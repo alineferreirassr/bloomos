@@ -70,6 +70,7 @@ The record tying a client to a specific engagement and tracking it through the l
 | status | enum | `draft`, `sent`, `signed`, `cancelled` |
 | total_amount | numeric | |
 | signed_at | timestamptz | nullable |
+| file_path | text | nullable — path into the future `contracts` Supabase Storage bucket (`docs/integrations.md`); no upload capability exists until Supabase is connected |
 | created_at / updated_at | timestamptz | |
 
 ### `payments`

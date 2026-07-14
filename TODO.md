@@ -23,16 +23,17 @@ Current, actionable tasks. Keep this in sync with reality — check items off as
 - [x] Write `PRODUCT_PRINCIPLES.md`
 - [x] Document the Workspace concept (`BLOOMOS_BIBLE.md` §7) — not implemented
 - [x] Get explicit approval on the architecture (approved, with adjustments incorporated)
-- [ ] Scaffold Next.js (App Router) + TypeScript + Tailwind + ESLint project
-- [ ] Scaffold reserved structural folders (`core/`, `services/`, `features/`, `automation/`, `audit/`, `email/`) as empty/interface-only placeholders — no business logic yet
-- [ ] Verify empty shell builds and runs locally (desktop + mobile viewport)
+- [x] Scaffold Next.js (App Router) + TypeScript strict + Tailwind CSS v4 + ESLint project
+- [x] Scaffold reserved structural folders (`core/`, `services/`, `features/`, `automation/`, `audit/`, `email/`) as placeholders — no business logic yet
+- [x] Verify empty shell builds, lints, typechecks, and runs locally (desktop + mobile viewport)
 
-## Phase 1 — MVP (not started, blocked on Phase 0 completion)
+## Phase 1 — MVP (in progress)
 
-- [ ] `core/` scaffolding: shared enums, constants, errors, permissions, roles, guards, logger
+- [x] Build app shell (AppShell, Sidebar, TopBar, responsive Mobile Navigation)
+- [x] Build minimal Dashboard shell early (placeholder cards over mock data) — not deferred to the end
+- [ ] `core/` real scaffolding (shared enums, constants, errors, permissions, roles, guards, logger) — populate when the Leads module starts
+- [ ] `lib/data/index.ts` swappable data-access abstraction — introduce when a second data source (a real module) exists
 - [ ] Define mock data + centralized types for Leads, Clients, Events, Contracts, Finance
-- [ ] Build app shell (navigation, layout, responsive frame)
-- [ ] Build minimal Dashboard shell early (placeholder cards over mock data) — not deferred to the end
 - [ ] Build Leads module, then wire its card into the Dashboard
 - [ ] Build Clients module, then wire its card into the Dashboard
 - [ ] Build Events module, then wire its card into the Dashboard

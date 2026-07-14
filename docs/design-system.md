@@ -28,8 +28,24 @@ Apple, Linear, Notion, and Stripe. Specifically what to borrow from each:
 
 ## Where this becomes concrete
 
-Once implementation begins, the Tailwind config (`tailwind.config.ts`) is the executable source of truth for tokens (colors, spacing, type scale). This document should be updated at that point to reference the actual values, so design intent and implementation never drift apart.
+Tailwind CSS v4 is in use, which defines tokens as CSS custom properties in `src/app/globals.css` (via `@theme`) rather than a `tailwind.config.ts` file — that file is the executable source of truth for tokens now.
+
+### Current tokens (provisional — set with the AppShell/Dashboard shell, revisit once real screens accumulate)
+
+| Token | Light | Dark | Use |
+|---|---|---|---|
+| `--color-surface` | `#ffffff` | `#171412` | Card/panel backgrounds |
+| `--color-surface-muted` | `#fafaf9` | `#1f1b19` | App background |
+| `--color-border` | `#e7e5e4` | `#322c29` | Hairlines, card borders |
+| `--color-text` | `#1c1917` | `#f5f1ee` | Primary text |
+| `--color-text-muted` | `#78716c` | `#a39a94` | Secondary text, labels |
+| `--color-accent` | `#9f4a5c` | `#d98a9a` | Primary actions, active nav state |
+| `--color-accent-foreground` | `#ffffff` | `#1c1917` | Text/icons on accent |
+
+Font: system font stack (`ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif`) rather than a loaded webfont, to avoid a build-time network dependency — revisit once a specific typeface is chosen deliberately.
+
+Spacing and type scale beyond the above are Tailwind's defaults for now; a deliberate scale is defined once enough real screens exist to validate one (per "Explicitly out of scope for now" below), not invented ahead of that.
 
 ## Explicitly out of scope for now
 
-Picking final hex values, a type scale, or component-level visual specs before the architecture is approved and the first real screens are designed. Locking these in prematurely, without a screen to test them against, produces a design system nobody has validated.
+Picking a final custom typeface, a deliberate type/spacing scale, or component-level visual specs beyond what the AppShell and Dashboard shell needed. Locking these in prematurely, without more real screens to test them against, produces a design system nobody has validated.

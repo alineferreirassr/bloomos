@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Next.js 16 (App Router) + TypeScript (strict) + Tailwind CSS v4 + ESLint project scaffolded
+- Design tokens defined in `src/app/globals.css` (provisional neutral palette + accent — recorded in `docs/design-system.md`)
+- Approved folder structure created: `app/`, `modules/`, `components/`, `lib/`, `config/`, plus reserved placeholders `core/`, `services/`, `features/`, `automation/`, `audit/`, `email/` (each with a README noting it's a placeholder, per the approved architecture)
+- Shared UI primitives: `Button`, `Card`, hand-rolled nav icon set (no icon library dependency)
+- `AppShell`, `Sidebar`, `TopBar`, and responsive `MobileNav` (drawer on mobile, breakpoint at `md`)
+- Minimal Dashboard shell (`/dashboard`) with placeholder metric cards (Leads, Clients, Events, Contracts, Finance) over mock data, ready to go live as each module ships
+- `docs/database.md` gains a provisional `file_path` note on `contracts` for future document storage
+
+
 - Initial repository documentation: `README.md`, `CLAUDE.md`, `BLOOMOS_BIBLE.md`, `ROADMAP.md`, `TODO.md`, `CHANGELOG.md`
 - `docs/` specs: `database.md`, `workflows.md`, `ui.md`, `automations.md`, `integrations.md`, `permissions.md`, `ai.md`, `design-system.md`
 - Project initialized as a standalone repository (no external handoff package; BloomOS is being built from scratch)
