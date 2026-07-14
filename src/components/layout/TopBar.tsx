@@ -15,18 +15,18 @@ export function TopBar({ onMenuClick }: TopBarProps) {
   );
 
   return (
-    <header className="flex h-14 items-center gap-3 border-b border-border bg-surface px-4 md:px-6">
+    <header className="flex h-16 items-center gap-3 border-b border-border bg-surface px-5 md:px-8">
       <button
         type="button"
         onClick={onMenuClick}
-        className="-ml-1 flex h-9 w-9 items-center justify-center rounded-lg text-text-muted hover:bg-surface-muted hover:text-text md:hidden"
+        className="-ml-1 flex h-9 w-9 items-center justify-center rounded-lg text-text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-text md:hidden"
         aria-label="Open navigation menu"
       >
         <MenuIcon className="h-5 w-5" />
       </button>
-      <h1 className="text-sm font-medium text-text">
+      <p className="text-sm font-medium tracking-tight text-text-muted">
         {activeItem?.label ?? "BloomOS"}
-      </h1>
+      </p>
     </header>
   );
 }

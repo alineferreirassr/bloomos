@@ -29,21 +29,21 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
         type="button"
         aria-label="Close dialog"
         onClick={onClose}
-        className="absolute inset-0 bg-black/40"
+        className="absolute inset-0 bg-text/30 backdrop-blur-[2px]"
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-xl"
+        className="relative w-full max-w-md rounded-2xl border border-border bg-surface p-7 shadow-xl"
       >
         <div className="flex items-start justify-between gap-4">
-          <h2 className="text-base font-semibold text-text">{title}</h2>
+          <h2 className="text-lg font-semibold text-text">{title}</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-text-muted hover:bg-surface-muted hover:text-text"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-text"
           >
             <CloseIcon className="h-4 w-4" />
           </button>

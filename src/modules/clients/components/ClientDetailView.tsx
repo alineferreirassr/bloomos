@@ -101,7 +101,7 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-semibold text-text">
+              <h2 className="text-3xl font-semibold text-text">
                 {client.first_name} {client.last_name}
                 {client.partner_name ? ` & ${client.partner_name}` : ""}
               </h2>

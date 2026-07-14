@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navigationItems } from "@/config/navigation";
 import { CloseIcon } from "@/components/ui/icons";
+import { CURRENT_ACTOR } from "@/core/constants/actor";
 
 interface MobileNavProps {
   open: boolean;
@@ -13,33 +14,38 @@ interface MobileNavProps {
 export function MobileNav({ open, onClose }: MobileNavProps) {
   const pathname = usePathname();
 
-  if (!open) {
-    return null;
-  }
-
   return (
-    <div className="fixed inset-0 z-50 md:hidden">
+    <div
+      className={`fixed inset-0 z-50 md:hidden ${open ? "" : "pointer-events-none"}`}
+      inert={!open}
+    >
       <button
         type="button"
         aria-label="Close navigation menu"
         onClick={onClose}
-        className="absolute inset-0 bg-black/30"
+        className={`absolute inset-0 bg-text/30 backdrop-blur-[2px] transition-opacity duration-200 ${
+          open ? "opacity-100" : "opacity-0"
+        }`}
       />
-      <div className="absolute inset-y-0 left-0 flex w-64 flex-col bg-surface shadow-xl">
-        <div className="flex items-center justify-between px-5 py-6">
-          <span className="text-base font-semibold tracking-tight text-text">
+      <div
+        className={`absolute inset-y-0 left-0 flex w-72 flex-col bg-sidebar shadow-xl transition-transform duration-200 ${
+          open ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex items-center justify-between px-7 py-8">
+          <span className="font-serif text-2xl font-semibold tracking-tight text-text">
             BloomOS
           </span>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close navigation menu"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-surface-muted hover:text-text"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-text"
           >
             <CloseIcon className="h-5 w-5" />
           </button>
         </div>
-        <nav className="flex-1 space-y-1 px-3">
+        <nav className="flex-1 space-y-1 px-4">
           {navigationItems.map((item) => {
             const isActive = pathname.startsWith(item.href);
             const Icon = item.icon;
@@ -49,18 +55,33 @@ export function MobileNav({ open, onClose }: MobileNavProps) {
                 key={item.href}
                 href={item.href}
                 onClick={onClose}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive
-                    ? "bg-accent text-accent-foreground"
-                    : "text-text-muted hover:bg-surface-muted hover:text-text"
+                className={`relative flex items-center gap-3 rounded-lg py-2.5 pl-4 pr-3 text-sm font-medium tracking-tight transition-colors duration-150 ${
+                  isActive ? "text-text" : "text-text-muted hover:text-text"
                 }`}
               >
-                <Icon className="h-5 w-5 shrink-0" />
+                <span
+                  aria-hidden="true"
+                  className={`absolute top-1/2 left-0 h-4 w-[2px] -translate-y-1/2 rounded-full bg-accent transition-opacity duration-150 ${
+                    isActive ? "opacity-100" : "opacity-0"
+                  }`}
+                />
+                <Icon className="h-[18px] w-[18px] shrink-0" />
                 {item.label}
               </Link>
             );
           })}
         </nav>
+        <div className="border-t border-border px-7 py-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/15 text-xs font-semibold text-accent">
+              AB
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-text">{CURRENT_ACTOR}</p>
+              <p className="truncate text-xs text-text-muted">Amoré Bloom</p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

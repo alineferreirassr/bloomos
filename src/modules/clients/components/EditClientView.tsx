@@ -54,7 +54,7 @@ export function EditClientView({ clientId }: { clientId: string }) {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-text">
+      <h2 className="text-3xl font-semibold text-text">
         Edit {state.client.first_name} {state.client.last_name}
       </h2>
       <div className="mt-6 max-w-3xl">

@@ -80,7 +80,7 @@ export function LeadsListView() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold text-text">Leads</h2>
+          <h2 className="text-3xl font-semibold text-text">Leads</h2>
           <p className="mt-1 text-sm text-text-muted">
             Prospective clients moving through the Amoré Bloom pipeline. Data
             resets on page reload — there&apos;s no database behind this yet.

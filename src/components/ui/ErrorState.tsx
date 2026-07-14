@@ -8,13 +8,13 @@ export function ErrorState({
   onRetry,
 }: ErrorStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-surface px-6 py-16 text-center">
-      <p className="text-base font-medium text-text">{message}</p>
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-border bg-surface px-6 py-20 text-center">
+      <p className="text-base font-medium tracking-tight text-text">{message}</p>
       {onRetry ? (
         <button
           type="button"
           onClick={onRetry}
-          className="mt-4 rounded-lg border border-border px-3.5 py-2 text-sm font-medium text-text hover:bg-surface-muted"
+          className="mt-5 rounded-xl border border-border px-4 py-2 text-sm font-medium text-text transition-colors duration-150 hover:bg-surface-muted"
         >
           Try again
         </button>

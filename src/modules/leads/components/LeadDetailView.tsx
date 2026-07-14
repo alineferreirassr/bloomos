@@ -83,7 +83,7 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
     <div className="space-y-6">
       <div>
         <div className="flex flex-wrap items-center gap-3">
-          <h2 className="text-xl font-semibold text-text">
+          <h2 className="text-3xl font-semibold text-text">
             {lead.first_name} {lead.last_name}
           </h2>
           <LeadStatusBadge status={lead.status} />

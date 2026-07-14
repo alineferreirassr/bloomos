@@ -9,7 +9,7 @@ export function NewClientView() {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-text">New Client</h2>
+      <h2 className="text-3xl font-semibold text-text">New Client</h2>
       <p className="mt-1 text-sm text-text-muted">
         Creating a Client here does not require an originating Lead.
       </p>

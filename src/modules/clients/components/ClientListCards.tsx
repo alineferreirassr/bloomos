@@ -16,28 +16,28 @@ export function ClientListCards({ clients, nextActionByClientId }: ClientListCar
         const nextAction = nextActionByClientId[client.id];
         return (
           <Link key={client.id} href={`/clients/${client.id}`} className="block">
-            <Card className="transition-colors hover:border-accent">
+            <Card className="transition-colors duration-150 hover:border-accent/50">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-medium text-text">
+                  <p className="font-medium tracking-tight text-text">
                     {client.first_name} {client.last_name}
                   </p>
                   {client.partner_name ? (
-                    <p className="text-xs text-text-muted">& {client.partner_name}</p>
+                    <p className="mt-0.5 text-xs text-text-muted">& {client.partner_name}</p>
                   ) : null}
-                  <p className="text-xs text-text-muted">{client.email}</p>
+                  <p className="mt-0.5 text-xs text-text-muted">{client.email}</p>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
                   <ClientStatusBadge status={client.internal_status} />
                   <VipBadge isVip={client.is_vip} />
                 </div>
               </div>
-              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted">
+              <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted">
                 {client.source ? <span>{client.source}</span> : null}
                 {client.tags.length > 0 ? <span>{client.tags.join(", ")}</span> : null}
               </div>
               {nextAction ? (
-                <p className="mt-2 text-xs font-medium text-accent">{nextAction}</p>
+                <p className="mt-3 text-xs font-medium text-accent">{nextAction}</p>
               ) : null}
             </Card>
           </Link>

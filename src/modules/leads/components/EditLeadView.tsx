@@ -60,7 +60,7 @@ export function EditLeadView({ leadId }: { leadId: string }) {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-text">
+      <h2 className="text-3xl font-semibold text-text">
         Edit {state.lead.first_name} {state.lead.last_name}
       </h2>
       <div className="mt-6 max-w-3xl">
