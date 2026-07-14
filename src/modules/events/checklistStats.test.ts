@@ -34,25 +34,30 @@ describe("computeChecklistStats", () => {
       total: 0,
       completed: 0,
       pending: 0,
+      inProgress: 0,
       blocked: 0,
+      cancelled: 0,
       overdue: 0,
       percentComplete: 0,
       nextDueItem: null,
     });
   });
 
-  it("counts total, completed, pending, and blocked separately", () => {
+  it("counts total, completed, pending, in-progress, blocked, and cancelled separately", () => {
     const items = [
       makeItem({ id: "a", status: "completed" }),
       makeItem({ id: "b", status: "pending" }),
       makeItem({ id: "c", status: "blocked" }),
       makeItem({ id: "d", status: "in_progress" }),
+      makeItem({ id: "e", status: "cancelled" }),
     ];
     const stats = computeChecklistStats(items, NOW);
-    expect(stats.total).toBe(4);
+    expect(stats.total).toBe(5);
     expect(stats.completed).toBe(1);
     expect(stats.pending).toBe(1);
     expect(stats.blocked).toBe(1);
+    expect(stats.inProgress).toBe(1);
+    expect(stats.cancelled).toBe(1);
   });
 
   it("counts overdue items — due in the past, not completed or cancelled", () => {

@@ -313,7 +313,7 @@ export function EventDetailView({ eventId }: { eventId: string }) {
 
         <div className="space-y-6">
           <EventHealthCard health={health} />
-          <ChecklistSummaryCard stats={checklistStats} />
+          <ChecklistSummaryCard eventId={event.id} stats={checklistStats} />
           <ScheduleSummaryCard stats={scheduleStats} />
 
           <Card>

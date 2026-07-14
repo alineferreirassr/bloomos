@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checklistItemSchema } from "@/modules/checklist/schema";
+import { checklistFormToInput, checklistItemFormSchema, checklistItemSchema } from "@/modules/checklist/schema";
 
 const validInput = {
   title: "Book photographer",
@@ -47,5 +47,66 @@ describe("checklistItemSchema", () => {
   it("rejects an invalid assigned_type", () => {
     const result = checklistItemSchema.safeParse({ ...validInput, assigned_type: "robot" });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("checklistItemFormSchema", () => {
+  const validFormInput = {
+    title: "Book photographer",
+    description: "",
+    category: "photography" as const,
+    priority: "high" as const,
+    due_date: "",
+    assigned_type: "unknown" as const,
+    assigned_name: "",
+  };
+
+  it("accepts plain empty strings for nullable fields", () => {
+    const result = checklistItemFormSchema.safeParse(validFormInput);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a missing title", () => {
+    const result = checklistItemFormSchema.safeParse({ ...validFormInput, title: "" });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("checklistFormToInput", () => {
+  it("normalizes empty strings to null and forces assigned_id to null", () => {
+    const input = checklistFormToInput({
+      title: "Book photographer",
+      description: "",
+      category: "photography",
+      priority: "high",
+      due_date: "",
+      assigned_type: "employee",
+      assigned_name: "",
+    });
+    expect(input).toEqual({
+      title: "Book photographer",
+      description: null,
+      category: "photography",
+      priority: "high",
+      due_date: null,
+      assigned_type: "employee",
+      assigned_id: null,
+      assigned_name: null,
+    });
+  });
+
+  it("preserves non-empty values", () => {
+    const input = checklistFormToInput({
+      title: "Confirm florist",
+      description: "Call before Friday",
+      category: "flowers",
+      priority: "normal",
+      due_date: "2026-08-10",
+      assigned_type: "vendor",
+      assigned_name: "Bloom & Co",
+    });
+    expect(input.description).toBe("Call before Friday");
+    expect(input.due_date).toBe("2026-08-10");
+    expect(input.assigned_name).toBe("Bloom & Co");
   });
 });

@@ -38,6 +38,8 @@ import type { EventFormInput } from "@/modules/events/schema";
 import type { ChecklistItemInput } from "@/modules/checklist/schema";
 import type { ScheduleItemInput } from "@/modules/events/schema";
 import type { LeadFormInput } from "@/modules/leads/schema";
+import { computeChecklistStats } from "@/modules/events/checklistStats";
+import { getEventHealthDetails } from "@/core/workflows/eventHealth";
 
 /**
  * event_type is deliberately "birthday" — one of the types with no default
@@ -715,6 +717,51 @@ describe("Checklist CRUD", () => {
     if (!result.success) return;
     expect(result.data.assigned_type).toBe("vendor");
     expect(result.data.assigned_name).toBe("Golden Gate Florals");
+  });
+
+  it("checklist mutations are reflected together in computeChecklistStats, getEventHealthDetails, and the Timeline", async () => {
+    // "birthday" has no default template (see comment at the top of this file), so the checklist starts empty.
+    const event = await createEvent(validEventInput);
+    if (!event.success) throw new Error("setup failed");
+
+    const healthContext = {
+      hasOverdueChecklistItems: false,
+      hasScheduleItems: false,
+      hasPostEventReview: false,
+      daysUntilEvent: null,
+    };
+    const eventForHealth = {
+      status: event.data.status,
+      priority: event.data.priority,
+      location_name: event.data.location_name,
+      address: event.data.address,
+      budget_min: event.data.budget_min,
+      budget_max: event.data.budget_max,
+    };
+
+    const before = await getChecklistByEventId(event.data.id);
+    const statsBefore = computeChecklistStats(before);
+    expect(statsBefore.total).toBe(0);
+    const healthBefore = getEventHealthDetails(eventForHealth, { ...healthContext, hasChecklistItems: false });
+    expect(healthBefore.factors.some((f) => f.label === "No checklist items")).toBe(true);
+
+    const created = await createChecklistItem(event.data.id, validChecklistInput);
+    if (!created.success) throw new Error("setup failed");
+    await completeChecklistItem(created.data.id);
+
+    const after = await getChecklistByEventId(event.data.id);
+    const statsAfter = computeChecklistStats(after);
+    expect(statsAfter.total).toBe(1);
+    expect(statsAfter.completed).toBe(1);
+    expect(statsAfter.percentComplete).toBe(100);
+
+    const healthAfter = getEventHealthDetails(eventForHealth, { ...healthContext, hasChecklistItems: true });
+    expect(healthAfter.factors.some((f) => f.label === "No checklist items")).toBe(false);
+    expect(healthAfter.score).toBeGreaterThan(healthBefore.score);
+
+    const timeline = await getTimelineByEventId(event.data.id);
+    expect(timeline.some((activity) => activity.type === "checklist_item_created")).toBe(true);
+    expect(timeline.some((activity) => activity.type === "checklist_item_completed")).toBe(true);
   });
 });
 

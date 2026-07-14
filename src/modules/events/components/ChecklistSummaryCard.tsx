@@ -1,10 +1,11 @@
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { formatEventDate } from "@/modules/events/dateFormat";
 import type { ChecklistStats } from "@/modules/events/checklistStats";
 
-/** Read-only summary only — Checklist CRUD UI is Phase 3. */
-export function ChecklistSummaryCard({ stats }: { stats: ChecklistStats }) {
+/** Read-only summary — full checklist management lives at /events/[id]/checklist (Phase 3). */
+export function ChecklistSummaryCard({ eventId, stats }: { eventId: string; stats: ChecklistStats }) {
   return (
     <Card>
       <h3 className="font-serif text-[17px] font-semibold text-text">Checklist Summary</h3>
@@ -30,9 +31,11 @@ export function ChecklistSummaryCard({ stats }: { stats: ChecklistStats }) {
           </div>
         </>
       )}
-      <Button variant="secondary" className="mt-4" disabled title="Checklist management is coming in Phase 3">
-        Manage Checklist
-      </Button>
+      <Link href={`/events/${eventId}/checklist`}>
+        <Button variant="secondary" className="mt-4">
+          Manage Checklist
+        </Button>
+      </Link>
     </Card>
   );
 }
