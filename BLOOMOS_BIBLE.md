@@ -101,6 +101,15 @@ See [`ROADMAP.md`](./ROADMAP.md) for sequencing.
 - **Premium by default.** Visual and interaction quality is a product requirement, not a polish pass.
 - **Trustworthy with client data.** This system holds real client relationships, contracts, and money. Correctness and clarity outrank cleverness.
 
-## 7. Change control
+## 7. Workspace
+
+A **Workspace** is one business operating on BloomOS — its leads, clients, events, contracts, finances, team, and settings, isolated from every other business on the platform. Amoré Bloom is BloomOS's first Workspace, but it must never be treated as *the only* Workspace the system will ever hold.
+
+- The schema representation of a Workspace is the `workspaces` table (`docs/database.md`); every core table carries a `workspace_id`.
+- The MVP implements exactly one Workspace and no UI for creating, switching, or managing additional ones — but no module, query, or screen should be written in a way that assumes a second Workspace could never exist.
+- Multi-Workspace capability (creating new Workspaces, switching between them, per-Workspace billing/branding/settings) is future scope (`ROADMAP.md` Phase 4), not MVP scope.
+- "Organization" and "tenant" are used interchangeably with "Workspace" in technical discussion; **Workspace** is the product-facing term and should be preferred in anything user-facing.
+
+## 8. Change control
 
 This document changes only when the business model or lifecycle genuinely changes — not to accommodate a shortcut in implementation. Any change here must be reflected in the relevant `docs/*.md` files in the same change.

@@ -17,7 +17,7 @@ Bloom AI is an assistant embedded in BloomOS that helps the team run the busines
 
 - **Data-grounded, not speculative.** Bloom AI answers from BloomOS's actual data; it does not fabricate client, contract, or financial information.
 - **Assist, not replace.** It drafts and suggests; a human approves anything client-facing or financially consequential before it goes out.
-- **Scoped to organization data.** Same tenant-isolation rule as everything else in `docs/permissions.md` — no cross-tenant leakage, ever.
+- **Scoped to Workspace data.** Same tenant-isolation rule as everything else in `docs/permissions.md` — no cross-tenant leakage, ever.
 - **Transparent.** Where Bloom AI takes or suggests an action, it's visible and attributable, not a silent background process.
 
 ## Explicitly out of scope for now

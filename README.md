@@ -36,7 +36,8 @@ No unnecessary dependencies. Every library added must earn its place.
 | File | Purpose |
 |---|---|
 | [`CLAUDE.md`](./CLAUDE.md) | Permanent operating instructions for AI agents and engineers working in this repo |
-| [`BLOOMOS_BIBLE.md`](./BLOOMOS_BIBLE.md) | Source of truth for the domain model, lifecycle, and product philosophy |
+| [`BLOOMOS_BIBLE.md`](./BLOOMOS_BIBLE.md) | Source of truth for the domain model, lifecycle, and Workspace concept |
+| [`PRODUCT_PRINCIPLES.md`](./PRODUCT_PRINCIPLES.md) | Long-term product philosophy — the tiebreaker when a decision isn't settled elsewhere |
 | [`ROADMAP.md`](./ROADMAP.md) | Phased delivery plan, MVP scope, future modules |
 | [`CHANGELOG.md`](./CHANGELOG.md) | Notable changes, by version |
 | [`TODO.md`](./TODO.md) | Current, actionable task list |

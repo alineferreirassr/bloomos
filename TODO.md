@@ -19,19 +19,24 @@ Current, actionable tasks. Keep this in sync with reality — check items off as
 - [x] Write `docs/permissions.md`
 - [x] Write `docs/ai.md`
 - [x] Write `docs/design-system.md`
-- [ ] Present technical architecture proposal to the user
-- [ ] Get explicit approval on the architecture
+- [x] Present technical architecture proposal to the user
+- [x] Write `PRODUCT_PRINCIPLES.md`
+- [x] Document the Workspace concept (`BLOOMOS_BIBLE.md` §7) — not implemented
+- [x] Get explicit approval on the architecture (approved, with adjustments incorporated)
 - [ ] Scaffold Next.js (App Router) + TypeScript + Tailwind + ESLint project
+- [ ] Scaffold reserved structural folders (`core/`, `services/`, `features/`, `automation/`, `audit/`, `email/`) as empty/interface-only placeholders — no business logic yet
 - [ ] Verify empty shell builds and runs locally (desktop + mobile viewport)
 
-## Phase 1 — MVP (not started, blocked on Phase 0 approval)
+## Phase 1 — MVP (not started, blocked on Phase 0 completion)
 
+- [ ] `core/` scaffolding: shared enums, constants, errors, permissions, roles, guards, logger
 - [ ] Define mock data + centralized types for Leads, Clients, Events, Contracts, Finance
 - [ ] Build app shell (navigation, layout, responsive frame)
-- [ ] Build Leads module
-- [ ] Build Clients module
-- [ ] Build Events module
-- [ ] Build Contracts module
-- [ ] Build Finance module
-- [ ] Build Dashboard
-- [ ] Connect Supabase (only once real credentials are provided)
+- [ ] Build minimal Dashboard shell early (placeholder cards over mock data) — not deferred to the end
+- [ ] Build Leads module, then wire its card into the Dashboard
+- [ ] Build Clients module, then wire its card into the Dashboard
+- [ ] Build Events module, then wire its card into the Dashboard
+- [ ] Build Contracts module, then wire its card into the Dashboard
+- [ ] Build Finance module, then wire its card into the Dashboard
+- [ ] Connect Supabase (only once real credentials are provided) — no authentication and no live connection before this
+- [ ] Use mock data exclusively until the above is reached

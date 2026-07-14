@@ -4,7 +4,7 @@ This document defines the data model for BloomOS. It is a design reference, writ
 
 ## Principles
 
-- **Multi-tenant-ready, not multi-tenant-active.** Every core table carries an `organization_id` column from day one, even though the MVP runs a single tenant (Amoré Bloom). This avoids a painful retrofit later.
+- **Multi-tenant-ready, not multi-tenant-active.** Every core table carries a `workspace_id` column from day one, even though the MVP runs a single tenant (Amoré Bloom). This avoids a painful retrofit later. See `BLOOMOS_BIBLE.md` §7 for what a Workspace is.
 - **UUID primary keys** everywhere, generated server-side.
 - **Timestamps on everything:** `created_at`, `updated_at` (and `deleted_at` for soft deletes where reversibility matters — e.g. Clients, Events, Contracts).
 - **Status/stage as constrained enums**, not free text, so the lifecycle in `docs/workflows.md` is enforced at the data layer.
@@ -12,8 +12,8 @@ This document defines the data model for BloomOS. It is a design reference, writ
 
 ## MVP entities
 
-### `organizations`
-Reserved for multi-tenancy readiness. In the MVP, exactly one row exists (Amoré Bloom).
+### `workspaces`
+The schema representation of a Workspace (`BLOOMOS_BIBLE.md` §7) — one row per business operating on BloomOS. Reserved for multi-tenancy readiness. In the MVP, exactly one row exists (Amoré Bloom).
 
 | Column | Type | Notes |
 |---|---|---|
@@ -25,7 +25,7 @@ Reserved for multi-tenancy readiness. In the MVP, exactly one row exists (Amoré
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| organization_id | uuid | FK → organizations |
+| workspace_id | uuid | FK → workspaces |
 | name | text | |
 | email | text | |
 | phone | text | nullable |
@@ -39,7 +39,7 @@ Reserved for multi-tenancy readiness. In the MVP, exactly one row exists (Amoré
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| organization_id | uuid | FK → organizations |
+| workspace_id | uuid | FK → workspaces |
 | name | text | |
 | email | text | |
 | phone | text | nullable |
@@ -53,7 +53,7 @@ The record tying a client to a specific engagement and tracking it through the l
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| organization_id | uuid | FK → organizations |
+| workspace_id | uuid | FK → workspaces |
 | client_id | uuid | FK → clients |
 | title | text | e.g. "Proposal at Big Sur" |
 | lifecycle_stage | enum | `lead`, `consultation`, `proposal`, `contract`, `deposit`, `planning`, `execution`, `gallery`, `feedback`, `completed` — see `docs/workflows.md` |
@@ -65,7 +65,7 @@ The record tying a client to a specific engagement and tracking it through the l
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| organization_id | uuid | FK → organizations |
+| workspace_id | uuid | FK → workspaces |
 | event_id | uuid | FK → events |
 | status | enum | `draft`, `sent`, `signed`, `cancelled` |
 | total_amount | numeric | |
@@ -78,7 +78,7 @@ Finance module: deposits and subsequent payments against a contract.
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| organization_id | uuid | FK → organizations |
+| workspace_id | uuid | FK → workspaces |
 | contract_id | uuid | FK → contracts |
 | type | enum | `deposit`, `installment`, `balance`, `refund` |
 | amount | numeric | |
@@ -90,8 +90,8 @@ Finance module: deposits and subsequent payments against a contract.
 ## Relationships
 
 ```
-organizations 1—* leads
-organizations 1—* clients
+workspaces 1—* leads
+workspaces 1—* clients
 leads 1—0/1 clients        (via clients.origin_lead_id)
 clients 1—* events
 events 1—0/1 contracts

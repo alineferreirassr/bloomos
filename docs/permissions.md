@@ -4,7 +4,7 @@ Access control model for BloomOS. Written ahead of Supabase connection — RLS p
 
 ## MVP roles
 
-The MVP runs for a single organization (Amoré Bloom) with a small team, so the role model is intentionally minimal:
+The MVP runs for a single Workspace (Amoré Bloom — see `BLOOMOS_BIBLE.md` §7) with a small team, so the role model is intentionally minimal:
 
 | Role | Description |
 |---|---|
@@ -15,7 +15,7 @@ No client-facing role exists in the MVP — the future **Client Portal** module 
 
 ## Guiding rules
 
-- **Organization-scoped by default.** Every query is implicitly scoped to `organization_id` (see `docs/database.md`), even with a single tenant today — this is what makes multi-tenancy a flip of a switch later, not a rebuild.
+- **Workspace-scoped by default.** Every query is implicitly scoped to `workspace_id` (see `docs/database.md`), even with a single tenant today — this is what makes multi-tenancy a flip of a switch later, not a rebuild.
 - **No cross-tenant visibility, ever** — even before multi-tenancy is "on," the data model and access rules behave as if other tenants already exist.
 - **Least privilege.** A role gets exactly the modules its job requires. The future Client Portal role, for example, sees only its own event's data — never other clients, never internal notes.
 
@@ -23,7 +23,7 @@ No client-facing role exists in the MVP — the future **Client Portal** module 
 
 Once Supabase is connected (see `docs/integrations.md`), RLS policies enforce:
 
-- Every table with `organization_id` — a row is only visible/writable to authenticated users belonging to that `organization_id`.
+- Every table with `workspace_id` — a row is only visible/writable to authenticated users belonging to that `workspace_id`.
 - `Owner/Admin` vs `Team Member` distinctions enforced via a role claim on the authenticated user, checked in policy, not in application code alone.
 - The future Client Portal role restricted, at the policy level, to its own `client_id`'s and linked `event_id`'s rows only — never a broader query.
 
