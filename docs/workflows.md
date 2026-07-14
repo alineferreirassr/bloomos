@@ -85,3 +85,6 @@ The MVP tracks `lifecycle_stage` on the `events` table (see `docs/database.md`) 
 - A `payments` row of type `deposit` cannot be `paid` before its `contracts` row is `signed`.
 - A Client becomes `is_returning = true` the moment they have more than one `events` record.
 - Declining at Proposal or cancelling a Contract ends that event's lifecycle but never deletes the Client relationship.
+- A `leads` record's status transitions are governed by `core/workflows/leadWorkflow.ts` (the single source of truth, consumed by both the UI and the data layer): `converted` and `archived` are terminal, reachable only via their own dedicated action, never the plain status selector — see `BLOOMOS_BIBLE.md`'s Lead/Client definitions.
+- Every Lead lifecycle event (created, edited, status change, note added, note pinned/unpinned, Welcome Guide sent, archived, converted) is recorded as a `lead_timeline_activities` row through one shared mechanism — no module constructs a timeline entry by hand.
+- Converting a Lead to a Client preserves that Lead's notes and timeline untouched (only one new `lead_converted` entry is appended), retains the original Lead record read-only, and cannot happen twice for the same Lead.

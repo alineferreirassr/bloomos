@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
-import type { DashboardMetric } from "@/lib/data/mock/dashboardMetrics";
+import type { DashboardMetric } from "@/lib/data";
 
 export function MetricCard({ label, value, href }: DashboardMetric) {
   return (

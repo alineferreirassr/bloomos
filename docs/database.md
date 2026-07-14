@@ -26,21 +26,57 @@ The schema representation of a Workspace (`BLOOMOS_BIBLE.md` §7) — one row pe
 |---|---|---|
 | id | uuid | PK |
 | workspace_id | uuid | FK → workspaces |
-| name | text | |
+| first_name | text | |
+| last_name | text | |
 | email | text | |
 | phone | text | nullable |
-| source | text | how they found the business |
-| status | enum | `new`, `contacted`, `qualified`, `disqualified`, `converted` |
-| notes | text | nullable |
-| created_at / updated_at | timestamptz | |
+| instagram | text | nullable |
+| source | text | how they found the business — curated options in `modules/leads/constants.ts`, not a canonical enum |
+| event_type | text | nullable — curated options in `modules/leads/constants.ts` |
+| event_date | date | nullable |
+| location | text | nullable |
+| budget_min | numeric | nullable |
+| budget_max | numeric | nullable |
+| message | text | nullable |
+| status | enum | `new`, `contacted`, `welcome_guide_sent`, `consultation_scheduled`, `qualified`, `proposal_sent`, `converted`, `lost`, `archived` — canonical values and transition rules live in `core/workflows/leadWorkflow.ts`, not duplicated here |
+| assigned_to | text | nullable — team member name; becomes a real FK once a Team module and auth exist |
 | converted_client_id | uuid | nullable FK → clients, set on conversion |
+| created_at / updated_at | timestamptz | |
+| archived_at | timestamptz | nullable, set when status becomes `archived` |
+
+### `lead_notes`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| lead_id | uuid | FK → leads |
+| title | text | |
+| content | text | |
+| category | enum | `general`, `special_request`, `preference`, `idea`, `reminder`, `problem`, `allergy`, `internal_alert` |
+| priority | enum | `low`, `normal`, `high`, `critical` |
+| is_pinned | boolean | pinned notes surface first on the Lead detail page |
+| created_by | text | actor name; becomes a real FK once auth exists |
+| created_at / updated_at | timestamptz | |
+
+### `lead_timeline_activities`
+Append-only. Every entry is written through one shared mechanism (`recordTimelineActivity`), never constructed by hand — see `docs/workflows.md`.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| lead_id | uuid | FK → leads |
+| type | enum | `lead_created`, `lead_updated`, `status_changed`, `note_added`, `note_pinned`, `note_unpinned`, `welcome_guide_sent`, `lead_archived`, `lead_converted` |
+| description | text | human-readable summary |
+| actor | text | who/what performed the action |
+| timestamp | timestamptz | |
+| metadata | jsonb | nullable — e.g. `{ from, to }` on a status change, `{ client_id }` on conversion |
 
 ### `clients`
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
 | workspace_id | uuid | FK → workspaces |
-| name | text | |
+| first_name | text | |
+| last_name | text | |
 | email | text | |
 | phone | text | nullable |
 | origin_lead_id | uuid | nullable FK → leads |
@@ -93,6 +129,8 @@ Finance module: deposits and subsequent payments against a contract.
 ```
 workspaces 1—* leads
 workspaces 1—* clients
+leads 1—* lead_notes
+leads 1—* lead_timeline_activities
 leads 1—0/1 clients        (via clients.origin_lead_id)
 clients 1—* events
 events 1—0/1 contracts
