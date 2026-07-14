@@ -15,6 +15,7 @@ vi.mock("@/lib/data", () => ({
   setClientVipStatus: vi.fn(),
   updateClientStatus: vi.fn(),
   updateClientContactPreference: vi.fn(),
+  updateClientTags: vi.fn(),
 }));
 
 import * as dataLayer from "@/lib/data";
@@ -39,7 +40,10 @@ describe("ClientDetailView", () => {
 
     expect(await screen.findByText(/Naomi Whitfield & James Whitfield/)).toBeInTheDocument();
     expect(screen.getByText("VIP")).toBeInTheDocument();
-    expect(screen.getByText("repeat-client")).toBeInTheDocument();
+    // Tags now render as removable badges via TagsEditor, so match the tag
+    // text as a substring rather than the badge's full text (which also
+    // includes the "remove" control).
+    expect(screen.getByText(/repeat-client/)).toBeInTheDocument();
     expect(screen.getByText("No activity yet")).toBeInTheDocument();
   });
 

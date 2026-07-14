@@ -22,6 +22,7 @@ import { Timeline } from "@/modules/timeline/components/Timeline";
 import { ClientStatusBadge } from "@/modules/clients/components/ClientStatusBadge";
 import { VipBadge } from "@/modules/clients/components/VipBadge";
 import { ClientActions } from "@/modules/clients/components/ClientActions";
+import { TagsEditor } from "@/modules/clients/components/TagsEditor";
 import { CONTACT_METHOD_LABELS } from "@/core/enums/contactMethod";
 
 type LoadState =
@@ -226,7 +227,20 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
           <Card>
             <h3 className="text-sm font-medium text-text-muted">Internal</h3>
             <dl className="mt-3 grid grid-cols-1 gap-3">
-              <Field label="Tags" value={client.tags.length > 0 ? client.tags.join(", ") : null} />
+              <div>
+                <dt className="text-xs text-text-muted">Tags</dt>
+                <dd className="mt-1.5 text-sm text-text">
+                  {client.archived_at ? (
+                    client.tags.length > 0 ? (
+                      client.tags.join(", ")
+                    ) : (
+                      "—"
+                    )
+                  ) : (
+                    <TagsEditor clientId={client.id} tags={client.tags} onChanged={refetch} />
+                  )}
+                </dd>
+              </div>
               <Field label="Internal status" value={<ClientStatusBadge status={client.internal_status} />} />
               <Field label="Returning client" value={client.is_returning ? "Yes" : "No"} />
               <Field
