@@ -78,6 +78,15 @@ export const eventFormSchema = z
       message: "Maximum budget must be greater than or equal to minimum budget",
       path: ["budget_max"],
     },
+  )
+  .refine(
+    // "HH:MM" strings compare correctly lexicographically for same-day times —
+    // no Date parsing needed. Only enforced when both are set ("where practical").
+    (data) => data.start_time === "" || data.end_time === "" || data.end_time >= data.start_time,
+    {
+      message: "End time cannot be before start time",
+      path: ["end_time"],
+    },
   );
 
 export type EventFormInput = z.infer<typeof eventFormSchema>;

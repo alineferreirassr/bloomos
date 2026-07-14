@@ -535,6 +535,41 @@ describe("getEvents filtering", () => {
     const noMatch = await getEvents({ search: "no-such-event-xyz" });
     expect(noMatch.length).toBe(0);
   });
+
+  it("filters by search text matching the Client's name", async () => {
+    const results = await getEvents({ search: "naomi whitfield" });
+    expect(results.every((event) => event.client_id === "client_1")).toBe(true);
+    expect(results.length).toBeGreaterThan(0);
+  });
+
+  it("filters by lifecycleStage", async () => {
+    const created = await createEvent(validEventInput);
+    if (!created.success) throw new Error("setup failed");
+    await updateEventLifecycleStage(created.data.id, "planning");
+
+    const results = await getEvents({ lifecycleStage: "planning" });
+    expect(results.every((event) => event.lifecycle_stage === "planning")).toBe(true);
+    expect(results.some((event) => event.id === created.data.id)).toBe(true);
+  });
+
+  it("filters by priority", async () => {
+    const created = await createEvent(validEventInput);
+    if (!created.success) throw new Error("setup failed");
+    await updateEventPriority(created.data.id, "urgent");
+
+    const results = await getEvents({ priority: "urgent" });
+    expect(results.every((event) => event.priority === "urgent")).toBe(true);
+    expect(results.some((event) => event.id === created.data.id)).toBe(true);
+  });
+
+  it("filters by an inclusive date range, excluding events with no event_date", async () => {
+    const results = await getEvents({ dateFrom: "2026-08-01", dateTo: "2026-08-31" });
+    expect(results.every((event) => event.event_date !== null)).toBe(true);
+    expect(
+      results.every((event) => event.event_date! >= "2026-08-01" && event.event_date! <= "2026-08-31"),
+    ).toBe(true);
+    expect(results.some((event) => event.id === "event_5")).toBe(false);
+  });
 });
 
 describe("Checklist CRUD", () => {

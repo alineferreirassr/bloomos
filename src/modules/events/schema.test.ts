@@ -77,6 +77,29 @@ describe("eventFormSchema", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("rejects an end time before the start time", () => {
+    const result = eventFormSchema.safeParse({
+      ...validFormInput,
+      start_time: "18:00",
+      end_time: "17:00",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts an end time equal to the start time", () => {
+    const result = eventFormSchema.safeParse({
+      ...validFormInput,
+      start_time: "18:00",
+      end_time: "18:00",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("does not require start/end time comparison when only one is set", () => {
+    const result = eventFormSchema.safeParse({ ...validFormInput, start_time: "18:00", end_time: "" });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("eventDataSchema", () => {

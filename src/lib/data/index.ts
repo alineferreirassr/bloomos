@@ -664,26 +664,49 @@ export async function getClientNextAction(clientId: string): Promise<string | nu
 export interface EventFilters {
   search?: string;
   status?: EventStatus | "all";
+  lifecycleStage?: EventLifecycleStage | "all";
   eventType?: EventType | "all";
   priority?: EventPriority | "all";
   clientId?: string;
+  /** Inclusive; events with no event_date never match when either bound is set. */
+  dateFrom?: string;
+  dateTo?: string;
   includeArchived?: boolean;
 }
 
 export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
   await delay(200);
-  const { search, status, eventType, priority, clientId, includeArchived = false } = filters;
+  const {
+    search,
+    status,
+    lifecycleStage,
+    eventType,
+    priority,
+    clientId,
+    dateFrom,
+    dateTo,
+    includeArchived = false,
+  } = filters;
+  const clientsById = new Map(readClients().map((client) => [client.id, client]));
 
   return readEvents().filter((event) => {
     if (!includeArchived && event.status === "archived") return false;
     if (status && status !== "all" && event.status !== status) return false;
+    if (lifecycleStage && lifecycleStage !== "all" && event.lifecycle_stage !== lifecycleStage) return false;
     if (eventType && eventType !== "all" && event.event_type !== eventType) return false;
     if (priority && priority !== "all" && event.priority !== priority) return false;
     if (clientId && event.client_id !== clientId) return false;
+    if (dateFrom || dateTo) {
+      if (!event.event_date) return false;
+      if (dateFrom && event.event_date < dateFrom) return false;
+      if (dateTo && event.event_date > dateTo) return false;
+    }
     if (search) {
       const q = search.trim().toLowerCase();
       if (!q) return true;
-      const haystack = `${event.title} ${event.location_name ?? ""} ${event.city ?? ""}`.toLowerCase();
+      const client = clientsById.get(event.client_id);
+      const clientName = client ? `${client.first_name} ${client.last_name}` : "";
+      const haystack = `${event.title} ${clientName} ${event.location_name ?? ""} ${event.city ?? ""}`.toLowerCase();
       if (!haystack.includes(q)) return false;
     }
     return true;
