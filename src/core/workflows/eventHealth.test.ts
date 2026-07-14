@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getEventHealthScore } from "@/core/workflows/eventHealth";
+import { getEventHealthDetails, getEventHealthScore } from "@/core/workflows/eventHealth";
 
 const perfectEvent = {
   status: "confirmed" as const,
@@ -158,5 +158,45 @@ describe("getEventHealthScore", () => {
     );
     expect(score).toBeGreaterThanOrEqual(0);
     expect(score).toBeLessThanOrEqual(100);
+  });
+});
+
+describe("getEventHealthDetails", () => {
+  it("returns an empty factors list and score 100 for a perfect event", () => {
+    const details = getEventHealthDetails(perfectEvent, healthyContext);
+    expect(details.score).toBe(100);
+    expect(details.factors).toEqual([]);
+  });
+
+  it("returns the score consistent with getEventHealthScore for the same inputs", () => {
+    const event = { ...perfectEvent, location_name: null, address: null };
+    const context = { ...healthyContext, hasScheduleItems: false };
+    const details = getEventHealthDetails(event, context);
+    expect(details.score).toBe(getEventHealthScore(event, context));
+  });
+
+  it("lists every triggered factor with its label and deduction", () => {
+    const details = getEventHealthDetails(
+      { ...perfectEvent, budget_min: null, budget_max: null },
+      { ...healthyContext, hasScheduleItems: false },
+    );
+    expect(details.factors).toEqual(
+      expect.arrayContaining([
+        { label: "Missing budget", deduction: 10 },
+        { label: "No schedule items", deduction: 10 },
+      ]),
+    );
+    expect(details.factors).toHaveLength(2);
+  });
+
+  it("sorts factors by deduction size, largest first", () => {
+    const details = getEventHealthDetails(
+      { ...perfectEvent, location_name: null, address: null, budget_min: null, budget_max: null },
+      { ...healthyContext, hasChecklistItems: false },
+    );
+    // missingLocation (15) and missingChecklist (15) tie for largest, missingBudget (10) is smallest.
+    expect(details.factors[0].deduction).toBeGreaterThanOrEqual(details.factors[1].deduction);
+    expect(details.factors[1].deduction).toBeGreaterThanOrEqual(details.factors[2].deduction);
+    expect(details.factors.map((f) => f.deduction)).toEqual([15, 15, 10]);
   });
 });

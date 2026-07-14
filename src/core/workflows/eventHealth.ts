@@ -46,33 +46,58 @@ export interface EventHealthContext {
   daysUntilEvent: number | null;
 }
 
-/** 0–100. 100 = nothing flagged; each factor below deducts independently, so multiple gaps compound. */
-export function getEventHealthScore(event: EventHealthInput, context: EventHealthContext): number {
-  let score = 100;
+export interface EventHealthFactor {
+  label: string;
+  deduction: number;
+}
+
+const FACTOR_LABELS: Record<keyof typeof DEDUCTIONS, string> = {
+  missingLocation: "Missing location",
+  missingBudget: "Missing budget",
+  missingChecklist: "No checklist items",
+  overdueChecklist: "Overdue checklist items",
+  missingSchedule: "No schedule items",
+  awaitingContract: "Awaiting contract",
+  awaitingDeposit: "Awaiting deposit",
+  criticalPriority: "Critical priority",
+  approachingDate: "Event approaching, not yet ready",
+  missingPostEventReview: "Missing post-event review",
+};
+
+/**
+ * The single source of deduction logic — both getEventHealthScore and
+ * getEventHealthDetails call this rather than each re-implementing the same
+ * checks, so the two can never drift out of sync with each other.
+ */
+function getTriggeredFactors(event: EventHealthInput, context: EventHealthContext): EventHealthFactor[] {
+  const factors: EventHealthFactor[] = [];
+  const add = (key: keyof typeof DEDUCTIONS) => {
+    factors.push({ label: FACTOR_LABELS[key], deduction: DEDUCTIONS[key] });
+  };
 
   if (!event.location_name && !event.address) {
-    score -= DEDUCTIONS.missingLocation;
+    add("missingLocation");
   }
   if (event.budget_min === null && event.budget_max === null) {
-    score -= DEDUCTIONS.missingBudget;
+    add("missingBudget");
   }
   if (!context.hasChecklistItems) {
-    score -= DEDUCTIONS.missingChecklist;
+    add("missingChecklist");
   }
   if (context.hasOverdueChecklistItems) {
-    score -= DEDUCTIONS.overdueChecklist;
+    add("overdueChecklist");
   }
   if (!context.hasScheduleItems) {
-    score -= DEDUCTIONS.missingSchedule;
+    add("missingSchedule");
   }
   if (event.status === "awaiting_contract") {
-    score -= DEDUCTIONS.awaitingContract;
+    add("awaitingContract");
   }
   if (event.status === "awaiting_deposit") {
-    score -= DEDUCTIONS.awaitingDeposit;
+    add("awaitingDeposit");
   }
   if (event.priority === "critical") {
-    score -= DEDUCTIONS.criticalPriority;
+    add("criticalPriority");
   }
   if (
     context.daysUntilEvent !== null &&
@@ -82,11 +107,34 @@ export function getEventHealthScore(event: EventHealthInput, context: EventHealt
     event.status !== "in_progress" &&
     event.status !== "completed"
   ) {
-    score -= DEDUCTIONS.approachingDate;
+    add("approachingDate");
   }
   if (event.status === "completed" && !context.hasPostEventReview) {
-    score -= DEDUCTIONS.missingPostEventReview;
+    add("missingPostEventReview");
   }
 
-  return Math.max(0, Math.min(100, score));
+  return factors;
+}
+
+/** 0–100. 100 = nothing flagged; each factor below deducts independently, so multiple gaps compound. */
+export function getEventHealthScore(event: EventHealthInput, context: EventHealthContext): number {
+  const deducted = getTriggeredFactors(event, context).reduce((sum, factor) => sum + factor.deduction, 0);
+  return Math.max(0, Math.min(100, 100 - deducted));
+}
+
+export interface EventHealthDetails {
+  score: number;
+  /** Every triggered factor, largest deduction first — "top risks" is just the head of this list. */
+  factors: EventHealthFactor[];
+}
+
+/**
+ * Same underlying signals as getEventHealthScore, plus which factors
+ * triggered and by how much — for a future Event Detail health card. Never
+ * duplicates the deduction rules; both functions call getTriggeredFactors.
+ */
+export function getEventHealthDetails(event: EventHealthInput, context: EventHealthContext): EventHealthDetails {
+  const factors = getTriggeredFactors(event, context).sort((a, b) => b.deduction - a.deduction);
+  const score = getEventHealthScore(event, context);
+  return { score, factors };
 }

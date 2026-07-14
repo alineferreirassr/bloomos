@@ -1,0 +1,355 @@
+"use client";
+
+import { useEffect, useState, type ReactNode } from "react";
+import Link from "next/link";
+import {
+  createEventNote,
+  getChecklistByEventId,
+  getClientById,
+  getEventById,
+  getEventNextAction,
+  getNotesByEventId,
+  getScheduleByEventId,
+  getTimelineByEventId,
+  togglePinNote,
+} from "@/lib/data";
+import type { Event } from "@/types/event";
+import type { Client } from "@/types/client";
+import type { Note } from "@/types/note";
+import type { TimelineActivity } from "@/types/timelineActivity";
+import type { ChecklistItem } from "@/types/checklistItem";
+import type { EventScheduleItem } from "@/types/eventScheduleItem";
+import { NotFoundError } from "@/core/errors";
+import { Card } from "@/components/ui/Card";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { NotesSection } from "@/modules/notes/components/NotesSection";
+import { Timeline } from "@/modules/timeline/components/Timeline";
+import { EVENT_TYPE_LABELS } from "@/core/enums/eventType";
+import { getEventHealthDetails, type EventHealthDetails } from "@/core/workflows/eventHealth";
+import { computeChecklistStats } from "@/modules/events/checklistStats";
+import { computeScheduleStats } from "@/modules/events/scheduleStats";
+import { formatEventDate } from "@/modules/events/dateFormat";
+import { EventStatusBadge } from "@/modules/events/components/EventStatusBadge";
+import { EventLifecycleBadge } from "@/modules/events/components/EventLifecycleBadge";
+import { EventPriorityBadge } from "@/modules/events/components/EventPriorityBadge";
+import { EventActions } from "@/modules/events/components/EventActions";
+import { EventHealthCard } from "@/modules/events/components/EventHealthCard";
+import { ChecklistSummaryCard } from "@/modules/events/components/ChecklistSummaryCard";
+import { ScheduleSummaryCard } from "@/modules/events/components/ScheduleSummaryCard";
+
+type LoadState =
+  | { status: "loading" }
+  | { status: "not-found" }
+  | { status: "error" }
+  | {
+      status: "ready";
+      event: Event;
+      client: Client | null;
+      notes: Note[];
+      timeline: TimelineActivity[];
+      checklist: ChecklistItem[];
+      schedule: EventScheduleItem[];
+      nextAction: string | null;
+      health: EventHealthDetails;
+    };
+
+/**
+ * daysUntilEvent (and therefore the health score) is computed here, at
+ * fetch time, rather than inline in the component body — calling Date.now()
+ * during render would make the component non-idempotent, which the
+ * react-hooks/purity rule (correctly) rejects.
+ */
+async function loadEventDetail(eventId: string): Promise<LoadState> {
+  try {
+    const event = await getEventById(eventId);
+    const [client, notes, timeline, checklist, schedule, nextAction] = await Promise.all([
+      getClientById(event.client_id).catch(() => null),
+      getNotesByEventId(eventId),
+      getTimelineByEventId(eventId),
+      getChecklistByEventId(eventId),
+      getScheduleByEventId(eventId),
+      getEventNextAction(eventId),
+    ]);
+
+    const checklistStats = computeChecklistStats(checklist);
+    const now = Date.now();
+    const daysUntilEvent = event.event_date
+      ? Math.floor((new Date(event.event_date).getTime() - now) / (1000 * 60 * 60 * 24))
+      : null;
+    const health = getEventHealthDetails(
+      {
+        status: event.status,
+        priority: event.priority,
+        location_name: event.location_name,
+        address: event.address,
+        budget_min: event.budget_min,
+        budget_max: event.budget_max,
+      },
+      {
+        hasChecklistItems: checklist.length > 0,
+        hasOverdueChecklistItems: checklistStats.overdue > 0,
+        hasScheduleItems: schedule.length > 0,
+        hasPostEventReview: false,
+        daysUntilEvent,
+      },
+    );
+
+    return { status: "ready", event, client, notes, timeline, checklist, schedule, nextAction, health };
+  } catch (err) {
+    return { status: err instanceof NotFoundError ? "not-found" : "error" };
+  }
+}
+
+export function EventDetailView({ eventId }: { eventId: string }) {
+  const [state, setState] = useState<LoadState>({ status: "loading" });
+
+  useEffect(() => {
+    let cancelled = false;
+    loadEventDetail(eventId).then((next) => {
+      if (!cancelled) setState(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId]);
+
+  // Same rationale as ClientDetailView/LeadDetailView: keep the current tree
+  // mounted while a refetch runs in the background, so local feedback (e.g.
+  // quick-action errors) isn't unmounted before the user sees it.
+  const refetch = () => {
+    loadEventDetail(eventId).then(setState);
+  };
+
+  if (state.status === "loading") {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-32 w-full" />
+      </div>
+    );
+  }
+
+  if (state.status === "not-found") {
+    return <ErrorState message="This event could not be found." />;
+  }
+
+  if (state.status === "error") {
+    return <ErrorState message="Could not load this event." onRetry={refetch} />;
+  }
+
+  const { event, client, notes, timeline, checklist, schedule, nextAction, health } = state;
+
+  const checklistStats = computeChecklistStats(checklist);
+  const scheduleStats = computeScheduleStats(schedule);
+
+  // Per the Phase 2 spec: archived/cancelled Events lock Notes read-only;
+  // completed Events explicitly keep Notes open for post-event write-ups.
+  const notesReadOnly = event.status === "archived" || event.status === "cancelled";
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="font-serif text-3xl font-semibold text-text">{event.title}</h2>
+          <EventStatusBadge status={event.status} />
+          <EventLifecycleBadge stage={event.lifecycle_stage} />
+          <EventPriorityBadge priority={event.priority} />
+        </div>
+        <p className="mt-1 text-sm text-text-muted">
+          {EVENT_TYPE_LABELS[event.event_type]}
+          {client ? (
+            <>
+              {" · "}
+              <Link href={`/clients/${client.id}`} className="text-accent hover:underline">
+                {client.first_name} {client.last_name}
+              </Link>
+            </>
+          ) : null}
+          {event.event_date ? ` · ${formatEventDate(event.event_date)}` : ""}
+          {event.location_name ? ` · ${event.location_name}` : event.city ? ` · ${event.city}` : ""}
+        </p>
+
+        <div className="mt-4">
+          <EventActions event={event} onChanged={refetch} />
+        </div>
+      </div>
+
+      {nextAction ? (
+        <Card className="border-accent/40 bg-accent/5">
+          <p className="text-xs font-medium uppercase tracking-wide text-accent">Next recommended action</p>
+          <p className="mt-1 text-sm text-text">{nextAction}</p>
+        </Card>
+      ) : null}
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Event Summary</h3>
+            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Event type" value={EVENT_TYPE_LABELS[event.event_type]} />
+              <Field label="Package" value={event.package_name} />
+              <Field label="Assigned owner" value={event.assigned_owner} />
+              <Field label="Created" value={new Date(event.created_at).toLocaleDateString()} />
+              <Field label="Updated" value={new Date(event.updated_at).toLocaleDateString()} />
+              {event.originating_lead_id ? (
+                <Field
+                  label="Originating Lead"
+                  value={
+                    <Link href={`/leads/${event.originating_lead_id}`} className="text-accent hover:underline">
+                      View original Lead →
+                    </Link>
+                  }
+                />
+              ) : null}
+            </dl>
+          </Card>
+
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Client</h3>
+            {client ? (
+              <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field
+                  label="Name"
+                  value={
+                    <Link href={`/clients/${client.id}`} className="text-accent hover:underline">
+                      {client.first_name} {client.last_name}
+                    </Link>
+                  }
+                />
+                <Field label="Email" value={client.email} />
+                <Field label="Phone" value={client.phone} />
+              </dl>
+            ) : (
+              <p className="mt-2 text-sm text-text-muted">Client not found.</p>
+            )}
+          </Card>
+
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Date &amp; Time</h3>
+            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Event date" value={formatEventDate(event.event_date)} />
+              <Field label="Start time" value={event.start_time} />
+              <Field label="End time" value={event.end_time} />
+              <Field label="Timezone" value={event.timezone} />
+            </dl>
+          </Card>
+
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Location</h3>
+            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Location name" value={event.location_name} />
+              <Field label="Address" value={event.address} />
+              <Field label="City" value={event.city} />
+              <Field label="State" value={event.state} />
+              <Field label="ZIP code" value={event.zip_code} />
+            </dl>
+          </Card>
+
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Budget, Package &amp; Guests</h3>
+            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Budget min" value={formatCurrency(event.budget_min)} />
+              <Field label="Budget max" value={formatCurrency(event.budget_max)} />
+              <Field label="Package" value={event.package_name} />
+              <Field label="Guest count" value={event.guest_count === null ? null : String(event.guest_count)} />
+            </dl>
+          </Card>
+
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Theme &amp; Color Palette</h3>
+            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Theme" value={event.theme} />
+              <Field label="Color palette" value={event.color_palette} />
+            </dl>
+          </Card>
+
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Surprise &amp; Confidentiality</h3>
+            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Surprise event" value={event.surprise_event ? "Yes" : "No"} />
+              <Field label="Confidentiality notes" value={event.confidentiality_notes} />
+            </dl>
+          </Card>
+
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Accessibility &amp; Dietary Notes</h3>
+            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Accessibility notes" value={event.accessibility_notes} />
+              <Field label="Dietary notes" value={event.dietary_notes} />
+            </dl>
+          </Card>
+
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Weather Plan &amp; Backup Location</h3>
+            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Weather plan" value={event.weather_plan} />
+              <Field label="Backup location" value={event.backup_location} />
+            </dl>
+          </Card>
+
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Internal Summary</h3>
+            <p className="mt-2 text-sm text-text">{event.internal_summary || "—"}</p>
+          </Card>
+
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
+            <div className="mt-3">
+              <NotesSection
+                workspaceId={event.workspace_id}
+                ownerType="event"
+                ownerId={event.id}
+                notes={notes}
+                onCreateNote={(input) => createEventNote(event.id, input)}
+                onTogglePin={togglePinNote}
+                readOnly={notesReadOnly}
+                onNotesChanged={refetch}
+              />
+            </div>
+          </Card>
+        </div>
+
+        <div className="space-y-6">
+          <EventHealthCard health={health} />
+          <ChecklistSummaryCard stats={checklistStats} />
+          <ScheduleSummaryCard stats={scheduleStats} />
+
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
+            <div className="mt-3">
+              <Timeline activities={timeline} />
+            </div>
+          </Card>
+
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Future Integrations</h3>
+            <p className="mt-2 text-xs text-text-muted">Not built yet — reserved for upcoming modules.</p>
+            <ul className="mt-3 space-y-1.5 text-sm text-text-muted">
+              <li>Contracts</li>
+              <li>Finance</li>
+              <li>Team assignments</li>
+              <li>Vendors</li>
+              <li>Inventory</li>
+            </ul>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div>
+      <dt className="text-xs text-text-muted">{label}</dt>
+      <dd className="text-sm text-text">{value || "—"}</dd>
+    </div>
+  );
+}
+
+function formatCurrency(value: number | null): string | null {
+  if (value === null) return null;
+  return `$${value.toLocaleString()}`;
+}

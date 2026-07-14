@@ -307,6 +307,25 @@ describe("updateEvent", () => {
     const result = await updateEvent("event_does_not_exist", validEventInput);
     expect(result.success).toBe(false);
   });
+
+  it("changing event_type on an existing event does not touch its checklist", async () => {
+    const created = await createEvent({ ...validEventInput, event_type: "proposal" });
+    if (!created.success) throw new Error("setup failed");
+
+    const before = await getChecklistByEventId(created.data.id);
+    expect(before.length).toBe(11);
+
+    const updated = await updateEvent(created.data.id, { ...validEventInput, event_type: "anniversary" });
+    expect(updated.success).toBe(true);
+    if (!updated.success) return;
+    expect(updated.data.event_type).toBe("anniversary");
+
+    const after = await getChecklistByEventId(created.data.id);
+    expect(after).toEqual(before);
+
+    const timeline = await getTimelineByEventId(created.data.id);
+    expect(timeline.filter((activity) => activity.type === "checklist_template_applied")).toHaveLength(1);
+  });
 });
 
 describe("Event status behavior", () => {

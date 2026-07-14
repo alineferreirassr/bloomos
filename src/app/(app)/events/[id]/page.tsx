@@ -1,4 +1,4 @@
-import { EventDetailPlaceholder } from "@/modules/events/components/EventDetailPlaceholder";
+import { EventDetailView } from "@/modules/events/components/EventDetailView";
 
 export default async function EventDetailPage({
   params,
@@ -6,5 +6,5 @@ export default async function EventDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <EventDetailPlaceholder key={id} eventId={id} />;
+  return <EventDetailView key={id} eventId={id} />;
 }

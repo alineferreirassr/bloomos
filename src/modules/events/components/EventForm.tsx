@@ -65,6 +65,7 @@ export function EventForm({ defaultValues, onSubmit, submitLabel, cancelHref }: 
     register,
     handleSubmit,
     setError,
+    setValue,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<EventFormInput>({
     resolver: zodResolver(eventFormSchema),
@@ -80,6 +81,22 @@ export function EventForm({ defaultValues, onSubmit, submitLabel, cancelHref }: 
       cancelled = true;
     };
   }, []);
+
+  // The Client <select> has no matching <option> until getClients() resolves
+  // and React re-renders with them, so the browser can't select
+  // defaultValues.client_id on first render and silently falls back to the
+  // empty placeholder. Calling setValue() in the same tick as setClients()
+  // (above) is too early — the new <option> elements don't exist in the DOM
+  // yet. Waiting for `clients` to actually change and re-applying here, once
+  // React has committed the new options, fixes editing an existing Event
+  // (where the Client would otherwise appear unselected despite being saved
+  // correctly) without affecting the blank New Event form.
+  useEffect(() => {
+    if (clients && defaultValues?.client_id) {
+      setValue("client_id", defaultValues.client_id, { shouldDirty: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clients]);
 
   useEffect(() => {
     if (!isDirty) return;
