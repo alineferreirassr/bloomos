@@ -1,37 +1,63 @@
 "use client";
 
 import { useState } from "react";
-import { createNote, togglePinNote } from "@/lib/data";
-import type { LeadNote } from "@/types/note";
-import type { NoteFormInput } from "@/modules/leads/schema";
-import { NoteCard } from "@/modules/leads/components/NoteCard";
-import { NoteForm } from "@/modules/leads/components/NoteForm";
+import type { Note } from "@/types/note";
+import type { NoteFormInput } from "@/modules/notes/schema";
+import type { DataResult } from "@/lib/data/result";
+import type { EntityType } from "@/core/enums/entityType";
+import { NoteCard } from "@/modules/notes/components/NoteCard";
+import { NoteForm } from "@/modules/notes/components/NoteForm";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 
+const OWNER_LABEL: Record<EntityType, string> = {
+  lead: "Lead",
+  client: "Client",
+};
+
+/**
+ * Generic — owns no Lead or Client business logic itself. The caller injects
+ * the actual mutations (onCreateNote/onTogglePin), already scoped to the
+ * right owner and workspace by the data layer, so Lead and future Client
+ * screens compose this same implementation instead of forking it.
+ */
 interface NotesSectionProps {
-  leadId: string;
-  notes: LeadNote[];
+  workspaceId: string;
+  ownerType: EntityType;
+  ownerId: string;
+  notes: Note[];
+  onCreateNote: (input: NoteFormInput) => Promise<DataResult<Note>>;
+  onTogglePin: (noteId: string) => Promise<DataResult<Note>>;
   readOnly: boolean;
   onNotesChanged: () => void;
 }
 
-export function NotesSection({ leadId, notes, readOnly, onNotesChanged }: NotesSectionProps) {
+export function NotesSection({
+  workspaceId,
+  ownerType,
+  ownerId,
+  notes,
+  onCreateNote,
+  onTogglePin,
+  readOnly,
+  onNotesChanged,
+}: NotesSectionProps) {
   const [showForm, setShowForm] = useState(false);
   const [pendingNoteId, setPendingNoteId] = useState<string | null>(null);
+  const ownerLabel = OWNER_LABEL[ownerType];
 
   const pinned = notes.filter((note) => note.is_pinned);
   const rest = notes.filter((note) => !note.is_pinned);
 
   const handleTogglePin = async (noteId: string) => {
     setPendingNoteId(noteId);
-    await togglePinNote(noteId);
+    await onTogglePin(noteId);
     setPendingNoteId(null);
     onNotesChanged();
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-workspace-id={workspaceId} data-owner-type={ownerType} data-owner-id={ownerId}>
       {pinned.length > 0 ? (
         <div>
           <h3 className="text-sm font-medium text-text-muted">Pinned notes</h3>
@@ -62,7 +88,7 @@ export function NotesSection({ leadId, notes, readOnly, onNotesChanged }: NotesS
         {showForm ? (
           <div className="mt-3">
             <NoteForm
-              onSubmit={(input: NoteFormInput) => createNote(leadId, input)}
+              onSubmit={onCreateNote}
               onSuccess={() => {
                 setShowForm(false);
                 onNotesChanged();
@@ -74,7 +100,7 @@ export function NotesSection({ leadId, notes, readOnly, onNotesChanged }: NotesS
 
         <div className="mt-3 space-y-3">
           {rest.length === 0 && pinned.length === 0 && !showForm ? (
-            <EmptyState title="No notes yet" description="Add the first note for this lead." />
+            <EmptyState title="No notes yet" description={`Add the first note for this ${ownerLabel}.`} />
           ) : (
             rest.map((note) => (
               <NoteCard

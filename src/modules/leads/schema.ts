@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { NOTE_CATEGORIES } from "@/core/enums/noteCategory";
-import { NOTE_PRIORITIES } from "@/core/enums/notePriority";
+
+export { noteFormSchema, type NoteFormInput } from "@/modules/notes/schema";
 
 /**
  * Client-side (react-hook-form) schema. Every field is a plain string —
@@ -75,12 +75,3 @@ export const leadDataSchema = leadFormSchema.transform((data) => ({
 }));
 
 export type LeadDataInput = z.infer<typeof leadDataSchema>;
-
-export const noteFormSchema = z.object({
-  title: z.string().trim().min(1, "Title is required"),
-  content: z.string().trim().min(1, "Note content is required"),
-  category: z.enum(NOTE_CATEGORIES),
-  priority: z.enum(NOTE_PRIORITIES),
-});
-
-export type NoteFormInput = z.infer<typeof noteFormSchema>;

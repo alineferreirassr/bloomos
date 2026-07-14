@@ -73,12 +73,16 @@ export function ClientProofView({ clientId }: { clientId: string }) {
           <div>
             <dt className="text-xs text-text-muted">Converted from Lead</dt>
             <dd className="text-sm text-text">
-              <Link
-                href={`/leads/${client.origin_lead_id}`}
-                className="text-accent hover:underline"
-              >
-                View original Lead →
-              </Link>
+              {client.originating_lead_id ? (
+                <Link
+                  href={`/leads/${client.originating_lead_id}`}
+                  className="text-accent hover:underline"
+                >
+                  View original Lead →
+                </Link>
+              ) : (
+                "—"
+              )}
             </dd>
           </div>
         </dl>

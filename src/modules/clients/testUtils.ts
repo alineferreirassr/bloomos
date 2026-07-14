@@ -1,0 +1,55 @@
+import type { Client } from "@/types/client";
+
+/** Test-only fixture factory — not imported by any app code. */
+export function makeClient(overrides: Partial<Client> = {}): Client {
+  return {
+    id: "client_test",
+    workspace_id: "ws_test",
+    originating_lead_id: null,
+    first_name: "Test",
+    last_name: "Client",
+    email: "test.client@example.com",
+    phone: null,
+    instagram: null,
+    preferred_contact_method: null,
+    partner_name: null,
+    relationship_status: null,
+    important_dates: [],
+    address: null,
+    city: null,
+    state: null,
+    zip_code: null,
+    source: "Website",
+    tags: [],
+    internal_status: "active",
+    is_returning: false,
+
+    how_they_met: null,
+    first_date: null,
+    relationship_anniversary: null,
+    engagement_date: null,
+    wedding_date: null,
+    favorite_colors: null,
+    favorite_flowers: null,
+    favorite_music: null,
+    favorite_food: null,
+    favorite_drinks: null,
+    preferred_style: null,
+    disliked_elements: null,
+
+    allergies: null,
+    accessibility_needs: null,
+    dietary_restrictions: null,
+    preferred_communication_time: null,
+    do_not_call: false,
+    surprise_event_confidentiality: false,
+    emergency_contact_name: null,
+    emergency_contact_phone: null,
+    is_vip: false,
+
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+    archived_at: null,
+    ...overrides,
+  };
+}

@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getLeadById, getNotesByLeadId, getTimelineByLeadId } from "@/lib/data";
+import { createNote, getLeadById, getNotesByLeadId, getTimelineByLeadId, togglePinNote } from "@/lib/data";
 import type { Lead } from "@/types/lead";
-import type { LeadNote } from "@/types/note";
+import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
 import { NotFoundError } from "@/core/errors";
 import { Card } from "@/components/ui/Card";
@@ -13,15 +13,15 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { LeadStatusBadge } from "@/modules/leads/components/LeadStatusBadge";
 import { LeadStatusSelect } from "@/modules/leads/components/LeadStatusSelect";
 import { LeadActions } from "@/modules/leads/components/LeadActions";
-import { NotesSection } from "@/modules/leads/components/NotesSection";
-import { LeadTimeline } from "@/modules/leads/components/LeadTimeline";
+import { NotesSection } from "@/modules/notes/components/NotesSection";
+import { Timeline } from "@/modules/timeline/components/Timeline";
 import { getNextRecommendedAction } from "@/core/workflows/leadWorkflow";
 
 type LoadState =
   | { status: "loading" }
   | { status: "not-found" }
   | { status: "error" }
-  | { status: "ready"; lead: Lead; notes: LeadNote[]; timeline: TimelineActivity[] };
+  | { status: "ready"; lead: Lead; notes: Note[]; timeline: TimelineActivity[] };
 
 async function loadLeadDetail(leadId: string): Promise<LoadState> {
   try {
@@ -155,8 +155,12 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
             <h3 className="text-sm font-medium text-text-muted">Notes</h3>
             <div className="mt-3">
               <NotesSection
-                leadId={lead.id}
+                workspaceId={lead.workspace_id}
+                ownerType="lead"
+                ownerId={lead.id}
                 notes={notes}
+                onCreateNote={(input) => createNote(lead.id, input)}
+                onTogglePin={togglePinNote}
                 readOnly={isReadOnly}
                 onNotesChanged={refetch}
               />
@@ -174,7 +178,7 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
           <Card>
             <h3 className="text-sm font-medium text-text-muted">Timeline</h3>
             <div className="mt-3">
-              <LeadTimeline activities={timeline} />
+              <Timeline activities={timeline} />
             </div>
           </Card>
         </div>

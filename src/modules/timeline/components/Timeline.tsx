@@ -2,7 +2,8 @@ import { TIMELINE_ACTIVITY_LABELS } from "@/core/enums/timelineActivityType";
 import type { TimelineActivity } from "@/types/timelineActivity";
 import { EmptyState } from "@/components/ui/EmptyState";
 
-export function LeadTimeline({ activities }: { activities: TimelineActivity[] }) {
+/** Generic — renders any owner's TimelineActivity[] (Lead or Client), no owner-specific logic. */
+export function Timeline({ activities }: { activities: TimelineActivity[] }) {
   if (activities.length === 0) {
     return <EmptyState title="No activity yet" />;
   }

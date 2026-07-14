@@ -44,44 +44,76 @@ The schema representation of a Workspace (`BLOOMOS_BIBLE.md` §7) — one row pe
 | created_at / updated_at | timestamptz | |
 | archived_at | timestamptz | nullable, set when status becomes `archived` |
 
-### `lead_notes`
+### `notes`
+Shared by Leads and Clients — one polymorphic table (`owner_type` + `owner_id`) rather than a separate `lead_notes` and `client_notes` table, so the shape doesn't duplicate itself as more owner types are added.
+
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| lead_id | uuid | FK → leads |
+| workspace_id | uuid | FK → workspaces — see "Polymorphic ownership" below for why every read/write scopes by this in addition to owner_type/owner_id |
+| owner_type | enum | `lead`, `client` |
+| owner_id | uuid | references leads.id or clients.id, depending on owner_type — **not** a database-enforced FK; see below |
 | title | text | |
 | content | text | |
-| category | enum | `general`, `special_request`, `preference`, `idea`, `reminder`, `problem`, `allergy`, `internal_alert` |
+| category | enum | `general`, `special_request`, `preference`, `relationship_detail`, `allergy`, `accessibility`, `dietary_restriction`, `communication`, `internal_alert`, `idea`, `reminder`, `problem` |
 | priority | enum | `low`, `normal`, `high`, `critical` |
-| is_pinned | boolean | pinned notes surface first on the Lead detail page |
+| is_pinned | boolean | pinned notes surface first on the Lead/Client detail page |
+| attachments | jsonb | metadata-only placeholders (`id`, `file_name`, `file_type`, `size_bytes`) — no real file storage until Supabase Storage is connected |
 | created_by | text | actor name; becomes a real FK once auth exists |
 | created_at / updated_at | timestamptz | |
 
-### `lead_timeline_activities`
-Append-only. Every entry is written through one shared mechanism (`recordTimelineActivity`), never constructed by hand — see `docs/workflows.md`.
+### `timeline_activities`
+Shared by Leads and Clients — one polymorphic, append-only table (`owner_type` + `owner_id`). Every entry is written through one shared mechanism (`recordTimelineActivity`), never constructed by hand — see `docs/workflows.md`.
 
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| lead_id | uuid | FK → leads |
-| type | enum | `lead_created`, `lead_updated`, `status_changed`, `note_added`, `note_pinned`, `note_unpinned`, `welcome_guide_sent`, `lead_archived`, `lead_converted` |
+| workspace_id | uuid | FK → workspaces — see "Polymorphic ownership" below for why every read/write scopes by this in addition to owner_type/owner_id |
+| owner_type | enum | `lead`, `client` |
+| owner_id | uuid | references leads.id or clients.id, depending on owner_type — **not** a database-enforced FK; see below |
+| type | enum | `lead_created`, `lead_updated`, `status_changed`, `note_added`, `note_pinned`, `note_unpinned`, `welcome_guide_sent`, `lead_archived`, `lead_converted`, `client_created`, `client_updated`, `tags_changed`, `vip_status_changed`, `communication_preference_changed`, `client_archived`, `client_restored` |
 | description | text | human-readable summary |
 | actor | text | who/what performed the action |
 | timestamp | timestamptz | |
 | metadata | jsonb | nullable — e.g. `{ from, to }` on a status change, `{ client_id }` on conversion |
+
+#### Polymorphic ownership: no normal foreign key is possible
+
+`notes.owner_id` and `timeline_activities.owner_id` each point at either `leads.id` or `clients.id` depending on the row's `owner_type` — a single column referencing two different target tables. Postgres (and Supabase) cannot express that as one `FOREIGN KEY` constraint; a normal FK targets exactly one table. This is a deliberate tradeoff to avoid duplicating the entire Notes/Timeline architecture into separate `lead_notes`/`client_notes` and `lead_timeline_activities`/`client_timeline_activities` tables.
+
+Because referential integrity and workspace isolation can't be guaranteed by a FK here, both are enforced elsewhere instead:
+
+- **Data layer (now):** every read/write in `lib/data/index.ts` derives `workspace_id` from the owning Lead/Client record and filters by `workspace_id` **and** `owner_type`/`owner_id` together — never `owner_id` alone. A note or timeline row is only ever reachable through its actual owner's own workspace.
+- **Supabase RLS (once connected):** row-level security policies must independently re-check `workspace_id` against the authenticated user's workspace, and validate that `owner_id` actually exists in the table named by `owner_type`, on every `SELECT`/`INSERT`/`UPDATE`. A `CHECK` constraint can validate `owner_type IN ('lead','client')`, but the owner's existence and workspace match must be enforced by RLS policy logic (or trigger-based validation) rather than a FK.
 
 ### `clients`
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
 | workspace_id | uuid | FK → workspaces |
+| originating_lead_id | uuid | nullable FK → leads — manually-created Clients have no originating Lead |
 | first_name | text | |
 | last_name | text | |
 | email | text | |
 | phone | text | nullable |
-| origin_lead_id | uuid | nullable FK → leads |
+| instagram | text | nullable |
+| preferred_contact_method | enum | nullable — `email`, `phone`, `text`, `whatsapp`, `instagram` |
+| partner_name | text | nullable |
+| relationship_status | text | nullable — curated options in `modules/clients/constants.ts`, not a canonical enum |
+| important_dates | jsonb | array of `{ id, label, date }` — custom/ad-hoc dates beyond the fixed couple-info milestones below |
+| address / city / state / zip_code | text | nullable |
+| source | text | nullable — how they originally came in; curated options in `modules/clients/constants.ts` |
+| tags | text[] | |
+| internal_status | enum | `active`, `planning`, `past_client`, `inactive`, `archived` — canonical values live in `core/enums/clientStatus.ts` |
 | is_returning | boolean | true once they have more than one event |
-| created_at / updated_at / deleted_at | timestamptz | |
+| how_they_met / first_date / relationship_anniversary / engagement_date / wedding_date | text/date | nullable couple-info milestones |
+| favorite_colors / favorite_flowers / favorite_music / favorite_food / favorite_drinks / preferred_style / disliked_elements | text | nullable couple-info preferences |
+| allergies / accessibility_needs / dietary_restrictions / preferred_communication_time | text | nullable — internal-only, never exposed to a future Client Portal |
+| do_not_call / surprise_event_confidentiality | boolean | internal-only operational flags |
+| emergency_contact_name / emergency_contact_phone | text | nullable |
+| is_vip | boolean | VIP / high-priority flag |
+| created_at / updated_at | timestamptz | |
+| archived_at | timestamptz | nullable, set when internal_status becomes `archived` |
 
 ### `events`
 The record tying a client to a specific engagement and tracking it through the lifecycle.
@@ -129,9 +161,11 @@ Finance module: deposits and subsequent payments against a contract.
 ```
 workspaces 1—* leads
 workspaces 1—* clients
-leads 1—* lead_notes
-leads 1—* lead_timeline_activities
-leads 1—0/1 clients        (via clients.origin_lead_id)
+leads 1—* notes                (owner_type = 'lead')
+leads 1—* timeline_activities  (owner_type = 'lead')
+clients 1—* notes               (owner_type = 'client')
+clients 1—* timeline_activities (owner_type = 'client')
+leads 1—0/1 clients        (via clients.originating_lead_id)
 clients 1—* events
 events 1—0/1 contracts
 contracts 1—* payments

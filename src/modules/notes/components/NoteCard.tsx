@@ -1,10 +1,10 @@
 import { Card } from "@/components/ui/Card";
-import { NoteCategoryBadge } from "@/modules/leads/components/NoteCategoryBadge";
-import { NotePriorityBadge } from "@/modules/leads/components/NotePriorityBadge";
-import type { LeadNote } from "@/types/note";
+import { NoteCategoryBadge } from "@/modules/notes/components/NoteCategoryBadge";
+import { NotePriorityBadge } from "@/modules/notes/components/NotePriorityBadge";
+import type { Note } from "@/types/note";
 
 interface NoteCardProps {
-  note: LeadNote;
+  note: Note;
   onTogglePin: (noteId: string) => void;
   readOnly: boolean;
   pinPending: boolean;

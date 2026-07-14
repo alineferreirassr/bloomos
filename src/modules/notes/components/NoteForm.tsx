@@ -8,14 +8,14 @@ import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
-import { noteFormSchema, type NoteFormInput } from "@/modules/leads/schema";
+import { noteFormSchema, type NoteFormInput } from "@/modules/notes/schema";
 import { NOTE_CATEGORIES, NOTE_CATEGORY_LABELS } from "@/core/enums/noteCategory";
 import { NOTE_PRIORITIES, NOTE_PRIORITY_LABELS } from "@/core/enums/notePriority";
 import type { DataResult } from "@/lib/data/result";
-import type { LeadNote } from "@/types/note";
+import type { Note } from "@/types/note";
 
 interface NoteFormProps {
-  onSubmit: (input: NoteFormInput) => Promise<DataResult<LeadNote>>;
+  onSubmit: (input: NoteFormInput) => Promise<DataResult<Note>>;
   onSuccess: () => void;
   onCancel: () => void;
 }

@@ -33,14 +33,51 @@ export async function convertLeadToClient(
   const client: Client = {
     id: generateId("client"),
     workspace_id: existing.workspace_id,
+    originating_lead_id: existing.id,
     first_name: existing.first_name,
     last_name: existing.last_name,
     email: existing.email,
     phone: existing.phone,
-    origin_lead_id: existing.id,
+    instagram: existing.instagram,
+    preferred_contact_method: null,
+    partner_name: null,
+    relationship_status: null,
+    important_dates: [],
+    address: null,
+    city: null,
+    state: null,
+    zip_code: null,
+    source: existing.source,
+    tags: [],
+    internal_status: "active",
     is_returning: false,
+
+    how_they_met: null,
+    first_date: null,
+    relationship_anniversary: null,
+    engagement_date: null,
+    wedding_date: null,
+    favorite_colors: null,
+    favorite_flowers: null,
+    favorite_music: null,
+    favorite_food: null,
+    favorite_drinks: null,
+    preferred_style: null,
+    disliked_elements: null,
+
+    allergies: null,
+    accessibility_needs: null,
+    dietary_restrictions: null,
+    preferred_communication_time: null,
+    do_not_call: false,
+    surprise_event_confidentiality: false,
+    emergency_contact_name: null,
+    emergency_contact_phone: null,
+    is_vip: false,
+
     created_at: timestamp,
     updated_at: timestamp,
+    archived_at: null,
   };
   writeClients([...readClients(), client]);
 
@@ -52,9 +89,17 @@ export async function convertLeadToClient(
   };
   writeLeads(readLeads().map((lead) => (lead.id === leadId ? updatedLead : lead)));
 
-  recordTimelineActivity(leadId, "lead_converted", "Lead converted to Client", {
+  recordTimelineActivity(existing.workspace_id, "lead", leadId, "lead_converted", "Lead converted to Client", {
     client_id: client.id,
   });
+  recordTimelineActivity(
+    client.workspace_id,
+    "client",
+    client.id,
+    "client_created",
+    "Client created from converted Lead",
+    { originating_lead_id: existing.id },
+  );
 
   return ok({ lead: updatedLead, client });
 }
