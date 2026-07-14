@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 const OWNER_LABEL: Record<EntityType, string> = {
   lead: "Lead",
   client: "Client",
+  event: "Event",
 };
 
 /**
