@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Navigation no longer leads to 404s: `/leads`, `/clients`, `/events`, `/contracts`, `/finance` each render a shared `ComingSoon` placeholder until their module is built, so every nav link and Dashboard metric card resolves to a real page
+
 ### Added
 
 - Next.js 16 (App Router) + TypeScript (strict) + Tailwind CSS v4 + ESLint project scaffolded

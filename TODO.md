@@ -31,6 +31,7 @@ Current, actionable tasks. Keep this in sync with reality — check items off as
 
 - [x] Build app shell (AppShell, Sidebar, TopBar, responsive Mobile Navigation)
 - [x] Build minimal Dashboard shell early (placeholder cards over mock data) — not deferred to the end
+- [x] Fix navigation: Leads/Clients/Events/Contracts/Finance show a "Coming Soon" placeholder instead of 404
 - [ ] `core/` real scaffolding (shared enums, constants, errors, permissions, roles, guards, logger) — populate when the Leads module starts
 - [ ] `lib/data/index.ts` swappable data-access abstraction — introduce when a second data source (a real module) exists
 - [ ] Define mock data + centralized types for Leads, Clients, Events, Contracts, Finance
