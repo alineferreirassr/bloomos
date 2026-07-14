@@ -37,7 +37,8 @@ Current, actionable tasks. Keep this in sync with reality — check items off as
 - [x] `lib/data/index.ts` swappable data-access abstraction — introduced with the Leads module (mock-backed for now)
 - [x] Define mock data + centralized types for Leads (Clients only as much as the conversion proof needs; Events/Contracts/Finance still pending)
 - [x] Build Leads module end to end: list (search/filter/archive-visibility, responsive table+cards, empty/loading/error states), detail (contact/event info, pinned+all notes, timeline, status selector, actions), create/edit forms, Welcome Guide mock action, Archive, Convert-to-Client (via `LeadConversionService`) — then wire its card into the Dashboard
-- [ ] Build Clients module (beyond the minimal conversion-proof detail page), then wire its card into the Dashboard
+- [x] Build Clients module foundation: canonical types/enums/schemas, generalized Notes/Timeline architecture (shared with Leads, workspace-scoped), data layer, workflow helper
+- [x] Build Clients module UI: list (search/filters/VIP/tags/source/archived, responsive table+cards, empty/loading/error states), full profile (header/contact/relationship/address/preferences/internal, shared Notes+Timeline), create/edit forms, quick actions (Edit/Archive/Restore/VIP/Status/Contact method) — then wire its card into the Dashboard
 - [ ] Build Events module, then wire its card into the Dashboard
 - [ ] Build Contracts module, then wire its card into the Dashboard
 - [ ] Build Finance module, then wire its card into the Dashboard

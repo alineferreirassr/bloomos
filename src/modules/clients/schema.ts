@@ -35,7 +35,7 @@ export const clientFormSchema = z.object({
   state: z.string().trim(),
   zip_code: z.string().trim(),
   source: z.string().trim(),
-  important_dates: z.array(importantDateSchema).default([]),
+  important_dates: z.array(importantDateSchema),
 
   how_they_met: z.string().trim(),
   first_date: z.string().trim(),
@@ -54,8 +54,8 @@ export const clientFormSchema = z.object({
   accessibility_needs: z.string().trim(),
   dietary_restrictions: z.string().trim(),
   preferred_communication_time: z.string().trim(),
-  do_not_call: z.boolean().default(false),
-  surprise_event_confidentiality: z.boolean().default(false),
+  do_not_call: z.boolean(),
+  surprise_event_confidentiality: z.boolean(),
   emergency_contact_name: z.string().trim(),
   emergency_contact_phone: z.string().trim(),
 });
