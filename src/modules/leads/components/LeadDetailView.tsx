@@ -122,7 +122,7 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card>
-            <h3 className="text-sm font-medium text-text-muted">Contact information</h3>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Contact information</h3>
             <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Email" value={lead.email} />
               <Field label="Phone" value={lead.phone} />
@@ -133,7 +133,7 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
           </Card>
 
           <Card>
-            <h3 className="text-sm font-medium text-text-muted">Event information</h3>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Event information</h3>
             <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Event type" value={lead.event_type} />
               <Field
@@ -152,7 +152,7 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
           </Card>
 
           <Card>
-            <h3 className="text-sm font-medium text-text-muted">Notes</h3>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
             <div className="mt-3">
               <NotesSection
                 workspaceId={lead.workspace_id}
@@ -170,13 +170,13 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
 
         <div className="space-y-6">
           <Card>
-            <h3 className="text-sm font-medium text-text-muted">Status</h3>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Status</h3>
             <div className="mt-3">
               <LeadStatusSelect leadId={lead.id} status={lead.status} onChanged={refetch} />
             </div>
           </Card>
           <Card>
-            <h3 className="text-sm font-medium text-text-muted">Timeline</h3>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
             <div className="mt-3">
               <Timeline activities={timeline} />
             </div>

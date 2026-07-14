@@ -19,16 +19,16 @@ export function FormField({
 }: FormFieldProps) {
   return (
     <div>
-      <label htmlFor={htmlFor} className="block text-sm font-medium tracking-tight text-text">
+      <label htmlFor={htmlFor} className="mb-[5px] block text-xs text-text/70">
         {label}
         {required ? <span className="text-accent"> *</span> : null}
       </label>
-      <div className="mt-2">{children}</div>
+      {children}
       {hint && !error ? (
-        <p className="mt-1.5 text-xs text-text-muted">{hint}</p>
+        <p className="mt-1 text-xs text-text-muted">{hint}</p>
       ) : null}
       {error ? (
-        <p role="alert" className="mt-1.5 text-xs text-danger">
+        <p role="alert" className="mt-1 text-xs text-danger">
           {error}
         </p>
       ) : null}

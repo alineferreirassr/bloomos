@@ -2,10 +2,12 @@ import type { HTMLAttributes } from "react";
 
 type CardProps = HTMLAttributes<HTMLDivElement>;
 
+/* .card — no fill, thin divider border only. Matches the approved design's
+   restraint: cards are defined by their border, not by a white surface. */
 export function Card({ className = "", ...props }: CardProps) {
   return (
     <div
-      className={`rounded-2xl border border-border bg-surface p-6 shadow-[0_1px_2px_rgba(46,42,39,0.04)] transition-colors duration-150 sm:p-7 ${className}`}
+      className={`rounded-md border border-border bg-transparent p-3.5 ${className}`}
       {...props}
     />
   );

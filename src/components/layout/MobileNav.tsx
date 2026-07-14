@@ -23,29 +23,30 @@ export function MobileNav({ open, onClose }: MobileNavProps) {
         type="button"
         aria-label="Close navigation menu"
         onClick={onClose}
-        className={`absolute inset-0 bg-text/30 backdrop-blur-[2px] transition-opacity duration-200 ${
+        className={`absolute inset-0 bg-neutral-800/50 transition-opacity duration-200 ${
           open ? "opacity-100" : "opacity-0"
         }`}
       />
       <div
-        className={`absolute inset-y-0 left-0 flex w-72 flex-col bg-sidebar shadow-xl transition-transform duration-200 ${
+        className={`absolute inset-y-0 left-0 flex w-64 flex-col bg-sidebar py-6 shadow-md transition-transform duration-200 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex items-center justify-between px-7 py-8">
-          <span className="font-serif text-2xl font-semibold tracking-tight text-text">
-            BloomOS
-          </span>
+        <div className="mb-4 flex items-center justify-between border-b border-border px-[23px] pb-[23px]">
+          <div>
+            <div className="font-serif text-xl font-semibold tracking-[0.01em] text-text">BloomOS</div>
+            <div className="mt-1 text-[11px] tracking-[0.06em] text-text/55 uppercase">Amoré Bloom</div>
+          </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close navigation menu"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-text"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors duration-150 hover:bg-text/7 hover:text-text"
           >
             <CloseIcon className="h-5 w-5" />
           </button>
         </div>
-        <nav className="flex-1 space-y-1 px-4">
+        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3.5">
           {navigationItems.map((item) => {
             const isActive = pathname.startsWith(item.href);
             const Icon = item.icon;
@@ -55,31 +56,27 @@ export function MobileNav({ open, onClose }: MobileNavProps) {
                 key={item.href}
                 href={item.href}
                 onClick={onClose}
-                className={`relative flex items-center gap-3 rounded-lg py-2.5 pl-4 pr-3 text-sm font-medium tracking-tight transition-colors duration-150 ${
-                  isActive ? "text-text" : "text-text-muted hover:text-text"
+                className={`flex items-center gap-2.5 rounded-md border-l-2 px-3 py-2 text-[14.5px] transition-colors duration-150 ${
+                  isActive
+                    ? "border-accent bg-accent/7 font-semibold text-text"
+                    : "border-transparent font-normal text-text hover:bg-accent/10"
                 }`}
               >
-                <span
-                  aria-hidden="true"
-                  className={`absolute top-1/2 left-0 h-4 w-[2px] -translate-y-1/2 rounded-full bg-accent transition-opacity duration-150 ${
-                    isActive ? "opacity-100" : "opacity-0"
-                  }`}
+                <Icon
+                  className={`h-[17px] w-[17px] shrink-0 ${isActive ? "opacity-95" : "opacity-60"}`}
                 />
-                <Icon className="h-[18px] w-[18px] shrink-0" />
                 {item.label}
               </Link>
             );
           })}
         </nav>
-        <div className="border-t border-border px-7 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/15 text-xs font-semibold text-accent">
-              AB
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-text">{CURRENT_ACTOR}</p>
-              <p className="truncate text-xs text-text-muted">Amoré Bloom</p>
-            </div>
+        <div className="mt-3 flex items-center gap-2.5 border-t border-border px-[23px] pt-4">
+          <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border border-border font-serif text-[13px] text-text">
+            AB
+          </div>
+          <div className="leading-tight">
+            <div className="text-[13px] text-text">{CURRENT_ACTOR}</div>
+            <div className="text-[11.5px] text-text/55">Amoré Bloom</div>
           </div>
         </div>
       </div>

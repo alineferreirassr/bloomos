@@ -24,31 +24,31 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 grid place-items-center p-4">
       <button
         type="button"
         aria-label="Close dialog"
         onClick={onClose}
-        className="absolute inset-0 bg-text/30 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-neutral-800/50"
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative w-full max-w-md rounded-2xl border border-border bg-surface p-7 shadow-xl"
+        className="relative flex w-full max-w-[440px] flex-col gap-3.5 rounded-lg border border-border bg-surface p-4 shadow-md"
       >
         <div className="flex items-start justify-between gap-4">
-          <h2 className="text-lg font-semibold text-text">{title}</h2>
+          <h2 className="font-serif text-xl font-semibold text-text">{title}</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-text-muted transition-colors duration-150 hover:bg-surface-muted hover:text-text"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors duration-150 hover:bg-text/7 hover:text-text"
           >
             <CloseIcon className="h-4 w-4" />
           </button>
         </div>
-        <div className="mt-4">{children}</div>
+        <div className="text-sm text-text/85">{children}</div>
       </div>
     </div>
   );

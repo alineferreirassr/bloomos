@@ -132,7 +132,7 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card>
-            <h3 className="text-sm font-medium text-text-muted">Contact</h3>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Contact</h3>
             <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Email" value={client.email} />
               <Field label="Phone" value={client.phone} />
@@ -149,7 +149,7 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
           </Card>
 
           <Card>
-            <h3 className="text-sm font-medium text-text-muted">Relationship</h3>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Relationship</h3>
             <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Partner" value={client.partner_name} />
               <Field label="Relationship status" value={client.relationship_status} />
@@ -174,7 +174,7 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
           </Card>
 
           <Card>
-            <h3 className="text-sm font-medium text-text-muted">Address</h3>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Address</h3>
             <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Address" value={client.address} />
               <Field label="City" value={client.city} />
@@ -184,7 +184,7 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
           </Card>
 
           <Card>
-            <h3 className="text-sm font-medium text-text-muted">Preferences</h3>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Preferences</h3>
             <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Color palette" value={client.favorite_colors} />
               <Field label="Favorite flowers" value={client.favorite_flowers} />
@@ -207,7 +207,7 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
           </Card>
 
           <Card>
-            <h3 className="text-sm font-medium text-text-muted">Notes</h3>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
             <div className="mt-3">
               <NotesSection
                 workspaceId={client.workspace_id}
@@ -225,7 +225,7 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
 
         <div className="space-y-6">
           <Card>
-            <h3 className="text-sm font-medium text-text-muted">Internal</h3>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Internal</h3>
             <dl className="mt-3 grid grid-cols-1 gap-3">
               <div>
                 <dt className="text-xs text-text-muted">Tags</dt>
@@ -267,7 +267,7 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
           </Card>
 
           <Card>
-            <h3 className="text-sm font-medium text-text-muted">Timeline</h3>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
             <div className="mt-3">
               <Timeline activities={timeline} />
             </div>

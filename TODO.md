@@ -40,6 +40,7 @@ Current, actionable tasks. Keep this in sync with reality — check items off as
 - [x] Build Clients module foundation: canonical types/enums/schemas, generalized Notes/Timeline architecture (shared with Leads, workspace-scoped), data layer, workflow helper
 - [x] Build Clients module UI: list (search/filters/VIP/tags/source/archived, responsive table+cards, empty/loading/error states), full profile (header/contact/relationship/address/preferences/internal, shared Notes+Timeline), create/edit forms, quick actions (Edit/Archive/Restore/VIP/Status/Contact method/Tags) — then wire its card into the Dashboard
 - [x] Full Clients browser smoke test (notes, preferences, important dates, status, contact method, VIP, tags, archive/restore, mobile list+profile+form, Lead→Client conversion) — passed; one gap found and fixed (Tags had no UI despite the data layer already supporting it)
+- [x] Implement the approved design (`bloomos-handoff/` Classical design system) exactly, on `feature/design-system` — tokens, fonts (Lora + Cormorant Garamond), outline buttons, borderless cards, 3-tone tags, corrected icons, matching Sidebar/Header spacing; presentation-layer only, no routing/data-layer/component-hierarchy changes; 5 disclosed gaps recorded in `docs/design-system.md`
 - [ ] Build Events module, then wire its card into the Dashboard
 - [ ] Build Contracts module, then wire its card into the Dashboard
 - [ ] Build Finance module, then wire its card into the Dashboard

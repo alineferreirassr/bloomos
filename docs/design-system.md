@@ -1,75 +1,66 @@
 # Design System
 
-Visual and interaction principles for BloomOS, plus the concrete tokens now locked in with the first real screens (Dashboard, Leads, Clients). This file must stay in sync with `src/app/globals.css`, the executable source of truth for tokens (Tailwind CSS v4 defines them as CSS custom properties via `@theme`, not a `tailwind.config.ts` file).
+Visual and interaction principles for BloomOS, plus the concrete tokens implementing the **approved design** delivered as a handoff package (`bloomos-handoff/`, Classical design system — `_ds/classical-.../styles.css` is the authoritative source of every value below; this file must stay in sync with `src/app/globals.css`). This is not a from-scratch design — it is a faithful implementation of a prototype the founder already approved, reproduced pixel-for-pixel where the existing React architecture allows it without restructuring.
 
-## Reference bar
+## Reference
 
-Attio, Linear, Notion, Arc, Apple, Framer, Pitch, Superhuman, and luxury hotel/editorial branding. BloomOS is a premium operating system for luxury event businesses, not an admin dashboard — the interface should feel calm, editorial, and expensive, closer to a well-typeset magazine or a luxury brand's private workspace than a SaaS back office.
+The approved prototype: `Dashboard.dc.html`, `Leads.dc.html`, `Lead Detail.dc.html`, `Lead Form.dc.html`, `Sidebar.dc.html`, `Header.dc.html`, backed by `_ds/classical-.../styles.css`. Clients/Events/Contracts/Finance were not prototyped in that handoff — their screens follow the same tokens and component classes by extension, since the handoff's own instructions call for reusing exactly `.btn`/`.card`/`.tag`/`.field`/`.input`/`.table`/`.dialog` rather than inventing new visual language per module.
 
 ## Principles
 
-- **Premium means restrained, not decorated.** No gradients, no heavy shadows, no bright/saturated colors. Elegance comes from whitespace, alignment, and typography.
-- **Content-first.** The client's and event's data is the interface. Chrome (nav, buttons, labels) stays quiet.
-- **Editorial hierarchy.** Page-level titles are large and set in a serif display face; everything else — labels, table headers, badges — stays small, quiet, and functional in the sans body face.
-- **One clear action per screen.** Primary actions (soft gold) are obvious; secondary and ghost actions don't compete for attention.
-- **Consistent status language.** Every lifecycle stage and status gets one shared `Badge` treatment (muted tone, thin border), never a bespoke look per module.
-- **Motion is functional, not decorative.** Subtle fades/slides (150–200ms) clarify state changes (drawer open/close, hover); nothing performs for its own sake.
+- **Reproduce, don't reinterpret.** Every token below is copied from the approved `styles.css`, not estimated from a screenshot or redesigned to taste.
+- **Borders define shape, not fill.** Cards, inputs, and buttons carry almost no background of their own — they're outlined against the page, not white boxes floating on gray. Only the sidebar and dialogs get a distinct filled surface tone.
+- **Outline buttons, not filled ones.** The primary action is a gold-outlined, gold-text button that tints on hover — never a solid gold block.
+- **Three status tones, not five.** `tag-outline` (in progress), `tag-accent` (won/converted), `tag-neutral` (lost/archived) — no separate success/warning/danger palette exists in the approved system.
+- **Editorial hierarchy.** Page titles and card section headers are serif (Cormorant Garamond); everything else — labels, table headers, body copy — is Lora, the approved system's body face.
 
 ## Typography
 
-| Role | Family | Notes |
-|---|---|---|
-| Headings (`h1`, `h2`) | Cormorant Garamond | Loaded via `next/font/google`, applied globally in `globals.css`; page titles and record names (e.g. a Client's name) render in this face automatically — no per-component class needed |
-| Interface (body, labels, table headers, buttons) | Inter | Loaded via `next/font/google`; the default body face |
-| Numbers (dashboard metrics) | Inter Medium | `MetricCard`'s value — deliberately sans, not serif, for legibility at a glance |
-
-Section sub-headers inside cards (`h3`, e.g. "Contact", "Notes") stay in Inter, not serif — they're structural UI labels, not editorial titles.
+| Role | Family | Size | Notes |
+|---|---|---|---|
+| Page/section headings (`h1`/`h2`, card titles) | Cormorant Garamond, weight 600 | h1 42px / h2 32px / card-title 17px | Loaded via `next/font/google`; global `h1, h2 { font-family: var(--font-serif) }` rule in `globals.css`, plus explicit `font-serif` utility on card section headers and buttons |
+| Body / interface / table / labels | **Lora**, weight 400 | 15px body, 14px table/input, 11–12px labels | Loaded via `next/font/google` — the approved system's body face is Lora, not Inter, despite earlier prose descriptions in this project's chat history; `_ds/classical-.../styles.css` is authoritative and was followed over that prose |
+| Buttons | Cormorant Garamond, weight 600 | 13px | Matches `.btn` exactly — buttons use the heading face, not the body face, in this system |
 
 ## Color
 
-A neutral, warm-toned palette with a single soft-gold accent used sparingly for primary actions, active nav state, and key status. Semantic colors (success/warning/danger) are reserved strictly for status meaning. No bright blue anywhere.
+Copied verbatim from `:root` in the approved `styles.css`. No value below was redefined or estimated.
 
-### Tokens (`src/app/globals.css`)
+| Token | Value | Use |
+|---|---|---|
+| `--color-background` | `#f3f2f2` | Page background |
+| `--color-sidebar` / `--color-surface` | `#eae9e9` | Sidebar fill and dialog/modal fill — the *only* two things with a distinct filled surface |
+| `--color-border` | `color-mix(in srgb, #201f1d 16%, transparent)` | Every card/input/table/divider border |
+| `--color-text` | `#201f1d` | Primary text |
+| `--color-text-muted` | `color-mix(in srgb, #201f1d 55%, transparent)` | Secondary text — matches the approved system's `.text-muted` class exactly |
+| `--color-accent` | `#b68235` | Primary actions, active nav indicator, links, tag-outline |
+| `--color-accent-2` | `#ac803e` | Secondary accent (available; lightly used) |
+| Accent tint ramp | `100 #fff3e4` / `800 #5a3b0a` | `tag-accent` background/text |
+| Neutral tint ramp | `100 #f8f4f4` / `800 #444141` | `tag-neutral` background/text |
 
-| Token | Light | Dark | Use |
-|---|---|---|---|
-| `--color-background` | `#f8f6f2` | `#1c1917` | App/page background |
-| `--color-sidebar` | `#f4f1ec` | `#201c19` | Sidebar and mobile nav drawer background |
-| `--color-surface` | `#ffffff` | `#262220` | Card/panel/topbar/modal backgrounds |
-| `--color-surface-muted` | `#f1ece3` | `#2c2723` | Hover state on nav items, buttons, table rows |
-| `--color-border` | `#e7e1da` | `#3a342f` | Hairlines, card borders |
-| `--color-text` | `#2e2a27` | `#f3efe9` | Primary text |
-| `--color-text-muted` | `#7a736d` | `#a79e93` | Secondary text, labels, table headers |
-| `--color-accent` | `#c59a5a` | `#d9ad6d` | Primary actions, active nav indicator, focus ring |
-| `--color-accent-foreground` | `#2e2a27` | `#211e1b` | Text on accent-filled surfaces (dark text on gold — light text fails AA contrast against this gold) |
-| `--color-success` / `-foreground` | `#6b8f71` / `#f4f8f4` | `#86ad8b` / `#16211a` | Positive status (muted green, never bright) |
-| `--color-warning` / `-foreground` | `#b8863e` / `#fbf4ea` | `#d1a059` / `#241b0f` | Caution status (muted amber) |
-| `--color-danger` / `-foreground` | `#8c4a4a` / `#f8f0f0` | `#b06868` / `#241414` | Error/destructive status (muted burgundy) |
+There is no success/warning/danger palette in the approved system. `--color-danger` (`#7d5411`, the system's own `accent-700`) is kept only for genuine form-validation error text, per the handoff's own spec: *"mensagens de erro ... em --color-accent-700"*.
 
-Dark mode is driven by `@media (prefers-color-scheme: dark)` by default, with `:root[data-theme="dark"]` / `:root[data-theme="light"]` overrides so a manual theme toggle always wins over the OS preference.
+## Spacing, radius, shadow
 
-## Spacing & density
-
-Generous throughout — this was the biggest single change from the original provisional tokens:
-
-- Cards: `rounded-2xl`, `p-6`–`p-7` (was `rounded-xl`, `p-5`)
-- Buttons/inputs: `rounded-xl`, `py-2.5`+ (was `rounded-lg`, `py-2`)
-- Table rows: `py-4` with uppercase tracked headers (was `py-3`, plain-case headers)
-- Sidebar: `px-7 py-8` header block, `py-2.5` per nav item (was `px-5 py-6`, `py-2`)
-- Main content padding: `p-6 md:p-10` (was `p-4 md:p-6`)
-
-Density is still comfortable on mobile, not just shrunk desktop — the mobile nav is a full slide-in drawer with its own generous spacing and a backdrop blur, not a cramped version of the sidebar.
+- **Radius**: `--radius-sm: 2px`, `--radius-md: 4px` (cards, buttons, inputs, sidebar nav rows), `--radius-lg: 7px` (dialogs). Tags use `3px` (`4px * 0.75`). This replaced an earlier, incorrect first pass at this redesign that used 12–16px radii — a generic-SaaS look the approved system explicitly does not have.
+- **Shadow**: none by default on cards (`.card { background: transparent }` — no elevation at all). Dialogs get a soft `0 3px 10px` ink-tinted shadow.
+- The approved system's own spacing scale (`--space-1` through `--space-8`, a non-standard ~4.6px base unit) was **not** imported wholesale into Tailwind's spacing scale — doing so would have silently changed the meaning of every `p-*`/`gap-*`/`m-*` utility already used across ~40 existing files (a Next.js-configuration-level change well outside "update the presentation layer"). Component-level spacing was hand-matched to the approved pixel values instead (e.g. table cell padding `9px`, card padding `14px`), using Tailwind's existing scale or arbitrary values where needed.
 
 ## Components
 
-- **Button** — `primary` (soft gold fill, dark text, subtle brightness shift on hover), `secondary` (white, thin border), `ghost` (near-invisible, text-only until hovered). Never the Tailwind default blue/gray button look.
-- **Card** — large radius, thin border, a very subtle shadow (`0 1px 2px` at 4% opacity) — no drop-shadow-heavy elevation.
-- **Badge** — thin outlined pill, muted tone-on-tone (10% background tint, 25% border tint of the semantic color), never a solid fill.
-- **Input / Select / Textarea** — larger height, thin border, focus state is a soft accent-colored ring plus an accent border (no default browser blue outline).
-- **Sidebar** — serif wordmark, slim Lucide icons (`strokeWidth={1.5}`), current page marked by a 2px gold indicator bar to the left of the label (not a filled pill), user profile pinned to the bottom.
-- **Mobile nav** — full-height drawer sliding in from the left with a blurred backdrop, `inert` when closed (fully removed from the tab order and hit-testing, not just visually hidden), same nav treatment as the desktop sidebar.
-- **Icons** — [Lucide](https://lucide.dev) (`lucide-react`), wrapped by the existing named exports in `components/ui/icons.tsx` (`DashboardIcon`, `LeadsIcon`, etc.) so no call site changed when the icon set was swapped in.
+- **Button** (`components/ui/Button.tsx`) — `.btn-primary`/`.btn-secondary`/`.btn-ghost`: outline/transparent by default, a soft tint on hover, a stronger tint on active. Cormorant Garamond, 13px, semibold.
+- **Card** (`components/ui/Card.tsx`) — `.card`: transparent background, `1px` border, `4px` radius, `14px` padding. No shadow.
+- **Badge** (`components/ui/Badge.tsx`) — `.tag`: added an `outline` tone (border+text accent, no fill) alongside the existing tones, matching `.tag-outline`/`.tag-accent`/`.tag-neutral`. `LeadStatusBadge`/`ClientStatusBadge`'s status→tone lookup tables were updated to the approved 3-tone mapping (in-progress→outline, won/converted→accent, lost/archived→neutral) — a presentational lookup change only; the underlying status enums and transition rules are untouched.
+- **Input / Select / Textarea** — `.input`: transparent background, `36px` min-height, `1px` divider border, accent border on focus (no default browser outline).
+- **Sidebar / MobileNav** — `224px` (approximated as `14rem`/`w-56` in Tailwind's scale), serif "BloomOS" wordmark + uppercase "AMORÉ BLOOM" subtitle, nav rows with a `2px` left-border + `7%` accent-tinted background when active (never a filled pill), footer profile block with a circular initials avatar.
+- **Icons** — Lucide, matching the approved icon choice per nav item exactly (Leads = `Users`, Clients = `User` singular, not swapped as they were in an earlier pass).
 
-## Explicitly out of scope for this pass
+## Known, deliberate differences from the reference mockups
 
-This was a presentation-only pass — no changes to routing, the data layer, workflows, validation, or tests. Component-level visual specs beyond what Dashboard/Leads/Clients needed (e.g. a dedicated Events/Contracts/Finance visual language) are deferred until those modules are actually built, per the existing "don't invent a design system nobody has validated" principle.
+Disclosed rather than silently diverged from — each below was a scope call made because closing the gap would have meant restructuring page composition, component hierarchy, or the data layer, all explicitly out of bounds for this pass:
+
+1. **Header action buttons.** The approved `Header.dc.html` renders the page's primary/secondary action button (e.g. "Novo lead") *inside* the persistent 72px header bar, driven by props passed down from each page. This app's `TopBar` is a dumb, prop-free breadcrumb; each page renders its own action button inline in the page body instead (e.g. "New Lead" sits at the top of `LeadsListView`'s own content, not in the header row). Changing this would mean giving `TopBar`/`AppShell` a new prop contract and touching every page — a component-hierarchy change, not a style change. The button itself uses the corrected `.btn-primary` style either way.
+2. **Dashboard "Recent leads" table and "Open tasks" panel.** Not reproduced. The current `DashboardPage` renders only the KPI card grid, matching `.card`/`.card-kicker`/`.card-title` styling exactly for what exists. Adding the recent-leads table would mean growing the Dashboard page's composition (a "don't rewrite pages" boundary); the tasks panel would require inventing a `Task` entity that has no data-layer support at all in this codebase (`Task` is not a concept anywhere in `lib/data`) — squarely a data-layer change, not presentation.
+3. **KPI card third line.** The approved KPI cards show a `card-meta` note line (e.g. "excl. perdidos/convertidos") below the value. `DashboardMetric` (`lib/data/index.ts`) only carries `{ label, value, href }` — no note field. Adding one is a data-layer interface change, out of scope; the label/value styling is otherwise pixel-matched.
+4. **Sidebar item count.** The approved sidebar lists 13 modules (including Inventory, Suppliers, Client Portal, Bloom AI, Reports, Documents, Settings as disabled "Em breve" entries). This app's sidebar lists the 6 that have real routes today (Dashboard, Leads, Clients, Events, Contracts, Finance). Adding the other 7 as dead links, or as new placeholder routes, was judged out of bounds for a presentation-only pass — they'll be added as their modules actually ship real routes.
+5. **Body font-family swap (Lora vs. Inter).** Earlier in this project's history, in-chat prose repeatedly specified Inter for body text. The actual approved design file (`styles.css`) specifies Lora. Per this task's explicit instruction to treat the handoff file as the authoritative source and not reinterpret it, Lora was used.

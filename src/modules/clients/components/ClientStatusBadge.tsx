@@ -1,9 +1,11 @@
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { CLIENT_STATUS_LABELS, type ClientStatus } from "@/core/enums/clientStatus";
 
+/* Same 3-tone system as LeadStatusBadge: outline for an active/ongoing
+   relationship, neutral for inactive/past/archived. */
 const STATUS_TONES: Record<ClientStatus, BadgeTone> = {
-  active: "success",
-  planning: "accent",
+  active: "outline",
+  planning: "outline",
   past_client: "neutral",
   inactive: "neutral",
   archived: "neutral",

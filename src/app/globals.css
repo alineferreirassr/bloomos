@@ -1,114 +1,93 @@
 @import "tailwindcss";
 
+/*
+  Tokens copied verbatim from the approved design handoff's Classical design
+  system (`_ds/classical-.../styles.css`), not reinterpreted. Variable NAMES
+  match this codebase's existing convention so every existing bg-surface /
+  text-text / border-border / etc. call site repaints without edits; only
+  the underlying values changed to match the approved hex/px exactly.
+*/
+
 :root {
-  --color-background: #f8f6f2;
-  --color-sidebar: #f4f1ec;
-  --color-surface: #ffffff;
-  --color-surface-muted: #f1ece3;
-  --color-border: #e7e1da;
-  --color-text: #2e2a27;
-  --color-text-muted: #7a736d;
-  --color-accent: #c59a5a;
-  --color-accent-foreground: #2e2a27;
-  --color-success: #6b8f71;
-  --color-success-foreground: #f4f8f4;
-  --color-warning: #b8863e;
-  --color-warning-foreground: #fbf4ea;
-  --color-danger: #8c4a4a;
-  --color-danger-foreground: #f8f0f0;
+  --color-background: #f3f2f2;
+  --color-sidebar: #eae9e9;
+  --color-surface: #eae9e9;
+  --color-border: color-mix(in srgb, #201f1d 16%, transparent);
+  --color-text: #201f1d;
+  --color-text-muted: color-mix(in srgb, #201f1d 55%, transparent);
+  --color-accent: #b68235;
+  --color-accent-2: #ac803e;
+  --color-accent-foreground: #201f1d;
 
-  --font-serif-family: var(--font-cormorant), Georgia, "Times New Roman", serif;
-  --font-sans-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", sans-serif;
-}
+  --color-accent-100: #fff3e4;
+  --color-accent-800: #5a3b0a;
+  --color-neutral-100: #f8f4f4;
+  --color-neutral-800: #444141;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-background: #1c1917;
-    --color-sidebar: #201c19;
-    --color-surface: #262220;
-    --color-surface-muted: #2c2723;
-    --color-border: #3a342f;
-    --color-text: #f3efe9;
-    --color-text-muted: #a79e93;
-    --color-accent: #d9ad6d;
-    --color-accent-foreground: #211e1b;
-    --color-success: #86ad8b;
-    --color-success-foreground: #16211a;
-    --color-warning: #d1a059;
-    --color-warning-foreground: #241b0f;
-    --color-danger: #b06868;
-    --color-danger-foreground: #241414;
-  }
-}
+  /* The approved system has no separate success/warning/danger palette —
+     status is communicated by outline (in progress) vs accent-fill (won)
+     vs neutral-fill (lost/archived) tags. These three are kept only for
+     genuine errors (form validation, ErrorState), reusing accent-700 per
+     the handoff's own error-message spec ("mensagens de erro ... em
+     --color-accent-700"). */
+  --color-danger: #7d5411;
+  --color-danger-foreground: #fff3e4;
+  --color-success: var(--color-accent);
+  --color-success-foreground: var(--color-accent-foreground);
+  --color-warning: var(--color-accent-2);
+  --color-warning-foreground: var(--color-accent-foreground);
 
-/* The theme toggle used by the harness sets data-theme on the root element;
-   it must win over the OS-level prefers-color-scheme media query. */
-:root[data-theme="dark"] {
-  --color-background: #1c1917;
-  --color-sidebar: #201c19;
-  --color-surface: #262220;
-  --color-surface-muted: #2c2723;
-  --color-border: #3a342f;
-  --color-text: #f3efe9;
-  --color-text-muted: #a79e93;
-  --color-accent: #d9ad6d;
-  --color-accent-foreground: #211e1b;
-  --color-success: #86ad8b;
-  --color-success-foreground: #16211a;
-  --color-warning: #d1a059;
-  --color-warning-foreground: #241b0f;
-  --color-danger: #b06868;
-  --color-danger-foreground: #241414;
-}
+  --font-heading-family: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
+  --font-body-family: var(--font-lora), "Lora", Georgia, serif;
 
-:root[data-theme="light"] {
-  --color-background: #f8f6f2;
-  --color-sidebar: #f4f1ec;
-  --color-surface: #ffffff;
-  --color-surface-muted: #f1ece3;
-  --color-border: #e7e1da;
-  --color-text: #2e2a27;
-  --color-text-muted: #7a736d;
-  --color-accent: #c59a5a;
-  --color-accent-foreground: #2e2a27;
-  --color-success: #6b8f71;
-  --color-success-foreground: #f4f8f4;
-  --color-warning: #b8863e;
-  --color-warning-foreground: #fbf4ea;
-  --color-danger: #8c4a4a;
-  --color-danger-foreground: #f8f0f0;
+  --radius-sm-px: 2px;
+  --radius-md-px: 4px;
+  --radius-lg-px: 7px;
+
+  --shadow-sm-val: 0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent);
+  --shadow-md-val: 0 3px 10px color-mix(in srgb, #2d2b2b 16%, transparent);
 }
 
 @theme inline {
   --color-background: var(--color-background);
   --color-sidebar: var(--color-sidebar);
   --color-surface: var(--color-surface);
-  --color-surface-muted: var(--color-surface-muted);
+  --color-surface-muted: var(--color-surface);
   --color-border: var(--color-border);
   --color-text: var(--color-text);
   --color-text-muted: var(--color-text-muted);
   --color-accent: var(--color-accent);
+  --color-accent-2: var(--color-accent-2);
   --color-accent-foreground: var(--color-accent-foreground);
+  --color-accent-100: var(--color-accent-100);
+  --color-accent-800: var(--color-accent-800);
+  --color-neutral-100: var(--color-neutral-100);
+  --color-neutral-800: var(--color-neutral-800);
+  --color-danger: var(--color-danger);
+  --color-danger-foreground: var(--color-danger-foreground);
   --color-success: var(--color-success);
   --color-success-foreground: var(--color-success-foreground);
   --color-warning: var(--color-warning);
   --color-warning-foreground: var(--color-warning-foreground);
-  --color-danger: var(--color-danger);
-  --color-danger-foreground: var(--color-danger-foreground);
-  --font-sans: var(--font-sans-family);
-  --font-serif: var(--font-serif-family);
+  --font-sans: var(--font-body-family);
+  --font-serif: var(--font-heading-family);
+  --radius-sm: var(--radius-sm-px);
+  --radius-md: var(--radius-md-px);
+  --radius-lg: var(--radius-lg-px);
 }
 
 body {
   background: var(--color-background);
   color: var(--color-text);
   font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
 }
 
 h1,
 h2 {
   font-family: var(--font-serif);
   font-weight: 600;
-  letter-spacing: -0.01em;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
 }

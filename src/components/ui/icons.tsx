@@ -1,36 +1,39 @@
 import type { SVGProps } from "react";
-import { LayoutGrid, UserPlus, Users, Calendar, FileText, Wallet, Menu, X } from "lucide-react";
+import { Home, Users, User, Calendar, FileText, DollarSign, Menu, X } from "lucide-react";
 
 type IconProps = SVGProps<SVGSVGElement>;
 
+/* Icon choice per nav item matches the approved Sidebar.dc.html exactly:
+   dashboard=home, leads=users (group), clients=user (single person),
+   events=calendar, contracts=file, financial=dollar. */
 export function DashboardIcon(props: IconProps) {
-  return <LayoutGrid strokeWidth={1.5} aria-hidden="true" {...props} />;
+  return <Home strokeWidth={2} aria-hidden="true" {...props} />;
 }
 
 export function LeadsIcon(props: IconProps) {
-  return <UserPlus strokeWidth={1.5} aria-hidden="true" {...props} />;
+  return <Users strokeWidth={2} aria-hidden="true" {...props} />;
 }
 
 export function ClientsIcon(props: IconProps) {
-  return <Users strokeWidth={1.5} aria-hidden="true" {...props} />;
+  return <User strokeWidth={2} aria-hidden="true" {...props} />;
 }
 
 export function EventsIcon(props: IconProps) {
-  return <Calendar strokeWidth={1.5} aria-hidden="true" {...props} />;
+  return <Calendar strokeWidth={2} aria-hidden="true" {...props} />;
 }
 
 export function ContractsIcon(props: IconProps) {
-  return <FileText strokeWidth={1.5} aria-hidden="true" {...props} />;
+  return <FileText strokeWidth={2} aria-hidden="true" {...props} />;
 }
 
 export function FinanceIcon(props: IconProps) {
-  return <Wallet strokeWidth={1.5} aria-hidden="true" {...props} />;
+  return <DollarSign strokeWidth={2} aria-hidden="true" {...props} />;
 }
 
 export function MenuIcon(props: IconProps) {
-  return <Menu strokeWidth={1.5} aria-hidden="true" {...props} />;
+  return <Menu strokeWidth={2} aria-hidden="true" {...props} />;
 }
 
 export function CloseIcon(props: IconProps) {
-  return <X strokeWidth={1.5} aria-hidden="true" {...props} />;
+  return <X strokeWidth={2} aria-hidden="true" {...props} />;
 }

@@ -1,13 +1,19 @@
 import type { HTMLAttributes } from "react";
 
-export type BadgeTone = "neutral" | "accent" | "success" | "warning" | "danger";
+/* Matches the approved .tag system: tag-accent (won/converted, filled tint),
+   tag-outline (in-progress stages, border only), tag-neutral (lost/archived).
+   No separate success/warning/danger palette exists in the approved system —
+   those three stay within the same warm accent family, differentiated only
+   by weight, rather than introducing new colors. */
+export type BadgeTone = "neutral" | "accent" | "outline" | "success" | "warning" | "danger";
 
 const toneClasses: Record<BadgeTone, string> = {
-  neutral: "border-border bg-surface-muted text-text-muted",
-  accent: "border-accent/25 bg-accent/10 text-accent",
-  success: "border-success/25 bg-success/10 text-success",
-  warning: "border-warning/25 bg-warning/10 text-warning",
-  danger: "border-danger/25 bg-danger/10 text-danger",
+  neutral: "border-transparent bg-neutral-100 text-neutral-800",
+  accent: "border-transparent bg-accent-100 text-accent-800",
+  outline: "border-accent bg-transparent text-accent",
+  success: "border-transparent bg-accent-100 text-accent-800",
+  warning: "border-transparent bg-accent-100 text-accent-2",
+  danger: "border-transparent bg-accent-100 text-danger",
 };
 
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
@@ -17,7 +23,7 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 export function Badge({ tone = "neutral", className = "", ...props }: BadgeProps) {
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium tracking-tight ${toneClasses[tone]} ${className}`}
+      className={`inline-flex items-center rounded-[3px] border px-2.5 py-0.5 text-[11px] tracking-wide ${toneClasses[tone]} ${className}`}
       {...props}
     />
   );
