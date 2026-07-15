@@ -2,6 +2,7 @@ import { z } from "zod";
 import { PAYMENT_TYPES } from "@/core/enums/paymentType";
 import { PAYMENT_METHODS } from "@/core/enums/paymentMethod";
 import { EXPENSE_CATEGORIES } from "@/core/enums/expenseCategory";
+import { majorToMinor } from "@/lib/money";
 
 /**
  * Authoritative schemas for Invoice/Payment/Expense content fields, used
@@ -91,3 +92,136 @@ export const expenseSchema = z.object({
 });
 
 export type ExpenseInput = z.infer<typeof expenseSchema>;
+
+/**
+ * Client-side (react-hook-form) form schemas for the Finance UI — every
+ * field is a plain string or boolean, matching what HTML form inputs
+ * actually produce, mirroring modules/contracts/schema.ts's
+ * contractFormSchema/contractFormToInput split. Money fields are entered in
+ * major units (e.g. "1250.00") since that's what a human types; each
+ * `*FormToInput` below converts through `majorToMinor()` before handing the
+ * value to the authoritative schema above — the data layer never sees a
+ * major-unit number.
+ */
+
+const majorAmountString = z
+  .string()
+  .trim()
+  .refine((v) => v !== "" && !Number.isNaN(Number(v)) && Number(v) >= 0, { message: "Enter a valid amount" });
+
+export const invoiceFormSchema = z
+  .object({
+    client_id: z.string().trim().min(1, "Client is required"),
+    event_id: z.string().trim(),
+    contract_id: z.string().trim(),
+    title: z.string().trim().min(1, "Title is required"),
+    description: z.string().trim(),
+    issue_date: z.string().trim(),
+    due_date: z.string().trim(),
+    subtotal: majorAmountString,
+    tax: z.string().trim().refine((v) => v === "" || (!Number.isNaN(Number(v)) && Number(v) >= 0), {
+      message: "Enter a valid amount",
+    }),
+    discount: z.string().trim().refine((v) => v === "" || (!Number.isNaN(Number(v)) && Number(v) >= 0), {
+      message: "Enter a valid amount",
+    }),
+    currency: z.string().trim().length(3, "Use a 3-letter currency code"),
+    notes: z.string().trim(),
+  })
+  .refine(
+    (data) => data.discount === "" || Number(data.discount) <= Number(data.subtotal),
+    { message: "Discount cannot exceed the subtotal", path: ["discount"] },
+  )
+  .refine(
+    (data) => data.issue_date === "" || data.due_date === "" || data.due_date >= data.issue_date,
+    { message: "Due date cannot be before the issue date", path: ["due_date"] },
+  );
+
+export type InvoiceFormInput = z.infer<typeof invoiceFormSchema>;
+
+export function invoiceFormToInput(data: InvoiceFormInput): InvoiceInput {
+  return {
+    client_id: data.client_id,
+    event_id: data.event_id === "" ? null : data.event_id,
+    contract_id: data.contract_id === "" ? null : data.contract_id,
+    title: data.title,
+    description: data.description === "" ? null : data.description,
+    issue_date: data.issue_date === "" ? null : data.issue_date,
+    due_date: data.due_date === "" ? null : data.due_date,
+    subtotal_minor: majorToMinor(Number(data.subtotal)),
+    tax_minor: data.tax === "" ? 0 : majorToMinor(Number(data.tax)),
+    discount_minor: data.discount === "" ? 0 : majorToMinor(Number(data.discount)),
+    currency: data.currency.toUpperCase(),
+    notes: data.notes === "" ? null : data.notes,
+  };
+}
+
+export const paymentFormSchema = z.object({
+  invoice_id: z.string().trim(),
+  client_id: z.string().trim().min(1, "Client is required"),
+  event_id: z.string().trim(),
+  contract_id: z.string().trim(),
+  payment_type: z.enum(PAYMENT_TYPES),
+  amount: majorAmountString.refine((v) => Number(v) > 0, { message: "Enter an amount greater than zero" }),
+  currency: z.string().trim().length(3, "Use a 3-letter currency code"),
+  payment_method: z.enum(PAYMENT_METHODS),
+  reference: z.string().trim(),
+  transaction_date: z.string().trim().min(1, "Transaction date is required"),
+  notes: z.string().trim(),
+});
+
+export type PaymentFormInput = z.infer<typeof paymentFormSchema>;
+
+export function paymentFormToInput(data: PaymentFormInput): PaymentInput {
+  return {
+    invoice_id: data.invoice_id === "" ? null : data.invoice_id,
+    client_id: data.client_id,
+    event_id: data.event_id === "" ? null : data.event_id,
+    contract_id: data.contract_id === "" ? null : data.contract_id,
+    payment_type: data.payment_type,
+    amount_minor: majorToMinor(Number(data.amount)),
+    currency: data.currency.toUpperCase(),
+    payment_method: data.payment_method,
+    reference: data.reference === "" ? null : data.reference,
+    transaction_date: data.transaction_date,
+    notes: data.notes === "" ? null : data.notes,
+  };
+}
+
+export const expenseFormSchema = z.object({
+  event_id: z.string().trim(),
+  client_id: z.string().trim(),
+  contract_id: z.string().trim(),
+  supplier_id: z.string().trim(),
+  team_member_id: z.string().trim(),
+  category: z.enum(EXPENSE_CATEGORIES),
+  description: z.string().trim().min(1, "Description is required"),
+  amount: majorAmountString.refine((v) => Number(v) > 0, { message: "Enter an amount greater than zero" }),
+  currency: z.string().trim().length(3, "Use a 3-letter currency code"),
+  transaction_date: z.string().trim().min(1, "Transaction date is required"),
+  due_date: z.string().trim(),
+  reimbursable: z.boolean(),
+  reference: z.string().trim(),
+  notes: z.string().trim(),
+});
+
+export type ExpenseFormInput = z.infer<typeof expenseFormSchema>;
+
+export function expenseFormToInput(data: ExpenseFormInput): ExpenseInput {
+  return {
+    event_id: data.event_id === "" ? null : data.event_id,
+    client_id: data.client_id === "" ? null : data.client_id,
+    contract_id: data.contract_id === "" ? null : data.contract_id,
+    supplier_id: data.supplier_id === "" ? null : data.supplier_id,
+    team_member_id: data.team_member_id === "" ? null : data.team_member_id,
+    category: data.category,
+    description: data.description,
+    amount_minor: majorToMinor(Number(data.amount)),
+    currency: data.currency.toUpperCase(),
+    transaction_date: data.transaction_date,
+    due_date: data.due_date === "" ? null : data.due_date,
+    reimbursable: data.reimbursable,
+    reference: data.reference === "" ? null : data.reference,
+    notes: data.notes === "" ? null : data.notes,
+  };
+}

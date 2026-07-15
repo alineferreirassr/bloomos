@@ -14,6 +14,8 @@ vi.mock("@/lib/data", () => ({
   getEventNextAction: vi.fn(),
   createEventNote: vi.fn(),
   togglePinNote: vi.fn(),
+  getEventFinancialSummary: vi.fn(),
+  getEventFinancialStatus: vi.fn(),
 }));
 
 import * as dataLayer from "@/lib/data";
@@ -39,6 +41,22 @@ function mockReady(overrides: Partial<ReturnType<typeof makeEvent>> = {}) {
   vi.mocked(dataLayer.getChecklistByEventId).mockResolvedValue([]);
   vi.mocked(dataLayer.getScheduleByEventId).mockResolvedValue([]);
   vi.mocked(dataLayer.getEventNextAction).mockResolvedValue(null);
+  vi.mocked(dataLayer.getEventFinancialSummary).mockResolvedValue({
+    contracted_value_minor: 0,
+    invoiced_total_minor: 0,
+    collected_minor: 0,
+    refunded_minor: 0,
+    outstanding_minor: 0,
+    expense_total_minor: 0,
+    gross_profit_minor: 0,
+    net_profit_minor: 0,
+    deposit_required_minor: 0,
+    deposit_paid_minor: 0,
+    deposit_balance_minor: 0,
+    payment_completion_percentage: 0,
+    expense_percentage_of_revenue: 0,
+  });
+  vi.mocked(dataLayer.getEventFinancialStatus).mockResolvedValue("no_contract");
   return event;
 }
 

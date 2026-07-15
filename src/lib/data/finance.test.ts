@@ -420,22 +420,68 @@ describe("createPayment and Invoice application", () => {
     expect(updated.status).not.toBe("paid");
   });
 
-  it("prevents overpayment from marking the balance negative", async () => {
+  it("rejects a payment that would exceed the invoice's remaining balance (no overpayment)", async () => {
     const invoice = await createInvoice({ ...validInvoiceInput, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 });
     if (!invoice.success) throw new Error("setup failed");
     await issueInvoice(invoice.data.id);
     await sendInvoice(invoice.data.id);
 
-    await createPayment({
+    const result = await createPayment({
       ...validPaymentInput,
       invoice_id: invoice.data.id,
       amount_minor: 90000,
       payment_method: "cash",
     });
+    expect(result.success).toBe(false);
+
+    const updated = await getInvoiceById(invoice.data.id);
+    expect(updated.paid_minor).toBe(0);
+    expect(updated.balance_minor).toBe(50000);
+  });
+
+  it("accepts a payment that exactly matches the remaining balance", async () => {
+    const invoice = await createInvoice({ ...validInvoiceInput, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 });
+    if (!invoice.success) throw new Error("setup failed");
+    await issueInvoice(invoice.data.id);
+    await sendInvoice(invoice.data.id);
+
+    const result = await createPayment({
+      ...validPaymentInput,
+      invoice_id: invoice.data.id,
+      amount_minor: 50000,
+      payment_method: "cash",
+    });
+    expect(result.success).toBe(true);
 
     const updated = await getInvoiceById(invoice.data.id);
     expect(updated.balance_minor).toBe(0);
     expect(updated.status).toBe("paid");
+  });
+
+  it("rejects marking a pending payment succeeded if the invoice's balance shrank in the meantime", async () => {
+    const invoice = await createInvoice({ ...validInvoiceInput, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 });
+    if (!invoice.success) throw new Error("setup failed");
+    await issueInvoice(invoice.data.id);
+    await sendInvoice(invoice.data.id);
+
+    const pending = await createPayment({
+      ...validPaymentInput,
+      invoice_id: invoice.data.id,
+      amount_minor: 40000,
+      payment_method: "credit_card",
+    });
+    if (!pending.success) throw new Error("setup failed");
+
+    // A second, immediately-succeeded payment covers the balance first.
+    await createPayment({
+      ...validPaymentInput,
+      invoice_id: invoice.data.id,
+      amount_minor: 50000,
+      payment_method: "cash",
+    });
+
+    const result = await markPaymentSucceeded(pending.data.id);
+    expect(result.success).toBe(false);
   });
 });
 

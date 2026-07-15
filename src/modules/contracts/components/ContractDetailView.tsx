@@ -7,12 +7,14 @@ import {
   getClientById,
   getContract,
   getContractExhibitsByContractId,
+  getContractFinanceSummary,
   getContractNextAction,
   getContractTemplateById,
   getEventById,
   getNotesByContractId,
   getTimelineByContractId,
   togglePinNote,
+  type ContractFinanceSummary,
 } from "@/lib/data";
 import type { Contract } from "@/types/contract";
 import type { Client } from "@/types/client";
@@ -36,6 +38,7 @@ import { ContractActions } from "@/modules/contracts/components/ContractActions"
 import { ExhibitsSection } from "@/modules/contracts/components/ExhibitsSection";
 import { VersionHistorySection } from "@/modules/contracts/components/VersionHistorySection";
 import { formatContractValue } from "@/modules/contracts/mappers";
+import { ContractFinanceSummaryCard } from "@/modules/finance/components/ContractFinanceSummaryCard";
 
 type LoadState =
   | { status: "loading" }
@@ -51,12 +54,13 @@ type LoadState =
       notes: Note[];
       timeline: TimelineActivity[];
       nextAction: string | null;
+      financeSummary: ContractFinanceSummary;
     };
 
 async function loadContractDetail(contractId: string): Promise<LoadState> {
   try {
     const contract = await getContract(contractId);
-    const [client, event, template, exhibits, notes, timeline, nextAction] = await Promise.all([
+    const [client, event, template, exhibits, notes, timeline, nextAction, financeSummary] = await Promise.all([
       getClientById(contract.client_id).catch(() => null),
       contract.event_id ? getEventById(contract.event_id).catch(() => null) : Promise.resolve(null),
       contract.template_id ? getContractTemplateById(contract.template_id).catch(() => null) : Promise.resolve(null),
@@ -64,9 +68,10 @@ async function loadContractDetail(contractId: string): Promise<LoadState> {
       getNotesByContractId(contractId),
       getTimelineByContractId(contractId),
       getContractNextAction(contractId),
+      getContractFinanceSummary(contractId),
     ]);
 
-    return { status: "ready", contract, client, event, template, exhibits, notes, timeline, nextAction };
+    return { status: "ready", contract, client, event, template, exhibits, notes, timeline, nextAction, financeSummary };
   } catch (err) {
     return { status: err instanceof NotFoundError ? "not-found" : "error" };
   }
@@ -110,7 +115,7 @@ export function ContractDetailView({ contractId }: { contractId: string }) {
     return <ErrorState message="Could not load this contract." onRetry={refetch} />;
   }
 
-  const { contract, client, event, template, exhibits, notes, timeline, nextAction } = state;
+  const { contract, client, event, template, exhibits, notes, timeline, nextAction, financeSummary } = state;
 
   const notesReadOnly = isContractFullyLocked(contract.status);
   const exhibitsReadOnly = isContractCommercialLocked(contract.status);
@@ -301,6 +306,10 @@ export function ContractDetailView({ contractId }: { contractId: string }) {
         </div>
 
         <div className="space-y-6">
+          {client ? (
+            <ContractFinanceSummaryCard contractId={contract.id} clientId={client.id} summary={financeSummary} />
+          ) : null}
+
           <Card>
             <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
             <div className="mt-3">
@@ -314,8 +323,6 @@ export function ContractDetailView({ contractId }: { contractId: string }) {
             <ul className="mt-3 space-y-1.5 text-sm text-text-muted">
               <li>Document rendering &amp; PDF export</li>
               <li>Electronic signature provider</li>
-              <li>Invoices</li>
-              <li>Payments</li>
             </ul>
           </Card>
         </div>

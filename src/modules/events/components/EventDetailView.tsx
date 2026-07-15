@@ -7,6 +7,8 @@ import {
   getChecklistByEventId,
   getClientById,
   getEventById,
+  getEventFinancialStatus,
+  getEventFinancialSummary,
   getEventNextAction,
   getNotesByEventId,
   getScheduleByEventId,
@@ -37,6 +39,9 @@ import { EventActions } from "@/modules/events/components/EventActions";
 import { EventHealthCard } from "@/modules/events/components/EventHealthCard";
 import { ChecklistSummaryCard } from "@/modules/events/components/ChecklistSummaryCard";
 import { ScheduleSummaryCard } from "@/modules/events/components/ScheduleSummaryCard";
+import { EventFinancialSummaryCard } from "@/modules/finance/components/EventFinancialSummaryCard";
+import type { EventFinancialSummary } from "@/modules/finance/financialSummary";
+import type { EventFinancialStatus } from "@/modules/finance/eventFinancialStatus";
 
 type LoadState =
   | { status: "loading" }
@@ -52,6 +57,8 @@ type LoadState =
       schedule: EventScheduleItem[];
       nextAction: string | null;
       health: EventHealthDetails;
+      financialSummary: EventFinancialSummary;
+      financialStatus: EventFinancialStatus;
     };
 
 /**
@@ -63,14 +70,17 @@ type LoadState =
 async function loadEventDetail(eventId: string): Promise<LoadState> {
   try {
     const event = await getEventById(eventId);
-    const [client, notes, timeline, checklist, schedule, nextAction] = await Promise.all([
-      getClientById(event.client_id).catch(() => null),
-      getNotesByEventId(eventId),
-      getTimelineByEventId(eventId),
-      getChecklistByEventId(eventId),
-      getScheduleByEventId(eventId),
-      getEventNextAction(eventId),
-    ]);
+    const [client, notes, timeline, checklist, schedule, nextAction, financialSummary, financialStatus] =
+      await Promise.all([
+        getClientById(event.client_id).catch(() => null),
+        getNotesByEventId(eventId),
+        getTimelineByEventId(eventId),
+        getChecklistByEventId(eventId),
+        getScheduleByEventId(eventId),
+        getEventNextAction(eventId),
+        getEventFinancialSummary(eventId),
+        getEventFinancialStatus(eventId),
+      ]);
 
     const checklistStats = computeChecklistStats(checklist);
     const now = Date.now();
@@ -95,7 +105,19 @@ async function loadEventDetail(eventId: string): Promise<LoadState> {
       },
     );
 
-    return { status: "ready", event, client, notes, timeline, checklist, schedule, nextAction, health };
+    return {
+      status: "ready",
+      event,
+      client,
+      notes,
+      timeline,
+      checklist,
+      schedule,
+      nextAction,
+      health,
+      financialSummary,
+      financialStatus,
+    };
   } catch (err) {
     return { status: err instanceof NotFoundError ? "not-found" : "error" };
   }
@@ -139,7 +161,8 @@ export function EventDetailView({ eventId }: { eventId: string }) {
     return <ErrorState message="Could not load this event." onRetry={refetch} />;
   }
 
-  const { event, client, notes, timeline, checklist, schedule, nextAction, health } = state;
+  const { event, client, notes, timeline, checklist, schedule, nextAction, health, financialSummary, financialStatus } =
+    state;
 
   const checklistStats = computeChecklistStats(checklist);
   const scheduleStats = computeScheduleStats(schedule);
@@ -313,6 +336,12 @@ export function EventDetailView({ eventId }: { eventId: string }) {
 
         <div className="space-y-6">
           <EventHealthCard health={health} />
+          <EventFinancialSummaryCard
+            eventId={event.id}
+            clientId={event.client_id}
+            summary={financialSummary}
+            status={financialStatus}
+          />
           <ChecklistSummaryCard eventId={event.id} stats={checklistStats} />
           <ScheduleSummaryCard eventId={event.id} stats={scheduleStats} />
 
@@ -327,8 +356,6 @@ export function EventDetailView({ eventId }: { eventId: string }) {
             <h3 className="font-serif text-[17px] font-semibold text-text">Future Integrations</h3>
             <p className="mt-2 text-xs text-text-muted">Not built yet — reserved for upcoming modules.</p>
             <ul className="mt-3 space-y-1.5 text-sm text-text-muted">
-              <li>Contracts</li>
-              <li>Finance</li>
               <li>Team assignments</li>
               <li>Vendors</li>
               <li>Inventory</li>

@@ -14,6 +14,7 @@ import type { Expense } from "@/types/expense";
 import type { EntityType } from "@/core/enums/entityType";
 import type { ContractTemplateCategory } from "@/core/enums/contractTemplateCategory";
 import type { PaymentType } from "@/core/enums/paymentType";
+import type { PaymentMethod } from "@/core/enums/paymentMethod";
 import type { ExpenseCategory } from "@/core/enums/expenseCategory";
 import { PAYMENT_STATUSES_COUNTING_TOWARD_PAID } from "@/core/enums/paymentStatus";
 import { LEAD_STATUS_LABELS, type LeadStatus } from "@/core/enums/leadStatus";
@@ -100,7 +101,7 @@ import {
   getEventFinancialStatus as deriveEventFinancialStatus,
   type EventFinancialStatus,
 } from "@/modules/finance/eventFinancialStatus";
-import { calculateBalance, subtractMinor, addMinor, sumMinor, formatMoney } from "@/lib/money";
+import { calculateBalance, subtractMinor, addMinor, sumMinor, majorToMinor, formatMoney } from "@/lib/money";
 import { DEFAULT_CHECKLIST_TEMPLATES } from "@/modules/events/constants/checklistTemplates";
 import { convertLeadToClient as convertLeadToClientService } from "@/modules/leads/services/LeadConversionService";
 import { type DataResult, ok, fail } from "@/lib/data/result";
@@ -2276,28 +2277,60 @@ export interface InvoiceFilters {
   clientId?: string;
   eventId?: string;
   contractId?: string;
+  /** Inclusive; invoices with no issue_date never match when either bound is set. */
+  issueDateFrom?: string;
+  issueDateTo?: string;
+  /** Inclusive; invoices with no due_date never match when either bound is set. */
+  dueDateFrom?: string;
+  dueDateTo?: string;
+  overdueOnly?: boolean;
   includeArchived?: boolean;
 }
 
 export async function getInvoices(filters: InvoiceFilters = {}): Promise<Invoice[]> {
   await delay(200);
-  const { search, status, clientId, eventId, contractId, includeArchived = false } = filters;
+  const {
+    search,
+    status,
+    clientId,
+    eventId,
+    contractId,
+    issueDateFrom,
+    issueDateTo,
+    dueDateFrom,
+    dueDateTo,
+    overdueOnly = false,
+    includeArchived = false,
+  } = filters;
   const clientsById = new Map(readClients().map((client) => [client.id, client]));
   const eventsById = new Map(readEvents().map((event) => [event.id, event]));
+  const contractsById = new Map(readContracts().map((contract) => [contract.id, contract]));
 
   return readInvoices().filter((invoice) => {
     if (!includeArchived && invoice.status === "archived") return false;
     if (status && status !== "all" && invoice.status !== status) return false;
+    if (overdueOnly && invoice.status !== "overdue") return false;
     if (clientId && invoice.client_id !== clientId) return false;
     if (eventId && invoice.event_id !== eventId) return false;
     if (contractId && invoice.contract_id !== contractId) return false;
+    if (issueDateFrom || issueDateTo) {
+      if (!invoice.issue_date) return false;
+      if (issueDateFrom && invoice.issue_date < issueDateFrom) return false;
+      if (issueDateTo && invoice.issue_date > issueDateTo) return false;
+    }
+    if (dueDateFrom || dueDateTo) {
+      if (!invoice.due_date) return false;
+      if (dueDateFrom && invoice.due_date < dueDateFrom) return false;
+      if (dueDateTo && invoice.due_date > dueDateTo) return false;
+    }
     if (search) {
       const q = search.trim().toLowerCase();
       if (!q) return true;
       const client = clientsById.get(invoice.client_id);
       const clientName = client ? `${client.first_name} ${client.last_name}` : "";
       const event = invoice.event_id ? eventsById.get(invoice.event_id) : undefined;
-      const haystack = `${invoice.invoice_number} ${invoice.title} ${clientName} ${event?.title ?? ""}`.toLowerCase();
+      const contract = invoice.contract_id ? contractsById.get(invoice.contract_id) : undefined;
+      const haystack = `${invoice.invoice_number} ${invoice.title} ${clientName} ${event?.title ?? ""} ${contract?.contract_number ?? ""}`.toLowerCase();
       if (!haystack.includes(q)) return false;
     }
     return true;
@@ -2689,22 +2722,58 @@ function applyPaymentToInvoice(invoiceId: string): Invoice | null {
 // ---------------------------------------------------------------------------
 
 export interface PaymentFilters {
+  search?: string;
   status?: PaymentStatus | "all";
   paymentType?: PaymentType | "all";
+  paymentMethod?: PaymentMethod | "all";
   clientId?: string;
   eventId?: string;
   invoiceId?: string;
+  contractId?: string;
+  /** Inclusive; matches against transaction_date. */
+  dateFrom?: string;
+  dateTo?: string;
+  refundsOnly?: boolean;
 }
 
 export async function getPayments(filters: PaymentFilters = {}): Promise<Payment[]> {
   await delay(200);
-  const { status, paymentType, clientId, eventId, invoiceId } = filters;
+  const {
+    search,
+    status,
+    paymentType,
+    paymentMethod,
+    clientId,
+    eventId,
+    invoiceId,
+    contractId,
+    dateFrom,
+    dateTo,
+    refundsOnly = false,
+  } = filters;
+  const clientsById = new Map(readClients().map((client) => [client.id, client]));
+  const eventsById = new Map(readEvents().map((event) => [event.id, event]));
+
   return readPayments().filter((payment) => {
     if (status && status !== "all" && payment.status !== status) return false;
     if (paymentType && paymentType !== "all" && payment.payment_type !== paymentType) return false;
+    if (paymentMethod && paymentMethod !== "all" && payment.payment_method !== paymentMethod) return false;
+    if (refundsOnly && payment.payment_type !== "refund") return false;
     if (clientId && payment.client_id !== clientId) return false;
     if (eventId && payment.event_id !== eventId) return false;
     if (invoiceId && payment.invoice_id !== invoiceId) return false;
+    if (contractId && payment.contract_id !== contractId) return false;
+    if (dateFrom && payment.transaction_date < dateFrom) return false;
+    if (dateTo && payment.transaction_date > dateTo) return false;
+    if (search) {
+      const q = search.trim().toLowerCase();
+      if (!q) return true;
+      const client = clientsById.get(payment.client_id);
+      const clientName = client ? `${client.first_name} ${client.last_name}` : "";
+      const event = payment.event_id ? eventsById.get(payment.event_id) : undefined;
+      const haystack = `${clientName} ${event?.title ?? ""} ${payment.reference ?? ""}`.toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
     return true;
   });
 }
@@ -2763,6 +2832,21 @@ export async function createPayment(input: PaymentInput): Promise<DataResult<Pay
   const initialStatus: PaymentStatus = IMMEDIATELY_SUCCEEDED_METHODS.has(parsed.data.payment_method)
     ? "succeeded"
     : "pending";
+
+  // No overpayment: a Payment that counts toward paid immediately (a
+  // non-refund type starting "succeeded") can never exceed what's actually
+  // still owed on its Invoice. Refund-type Payments are exempt — they
+  // reduce paid_minor, they can't cause an overpayment. A Payment that
+  // starts "pending"/"processing" is re-checked against the Invoice's
+  // then-current balance when it's later marked succeeded (markPaymentSucceeded).
+  if (invoice && initialStatus === "succeeded" && parsed.data.payment_type !== "refund") {
+    if (parsed.data.amount_minor > invoice.balance_minor) {
+      return fail(
+        `This payment (${parsed.data.amount_minor} minor units) would exceed the invoice's remaining balance (${invoice.balance_minor} minor units).`,
+        { amount_minor: "Amount exceeds the remaining balance." },
+      );
+    }
+  }
   const payment: Payment = {
     id: generateId("payment"),
     workspace_id: client.workspace_id,
@@ -2865,6 +2949,17 @@ export async function markPaymentSucceeded(id: string): Promise<DataResult<Payme
   }
   if (!canTransitionPaymentStatus(existing.status, "succeeded")) {
     return fail(`Cannot mark ${PAYMENT_STATUS_LABELS[existing.status].toLowerCase()} payment as succeeded.`);
+  }
+  // No overpayment: re-checked here (not just at createPayment) because a
+  // pending/processing Payment can sit for a while — the Invoice's balance
+  // may have shrunk (another Payment applied) by the time this one succeeds.
+  if (existing.invoice_id && existing.payment_type !== "refund") {
+    const linkedInvoice = readInvoices().find((i) => i.id === existing.invoice_id);
+    if (linkedInvoice && existing.amount_minor > linkedInvoice.balance_minor) {
+      return fail(
+        `This payment (${existing.amount_minor} minor units) would exceed the invoice's remaining balance (${linkedInvoice.balance_minor} minor units).`,
+      );
+    }
   }
 
   const timestamp = nowIso();
@@ -2977,6 +3072,27 @@ export async function refundPayment(originalPaymentId: string, amountMinor: numb
   return ok(refund);
 }
 
+/**
+ * How much of this Payment remains refundable right now — the same ceiling
+ * refundPayment() enforces, exposed read-only so the UI can display it (and
+ * cap its own input) without duplicating the `reference` convention that
+ * tracks prior refunds against a Payment.
+ */
+export async function getPaymentRefundableAmount(paymentId: string): Promise<number> {
+  const payment = readPayments().find((p) => p.id === paymentId);
+  if (!payment || !isPaymentRefundable(payment.status)) return 0;
+
+  const priorRefunds = sumMinor(
+    readPayments()
+      .filter(
+        (p) =>
+          p.reference === refundReferenceFor(paymentId) && PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status),
+      )
+      .map((p) => p.amount_minor),
+  );
+  return Math.max(0, subtractMinor(payment.amount_minor, priorRefunds));
+}
+
 export async function cancelPayment(id: string): Promise<DataResult<Payment>> {
   const existing = readPayments().find((p) => p.id === id);
   if (!existing) {
@@ -3008,18 +3124,38 @@ export interface ExpenseFilters {
   category?: ExpenseCategory | "all";
   eventId?: string;
   clientId?: string;
+  /** planned/approved/due — the same set treated as "unpaid" in getDashboardMetrics' Unpaid Expenses count. */
+  unpaidOnly?: boolean;
+  /** Only expenses with status "due". */
+  dueOnly?: boolean;
+  reimbursableOnly?: boolean;
   includeArchived?: boolean;
 }
 
+const UNPAID_EXPENSE_STATUSES: ExpenseStatus[] = ["planned", "approved", "due"];
+
 export async function getExpenses(filters: ExpenseFilters = {}): Promise<Expense[]> {
   await delay(200);
-  const { search, status, category, eventId, clientId, includeArchived = false } = filters;
+  const {
+    search,
+    status,
+    category,
+    eventId,
+    clientId,
+    unpaidOnly = false,
+    dueOnly = false,
+    reimbursableOnly = false,
+    includeArchived = false,
+  } = filters;
   return readExpenses().filter((expense) => {
     if (!includeArchived && expense.status === "archived") return false;
     if (status && status !== "all" && expense.status !== status) return false;
     if (category && category !== "all" && expense.category !== category) return false;
     if (eventId && expense.event_id !== eventId) return false;
     if (clientId && expense.client_id !== clientId) return false;
+    if (unpaidOnly && !UNPAID_EXPENSE_STATUSES.includes(expense.status)) return false;
+    if (dueOnly && expense.status !== "due") return false;
+    if (reimbursableOnly && !expense.reimbursable) return false;
     if (search) {
       const q = search.trim().toLowerCase();
       if (!q) return true;
@@ -3350,6 +3486,243 @@ export async function getEventFinancialStatus(eventId: string): Promise<EventFin
   });
 }
 
+export type ContractDepositStatus = "not_required" | "awaiting_deposit" | "deposit_partial" | "deposit_paid";
+
+export interface ContractFinanceSummary {
+  invoices: Invoice[];
+  totalInvoicedMinor: number;
+  totalCollectedMinor: number;
+  outstandingMinor: number;
+  depositStatus: ContractDepositStatus;
+  depositRequiredMinor: number;
+  depositPaidMinor: number;
+}
+
+/**
+ * Small Finance rollup for Contract Detail. Deliberately Contract-scoped
+ * rather than reusing computeEventFinancialSummary — a Contract's event_id
+ * is nullable (a standalone retainer has none), so this can't assume an
+ * Event exists. totalInvoicedMinor/totalCollectedMinor/outstandingMinor are
+ * plain sums of each linked (non-voided) Invoice's own total_minor/
+ * paid_minor/balance_minor — those are already the data layer's source of
+ * truth for each Invoice, not recomputed here. depositStatus follows the
+ * same required/none-paid/partial/paid ladder as
+ * modules/finance/eventFinancialStatus.ts, scoped to this Contract's own
+ * deposit-type Payments.
+ */
+export async function getContractFinanceSummary(contractId: string): Promise<ContractFinanceSummary> {
+  await delay(150);
+  const contract = readContracts().find((c) => c.id === contractId);
+  if (!contract) {
+    throw new NotFoundError(`Contract ${contractId} was not found`);
+  }
+
+  const invoices = readInvoices().filter((i) => i.contract_id === contractId && i.status !== "voided");
+  const totalInvoicedMinor = sumMinor(invoices.map((i) => i.total_minor));
+  const totalCollectedMinor = sumMinor(invoices.map((i) => i.paid_minor));
+  const outstandingMinor = sumMinor(invoices.map((i) => i.balance_minor));
+
+  const depositRequiredMinor = contract.deposit_required ? majorToMinor(contract.deposit_amount ?? 0) : 0;
+  const depositPaidMinor = sumMinor(
+    readPayments()
+      .filter(
+        (p) =>
+          p.contract_id === contractId &&
+          p.payment_type === "deposit" &&
+          PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status),
+      )
+      .map((p) => p.amount_minor),
+  );
+
+  let depositStatus: ContractDepositStatus;
+  if (!contract.deposit_required) {
+    depositStatus = "not_required";
+  } else if (depositPaidMinor === 0) {
+    depositStatus = "awaiting_deposit";
+  } else if (depositPaidMinor < depositRequiredMinor) {
+    depositStatus = "deposit_partial";
+  } else {
+    depositStatus = "deposit_paid";
+  }
+
+  return {
+    invoices,
+    totalInvoicedMinor,
+    totalCollectedMinor,
+    outstandingMinor,
+    depositStatus,
+    depositRequiredMinor,
+    depositPaidMinor,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Finance dashboard — one assembled payload so /finance never recomputes
+// arithmetic itself; every figure here comes straight from
+// computeWorkspaceFinancialSummary/computeAllTimeFinancialTotals/
+// computeEventFinancialSummary/deriveEventFinancialStatus, the same pure
+// helpers getDashboardMetrics and the single-Event endpoints use. Amounts
+// stay in minor units — the view formats them with formatMoney.
+// ---------------------------------------------------------------------------
+
+export interface FinanceDashboardMetrics {
+  totalInvoicedMinor: number;
+  totalCollectedMinor: number;
+  outstandingReceivablesMinor: number;
+  overdueReceivablesMinor: number;
+  depositsPendingMinor: number;
+  expensesThisMonthMinor: number;
+  grossProfitMinor: number;
+  netProfitMinor: number;
+  refundsThisMonthMinor: number;
+  unpaidExpensesCount: number;
+  eventsAwaitingDepositCount: number;
+  eventsPaidInFullCount: number;
+}
+
+export interface FinanceAlert {
+  message: string;
+  severity: "warning" | "danger";
+  href: string;
+}
+
+export interface EventOutstandingBalance {
+  event: Event;
+  outstandingMinor: number;
+  status: EventFinancialStatus;
+}
+
+export interface FinanceDashboardData {
+  metrics: FinanceDashboardMetrics;
+  recentInvoices: Invoice[];
+  recentPayments: Payment[];
+  overdueInvoices: Invoice[];
+  unpaidExpenses: Expense[];
+  alerts: FinanceAlert[];
+  eventsWithOutstandingBalance: EventOutstandingBalance[];
+}
+
+const FINANCE_DASHBOARD_RECENT_LIMIT = 5;
+
+export async function getFinanceDashboardData(): Promise<FinanceDashboardData> {
+  await delay(150);
+  const contracts = readContracts();
+  const invoices = readInvoices();
+  const payments = readPayments();
+  const expenses = readExpenses();
+  const activeEvents = readEvents().filter((e) => e.status !== "archived");
+
+  const workspaceFinancial = computeWorkspaceFinancialSummary(contracts, invoices, payments, expenses);
+  const allTimeFinancial = computeAllTimeFinancialTotals(invoices, payments);
+
+  const unpaidExpenses = expenses
+    .filter((e) => UNPAID_EXPENSE_STATUSES.includes(e.status))
+    .sort((a, b) => (a.due_date ?? a.transaction_date).localeCompare(b.due_date ?? b.transaction_date));
+  const overdueExpenses = unpaidExpenses.filter(
+    (e) => e.due_date !== null && new Date(e.due_date).getTime() < Date.now(),
+  );
+
+  const overdueInvoices = invoices
+    .filter((i) => i.status === "overdue")
+    .sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? ""));
+
+  const recentInvoices = invoices
+    .filter((i) => i.status !== "voided")
+    .slice()
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, FINANCE_DASHBOARD_RECENT_LIMIT);
+
+  const recentPayments = payments
+    .slice()
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, FINANCE_DASHBOARD_RECENT_LIMIT);
+
+  const eventEntries = activeEvents.map((event) => {
+    const summary = computeEventFinancialSummary(event.id, contracts, invoices, payments, expenses);
+    const eventContracts = contracts.filter((c) => c.event_id === event.id);
+    const activeEventContracts = eventContracts.filter(
+      (c) => !INACTIVE_CONTRACT_STATUSES_FOR_STATUS.includes(c.status),
+    );
+    const eventInvoices = invoices.filter((i) => i.event_id === event.id && i.status !== "voided");
+    const eventCancelled =
+      event.status === "cancelled" ||
+      (eventContracts.length > 0 && eventContracts.every((c) => c.status === "cancelled" || c.status === "declined"));
+    const status = deriveEventFinancialStatus({
+      eventCancelled,
+      hasActiveContract: activeEventContracts.length > 0,
+      hasInvoice: eventInvoices.length > 0,
+      hasOverdueInvoice: eventInvoices.some((i) => i.status === "overdue"),
+      depositRequired: activeEventContracts.some((c) => c.deposit_required),
+      depositRequiredMinor: summary.deposit_required_minor,
+      depositPaidMinor: summary.deposit_paid_minor,
+      invoicedTotalMinor: summary.invoiced_total_minor,
+      outstandingMinor: summary.outstanding_minor,
+      refundedMinor: summary.refunded_minor,
+    });
+    return { event, summary, status };
+  });
+
+  const eventsAwaitingDepositCount = eventEntries.filter((e) => e.status === "awaiting_deposit").length;
+  const eventsPaidInFullCount = eventEntries.filter((e) => e.status === "paid_in_full").length;
+  const eventsWithOutstandingBalance = eventEntries
+    .filter((e) => e.summary.outstanding_minor > 0)
+    .map((e) => ({ event: e.event, outstandingMinor: e.summary.outstanding_minor, status: e.status }))
+    .sort((a, b) => b.outstandingMinor - a.outstandingMinor);
+
+  const alerts: FinanceAlert[] = [];
+  if (overdueInvoices.length > 0) {
+    alerts.push({
+      message: `${overdueInvoices.length} invoice${overdueInvoices.length === 1 ? "" : "s"} overdue`,
+      severity: "danger",
+      href: "/finance/invoices",
+    });
+  }
+  if (overdueExpenses.length > 0) {
+    alerts.push({
+      message: `${overdueExpenses.length} expense${overdueExpenses.length === 1 ? "" : "s"} overdue`,
+      severity: "danger",
+      href: "/finance/expenses",
+    });
+  }
+  if (eventsAwaitingDepositCount > 0) {
+    alerts.push({
+      message: `${eventsAwaitingDepositCount} event${eventsAwaitingDepositCount === 1 ? "" : "s"} awaiting deposit`,
+      severity: "warning",
+      href: "/events",
+    });
+  }
+  if (unpaidExpenses.length > 0) {
+    alerts.push({
+      message: `${unpaidExpenses.length} unpaid expense${unpaidExpenses.length === 1 ? "" : "s"}`,
+      severity: "warning",
+      href: "/finance/expenses",
+    });
+  }
+
+  return {
+    metrics: {
+      totalInvoicedMinor: allTimeFinancial.total_invoiced_minor,
+      totalCollectedMinor: allTimeFinancial.total_collected_minor,
+      outstandingReceivablesMinor: workspaceFinancial.outstanding_receivables_minor,
+      overdueReceivablesMinor: workspaceFinancial.overdue_receivables_minor,
+      depositsPendingMinor: workspaceFinancial.deposits_pending_minor,
+      expensesThisMonthMinor: workspaceFinancial.expenses_this_month_minor,
+      grossProfitMinor: workspaceFinancial.gross_profit_minor,
+      netProfitMinor: workspaceFinancial.net_profit_minor,
+      refundsThisMonthMinor: workspaceFinancial.refunds_this_month_minor,
+      unpaidExpensesCount: unpaidExpenses.length,
+      eventsAwaitingDepositCount,
+      eventsPaidInFullCount,
+    },
+    recentInvoices,
+    recentPayments,
+    overdueInvoices,
+    unpaidExpenses,
+    alerts,
+    eventsWithOutstandingBalance,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Invoice/Payment/Expense Notes and Timeline — reuse the shared
 // owner_type/owner_id Notes and Timeline architecture, same precedent as
@@ -3447,7 +3820,7 @@ export async function getDashboardMetrics(): Promise<DashboardMetric[]> {
   const expenses = readExpenses();
   const workspaceFinancial = computeWorkspaceFinancialSummary(contracts, invoices, payments, expenses);
   const allTimeFinancial = computeAllTimeFinancialTotals(invoices, payments);
-  const unpaidExpenses = expenses.filter((e) => e.status === "planned" || e.status === "approved" || e.status === "due");
+  const unpaidExpenses = expenses.filter((e) => UNPAID_EXPENSE_STATUSES.includes(e.status));
   const activeLeads = leads.filter((lead) => lead.status !== "archived");
   const activeClients = clients.filter((client) => client.internal_status === "active");
   const vipClients = clients.filter((client) => client.is_vip);
