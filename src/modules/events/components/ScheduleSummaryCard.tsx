@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import type { ScheduleStats } from "@/modules/events/scheduleStats";
@@ -13,8 +14,8 @@ function itemLabel(item: ScheduleStats["first"]): string {
   return item.start_time ? `${item.title} — ${item.start_time}` : item.title;
 }
 
-/** Read-only summary only — Schedule CRUD UI is Phase 4. */
-export function ScheduleSummaryCard({ stats }: { stats: ScheduleStats }) {
+/** Read-only summary — full schedule management lives at /events/[id]/schedule (Phase 4). */
+export function ScheduleSummaryCard({ eventId, stats }: { eventId: string; stats: ScheduleStats }) {
   return (
     <Card>
       <h3 className="font-serif text-[17px] font-semibold text-text">Schedule Summary</h3>
@@ -44,9 +45,11 @@ export function ScheduleSummaryCard({ stats }: { stats: ScheduleStats }) {
           </div>
         </dl>
       )}
-      <Button variant="secondary" className="mt-4" disabled title="Schedule management is coming in Phase 4">
-        Manage Schedule
-      </Button>
+      <Link href={`/events/${eventId}/schedule`}>
+        <Button variant="secondary" className="mt-4">
+          Manage Schedule
+        </Button>
+      </Link>
     </Card>
   );
 }

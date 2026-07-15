@@ -2,20 +2,20 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-export interface ChecklistItemMenuAction {
+export interface ActionMenuAction {
   label: string;
   onSelect: () => void;
   destructive?: boolean;
 }
 
 /**
- * A small local dropdown, not a new global design primitive — no Menu
- * component exists anywhere else in the app yet (every other list uses
- * plain inline buttons), so this stays scoped to Checklist item actions
- * rather than generalizing prematurely. Visually it borrows straight from
- * Modal (border-border, bg-surface, shadow-md).
+ * A small dropdown for per-row item actions (Checklist, Schedule). Not a
+ * heavier design-system menu with submenus/icons — every other list in the
+ * app uses plain inline buttons, so this stays intentionally minimal.
+ * Visually it borrows straight from Modal (border-border, bg-surface,
+ * shadow-md).
  */
-export function ChecklistItemMenu({ actions }: { actions: ChecklistItemMenuAction[] }): ReactNode {
+export function ActionMenu({ actions }: { actions: ActionMenuAction[] }): ReactNode {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 

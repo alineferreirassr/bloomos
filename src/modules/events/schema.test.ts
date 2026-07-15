@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { eventFormSchema, eventDataSchema, scheduleItemSchema } from "@/modules/events/schema";
+import {
+  eventFormSchema,
+  eventDataSchema,
+  scheduleItemSchema,
+  scheduleItemFormSchema,
+  scheduleFormToInput,
+} from "@/modules/events/schema";
 
 const validFormInput = {
   client_id: "client_1",
@@ -179,5 +185,79 @@ describe("scheduleItemSchema", () => {
       category: "not-a-category",
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("scheduleItemFormSchema", () => {
+  const validFormInput = {
+    title: "Team arrival & setup",
+    description: "",
+    start_time: "17:00",
+    end_time: "17:45",
+    location: "El Matador State Beach",
+    assigned_to: "",
+    category: "arrival" as const,
+  };
+
+  it("accepts plain empty strings for nullable fields", () => {
+    const result = scheduleItemFormSchema.safeParse(validFormInput);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a missing title", () => {
+    const result = scheduleItemFormSchema.safeParse({ ...validFormInput, title: "" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an end time before the start time", () => {
+    const result = scheduleItemFormSchema.safeParse({ ...validFormInput, start_time: "18:00", end_time: "17:00" });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts an end time equal to the start time", () => {
+    const result = scheduleItemFormSchema.safeParse({ ...validFormInput, start_time: "18:00", end_time: "18:00" });
+    expect(result.success).toBe(true);
+  });
+
+  it("allows either time to be blank without triggering the ordering check", () => {
+    const result = scheduleItemFormSchema.safeParse({ ...validFormInput, start_time: "", end_time: "17:00" });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("scheduleFormToInput", () => {
+  it("normalizes empty strings to null", () => {
+    const input = scheduleFormToInput({
+      title: "Team arrival & setup",
+      description: "",
+      start_time: "",
+      end_time: "",
+      location: "",
+      assigned_to: "",
+      category: "arrival",
+    });
+    expect(input).toEqual({
+      title: "Team arrival & setup",
+      description: null,
+      start_time: null,
+      end_time: null,
+      location: null,
+      assigned_to: null,
+      category: "arrival",
+    });
+  });
+
+  it("preserves non-empty values", () => {
+    const input = scheduleFormToInput({
+      title: "Photographer arrives",
+      description: "Bring backup lenses",
+      start_time: "18:00",
+      end_time: "18:15",
+      location: "El Matador State Beach",
+      assigned_to: "Jamie Rivera",
+      category: "photography",
+    });
+    expect(input.description).toBe("Bring backup lenses");
+    expect(input.assigned_to).toBe("Jamie Rivera");
   });
 });

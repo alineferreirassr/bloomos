@@ -1,5 +1,6 @@
 import type { Event } from "@/types/event";
 import type { ChecklistItem } from "@/types/checklistItem";
+import type { EventScheduleItem } from "@/types/eventScheduleItem";
 
 /** Test-only fixture factory — not imported by any app code. */
 export function makeEvent(overrides: Partial<Event> = {}): Event {
@@ -64,6 +65,28 @@ export function makeChecklistItem(overrides: Partial<ChecklistItem> = {}): Check
     assigned_type: "unknown",
     assigned_id: null,
     assigned_name: null,
+    sort_order: 0,
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+/** Test-only fixture factory — not imported by any app code. */
+export function makeScheduleItem(overrides: Partial<EventScheduleItem> = {}): EventScheduleItem {
+  return {
+    id: "schedule_test",
+    workspace_id: "ws_test",
+    owner_type: "event",
+    owner_id: "event_test",
+    title: "Test schedule item",
+    description: null,
+    start_time: null,
+    end_time: null,
+    location: null,
+    assigned_to: null,
+    category: "setup",
+    status: "planned",
     sort_order: 0,
     created_at: "2026-01-01T00:00:00.000Z",
     updated_at: "2026-01-01T00:00:00.000Z",

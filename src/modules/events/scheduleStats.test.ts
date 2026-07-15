@@ -28,12 +28,46 @@ describe("computeScheduleStats", () => {
     const stats = computeScheduleStats([]);
     expect(stats).toEqual({
       total: 0,
+      planned: 0,
+      confirmed: 0,
+      completed: 0,
+      delayed: 0,
+      cancelled: 0,
       first: null,
       last: null,
-      delayed: 0,
-      completed: 0,
       completionState: "not_started",
+      spanStart: null,
+      spanEnd: null,
     });
+  });
+
+  it("counts planned, confirmed, and cancelled separately", () => {
+    const items = [
+      makeItem({ id: "a", status: "planned" }),
+      makeItem({ id: "b", status: "confirmed" }),
+      makeItem({ id: "c", status: "cancelled" }),
+    ];
+    const stats = computeScheduleStats(items);
+    expect(stats.planned).toBe(1);
+    expect(stats.confirmed).toBe(1);
+    expect(stats.cancelled).toBe(1);
+  });
+
+  it("computes the schedule span from the earliest start_time to the latest end_time across all items", () => {
+    const items = [
+      makeItem({ id: "a", start_time: "17:00", end_time: "17:45" }),
+      makeItem({ id: "b", start_time: "18:25", end_time: "20:30" }),
+      makeItem({ id: "c", start_time: "18:00", end_time: "18:15" }),
+    ];
+    const stats = computeScheduleStats(items);
+    expect(stats.spanStart).toBe("17:00");
+    expect(stats.spanEnd).toBe("20:30");
+  });
+
+  it("returns a null span when no item has a time set", () => {
+    const items = [makeItem({ id: "a", start_time: null, end_time: null })];
+    expect(computeScheduleStats(items).spanStart).toBeNull();
+    expect(computeScheduleStats(items).spanEnd).toBeNull();
   });
 
   it("identifies first and last by sort_order, not array order", () => {

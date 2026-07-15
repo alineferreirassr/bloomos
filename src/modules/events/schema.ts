@@ -134,10 +134,9 @@ export const eventDataSchema = eventFormSchema.transform((data) => ({
 export type EventDataInput = z.infer<typeof eventDataSchema>;
 
 /**
- * A day-of schedule row for one Event. No separate form/data split — unlike
- * Event/Client, this isn't fed by raw HTML form strings yet (no Event UI
- * exists at this checkpoint), so fields are typed directly rather than as
- * form-input strings requiring "" -> null normalization.
+ * A day-of schedule row for one Event. This is the authoritative schema,
+ * used inside the data layer (lib/data/index.ts createScheduleItem/
+ * updateScheduleItem) — nullable fields are real `null`, not "".
  */
 export const scheduleItemSchema = z.object({
   title: z.string().trim().min(1, "Title is required"),
@@ -150,3 +149,46 @@ export const scheduleItemSchema = z.object({
 });
 
 export type ScheduleItemInput = z.infer<typeof scheduleItemSchema>;
+
+/**
+ * Client-side (react-hook-form) schema for the Schedule Item create/edit
+ * form — every field is a plain string, matching what HTML form inputs
+ * actually produce, mirroring the checklistItemFormSchema/checklistItemSchema
+ * split in modules/checklist/schema.ts. `status` is deliberately excluded:
+ * it's changed only through the dedicated updateScheduleItemStatus function
+ * (see ScheduleItemForm), so it carries its own centralized timeline entry
+ * instead of being buried in a generic item update.
+ *
+ * end_time >= start_time reuses the exact same lexicographic-comparison
+ * refine as eventFormSchema — "HH:MM" strings compare correctly for
+ * same-day times, so no Date parsing is needed.
+ */
+export const scheduleItemFormSchema = z
+  .object({
+    title: z.string().trim().min(1, "Title is required"),
+    description: z.string().trim(),
+    start_time: z.string().trim(),
+    end_time: z.string().trim(),
+    location: z.string().trim(),
+    assigned_to: z.string().trim(),
+    category: z.enum(SCHEDULE_CATEGORIES),
+  })
+  .refine((data) => data.start_time === "" || data.end_time === "" || data.end_time >= data.start_time, {
+    message: "End time cannot be before start time",
+    path: ["end_time"],
+  });
+
+export type ScheduleItemFormInput = z.infer<typeof scheduleItemFormSchema>;
+
+/** Normalizes "" -> null into the shape scheduleItemSchema/the data layer expects. */
+export function scheduleFormToInput(data: ScheduleItemFormInput): ScheduleItemInput {
+  return {
+    title: data.title,
+    description: data.description === "" ? null : data.description,
+    start_time: data.start_time === "" ? null : data.start_time,
+    end_time: data.end_time === "" ? null : data.end_time,
+    location: data.location === "" ? null : data.location,
+    assigned_to: data.assigned_to === "" ? null : data.assigned_to,
+    category: data.category,
+  };
+}

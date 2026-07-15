@@ -39,6 +39,7 @@ import type { ChecklistItemInput } from "@/modules/checklist/schema";
 import type { ScheduleItemInput } from "@/modules/events/schema";
 import type { LeadFormInput } from "@/modules/leads/schema";
 import { computeChecklistStats } from "@/modules/events/checklistStats";
+import { computeScheduleStats } from "@/modules/events/scheduleStats";
 import { getEventHealthDetails } from "@/core/workflows/eventHealth";
 
 /**
@@ -847,6 +848,54 @@ describe("Schedule CRUD", () => {
     expect(result.data.owner_type).toBe("event");
     expect(result.data.owner_id).toBe(event.data.id);
     expect(result.data.workspace_id).toBe(event.data.workspace_id);
+  });
+
+  it("schedule mutations are reflected together in computeScheduleStats, getEventHealthDetails, and the Timeline", async () => {
+    // "birthday" has no default template and no seeded schedule (see comment at the top of this file).
+    const event = await createEvent(validEventInput);
+    if (!event.success) throw new Error("setup failed");
+
+    const healthContext = {
+      hasChecklistItems: true,
+      hasOverdueChecklistItems: false,
+      hasPostEventReview: false,
+      daysUntilEvent: null,
+    };
+    const eventForHealth = {
+      status: event.data.status,
+      priority: event.data.priority,
+      location_name: event.data.location_name,
+      address: event.data.address,
+      budget_min: event.data.budget_min,
+      budget_max: event.data.budget_max,
+    };
+
+    const before = await getScheduleByEventId(event.data.id);
+    const statsBefore = computeScheduleStats(before);
+    expect(statsBefore.total).toBe(0);
+    const healthBefore = getEventHealthDetails(eventForHealth, { ...healthContext, hasScheduleItems: false });
+    expect(healthBefore.factors.some((f) => f.label === "No schedule items")).toBe(true);
+
+    const created = await createScheduleItem(event.data.id, validScheduleInput);
+    if (!created.success) throw new Error("setup failed");
+    await updateScheduleItemStatus(created.data.id, "delayed");
+
+    const after = await getScheduleByEventId(event.data.id);
+    const statsAfter = computeScheduleStats(after);
+    expect(statsAfter.total).toBe(1);
+    expect(statsAfter.delayed).toBe(1);
+
+    const healthAfter = getEventHealthDetails(eventForHealth, { ...healthContext, hasScheduleItems: true });
+    expect(healthAfter.factors.some((f) => f.label === "No schedule items")).toBe(false);
+    expect(healthAfter.score).toBeGreaterThan(healthBefore.score);
+
+    const timeline = await getTimelineByEventId(event.data.id);
+    expect(timeline.some((activity) => activity.type === "schedule_item_created")).toBe(true);
+    expect(
+      timeline.some(
+        (activity) => activity.type === "schedule_item_updated" && activity.description.includes("Delayed"),
+      ),
+    ).toBe(true);
   });
 });
 
