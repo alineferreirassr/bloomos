@@ -14,6 +14,7 @@ const OWNER_LABEL: Record<EntityType, string> = {
   lead: "Lead",
   client: "Client",
   event: "Event",
+  contract: "Contract",
 };
 
 /**

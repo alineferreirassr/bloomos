@@ -51,8 +51,8 @@ Shared by Leads and Clients — one polymorphic table (`owner_type` + `owner_id`
 |---|---|---|
 | id | uuid | PK |
 | workspace_id | uuid | FK → workspaces — see "Polymorphic ownership" below for why every read/write scopes by this in addition to owner_type/owner_id |
-| owner_type | enum | `lead`, `client`, `event` |
-| owner_id | uuid | references leads.id, clients.id, or events.id, depending on owner_type — **not** a database-enforced FK; see below |
+| owner_type | enum | `lead`, `client`, `event`, `contract` |
+| owner_id | uuid | references leads.id, clients.id, events.id, or contracts.id, depending on owner_type — **not** a database-enforced FK; see below |
 | title | text | |
 | content | text | |
 | category | enum | `general`, `special_request`, `preference`, `relationship_detail`, `allergy`, `accessibility`, `dietary_restriction`, `communication`, `internal_alert`, `idea`, `reminder`, `problem` |
@@ -69,9 +69,9 @@ Shared by Leads and Clients — one polymorphic, append-only table (`owner_type`
 |---|---|---|
 | id | uuid | PK |
 | workspace_id | uuid | FK → workspaces — see "Polymorphic ownership" below for why every read/write scopes by this in addition to owner_type/owner_id |
-| owner_type | enum | `lead`, `client`, `event` |
-| owner_id | uuid | references leads.id, clients.id, or events.id, depending on owner_type — **not** a database-enforced FK; see below |
-| type | enum | `lead_created`, `lead_updated`, `status_changed`, `note_added`, `note_pinned`, `note_unpinned`, `welcome_guide_sent`, `lead_archived`, `lead_converted`, `client_created`, `client_updated`, `tags_changed`, `vip_status_changed`, `communication_preference_changed`, `client_archived`, `client_restored`, `event_created`, `event_updated`, `lifecycle_stage_changed`, `priority_changed`, `checklist_item_created`, `checklist_item_completed`, `checklist_template_applied`, `schedule_item_created`, `schedule_item_updated`, `event_archived`, `event_restored`, `event_cancelled`, `event_completed` |
+| owner_type | enum | `lead`, `client`, `event`, `contract` |
+| owner_id | uuid | references leads.id, clients.id, events.id, or contracts.id, depending on owner_type — **not** a database-enforced FK; see below |
+| type | enum | `lead_created`, `lead_updated`, `status_changed`, `note_added`, `note_pinned`, `note_unpinned`, `welcome_guide_sent`, `lead_archived`, `lead_converted`, `client_created`, `client_updated`, `tags_changed`, `vip_status_changed`, `communication_preference_changed`, `client_archived`, `client_restored`, `event_created`, `event_updated`, `lifecycle_stage_changed`, `priority_changed`, `checklist_item_created`, `checklist_item_completed`, `checklist_template_applied`, `schedule_item_created`, `schedule_item_updated`, `event_archived`, `event_restored`, `event_cancelled`, `event_completed`, `contract_created`, `contract_updated`, `contract_sent`, `contract_viewed`, `contract_signed`, `contract_declined`, `contract_cancelled`, `contract_completed`, `contract_archived`, `contract_restored` |
 | description | text | human-readable summary |
 | actor | text | who/what performed the action |
 | timestamp | timestamptz | |
@@ -79,7 +79,7 @@ Shared by Leads and Clients — one polymorphic, append-only table (`owner_type`
 
 #### Polymorphic ownership: no normal foreign key is possible
 
-`notes.owner_id`, `timeline_activities.owner_id`, `checklist_items.owner_id`, and `schedule_items.owner_id` each point at one of several possible target tables depending on the row's `owner_type` — a single column referencing more than one target table. Postgres (and Supabase) cannot express that as one `FOREIGN KEY` constraint; a normal FK targets exactly one table. This is a deliberate tradeoff to avoid duplicating the same architecture per owner type (`lead_notes`/`client_notes`/`event_notes`, `event_checklist_items`/`employee_checklist_items`/etc.) as more owner types are added — `checklist_items` and `schedule_items` were built polymorphic from the start specifically so Team Management, Vendors, Inventory, and Vehicles can adopt them later without a schema change, not just Events.
+`notes.owner_id`, `timeline_activities.owner_id`, `checklist_items.owner_id`, and `schedule_items.owner_id` each point at one of several possible target tables depending on the row's `owner_type` — a single column referencing more than one target table. Postgres (and Supabase) cannot express that as one `FOREIGN KEY` constraint; a normal FK targets exactly one table. This is a deliberate tradeoff to avoid duplicating the same architecture per owner type (`lead_notes`/`client_notes`/`event_notes`/`contract_notes`, `event_checklist_items`/`employee_checklist_items`/etc.) as more owner types are added — `checklist_items` and `schedule_items` were built polymorphic from the start specifically so Team Management, Vendors, Inventory, and Vehicles can adopt them later without a schema change, not just Events; `notes`/`timeline_activities` gained `contract` as a fourth `owner_type` value for the same reason (Contracts reuse the shared architecture rather than introducing a dedicated `contract_notes` table — see `docs/workflows.md`).
 
 Because referential integrity and workspace isolation can't be guaranteed by a FK here, both are enforced elsewhere instead:
 
@@ -187,16 +187,65 @@ The day-of run-of-show. Generalized the same way as `checklist_items` — `owner
 | created_at / updated_at | timestamptz | |
 
 ### `contracts`
+Closes the commercial cycle: Lead -> Client -> Event -> Contract -> Invoice (future) -> Payments (future). Reusable across every Workspace — nothing here is designed around a single business. `client_id` is required; `event_id` is deliberately nullable — a Contract can stand on its own (e.g. a retainer) ahead of or without a dedicated Event record. Replaces the earlier draft/sent/signed/cancelled sketch below with the actual shipped model (`core/workflows/contractWorkflow.ts`).
+
+`status` and `signature_status` are two independent state machines, the same pattern as `events.status`/`events.lifecycle_stage` — `status` is the contract's overall commercial lifecycle; `signature_status` is specifically about the e-signature process and can reach `partially_signed`, a state `status` has no equivalent for. Neither is inferred from the other.
+
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
 | workspace_id | uuid | FK → workspaces |
-| event_id | uuid | FK → events |
-| status | enum | `draft`, `sent`, `signed`, `cancelled` |
-| total_amount | numeric | |
-| signed_at | timestamptz | nullable |
-| file_path | text | nullable — path into the future `contracts` Supabase Storage bucket (`docs/integrations.md`); no upload capability exists until Supabase is connected |
+| client_id | uuid | FK → clients — **required** |
+| event_id | uuid | nullable FK → events |
+| template_id | uuid | nullable FK → contract_templates |
+| contract_number | text | workspace-scoped and generated uniquely (`CT-{year}-{sequence}`), collision-checked on every creation/duplication |
+| title | text | |
+| description | text | nullable |
+| status | enum | `draft`, `review`, `ready`, `sent`, `viewed`, `signed`, `completed`, `expired`, `cancelled`, `archived`, `declined` — `core/enums/contractStatus.ts`; `sent`/`viewed`/`signed`/`completed`/`expired`/`cancelled`/`archived`/`declined` are reachable only via their own dedicated data-layer action, never the plain status setter; only `draft`/`review`/`ready` remain freely inter-transitionable through it |
+| signature_status | enum | `unsigned`, `sent`, `viewed`, `partially_signed`, `signed`, `declined`, `expired`, `cancelled` — `core/enums/signatureStatus.ts` |
+| version | integer | starts at 1, incremented on every content edit (`updateContract`) |
+| version_history | jsonb | array of `{ version, title, description, total_value, deposit_amount, recorded_at }` snapshots taken immediately before each edit overwrites them — the model's minimal version history; no separate versions table |
+| effective_date / expiration_date | date | nullable |
+| signed_at / sent_at / viewed_at / declined_at / cancelled_at / archived_at | timestamptz | nullable, set by their respective dedicated action |
+| total_value | numeric | nullable |
+| deposit_required | boolean | |
+| deposit_amount | numeric | nullable — required when `deposit_required` is true, forbidden otherwise (schema-enforced) |
+| remaining_balance | numeric | nullable — derived as `total_value - deposit_amount` on every create/update, not independently editable |
+| currency | text | 3-letter code, uppercased |
+| notes | text | nullable — plain internal free-text field (mirrors `events.internal_summary`), separate from the shared `notes` table a Contract also owns via `owner_type = 'contract'` |
 | created_at / updated_at | timestamptz | |
+
+### `contract_templates`
+A reusable contract body a Contract can be created from. Workspace-scoped, reusable across Workspaces. No editor, HTML rendering, or PDF generation exists yet — `body` is plain text containing `{{merge_field}}` placeholders (see "Merge fields" below); nothing parses or renders them yet.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workspace_id | uuid | FK → workspaces |
+| name | text | |
+| description | text | nullable |
+| category | enum | `event_agreement`, `vendor_agreement`, `rental_agreement`, `photography_release`, `venue_rental`, `custom`, `other` — `core/enums/contractTemplateCategory.ts` |
+| body | text | plain text with `{{merge_field}}` placeholders |
+| version | integer | |
+| active | boolean | inactive templates are excluded when `activeOnly` is requested; still readable individually |
+| created_at / updated_at | timestamptz | |
+
+### `contract_exhibits`
+A named attachment/appendix to a Contract (e.g. Payment Schedule, Cancellation Policy, Rental Terms, Damage Waiver, Photo Release, Custom Attachment) — model support only this phase; no editor exists yet.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| contract_id | uuid | FK → contracts |
+| title | text | |
+| description | text | nullable |
+| display_order | integer | |
+| document_id | uuid | nullable — placeholder for the future Documents module; always null today |
+| created_at / updated_at | timestamptz | |
+
+#### Merge fields
+
+`modules/contracts/mergeFields.ts` is the centralized registry of `{{key}}` placeholders a `contract_templates.body` may reference: `client_name`, `partner_name`, `event_date`, `event_location`, `contract_total`, `deposit_amount`, `remaining_balance`, `workspace_name`. Architecture only — nothing parses a template or substitutes a value yet; this exists so a future renderer and template editor share one list of valid fields instead of each re-deciding what a placeholder means.
 
 ### `payments`
 Finance module: deposits and subsequent payments against a contract.
@@ -219,6 +268,8 @@ Finance module: deposits and subsequent payments against a contract.
 workspaces 1—* leads
 workspaces 1—* clients
 workspaces 1—* events
+workspaces 1—* contracts
+workspaces 1—* contract_templates
 leads 1—* notes                    (owner_type = 'lead')
 leads 1—* timeline_activities      (owner_type = 'lead')
 clients 1—* notes                   (owner_type = 'client')
@@ -227,10 +278,15 @@ events 1—* notes                    (owner_type = 'event')
 events 1—* timeline_activities      (owner_type = 'event')
 events 1—* checklist_items          (owner_type = 'event')
 events 1—* schedule_items           (owner_type = 'event')
+contracts 1—* notes                 (owner_type = 'contract')
+contracts 1—* timeline_activities   (owner_type = 'contract')
+contracts 1—* contract_exhibits
 leads 1—0/1 clients        (via clients.originating_lead_id)
 clients 1—* events                  (event.client_id — required)
+clients 1—* contracts               (contract.client_id — required)
 leads 1—0/1 events                  (via events.originating_lead_id, optional)
-events 1—0/1 contracts
+events 1—0/* contracts              (contract.event_id — optional)
+contract_templates 1—0/* contracts  (contract.template_id — optional)
 contracts 1—* payments
 ```
 

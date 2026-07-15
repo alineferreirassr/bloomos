@@ -28,6 +28,16 @@ export const TIMELINE_ACTIVITY_TYPES = [
   "event_restored",
   "event_cancelled",
   "event_completed",
+  "contract_created",
+  "contract_updated",
+  "contract_sent",
+  "contract_viewed",
+  "contract_signed",
+  "contract_declined",
+  "contract_cancelled",
+  "contract_completed",
+  "contract_archived",
+  "contract_restored",
 ] as const;
 
 export type TimelineActivityType = (typeof TIMELINE_ACTIVITY_TYPES)[number];
@@ -62,4 +72,14 @@ export const TIMELINE_ACTIVITY_LABELS: Record<TimelineActivityType, string> = {
   event_restored: "Event restored",
   event_cancelled: "Event cancelled",
   event_completed: "Event completed",
+  contract_created: "Contract created",
+  contract_updated: "Contract updated",
+  contract_sent: "Contract sent",
+  contract_viewed: "Contract viewed",
+  contract_signed: "Contract signed",
+  contract_declined: "Contract declined",
+  contract_cancelled: "Contract cancelled",
+  contract_completed: "Contract completed",
+  contract_archived: "Contract archived",
+  contract_restored: "Contract restored",
 };

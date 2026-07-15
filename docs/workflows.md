@@ -85,11 +85,28 @@ Neither is inferred from the other by string matching — each has its own trans
 
 A companion, deterministic `getEventHealthScore()` (`core/workflows/eventHealth.ts`) produces a 0–100 score from the same kind of signals (missing location/budget, missing/overdue checklist, missing schedule, awaiting contract/deposit, critical priority, an approaching date, a completed event missing its post-event review) — preparation for a future Dashboard/detail-page widget, not wired into any UI yet.
 
+## Contracts
+
+As implemented (`core/workflows/contractWorkflow.ts`), a Contract tracks **two independent state machines**, the same pattern as an Event's `status`/`lifecycle_stage`:
+
+- **`status`** — the contract's overall commercial lifecycle: `draft`, `review`, `ready`, `sent`, `viewed`, `signed`, `completed`, `expired`, `cancelled`, `archived`, `declined`. `draft`/`review`/`ready` remain freely inter-transitionable through the plain status setter (`updateContractStatus`); every other value is reachable only through its own dedicated data-layer action (`sendContract`, `markViewed`, `markSigned`, `completeContract`, `expireContract`, `cancelContract`, `archiveContract`, `markDeclined`) and never left again except by a further dedicated action.
+- **`signature_status`** — specifically the e-signature process: `unsigned`, `sent`, `viewed`, `partially_signed`, `signed`, `declined`, `expired`, `cancelled`. Moves in lockstep with `status` through the dedicated actions above, except it can additionally reach `partially_signed` — a state `status` has no equivalent for, reserved for a future multi-signer scenario no action currently sets.
+
+Neither is inferred from the other. `isContractClosed()` identifies the narrower set of statuses with genuinely nothing left to do (`completed`, `expired`, `cancelled`, `archived`, `declined`) — distinct from "locked" (entry-restricted to a dedicated action), since a `sent`/`viewed`/`signed` contract is locked from the plain setter but still very much mid-flow. `getContractNextRecommendedAction()` (mirroring `getEventNextRecommendedAction`/`getNextRecommendedAction`) returns a deterministic suggestion for every non-closed status, including flagging a `sent` contract that has passed its `expiration_date`.
+
+A Contract always belongs to a Client (`client_id` required); `event_id` is deliberately optional, so a Contract can stand on its own (e.g. a retainer) ahead of or without a dedicated Event record — never assume the Lead → Client → Event → Contract chain is fully populated. If `event_id` is set, it must belong to the same `client_id` (data-layer validated on both create and update).
+
 ## Business rules
 
 - An `events` record cannot exist without a `clients` record.
-- A `contracts` record cannot move to `signed` without an approved Proposal having occurred (enforced procedurally in the MVP; formal state-machine enforcement can be added later).
+- A `contracts` record cannot move to `signed` without first being `sent` (and, once viewed, `viewed`) — enforced by `markSigned`'s own precondition, not just procedurally: it fails if the contract's `status` isn't `sent` or `viewed`.
 - A `payments` row of type `deposit` cannot be `paid` before its `contracts` row is `signed`.
+- A `contracts` record cannot exist without a `client_id`; `event_id` is optional, and when set must belong to that same client (data-layer validated).
+- `contracts.contract_number` is generated uniquely per Workspace (`CT-{year}-{sequence}`) and checked for collisions on every create and duplicate — two Contracts can never share a number.
+- Duplicating a Contract (`duplicateContract`) copies its content (client, event, template, value, deposit, dates, currency, notes) into a fresh `draft`/`unsigned` Contract with a new id and contract_number; it never copies status, signature_status, version history, or any lifecycle timestamp.
+- Every Contract content edit (`updateContract`) increments `version` and appends the pre-edit state to `version_history` — the model's version history; there's no separate versions table and no editor UI yet.
+- Restoring an archived Contract (`restoreContract`) always resumes at `draft`, the same "reasonable resumption point, not the exact pre-archive state" precedent as `restoreEvent` — a restored Contract goes through send/view/sign again for a clean audit trail.
+- Contracts reuse the shared `notes`/`timeline_activities` architecture (`owner_type = 'contract'`) exactly like Events — there is no dedicated `ContractNote` type.
 - A Client becomes `is_returning = true` the moment they have more than one `events` record.
 - Declining at Proposal or cancelling a Contract ends that event's lifecycle but never deletes the Client relationship.
 - A `leads` record's status transitions are governed by `core/workflows/leadWorkflow.ts` (the single source of truth, consumed by both the UI and the data layer): `converted` and `archived` are terminal, reachable only via their own dedicated action, never the plain status selector — see `BLOOMOS_BIBLE.md`'s Lead/Client definitions.
