@@ -332,6 +332,69 @@ A cost the business incurs — Event-specific (`event_id` set), a general busine
 | created_at / updated_at | timestamptz | |
 | archived_at | timestamptz | nullable |
 
+### `documents`
+
+The single shared file system for BloomOS — every module (Client, Event, Contract, Contract Exhibit, Invoice, Payment, Expense, and the Workspace itself) attaches files through this one polymorphic table rather than a per-module upload system. **Phase 1 is metadata only**: `storage_provider`/`storage_bucket`/`storage_path` describe where a real file would live, but no binary upload, base64 content, or real storage connection exists yet — every row today has `storage_provider = 'mock'`. See `docs/integrations.md` for the planned Supabase Storage integration and `lib/documentFile.ts` for the centralized file-name/size/path rules.
+
+`owner_type`/`owner_id` is the authoritative owner (same polymorphic pattern as `notes`/`timeline_activities` — see "Polymorphic ownership" above), practically restricted to `workspace`, `client`, `event`, `contract`, `invoice`, `payment`, `expense` today (`supplier`, `inventory_item`, `team_member` are reserved for future modules and not yet real `owner_type` values). The seven typed reference columns (`contract_exhibit_id` … `expense_id`) are for cross-module navigation/lookup only — e.g. "every Document referencing this Invoice" — and never replace or duplicate `owner_type`/`owner_id`.
+
+**Versioning** is a `parent_document_id` + `version` chain, not a snapshot array like `contracts.version_history`: the first version of a file is its own chain root (`parent_document_id = null`, `version = 1`); every later version's `parent_document_id` points at that same root. Exactly one row in a chain has `is_latest_version = true` at any time — `createDocumentVersion` (`lib/data/index.ts`) is the only place that invariant is written: it marks the prior latest version `superseded` and writes both rows in a single batch, so a reader never observes a moment with zero or two "latest" versions. A version's `title`/`visibility`/`expires_at` may be overridden per version; `category` cannot — a chain always keeps the category its first version was uploaded with.
+
+**Soft deletion**: `status = 'deleted'` (with `deleted_at` set) never physically removes the row, the same reversibility precedent as Clients/Events/Contracts.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workspace_id | uuid | FK → workspaces |
+| owner_type | enum | practically `workspace`, `client`, `event`, `contract`, `invoice`, `payment`, `expense` (see above) |
+| owner_id | uuid | references the table named by `owner_type` — **not** a database-enforced FK; see "Polymorphic ownership" above |
+| folder_id | uuid | nullable FK → document_folders — must belong to the same `owner_type`/`owner_id` as this Document |
+| title | text | user-facing name; auto-generated from `file_name` when not supplied |
+| description | text | nullable |
+| category | enum | `contract`, `signed_contract`, `exhibit`, `proposal`, `invoice`, `receipt`, `payment_confirmation`, `expense_receipt`, `reimbursement_proof`, `moodboard`, `inspiration`, `floor_plan`, `event_schedule`, `checklist`, `photo`, `video`, `identification`, `insurance`, `license`, `tax`, `policy`, `waiver`, `report`, `internal`, `other` — `core/enums/documentCategory.ts` |
+| status | enum | `draft`, `active`, `superseded`, `expired`, `archived`, `deleted` — `core/enums/documentStatus.ts` / `core/workflows/documentWorkflow.ts` |
+| visibility | enum | `internal`, `client`, `team`, `client_and_team`, `restricted` — `core/enums/documentVisibility.ts`. **Metadata only** — no authentication or access enforcement reads it yet; see `docs/permissions.md` |
+| file_name | text | normalized (safe-character, lowercase-extension) system file name |
+| original_file_name | text | the file name as originally given, unnormalized |
+| file_extension | text | lowercase, no dot; must be in the allowed list (see below) |
+| mime_type | text | validated for consistency with `file_extension` where practical |
+| size_bytes | integer | positive; validated against a per-file-type limit (see below) |
+| storage_provider | enum | `mock`, `supabase`, `s3`, `local`, `other` — `core/enums/storageProvider.ts`. Always `mock` today |
+| storage_bucket | text | placeholder bucket name; no real bucket exists |
+| storage_path | text | architecture only — always relative (no leading `/`) and free of `..` traversal |
+| checksum | text | nullable — a deterministic placeholder derived from file name + size (`calculateMockChecksum`), not a hash of real file bytes, since none exist yet |
+| version | integer | starts at 1 for a chain root |
+| is_latest_version | boolean | exactly one `true` per version chain |
+| parent_document_id | uuid | nullable — null for a chain root, otherwise the chain root's id |
+| contract_exhibit_id / event_id / client_id / contract_id / invoice_id / payment_id / expense_id | uuid | all nullable — typed cross-references, see above |
+| uploaded_by | text | nullable — actor name; becomes a real FK once auth exists |
+| uploaded_at | timestamptz | |
+| expires_at | timestamptz | nullable; when set, must be after `uploaded_at` |
+| archived_at / deleted_at | timestamptz | nullable, set by `archiveDocument`/`softDeleteDocument` |
+| created_at / updated_at | timestamptz | |
+
+**File limits** (`lib/documentFile.ts`): allowed extensions are `pdf`, `doc`, `docx`, `xls`, `xlsx`, `csv`, `txt`, `jpg`, `jpeg`, `png`, `webp`, `heic`, `mp4`, `mov`, `zip`. `exe`, `dmg`, `pkg`, `app`, `js`, `sh`, `bat`, `cmd` are explicitly blocked regardless of MIME type. Size limits by category: images 25MB, PDFs 50MB, office documents 50MB, videos 500MB, archives 100MB, fallback 25MB.
+
+### `document_folders`
+
+A named container Documents can be filed into, scoped to a single `owner_type`/`owner_id` (a folder never spans multiple owners — the same owner the Documents inside it have). Folders nest via `parent_folder_id`; a root-level folder has `parent_folder_id = null`. `core/workflows/documentFolderWorkflow.ts` centralizes cycle prevention (`wouldCreateFolderCycle`) and cross-Workspace/cross-owner move rules (`canMoveFolder`) — a folder can never become its own ancestor, and `moveDocumentFolder` refuses to move a folder to a different Workspace or owner. Archiving (`archived_at`) is shallow — it does not cascade to child folders or the Documents inside.
+
+Reusable folder-name templates (`modules/documents/constants/folderTemplates.ts`, one each for Client/Event/Contract/Finance) can be applied on demand via `applyDefaultFolderTemplate()` — never auto-created globally. Application is one atomic batch operation: every folder name is validated first, the whole batch is written in a single call, and exactly one summarized `document_folder_template_applied` Timeline entry is recorded on the owner's own timeline — not one `document_folder_created` entry per generated folder, the same atomicity precedent as `checklist_template_applied`.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workspace_id | uuid | FK → workspaces |
+| owner_type | enum | same practical set as `documents.owner_type` |
+| owner_id | uuid | references the table named by `owner_type` — not a database-enforced FK |
+| parent_folder_id | uuid | nullable FK → document_folders (self-referential) |
+| name | text | |
+| description | text | nullable |
+| sort_order | integer | non-negative |
+| visibility | enum | `internal`, `client`, `team`, `client_and_team`, `restricted` — a default new Documents in the folder may inherit at creation time, never an override of a Document's own visibility |
+| created_at / updated_at | timestamptz | |
+| archived_at | timestamptz | nullable |
+
 ### Derived Event financial status
 
 `modules/finance/eventFinancialStatus.ts`'s `EventFinancialStatus` (`no_contract`, `awaiting_invoice`, `awaiting_deposit`, `deposit_partial`, `deposit_paid`, `balance_due`, `paid_in_full`, `overdue`, `refunded`, `cancelled`) is **never persisted** — it's derived on every read from an Event's Contracts/Invoices/Payments (`getEventFinancialStatus` in `lib/data/index.ts`), the same "don't store what you can compute" precedent as `contracts.remaining_balance`. It lives outside `core/enums/` deliberately: every other enum there is the intended value set of a real column; this one has no column at all.
@@ -364,6 +427,28 @@ payments 1—* notes                  (owner_type = 'payment')
 payments 1—* timeline_activities    (owner_type = 'payment')
 expenses 1—* notes                  (owner_type = 'expense')
 expenses 1—* timeline_activities    (owner_type = 'expense')
+workspaces 1—* documents            (owner_type = 'workspace')
+clients 1—* documents               (owner_type = 'client')
+events 1—* documents                (owner_type = 'event')
+contracts 1—* documents             (owner_type = 'contract')
+invoices 1—* documents              (owner_type = 'invoice')
+payments 1—* documents              (owner_type = 'payment')
+expenses 1—* documents              (owner_type = 'expense')
+documents 1—* notes                 (owner_type = 'document')
+documents 1—* timeline_activities   (owner_type = 'document')
+workspaces 1—* document_folders     (owner_type = 'workspace')
+clients 1—* document_folders        (owner_type = 'client')
+events 1—* document_folders         (owner_type = 'event')
+contracts 1—* document_folders      (owner_type = 'contract')
+invoices 1—* document_folders       (owner_type = 'invoice')
+payments 1—* document_folders       (owner_type = 'payment')
+expenses 1—* document_folders       (owner_type = 'expense')
+document_folders 1—0/* documents    (document.folder_id — optional)
+document_folders 1—0/* document_folders (document_folder.parent_folder_id — optional, self-referential)
+document_folders 1—* notes          (owner_type = 'document_folder')
+document_folders 1—* timeline_activities (owner_type = 'document_folder')
+documents 1—0/* documents           (document.parent_document_id — version chain, optional)
+contract_exhibits 1—0/* documents   (document.contract_exhibit_id — optional)
 leads 1—0/1 clients        (via clients.originating_lead_id)
 clients 1—* events                  (event.client_id — required)
 clients 1—* contracts               (contract.client_id — required)
@@ -384,9 +469,11 @@ invoices 1—0/* payments             (payment.invoice_id — optional)
 
 ## Post-MVP tables (not created yet)
 
-Anticipated, not implemented: `inventory_items`, `suppliers`, `team_members`, `event_team_assignments`, `vehicles`, `documents`, `client_portal_access`, `automations`, `automation_runs`, `emails`, `gallery_media`, `feedback`, `knowledge_base_articles`. When these ship, `checklist_items.owner_type`/`schedule_items.owner_type` and `checklist_items.assigned_type` are expected to gain `employee`/`vendor`/`inventory`/`vehicle` values rather than needing new tables — that reuse is the reason those two tables were generalized ahead of time. These will be specified in detail when their phase (see `ROADMAP.md`) begins.
+Anticipated, not implemented: `inventory_items`, `suppliers`, `team_members`, `event_team_assignments`, `vehicles`, `client_portal_access`, `team_portal_access`, `automations`, `automation_runs`, `emails`, `gallery_media`, `feedback`, `knowledge_base_articles`. When these ship, `checklist_items.owner_type`/`schedule_items.owner_type` and `checklist_items.assigned_type` are expected to gain `employee`/`vendor`/`inventory`/`vehicle` values rather than needing new tables — that reuse is the reason those two tables were generalized ahead of time; `documents.owner_type` is expected to gain `supplier`/`inventory_item`/`team_member` the same way. These will be specified in detail when their phase (see `ROADMAP.md`) begins.
 
-`payments.document_id` and `expenses.document_id` are placeholders for the future `documents` table specifically — once it exists, it's expected to attach invoices, receipts, payment confirmations, expense receipts, reimbursement proofs, and tax documents to the record that references it, the same way `contract_exhibits.document_id` is a placeholder today. No document upload or storage exists yet.
+`documents` now exists (see above) — `contract_exhibits.document_id`, `payments.document_id`, and `expenses.document_id` remain nullable placeholder columns that a real Document's id can be written into via the placeholder attachment helpers (`attachDocumentToContractExhibit`, `attachDocumentToPayment`, `attachDocumentToExpense`, and their Invoice/Event/Client counterparts) — metadata-only linking, no real binary upload. These helpers are additive: they never rewrite an existing `document_id` automatically, and no seed data populates them yet.
+
+Future Client Portal and Team Portal access (both listed above as not-yet-implemented) are expected to read `documents.visibility`/`document_folders.visibility` once real authentication exists — see `docs/permissions.md`.
 
 No payment-provider (Stripe, Square, PayPal, banks, accounting software) is connected. `payments.payment_method` values that name a provider (`stripe`, `square`, `paypal`, `credit_card`, `debit_card`) are labels only, recorded exactly like `cash`/`check`/`zelle`/`venmo` — none of them trigger a real charge, webhook, or reconciliation. `createPayment`'s initial `status` (`succeeded` for manual/bank-style methods, `pending` for card/wallet-style ones) simulates the outcome a provider round-trip would eventually produce, nothing more. **No card numbers, bank account numbers, or other sensitive payment credentials are ever stored** — `payments.reference` is a free-text field limited to non-sensitive identifiers (a check number, a provider transaction id).
 

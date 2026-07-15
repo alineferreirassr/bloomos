@@ -106,6 +106,15 @@ Continues the cycle Contract closes: Lead → Client → Event → Contract → 
 
 Money is always an integer minor-unit amount (`lib/money.ts`) — see `docs/database.md`'s "Money model" section. Refunds are a Payment with `payment_type: "refund"`, not a second ledger — see `docs/database.md`'s "Refund model" section for the exact mechanics. `modules/finance/eventFinancialStatus.ts`'s `EventFinancialStatus` is derived on every read from an Event's Contracts/Invoices/Payments, never persisted — see `docs/database.md`'s "Derived Event financial status" section.
 
+## Documents
+
+The single shared file system every other module attaches files through — see `docs/database.md`'s `documents`/`document_folders` sections for the full column reference. Two independent state machines, neither inferred from the other:
+
+- **Document** (`core/workflows/documentWorkflow.ts`) — `draft`, `active`, `superseded`, `expired`, `archived`, `deleted`. Every non-`draft` value is reached only through its own dedicated action (`activateDocument`, `createDocumentVersion` marks the prior latest version `superseded`, `expireDocument`, `archiveDocument`, `softDeleteDocument`). Only `deleted` is terminal (`isDocumentTerminal`); `archived`/`deleted` both restore to `active` via `restoreDocument` — the same "reasonable resumption point" precedent as `restoreContract`/`restoreExpense`. `getDocumentNextRecommendedAction()` returns a deterministic suggestion for every status, including flagging incomplete metadata on a draft (uncategorized or unfiled) and an active Document expiring within 14 days.
+- **Document Folder** — no status enum; archiving is `archived_at`-based only (`archiveDocumentFolder`/`restoreDocumentFolder`) and does not cascade to child folders or the Documents inside. Folder-tree rules (nesting, cycle prevention, cross-Workspace/cross-owner move guards) are centralized in `core/workflows/documentFolderWorkflow.ts` and never reimplemented by a caller.
+
+No money model applies here (Documents carry no monetary fields). No real file storage, upload, download, OCR, e-signature, or PDF generation exists in this phase — every mock Document's `storage_provider` is `"mock"`; see `docs/integrations.md`.
+
 ## Business rules
 
 - An `events` record cannot exist without a `clients` record.
@@ -137,3 +146,9 @@ Money is always an integer minor-unit amount (`lib/money.ts`) — see `docs/data
 - An `expenses` row cannot exist without a `workspace_id`, but `event_id`/`client_id` are both optional (a general business expense has neither) — unlike every other entity in this data layer, `workspace_id` is assigned directly rather than derived from a required Client.
 - `expenses.reimbursable` (whether an Expense is eligible for reimbursement) and `status: "reimbursed"` (whether that reimbursement has actually happened) are independent — `markExpenseReimbursed` fails on a non-reimbursable Expense regardless of its status.
 - Invoices/Payments/Expenses each reuse the shared `notes`/`timeline_activities` architecture (`owner_type = 'invoice' | 'payment' | 'expense'`) exactly like Contracts — there is no dedicated InvoiceNote/PaymentNote/ExpenseNote type.
+- A `documents` row cannot exist without a `workspace_id`; `owner_type` is validated against the practical set (`workspace`, `client`, `event`, `contract`, `invoice`, `payment`, `expense`) and `owner_id` must reference a real row of that type — data-layer validated, same as every other polymorphic owner in this app.
+- When a Document's typed reference fields (`client_id`, `event_id`, `contract_id`) are set together, they must agree with each other exactly like Invoice/Expense's event/contract-vs-client checks (e.g. an `event_id` reference must belong to the given `client_id` reference) — this is independent of and in addition to the `owner_type`/`owner_id` check above.
+- A Document's `folder_id`, when set, must reference a `document_folders` row with the same `owner_type`/`owner_id` as the Document itself — a Document can never be filed into a folder belonging to a different owner.
+- `createDocumentVersion` inherits `category` from the version it supersedes and refuses to change it — a version chain's category is fixed by its first version; `title`/`visibility`/`expires_at` may still be overridden per version.
+- Documents/Document Folders each reuse the shared `notes`/`timeline_activities` architecture (`owner_type = 'document' | 'document_folder'`) exactly like Contracts/Invoices/Payments/Expenses — there is no dedicated DocumentNote/FolderNote type.
+- The placeholder attachment helpers (`attachDocumentToContractExhibit`, `attachDocumentToPayment`, `attachDocumentToExpense`, `attachDocumentToInvoice`, `attachDocumentToEvent`, `attachDocumentToClient`) update only the Document's own typed reference field; they never rewrite `contract_exhibits.document_id`/`payments.document_id`/`expenses.document_id` automatically — additive and backward-compatible with the Contracts/Finance foundations those columns were introduced in.

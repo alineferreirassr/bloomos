@@ -18,6 +18,9 @@ const OWNER_LABEL: Record<EntityType, string> = {
   invoice: "Invoice",
   payment: "Payment",
   expense: "Expense",
+  document: "Document",
+  document_folder: "Folder",
+  workspace: "Workspace",
 };
 
 /**

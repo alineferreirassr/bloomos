@@ -12,7 +12,7 @@ Source control and CI for the BloomOS codebase. Active now.
 ### Supabase
 - **Role:** Postgres database, Auth, Storage.
 - **Status:** Not connected. The app is built against a centralized mock data layer (mirroring `docs/database.md`) until real Supabase credentials are provided, at which point the data layer is swapped for live queries — application code should not need to change, only the data-access implementation.
-- **Scope at connection time:** Auth (team login), Postgres (MVP schema), Storage (contracts/gallery media, once those modules need it).
+- **Scope at connection time:** Auth (team login), Postgres (MVP schema), Storage (the Documents domain's real backing store — every mock Document already carries a `storage_provider`/`storage_bucket`/`storage_path` triple shaped for this; connecting Supabase Storage is expected to mean writing real objects at those paths and switching `storage_provider` from `"mock"` to `"supabase"`, not a schema change. Signed, time-limited URLs are expected to replace any notion of a permanent public file URL — the Documents domain's `visibility` field is metadata only until this connects, see `docs/permissions.md`).
 
 ## Anticipated for future modules (not designed in detail yet)
 
