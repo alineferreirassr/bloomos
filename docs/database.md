@@ -247,20 +247,94 @@ A named attachment/appendix to a Contract (e.g. Payment Schedule, Cancellation P
 
 `modules/contracts/mergeFields.ts` is the centralized registry of `{{key}}` placeholders a `contract_templates.body` may reference: `client_name`, `partner_name`, `event_date`, `event_location`, `contract_total`, `deposit_amount`, `remaining_balance`, `workspace_name`. Architecture only — nothing parses a template or substitutes a value yet; this exists so a future renderer and template editor share one list of valid fields instead of each re-deciding what a placeholder means.
 
-### `payments`
-Finance module: deposits and subsequent payments against a contract.
+### Money model
+
+Every persisted monetary value across `invoices`/`payments`/`expenses` is an **integer minor-unit amount** (e.g. $1,250.00 is stored as `125000`), never a float — floats can't represent currency exactly and drift across repeated arithmetic. `lib/money.ts` is the single place this arithmetic happens (`formatMoney`, `calculateBalance`, `calculatePercentage`, safe `addMinor`/`subtractMinor`/`sumMinor`); no other module computes money totals ad hoc. `MINOR_UNIT_EXPONENT` (currently 2, i.e. cents) is centralized so a future 0- or 3-decimal currency only needs one constant changed. `contracts.total_value`/`contracts.deposit_amount` predate this model and remain plain major-unit numbers — every Finance summary that folds a Contract value into a `*_minor` total converts it through `majorToMinor()` rather than assuming it's already minor-unit; this is a known, deliberate seam, not an oversight.
+
+### `invoices`
+Continues the commercial cycle a Contract closes: Lead → Client → Event → Contract → Invoice → Payments → Expenses → Profit. `client_id` is required; `event_id` and `contract_id` are both nullable — a standalone Invoice (e.g. a one-off transaction with no Event or Contract on record) is legitimate. When set, `event_id`/`contract_id` must belong to the same `client_id` and `workspace_id` (data-layer validated).
+
+Unlike `contracts.status`, there is no plain status setter — every non-`draft` value is reached through its own dedicated data-layer action (`issueInvoice`, `sendInvoice`, `markInvoiceViewed`, `markInvoiceOverdue`, `voidInvoice`, `archiveInvoice`, `restoreInvoice`) or automatically when a successful Payment is applied (`partially_paid`/`paid` — see `applyPaymentToInvoice` in `lib/data/index.ts`).
 
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
 | workspace_id | uuid | FK → workspaces |
-| contract_id | uuid | FK → contracts |
-| type | enum | `deposit`, `installment`, `balance`, `refund` |
-| amount | numeric | |
-| status | enum | `pending`, `paid`, `failed`, `refunded` |
-| due_date | date | nullable |
-| paid_at | timestamptz | nullable |
+| client_id | uuid | FK → clients — **required** |
+| event_id | uuid | nullable FK → events |
+| contract_id | uuid | nullable FK → contracts |
+| invoice_number | text | workspace-scoped and generated uniquely (`INV-{year}-{sequence}`), collision-checked on every creation/duplication |
+| title | text | |
+| description | text | nullable |
+| status | enum | `draft`, `issued`, `sent`, `viewed`, `partially_paid`, `paid`, `overdue`, `voided`, `archived` — `core/enums/invoiceStatus.ts` / `core/workflows/invoiceWorkflow.ts` |
+| issue_date / due_date | date | nullable |
+| subtotal_minor / tax_minor / discount_minor | integer | minor units; `discount_minor` cannot exceed `subtotal_minor` (schema-enforced) |
+| total_minor | integer | derived as `subtotal_minor + tax_minor - discount_minor` on every create/update, not independently editable |
+| paid_minor / balance_minor | integer | derived by `applyPaymentToInvoice` from every linked, currently-counting Payment (net of refunds) each time one changes — never written directly by a caller |
+| currency | text | 3-letter code, uppercased |
+| notes | text | nullable — plain internal free-text field, separate from the shared `notes` table an Invoice also owns via `owner_type = 'invoice'` |
+| sent_at / viewed_at / paid_at / overdue_at / voided_at / archived_at | timestamptz | nullable, set by their respective dedicated action |
 | created_at / updated_at | timestamptz | |
+
+### `payments`
+A single money movement — collected from a Client (`deposit`, `installment`, `final_payment`, `full_payment`, `retainer`) or paid back to one (`refund`, `reimbursement`, `adjustment`). `invoice_id` is nullable: a Payment may exist without an Invoice (e.g. a deposit collected before one is issued, or a standalone cash transaction), but always belongs to a `client_id` and `workspace_id`. When `invoice_id` is set, workspace/client consistency is validated and a `succeeded` Payment updates that Invoice's `paid_minor`/`balance_minor`/`status` through `applyPaymentToInvoice` — never written directly.
+
+`amount_minor` is always positive, including for `payment_type: "refund"` rows — see "Refund model" below. **Never stores card numbers, bank account numbers, or any other sensitive payment credential** — `reference` is a free-text field for a check number, provider transaction id, or similarly non-sensitive identifier only. No payment-provider (Stripe/Square/PayPal/bank) integration exists; `payment_method` values are labels only.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workspace_id | uuid | FK → workspaces |
+| invoice_id | uuid | nullable FK → invoices |
+| client_id | uuid | FK → clients — **required** |
+| event_id | uuid | nullable FK → events |
+| contract_id | uuid | nullable FK → contracts |
+| payment_type | enum | `deposit`, `installment`, `final_payment`, `full_payment`, `retainer`, `reimbursement`, `refund`, `adjustment`, `other` — `core/enums/paymentType.ts` |
+| status | enum | `pending`, `processing`, `succeeded`, `failed`, `partially_refunded`, `refunded`, `cancelled` — `core/enums/paymentStatus.ts` / `core/workflows/paymentWorkflow.ts`. Only `succeeded`/`partially_refunded`/`refunded` count toward an Invoice's paid total (the money actually collected net of what's since gone back) |
+| payment_method | enum | `cash`, `check`, `bank_transfer`, `ach`, `credit_card`, `debit_card`, `zelle`, `venmo`, `paypal`, `stripe`, `square`, `other` — `core/enums/paymentMethod.ts`; labels only, no provider connected |
+| amount_minor | integer | minor units, always positive |
+| currency | text | 3-letter code |
+| reference | text | nullable — non-sensitive identifier only (check number, provider transaction id) |
+| transaction_date | date | |
+| received_at / failed_at / refunded_at | timestamptz | nullable, set by their respective dedicated action |
+| notes | text | nullable |
+| document_id | uuid | nullable — placeholder for the future Documents module (a payment confirmation or receipt); always null today |
+| created_at / updated_at | timestamptz | |
+
+#### Refund model
+
+Refunds are represented as an ordinary `payments` row with `payment_type = "refund"` rather than a second ledger — one authoritative approach, not two competing ones. `refundPayment(originalPaymentId, amountMinor)` creates this new row (status `succeeded` immediately, `amount_minor` always positive) and moves the *original* Payment's own `status` to `partially_refunded` or `refunded` depending on whether anything refundable remains. The refundable ceiling is the original Payment's `amount_minor` minus every prior refund already issued against it (tracked via `reference`, since a refund has no dedicated foreign key back to the Payment it refunds) — requesting more than that fails outright. If the original Payment was linked to an Invoice, that Invoice is recomputed through `applyPaymentToInvoice` immediately, so its `paid_minor`/`balance_minor`/`status` reflect the refund without a separate step.
+
+### `expenses`
+A cost the business incurs — Event-specific (`event_id` set), a general business expense (`event_id`/`client_id` both null), or supplier/team-related. `supplier_id` and `team_member_id` are forward-looking placeholders only — no Supplier or Team module exists yet, so neither is validated against a real table.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workspace_id | uuid | FK → workspaces |
+| event_id | uuid | nullable FK → events |
+| client_id | uuid | nullable FK → clients |
+| contract_id | uuid | nullable FK → contracts |
+| supplier_id | uuid | nullable — placeholder; future Supplier module, unvalidated today |
+| team_member_id | uuid | nullable — placeholder; future Team module, unvalidated today |
+| category | enum | `decor`, `flowers`, `rentals`, `venue`, `photography`, `video`, `food_beverage`, `transportation`, `printing`, `supplies`, `inventory`, `team_payroll`, `supplier_payment`, `marketing`, `software`, `insurance`, `taxes`, `fees`, `travel`, `refund`, `reimbursement`, `miscellaneous` — `core/enums/expenseCategory.ts` |
+| status | enum | `planned`, `approved`, `due`, `paid`, `reimbursed`, `cancelled`, `archived` — `core/enums/expenseStatus.ts` / `core/workflows/expenseWorkflow.ts` |
+| description | text | |
+| amount_minor | integer | minor units, always positive |
+| currency | text | 3-letter code |
+| transaction_date | date | |
+| due_date | date | nullable |
+| paid_at / reimbursed_at | timestamptz | nullable, set by their respective dedicated action |
+| reimbursable | boolean | marks an Expense a team member or supplier fronted and expects to be paid back for — distinct from `status: "reimbursed"`, which is *whether* that reimbursement has actually happened |
+| reference | text | nullable |
+| notes | text | nullable |
+| document_id | uuid | nullable — placeholder for the future Documents module (a receipt or reimbursement proof); always null today |
+| created_at / updated_at | timestamptz | |
+| archived_at | timestamptz | nullable |
+
+### Derived Event financial status
+
+`modules/finance/eventFinancialStatus.ts`'s `EventFinancialStatus` (`no_contract`, `awaiting_invoice`, `awaiting_deposit`, `deposit_partial`, `deposit_paid`, `balance_due`, `paid_in_full`, `overdue`, `refunded`, `cancelled`) is **never persisted** — it's derived on every read from an Event's Contracts/Invoices/Payments (`getEventFinancialStatus` in `lib/data/index.ts`), the same "don't store what you can compute" precedent as `contracts.remaining_balance`. It lives outside `core/enums/` deliberately: every other enum there is the intended value set of a real column; this one has no column at all.
 
 ## Relationships
 
@@ -270,6 +344,9 @@ workspaces 1—* clients
 workspaces 1—* events
 workspaces 1—* contracts
 workspaces 1—* contract_templates
+workspaces 1—* invoices
+workspaces 1—* payments
+workspaces 1—* expenses
 leads 1—* notes                    (owner_type = 'lead')
 leads 1—* timeline_activities      (owner_type = 'lead')
 clients 1—* notes                   (owner_type = 'client')
@@ -281,18 +358,37 @@ events 1—* schedule_items           (owner_type = 'event')
 contracts 1—* notes                 (owner_type = 'contract')
 contracts 1—* timeline_activities   (owner_type = 'contract')
 contracts 1—* contract_exhibits
+invoices 1—* notes                  (owner_type = 'invoice')
+invoices 1—* timeline_activities    (owner_type = 'invoice')
+payments 1—* notes                  (owner_type = 'payment')
+payments 1—* timeline_activities    (owner_type = 'payment')
+expenses 1—* notes                  (owner_type = 'expense')
+expenses 1—* timeline_activities    (owner_type = 'expense')
 leads 1—0/1 clients        (via clients.originating_lead_id)
 clients 1—* events                  (event.client_id — required)
 clients 1—* contracts               (contract.client_id — required)
+clients 1—* invoices                (invoice.client_id — required)
+clients 1—* payments                (payment.client_id — required)
+clients 1—0/* expenses              (expense.client_id — optional)
 leads 1—0/1 events                  (via events.originating_lead_id, optional)
 events 1—0/* contracts              (contract.event_id — optional)
+events 1—0/* invoices               (invoice.event_id — optional)
+events 1—0/* payments               (payment.event_id — optional)
+events 1—0/* expenses               (expense.event_id — optional)
 contract_templates 1—0/* contracts  (contract.template_id — optional)
-contracts 1—* payments
+contracts 1—0/* invoices            (invoice.contract_id — optional)
+contracts 1—0/* payments            (payment.contract_id — optional)
+contracts 1—0/* expenses            (expense.contract_id — optional)
+invoices 1—0/* payments             (payment.invoice_id — optional)
 ```
 
 ## Post-MVP tables (not created yet)
 
-Anticipated, not implemented: `inventory_items`, `suppliers`, `team_members`, `event_team_assignments`, `vehicles`, `client_portal_access`, `automations`, `automation_runs`, `emails`, `gallery_media`, `feedback`, `knowledge_base_articles`. When these ship, `checklist_items.owner_type`/`schedule_items.owner_type` and `checklist_items.assigned_type` are expected to gain `employee`/`vendor`/`inventory`/`vehicle` values rather than needing new tables — that reuse is the reason those two tables were generalized ahead of time. These will be specified in detail when their phase (see `ROADMAP.md`) begins.
+Anticipated, not implemented: `inventory_items`, `suppliers`, `team_members`, `event_team_assignments`, `vehicles`, `documents`, `client_portal_access`, `automations`, `automation_runs`, `emails`, `gallery_media`, `feedback`, `knowledge_base_articles`. When these ship, `checklist_items.owner_type`/`schedule_items.owner_type` and `checklist_items.assigned_type` are expected to gain `employee`/`vendor`/`inventory`/`vehicle` values rather than needing new tables — that reuse is the reason those two tables were generalized ahead of time. These will be specified in detail when their phase (see `ROADMAP.md`) begins.
+
+`payments.document_id` and `expenses.document_id` are placeholders for the future `documents` table specifically — once it exists, it's expected to attach invoices, receipts, payment confirmations, expense receipts, reimbursement proofs, and tax documents to the record that references it, the same way `contract_exhibits.document_id` is a placeholder today. No document upload or storage exists yet.
+
+No payment-provider (Stripe, Square, PayPal, banks, accounting software) is connected. `payments.payment_method` values that name a provider (`stripe`, `square`, `paypal`, `credit_card`, `debit_card`) are labels only, recorded exactly like `cash`/`check`/`zelle`/`venmo` — none of them trigger a real charge, webhook, or reconciliation. `createPayment`'s initial `status` (`succeeded` for manual/bank-style methods, `pending` for card/wallet-style ones) simulates the outcome a provider round-trip would eventually produce, nothing more. **No card numbers, bank account numbers, or other sensitive payment credentials are ever stored** — `payments.reference` is a free-text field limited to non-sensitive identifiers (a check number, a provider transaction id).
 
 ## Supabase-specific notes
 

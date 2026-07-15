@@ -8,8 +8,14 @@ import type { EventScheduleItem } from "@/types/eventScheduleItem";
 import type { Contract, ContractVersionSnapshot } from "@/types/contract";
 import type { ContractTemplate } from "@/types/contractTemplate";
 import type { ContractExhibit } from "@/types/contractExhibit";
+import type { Invoice } from "@/types/invoice";
+import type { Payment } from "@/types/payment";
+import type { Expense } from "@/types/expense";
 import type { EntityType } from "@/core/enums/entityType";
 import type { ContractTemplateCategory } from "@/core/enums/contractTemplateCategory";
+import type { PaymentType } from "@/core/enums/paymentType";
+import type { ExpenseCategory } from "@/core/enums/expenseCategory";
+import { PAYMENT_STATUSES_COUNTING_TOWARD_PAID } from "@/core/enums/paymentStatus";
 import { LEAD_STATUS_LABELS, type LeadStatus } from "@/core/enums/leadStatus";
 import { CLIENT_STATUS_LABELS, type ClientStatus } from "@/core/enums/clientStatus";
 import { CONTACT_METHOD_LABELS, type ContactMethod } from "@/core/enums/contactMethod";
@@ -26,6 +32,28 @@ import {
   CONTRACT_STATUS_LABELS,
   type ContractStatus,
 } from "@/core/workflows/contractWorkflow";
+import {
+  canTransitionInvoiceStatus,
+  isInvoiceTerminal,
+  getInvoiceNextRecommendedAction,
+  INVOICE_STATUS_LABELS,
+  type InvoiceStatus,
+} from "@/core/workflows/invoiceWorkflow";
+import {
+  canTransitionPaymentStatus,
+  isPaymentFinal,
+  isPaymentRefundable,
+  getPaymentNextRecommendedAction,
+  PAYMENT_STATUS_LABELS,
+  type PaymentStatus,
+} from "@/core/workflows/paymentWorkflow";
+import {
+  canTransitionExpenseStatus,
+  isExpenseTerminal,
+  getExpenseNextRecommendedAction,
+  EXPENSE_STATUS_LABELS,
+  type ExpenseStatus,
+} from "@/core/workflows/expenseWorkflow";
 import { CURRENT_ACTOR } from "@/core/constants/actor";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 import { NotFoundError } from "@/core/errors";
@@ -53,6 +81,26 @@ import {
   type ContractExhibitInput,
 } from "@/modules/contracts/schema";
 import { computeContractStats } from "@/modules/contracts/contractStats";
+import {
+  invoiceSchema,
+  paymentSchema,
+  expenseSchema,
+  type InvoiceInput,
+  type PaymentInput,
+  type ExpenseInput,
+} from "@/modules/finance/schema";
+import {
+  computeEventFinancialSummary,
+  computeWorkspaceFinancialSummary,
+  computeAllTimeFinancialTotals,
+  type EventFinancialSummary,
+  type WorkspaceFinancialSummary,
+} from "@/modules/finance/financialSummary";
+import {
+  getEventFinancialStatus as deriveEventFinancialStatus,
+  type EventFinancialStatus,
+} from "@/modules/finance/eventFinancialStatus";
+import { calculateBalance, subtractMinor, addMinor, sumMinor, formatMoney } from "@/lib/money";
 import { DEFAULT_CHECKLIST_TEMPLATES } from "@/modules/events/constants/checklistTemplates";
 import { convertLeadToClient as convertLeadToClientService } from "@/modules/leads/services/LeadConversionService";
 import { type DataResult, ok, fail } from "@/lib/data/result";
@@ -106,6 +154,21 @@ import {
   writeContractExhibits,
   resetContractExhibitsStore,
 } from "@/lib/data/mock/contractExhibitsStore";
+import {
+  readInvoices,
+  writeInvoices,
+  resetInvoicesStore,
+} from "@/lib/data/mock/invoicesStore";
+import {
+  readPayments,
+  writePayments,
+  resetPaymentsStore,
+} from "@/lib/data/mock/paymentsStore";
+import {
+  readExpenses,
+  writeExpenses,
+  resetExpensesStore,
+} from "@/lib/data/mock/expensesStore";
 
 function fieldErrorsFromZod(error: {
   issues: { path: PropertyKey[]; message: string }[];
@@ -2192,6 +2255,1168 @@ export async function reorderContractExhibits(
 }
 
 // ---------------------------------------------------------------------------
+// Finance — continues the commercial cycle Contract closes: Lead -> Client ->
+// Event -> Contract -> Invoice -> Payments -> Expenses -> Profit. Every
+// money field across Invoice/Payment/Expense is an integer minor-unit
+// amount (see lib/money.ts) — Contract.total_value/deposit_amount predate
+// this model and remain plain major-unit numbers; Finance summaries convert
+// through contractMoneyToMinor (modules/finance/financialSummary.ts) rather
+// than assuming Contract is already minor-unit.
+//
+// Invoice has no plain status setter (unlike Contract/Event) — every
+// non-draft status is reached through its own dedicated action below or
+// automatically when a successful Payment is applied (applyPaymentToInvoice
+// internal helper). Payment/Expense each have their own independent state
+// machine (core/workflows/paymentWorkflow.ts / expenseWorkflow.ts).
+// ---------------------------------------------------------------------------
+
+export interface InvoiceFilters {
+  search?: string;
+  status?: InvoiceStatus | "all";
+  clientId?: string;
+  eventId?: string;
+  contractId?: string;
+  includeArchived?: boolean;
+}
+
+export async function getInvoices(filters: InvoiceFilters = {}): Promise<Invoice[]> {
+  await delay(200);
+  const { search, status, clientId, eventId, contractId, includeArchived = false } = filters;
+  const clientsById = new Map(readClients().map((client) => [client.id, client]));
+  const eventsById = new Map(readEvents().map((event) => [event.id, event]));
+
+  return readInvoices().filter((invoice) => {
+    if (!includeArchived && invoice.status === "archived") return false;
+    if (status && status !== "all" && invoice.status !== status) return false;
+    if (clientId && invoice.client_id !== clientId) return false;
+    if (eventId && invoice.event_id !== eventId) return false;
+    if (contractId && invoice.contract_id !== contractId) return false;
+    if (search) {
+      const q = search.trim().toLowerCase();
+      if (!q) return true;
+      const client = clientsById.get(invoice.client_id);
+      const clientName = client ? `${client.first_name} ${client.last_name}` : "";
+      const event = invoice.event_id ? eventsById.get(invoice.event_id) : undefined;
+      const haystack = `${invoice.invoice_number} ${invoice.title} ${clientName} ${event?.title ?? ""}`.toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+export async function getInvoiceById(id: string): Promise<Invoice> {
+  await delay(150);
+  const invoice = readInvoices().find((i) => i.id === id);
+  if (!invoice) {
+    throw new NotFoundError(`Invoice ${id} was not found`);
+  }
+  return invoice;
+}
+
+/** Workspace-scoped and collision-checked, same precedent as generateContractNumber. */
+function generateInvoiceNumber(workspaceId: string): string {
+  const year = new Date().getUTCFullYear();
+  const workspaceInvoices = readInvoices().filter((i) => i.workspace_id === workspaceId);
+  const existingNumbers = new Set(workspaceInvoices.map((i) => i.invoice_number));
+
+  let sequence = workspaceInvoices.length + 1;
+  let candidate = `INV-${year}-${String(sequence).padStart(4, "0")}`;
+  while (existingNumbers.has(candidate)) {
+    sequence += 1;
+    candidate = `INV-${year}-${String(sequence).padStart(4, "0")}`;
+  }
+  return candidate;
+}
+
+function computeInvoiceTotal(subtotalMinor: number, taxMinor: number, discountMinor: number): number {
+  return subtractMinor(addMinor(subtotalMinor, taxMinor), discountMinor);
+}
+
+/**
+ * Shared Client/Event/Contract consistency check for createInvoice/
+ * createPayment/createExpense/updateInvoice — every one of these needs the
+ * same "does the linked Event/Contract actually belong to the same Client"
+ * rule; centralized here so it's checked identically everywhere rather than
+ * re-implemented per function.
+ */
+function validateEventBelongsToClient(eventId: string, clientId: string): string | null {
+  const event = readEvents().find((e) => e.id === eventId);
+  if (!event) return "Event not found.";
+  if (event.client_id !== clientId) return "The selected event doesn't belong to this client.";
+  return null;
+}
+
+function validateContractBelongsToClient(contractId: string, clientId: string): string | null {
+  const contract = readContracts().find((c) => c.id === contractId);
+  if (!contract) return "Contract not found.";
+  if (contract.client_id !== clientId) return "The selected contract doesn't belong to this client.";
+  return null;
+}
+
+export async function createInvoice(input: InvoiceInput): Promise<DataResult<Invoice>> {
+  const parsed = invoiceSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  const client = readClients().find((c) => c.id === parsed.data.client_id);
+  if (!client) {
+    return fail("Please select a valid client.", { client_id: "Client not found." });
+  }
+  if (parsed.data.event_id !== null) {
+    const error = validateEventBelongsToClient(parsed.data.event_id, parsed.data.client_id);
+    if (error) return fail(error, { event_id: error });
+  }
+  if (parsed.data.contract_id !== null) {
+    const error = validateContractBelongsToClient(parsed.data.contract_id, parsed.data.client_id);
+    if (error) return fail(error, { contract_id: error });
+  }
+
+  const timestamp = nowIso();
+  const total_minor = computeInvoiceTotal(parsed.data.subtotal_minor, parsed.data.tax_minor, parsed.data.discount_minor);
+  const invoice: Invoice = {
+    id: generateId("invoice"),
+    workspace_id: client.workspace_id,
+    invoice_number: generateInvoiceNumber(client.workspace_id),
+    ...parsed.data,
+    status: "draft",
+    total_minor,
+    paid_minor: 0,
+    balance_minor: total_minor,
+    sent_at: null,
+    viewed_at: null,
+    paid_at: null,
+    overdue_at: null,
+    voided_at: null,
+    archived_at: null,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+
+  writeInvoices([...readInvoices(), invoice]);
+  recordTimelineActivity(
+    invoice.workspace_id,
+    "invoice",
+    invoice.id,
+    "invoice_created",
+    `Invoice created: "${invoice.title}"`,
+  );
+
+  return ok(invoice);
+}
+
+/** General content edits — never touches status or any lifecycle timestamp; those move only through their own dedicated action below or automatically via a Payment application. */
+export async function updateInvoice(id: string, input: InvoiceInput): Promise<DataResult<Invoice>> {
+  const existing = readInvoices().find((i) => i.id === id);
+  if (!existing) {
+    return fail("Invoice not found.");
+  }
+  if (isInvoiceTerminal(existing.status)) {
+    return fail(`This invoice is ${INVOICE_STATUS_LABELS[existing.status].toLowerCase()} and read-only.`);
+  }
+
+  const parsed = invoiceSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+  if (parsed.data.client_id !== existing.client_id) {
+    return fail("An invoice's client can't be changed after creation.", { client_id: "Client cannot be changed." });
+  }
+  if (parsed.data.event_id !== null) {
+    const error = validateEventBelongsToClient(parsed.data.event_id, parsed.data.client_id);
+    if (error) return fail(error, { event_id: error });
+  }
+  if (parsed.data.contract_id !== null) {
+    const error = validateContractBelongsToClient(parsed.data.contract_id, parsed.data.client_id);
+    if (error) return fail(error, { contract_id: error });
+  }
+
+  const total_minor = computeInvoiceTotal(parsed.data.subtotal_minor, parsed.data.tax_minor, parsed.data.discount_minor);
+  const updated: Invoice = {
+    ...existing,
+    ...parsed.data,
+    total_minor,
+    balance_minor: calculateBalance(total_minor, existing.paid_minor),
+    updated_at: nowIso(),
+  };
+
+  writeInvoices(readInvoices().map((i) => (i.id === id ? updated : i)));
+  recordTimelineActivity(
+    existing.workspace_id,
+    "invoice",
+    id,
+    "invoice_updated",
+    `Invoice updated: "${updated.title}"`,
+  );
+
+  return ok(updated);
+}
+
+export async function issueInvoice(id: string): Promise<DataResult<Invoice>> {
+  const existing = readInvoices().find((i) => i.id === id);
+  if (!existing) {
+    return fail("Invoice not found.");
+  }
+  if (!canTransitionInvoiceStatus(existing.status, "issued")) {
+    return fail(`Cannot issue an invoice that is already ${INVOICE_STATUS_LABELS[existing.status].toLowerCase()}.`);
+  }
+
+  const timestamp = nowIso();
+  const updated: Invoice = {
+    ...existing,
+    status: "issued",
+    issue_date: existing.issue_date ?? timestamp.slice(0, 10),
+    updated_at: timestamp,
+  };
+  writeInvoices(readInvoices().map((i) => (i.id === id ? updated : i)));
+  recordTimelineActivity(existing.workspace_id, "invoice", id, "invoice_issued", `Invoice issued: "${existing.title}"`);
+
+  return ok(updated);
+}
+
+export async function sendInvoice(id: string): Promise<DataResult<Invoice>> {
+  const existing = readInvoices().find((i) => i.id === id);
+  if (!existing) {
+    return fail("Invoice not found.");
+  }
+  if (!canTransitionInvoiceStatus(existing.status, "sent")) {
+    return fail(`Cannot send an invoice that is ${INVOICE_STATUS_LABELS[existing.status].toLowerCase()}. Issue it first.`);
+  }
+
+  const timestamp = nowIso();
+  const updated: Invoice = { ...existing, status: "sent", sent_at: timestamp, updated_at: timestamp };
+  writeInvoices(readInvoices().map((i) => (i.id === id ? updated : i)));
+  recordTimelineActivity(existing.workspace_id, "invoice", id, "invoice_sent", `Invoice sent: "${existing.title}"`);
+
+  return ok(updated);
+}
+
+/** Idempotent: re-marking an already-viewed invoice keeps its original viewed_at, same precedent as markViewed (Contract). */
+export async function markInvoiceViewed(id: string): Promise<DataResult<Invoice>> {
+  const existing = readInvoices().find((i) => i.id === id);
+  if (!existing) {
+    return fail("Invoice not found.");
+  }
+  if (existing.status === "viewed") {
+    return ok(existing);
+  }
+  if (!canTransitionInvoiceStatus(existing.status, "viewed")) {
+    return fail(`Cannot mark ${INVOICE_STATUS_LABELS[existing.status].toLowerCase()} invoice as viewed.`);
+  }
+
+  const updated: Invoice = { ...existing, status: "viewed", viewed_at: nowIso(), updated_at: nowIso() };
+  writeInvoices(readInvoices().map((i) => (i.id === id ? updated : i)));
+  recordTimelineActivity(existing.workspace_id, "invoice", id, "invoice_viewed", `Invoice viewed: "${existing.title}"`);
+
+  return ok(updated);
+}
+
+export async function markInvoiceOverdue(id: string): Promise<DataResult<Invoice>> {
+  const existing = readInvoices().find((i) => i.id === id);
+  if (!existing) {
+    return fail("Invoice not found.");
+  }
+  if (existing.due_date === null) {
+    return fail("This invoice has no due date to be overdue against.");
+  }
+  if (!canTransitionInvoiceStatus(existing.status, "overdue")) {
+    return fail(`Cannot mark ${INVOICE_STATUS_LABELS[existing.status].toLowerCase()} invoice as overdue.`);
+  }
+
+  const timestamp = nowIso();
+  const updated: Invoice = { ...existing, status: "overdue", overdue_at: timestamp, updated_at: timestamp };
+  writeInvoices(readInvoices().map((i) => (i.id === id ? updated : i)));
+  recordTimelineActivity(existing.workspace_id, "invoice", id, "invoice_overdue", `Invoice overdue: "${existing.title}"`);
+
+  return ok(updated);
+}
+
+export async function voidInvoice(id: string): Promise<DataResult<Invoice>> {
+  const existing = readInvoices().find((i) => i.id === id);
+  if (!existing) {
+    return fail("Invoice not found.");
+  }
+  if (!canTransitionInvoiceStatus(existing.status, "voided")) {
+    return fail(`Cannot void an invoice that is already ${INVOICE_STATUS_LABELS[existing.status].toLowerCase()}.`);
+  }
+
+  const timestamp = nowIso();
+  const updated: Invoice = { ...existing, status: "voided", voided_at: timestamp, updated_at: timestamp };
+  writeInvoices(readInvoices().map((i) => (i.id === id ? updated : i)));
+  recordTimelineActivity(existing.workspace_id, "invoice", id, "invoice_voided", `Invoice voided: "${existing.title}"`);
+
+  return ok(updated);
+}
+
+export async function archiveInvoice(id: string): Promise<DataResult<Invoice>> {
+  const existing = readInvoices().find((i) => i.id === id);
+  if (!existing) {
+    return fail("Invoice not found.");
+  }
+  if (existing.status === "archived") {
+    return fail("This invoice is already archived.");
+  }
+
+  const timestamp = nowIso();
+  const updated: Invoice = { ...existing, status: "archived", archived_at: timestamp, updated_at: timestamp };
+  writeInvoices(readInvoices().map((i) => (i.id === id ? updated : i)));
+  recordTimelineActivity(existing.workspace_id, "invoice", id, "invoice_archived", "Invoice archived");
+
+  return ok(updated);
+}
+
+/** Restoring returns the Invoice to "draft" — the same "reasonable resumption point" precedent as restoreContract. */
+export async function restoreInvoice(id: string): Promise<DataResult<Invoice>> {
+  const existing = readInvoices().find((i) => i.id === id);
+  if (!existing) {
+    return fail("Invoice not found.");
+  }
+  if (existing.status !== "archived") {
+    return fail("This invoice is not archived.");
+  }
+
+  const updated: Invoice = { ...existing, status: "draft", archived_at: null, updated_at: nowIso() };
+  writeInvoices(readInvoices().map((i) => (i.id === id ? updated : i)));
+  recordTimelineActivity(existing.workspace_id, "invoice", id, "invoice_restored", "Invoice restored");
+
+  return ok(updated);
+}
+
+/** Fresh draft copy of an Invoice's content with a new id/invoice_number, resetting status/paid_minor/balance_minor and every lifecycle timestamp — mirrors duplicateContract. */
+export async function duplicateInvoice(id: string): Promise<DataResult<Invoice>> {
+  const existing = readInvoices().find((i) => i.id === id);
+  if (!existing) {
+    return fail("Invoice not found.");
+  }
+
+  const timestamp = nowIso();
+  const duplicate: Invoice = {
+    ...existing,
+    id: generateId("invoice"),
+    invoice_number: generateInvoiceNumber(existing.workspace_id),
+    status: "draft",
+    issue_date: null,
+    due_date: null,
+    paid_minor: 0,
+    balance_minor: existing.total_minor,
+    sent_at: null,
+    viewed_at: null,
+    paid_at: null,
+    overdue_at: null,
+    voided_at: null,
+    archived_at: null,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+
+  writeInvoices([...readInvoices(), duplicate]);
+  recordTimelineActivity(
+    duplicate.workspace_id,
+    "invoice",
+    duplicate.id,
+    "invoice_created",
+    `Invoice created (duplicated from ${existing.invoice_number})`,
+  );
+
+  return ok(duplicate);
+}
+
+export async function getInvoiceNextAction(invoiceId: string): Promise<string | null> {
+  const invoice = await getInvoiceById(invoiceId);
+  return getInvoiceNextRecommendedAction(invoice);
+}
+
+/**
+ * Recomputes an Invoice's paid_minor/balance_minor/status from scratch by
+ * summing every linked Payment that currently counts toward paid (net of
+ * refunds), rather than incrementing in place — avoids double-counting bugs
+ * across repeated Payment mutations. Only recomputes status while the
+ * Invoice is in an active, payment-aware state (sent/viewed/partially_paid/
+ * paid/overdue); a draft/issued/voided/archived Invoice's status is left
+ * alone even if a Payment happens to reference it. Internal — never called
+ * by UI directly, only by createPayment/markPaymentSucceeded/refundPayment
+ * below, each of which records the resulting invoice_partially_paid/
+ * invoice_paid timeline entry itself by comparing old vs new status.
+ */
+function applyPaymentToInvoice(invoiceId: string): Invoice | null {
+  const invoice = readInvoices().find((i) => i.id === invoiceId);
+  if (!invoice) return null;
+
+  const linked = readPayments().filter((p) => p.invoice_id === invoiceId);
+  const grossPaid = sumMinor(
+    linked.filter((p) => PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status) && p.payment_type !== "refund").map((p) => p.amount_minor),
+  );
+  const refunded = sumMinor(
+    linked.filter((p) => PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status) && p.payment_type === "refund").map((p) => p.amount_minor),
+  );
+  const paid_minor = Math.max(0, subtractMinor(grossPaid, refunded));
+  const balance_minor = calculateBalance(invoice.total_minor, paid_minor);
+
+  const PAYMENT_AWARE_STATUSES: InvoiceStatus[] = ["sent", "viewed", "partially_paid", "paid", "overdue"];
+  let status = invoice.status;
+  let paid_at = invoice.paid_at;
+  if (PAYMENT_AWARE_STATUSES.includes(invoice.status)) {
+    if (paid_minor > 0 && balance_minor === 0) {
+      status = "paid";
+      paid_at = paid_at ?? nowIso();
+    } else if (paid_minor > 0) {
+      status = "partially_paid";
+    }
+  }
+
+  const updated: Invoice = { ...invoice, paid_minor, balance_minor, status, paid_at, updated_at: nowIso() };
+  writeInvoices(readInvoices().map((i) => (i.id === invoiceId ? updated : i)));
+
+  if (status !== invoice.status) {
+    if (status === "paid") {
+      recordTimelineActivity(updated.workspace_id, "invoice", invoiceId, "invoice_paid", `Invoice paid in full: "${updated.title}"`);
+    } else if (status === "partially_paid") {
+      recordTimelineActivity(
+        updated.workspace_id,
+        "invoice",
+        invoiceId,
+        "invoice_partially_paid",
+        `Invoice partially paid: "${updated.title}"`,
+      );
+    }
+  }
+
+  return updated;
+}
+
+// ---------------------------------------------------------------------------
+// Payments
+// ---------------------------------------------------------------------------
+
+export interface PaymentFilters {
+  status?: PaymentStatus | "all";
+  paymentType?: PaymentType | "all";
+  clientId?: string;
+  eventId?: string;
+  invoiceId?: string;
+}
+
+export async function getPayments(filters: PaymentFilters = {}): Promise<Payment[]> {
+  await delay(200);
+  const { status, paymentType, clientId, eventId, invoiceId } = filters;
+  return readPayments().filter((payment) => {
+    if (status && status !== "all" && payment.status !== status) return false;
+    if (paymentType && paymentType !== "all" && payment.payment_type !== paymentType) return false;
+    if (clientId && payment.client_id !== clientId) return false;
+    if (eventId && payment.event_id !== eventId) return false;
+    if (invoiceId && payment.invoice_id !== invoiceId) return false;
+    return true;
+  });
+}
+
+export async function getPaymentById(id: string): Promise<Payment> {
+  await delay(150);
+  const payment = readPayments().find((p) => p.id === id);
+  if (!payment) {
+    throw new NotFoundError(`Payment ${id} was not found`);
+  }
+  return payment;
+}
+
+/**
+ * Methods with no real payment-provider integration (cash handed over,
+ * checks deposited, transfers confirmed by bank statement, peer-to-peer
+ * apps) are recorded as already succeeded — there is no provider round trip
+ * to await. Card/wallet-style methods that would normally clear through a
+ * provider start pending until markPaymentSucceeded/markPaymentFailed is
+ * called, simulating that round trip with no provider actually connected.
+ */
+const IMMEDIATELY_SUCCEEDED_METHODS = new Set(["cash", "check", "bank_transfer", "ach", "zelle", "venmo"]);
+
+export async function createPayment(input: PaymentInput): Promise<DataResult<Payment>> {
+  const parsed = paymentSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  const client = readClients().find((c) => c.id === parsed.data.client_id);
+  if (!client) {
+    return fail("Please select a valid client.", { client_id: "Client not found." });
+  }
+  if (parsed.data.event_id !== null) {
+    const error = validateEventBelongsToClient(parsed.data.event_id, parsed.data.client_id);
+    if (error) return fail(error, { event_id: error });
+  }
+  if (parsed.data.contract_id !== null) {
+    const error = validateContractBelongsToClient(parsed.data.contract_id, parsed.data.client_id);
+    if (error) return fail(error, { contract_id: error });
+  }
+  let invoice: Invoice | undefined;
+  if (parsed.data.invoice_id !== null) {
+    invoice = readInvoices().find((i) => i.id === parsed.data.invoice_id);
+    if (!invoice) {
+      return fail("Please select a valid invoice.", { invoice_id: "Invoice not found." });
+    }
+    if (invoice.client_id !== parsed.data.client_id || invoice.workspace_id !== client.workspace_id) {
+      return fail("The selected invoice doesn't belong to this client.", {
+        invoice_id: "Invoice belongs to a different client.",
+      });
+    }
+  }
+
+  const timestamp = nowIso();
+  const initialStatus: PaymentStatus = IMMEDIATELY_SUCCEEDED_METHODS.has(parsed.data.payment_method)
+    ? "succeeded"
+    : "pending";
+  const payment: Payment = {
+    id: generateId("payment"),
+    workspace_id: client.workspace_id,
+    ...parsed.data,
+    status: initialStatus,
+    received_at: initialStatus === "succeeded" ? timestamp : null,
+    failed_at: null,
+    refunded_at: null,
+    document_id: null,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+
+  writePayments([...readPayments(), payment]);
+  recordTimelineActivity(
+    payment.workspace_id,
+    "payment",
+    payment.id,
+    "payment_created",
+    `Payment created: ${PAYMENT_STATUS_LABELS[initialStatus]}`,
+  );
+
+  if (initialStatus === "succeeded" && invoice) {
+    applyPaymentToInvoice(invoice.id);
+  }
+
+  return ok(payment);
+}
+
+/**
+ * General content edits — payment_type/amount/method/reference/
+ * transaction_date/notes/event_id/contract_id. Never changes client_id or
+ * invoice_id (mirrors updateContract/updateInvoice's "the owner can't
+ * change after creation" rule) and is blocked once the Payment is final
+ * (isPaymentFinal). No dedicated "payment_updated" timeline type exists —
+ * unlike Invoice/Expense, the phase spec's Payment timeline list is only
+ * created/processing/succeeded/failed/refunded/cancelled, so a plain
+ * content edit intentionally records nothing.
+ */
+export async function updatePayment(id: string, input: PaymentInput): Promise<DataResult<Payment>> {
+  const existing = readPayments().find((p) => p.id === id);
+  if (!existing) {
+    return fail("Payment not found.");
+  }
+  if (isPaymentFinal(existing.status)) {
+    return fail(`This payment is ${PAYMENT_STATUS_LABELS[existing.status].toLowerCase()} and read-only.`);
+  }
+
+  const parsed = paymentSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+  if (parsed.data.client_id !== existing.client_id) {
+    return fail("A payment's client can't be changed after creation.", { client_id: "Client cannot be changed." });
+  }
+  if (parsed.data.invoice_id !== existing.invoice_id) {
+    return fail("A payment's linked invoice can't be changed after creation.", {
+      invoice_id: "Invoice cannot be changed.",
+    });
+  }
+  if (parsed.data.event_id !== null) {
+    const error = validateEventBelongsToClient(parsed.data.event_id, parsed.data.client_id);
+    if (error) return fail(error, { event_id: error });
+  }
+  if (parsed.data.contract_id !== null) {
+    const error = validateContractBelongsToClient(parsed.data.contract_id, parsed.data.client_id);
+    if (error) return fail(error, { contract_id: error });
+  }
+
+  const updated: Payment = { ...existing, ...parsed.data, updated_at: nowIso() };
+  writePayments(readPayments().map((p) => (p.id === id ? updated : p)));
+
+  if (updated.invoice_id && updated.status === "succeeded" && updated.amount_minor !== existing.amount_minor) {
+    applyPaymentToInvoice(updated.invoice_id);
+  }
+
+  return ok(updated);
+}
+
+export async function markPaymentProcessing(id: string): Promise<DataResult<Payment>> {
+  const existing = readPayments().find((p) => p.id === id);
+  if (!existing) {
+    return fail("Payment not found.");
+  }
+  if (!canTransitionPaymentStatus(existing.status, "processing")) {
+    return fail(`Cannot mark ${PAYMENT_STATUS_LABELS[existing.status].toLowerCase()} payment as processing.`);
+  }
+
+  const updated: Payment = { ...existing, status: "processing", updated_at: nowIso() };
+  writePayments(readPayments().map((p) => (p.id === id ? updated : p)));
+  recordTimelineActivity(existing.workspace_id, "payment", id, "payment_processing", "Payment processing");
+
+  return ok(updated);
+}
+
+export async function markPaymentSucceeded(id: string): Promise<DataResult<Payment>> {
+  const existing = readPayments().find((p) => p.id === id);
+  if (!existing) {
+    return fail("Payment not found.");
+  }
+  if (!canTransitionPaymentStatus(existing.status, "succeeded")) {
+    return fail(`Cannot mark ${PAYMENT_STATUS_LABELS[existing.status].toLowerCase()} payment as succeeded.`);
+  }
+
+  const timestamp = nowIso();
+  const updated: Payment = { ...existing, status: "succeeded", received_at: timestamp, updated_at: timestamp };
+  writePayments(readPayments().map((p) => (p.id === id ? updated : p)));
+  recordTimelineActivity(existing.workspace_id, "payment", id, "payment_succeeded", "Payment succeeded");
+
+  if (updated.invoice_id) {
+    applyPaymentToInvoice(updated.invoice_id);
+  }
+
+  return ok(updated);
+}
+
+export async function markPaymentFailed(id: string): Promise<DataResult<Payment>> {
+  const existing = readPayments().find((p) => p.id === id);
+  if (!existing) {
+    return fail("Payment not found.");
+  }
+  if (!canTransitionPaymentStatus(existing.status, "failed")) {
+    return fail(`Cannot mark ${PAYMENT_STATUS_LABELS[existing.status].toLowerCase()} payment as failed.`);
+  }
+
+  const timestamp = nowIso();
+  const updated: Payment = { ...existing, status: "failed", failed_at: timestamp, updated_at: timestamp };
+  writePayments(readPayments().map((p) => (p.id === id ? updated : p)));
+  recordTimelineActivity(existing.workspace_id, "payment", id, "payment_failed", "Payment failed");
+
+  return ok(updated);
+}
+
+/**
+ * Refunds are represented as a new Payment (payment_type: "refund") rather
+ * than a second ledger — the phase spec's explicit "do not create two
+ * competing financial ledgers" instruction. The refundable ceiling is the
+ * original Payment's amount_minor minus every prior refund already issued
+ * against it (tracked via `reference`, since Payment has no dedicated
+ * "refunds this payment" column); requesting more than that fails outright.
+ * The original Payment's own status moves to partially_refunded or
+ * refunded depending on whether anything refundable remains, and if the
+ * original was linked to an Invoice, that Invoice is recomputed through
+ * applyPaymentToInvoice so its paid_minor/balance_minor/status reflect the
+ * refund immediately.
+ */
+function refundReferenceFor(originalPaymentId: string): string {
+  return `refund_of:${originalPaymentId}`;
+}
+
+export async function refundPayment(originalPaymentId: string, amountMinor: number): Promise<DataResult<Payment>> {
+  const original = readPayments().find((p) => p.id === originalPaymentId);
+  if (!original) {
+    return fail("Payment not found.");
+  }
+  if (!isPaymentRefundable(original.status)) {
+    return fail(`Cannot refund a payment that is ${PAYMENT_STATUS_LABELS[original.status].toLowerCase()}.`);
+  }
+  if (!Number.isInteger(amountMinor) || amountMinor <= 0) {
+    return fail("Enter a refund amount greater than zero.");
+  }
+
+  const priorRefunds = sumMinor(
+    readPayments()
+      .filter((p) => p.reference === refundReferenceFor(originalPaymentId) && PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status))
+      .map((p) => p.amount_minor),
+  );
+  const refundable = Math.max(0, subtractMinor(original.amount_minor, priorRefunds));
+  if (amountMinor > refundable) {
+    return fail(`Cannot refund more than the refundable amount (${refundable} minor units remaining).`);
+  }
+
+  const timestamp = nowIso();
+  const refund: Payment = {
+    id: generateId("payment"),
+    workspace_id: original.workspace_id,
+    invoice_id: original.invoice_id,
+    client_id: original.client_id,
+    event_id: original.event_id,
+    contract_id: original.contract_id,
+    payment_type: "refund",
+    status: "succeeded",
+    amount_minor: amountMinor,
+    currency: original.currency,
+    payment_method: original.payment_method,
+    reference: refundReferenceFor(originalPaymentId),
+    transaction_date: timestamp.slice(0, 10),
+    received_at: timestamp,
+    failed_at: null,
+    refunded_at: timestamp,
+    notes: `Refund of payment ${original.id}.`,
+    document_id: null,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+  writePayments([...readPayments(), refund]);
+  recordTimelineActivity(refund.workspace_id, "payment", refund.id, "payment_refunded", "Payment refunded");
+
+  const remainingAfterThisRefund = refundable - amountMinor;
+  const originalUpdated: Payment = {
+    ...original,
+    status: remainingAfterThisRefund === 0 ? "refunded" : "partially_refunded",
+    refunded_at: timestamp,
+    updated_at: timestamp,
+  };
+  writePayments(readPayments().map((p) => (p.id === originalPaymentId ? originalUpdated : p)));
+
+  if (original.invoice_id) {
+    applyPaymentToInvoice(original.invoice_id);
+  }
+
+  return ok(refund);
+}
+
+export async function cancelPayment(id: string): Promise<DataResult<Payment>> {
+  const existing = readPayments().find((p) => p.id === id);
+  if (!existing) {
+    return fail("Payment not found.");
+  }
+  if (!canTransitionPaymentStatus(existing.status, "cancelled")) {
+    return fail(`Cannot cancel a payment that is ${PAYMENT_STATUS_LABELS[existing.status].toLowerCase()}.`);
+  }
+
+  const updated: Payment = { ...existing, status: "cancelled", updated_at: nowIso() };
+  writePayments(readPayments().map((p) => (p.id === id ? updated : p)));
+  recordTimelineActivity(existing.workspace_id, "payment", id, "payment_cancelled", "Payment cancelled");
+
+  return ok(updated);
+}
+
+export async function getPaymentNextAction(paymentId: string): Promise<string | null> {
+  const payment = await getPaymentById(paymentId);
+  return getPaymentNextRecommendedAction(payment);
+}
+
+// ---------------------------------------------------------------------------
+// Expenses
+// ---------------------------------------------------------------------------
+
+export interface ExpenseFilters {
+  search?: string;
+  status?: ExpenseStatus | "all";
+  category?: ExpenseCategory | "all";
+  eventId?: string;
+  clientId?: string;
+  includeArchived?: boolean;
+}
+
+export async function getExpenses(filters: ExpenseFilters = {}): Promise<Expense[]> {
+  await delay(200);
+  const { search, status, category, eventId, clientId, includeArchived = false } = filters;
+  return readExpenses().filter((expense) => {
+    if (!includeArchived && expense.status === "archived") return false;
+    if (status && status !== "all" && expense.status !== status) return false;
+    if (category && category !== "all" && expense.category !== category) return false;
+    if (eventId && expense.event_id !== eventId) return false;
+    if (clientId && expense.client_id !== clientId) return false;
+    if (search) {
+      const q = search.trim().toLowerCase();
+      if (!q) return true;
+      if (!expense.description.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+export async function getExpenseById(id: string): Promise<Expense> {
+  await delay(150);
+  const expense = readExpenses().find((e) => e.id === id);
+  if (!expense) {
+    throw new NotFoundError(`Expense ${id} was not found`);
+  }
+  return expense;
+}
+
+/**
+ * Expense's client_id is legitimately optional (a general business expense
+ * has neither), unlike every other entity in this data layer whose
+ * workspace_id is derived from a required Client — so workspace_id is
+ * assigned directly from CURRENT_WORKSPACE_ID here instead.
+ */
+export async function createExpense(input: ExpenseInput): Promise<DataResult<Expense>> {
+  const parsed = expenseSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  if (parsed.data.event_id !== null) {
+    const event = readEvents().find((e) => e.id === parsed.data.event_id);
+    if (!event) {
+      return fail("Please select a valid event.", { event_id: "Event not found." });
+    }
+    if (parsed.data.client_id !== null && event.client_id !== parsed.data.client_id) {
+      return fail("The selected event doesn't belong to this client.", {
+        event_id: "Event belongs to a different client.",
+      });
+    }
+  }
+  if (parsed.data.contract_id !== null) {
+    const contract = readContracts().find((c) => c.id === parsed.data.contract_id);
+    if (!contract) {
+      return fail("Please select a valid contract.", { contract_id: "Contract not found." });
+    }
+    if (parsed.data.client_id !== null && contract.client_id !== parsed.data.client_id) {
+      return fail("The selected contract doesn't belong to this client.", {
+        contract_id: "Contract belongs to a different client.",
+      });
+    }
+  }
+
+  const timestamp = nowIso();
+  const expense: Expense = {
+    id: generateId("expense"),
+    workspace_id: CURRENT_WORKSPACE_ID,
+    ...parsed.data,
+    status: "planned",
+    paid_at: null,
+    reimbursed_at: null,
+    document_id: null,
+    archived_at: null,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+
+  writeExpenses([...readExpenses(), expense]);
+  recordTimelineActivity(
+    expense.workspace_id,
+    "expense",
+    expense.id,
+    "expense_created",
+    `Expense created: "${expense.description}"`,
+  );
+
+  return ok(expense);
+}
+
+/** Content edits are blocked once the Expense is terminal (reimbursed/cancelled/archived) — a reimbursed Expense's amount is what was actually paid back and shouldn't drift after the fact, same reasoning as a cancelled or archived one being dead history. */
+export async function updateExpense(id: string, input: ExpenseInput): Promise<DataResult<Expense>> {
+  const existing = readExpenses().find((e) => e.id === id);
+  if (!existing) {
+    return fail("Expense not found.");
+  }
+  if (isExpenseTerminal(existing.status)) {
+    return fail(`This expense is ${EXPENSE_STATUS_LABELS[existing.status].toLowerCase()} and read-only.`);
+  }
+
+  const parsed = expenseSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+  if (parsed.data.event_id !== null) {
+    const event = readEvents().find((e) => e.id === parsed.data.event_id);
+    if (!event) {
+      return fail("Please select a valid event.", { event_id: "Event not found." });
+    }
+    if (parsed.data.client_id !== null && event.client_id !== parsed.data.client_id) {
+      return fail("The selected event doesn't belong to this client.", {
+        event_id: "Event belongs to a different client.",
+      });
+    }
+  }
+  if (parsed.data.contract_id !== null) {
+    const contract = readContracts().find((c) => c.id === parsed.data.contract_id);
+    if (!contract) {
+      return fail("Please select a valid contract.", { contract_id: "Contract not found." });
+    }
+    if (parsed.data.client_id !== null && contract.client_id !== parsed.data.client_id) {
+      return fail("The selected contract doesn't belong to this client.", {
+        contract_id: "Contract belongs to a different client.",
+      });
+    }
+  }
+
+  const updated: Expense = { ...existing, ...parsed.data, updated_at: nowIso() };
+  writeExpenses(readExpenses().map((e) => (e.id === id ? updated : e)));
+  recordTimelineActivity(
+    existing.workspace_id,
+    "expense",
+    id,
+    "expense_updated",
+    `Expense updated: "${updated.description}"`,
+  );
+
+  return ok(updated);
+}
+
+export async function approveExpense(id: string): Promise<DataResult<Expense>> {
+  const existing = readExpenses().find((e) => e.id === id);
+  if (!existing) {
+    return fail("Expense not found.");
+  }
+  if (!canTransitionExpenseStatus(existing.status, "approved")) {
+    return fail(`Cannot approve an expense that is already ${EXPENSE_STATUS_LABELS[existing.status].toLowerCase()}.`);
+  }
+
+  const updated: Expense = { ...existing, status: "approved", updated_at: nowIso() };
+  writeExpenses(readExpenses().map((e) => (e.id === id ? updated : e)));
+  recordTimelineActivity(existing.workspace_id, "expense", id, "expense_approved", "Expense approved");
+
+  return ok(updated);
+}
+
+export async function markExpenseDue(id: string): Promise<DataResult<Expense>> {
+  const existing = readExpenses().find((e) => e.id === id);
+  if (!existing) {
+    return fail("Expense not found.");
+  }
+  if (!canTransitionExpenseStatus(existing.status, "due")) {
+    return fail(`Cannot mark ${EXPENSE_STATUS_LABELS[existing.status].toLowerCase()} expense as due.`);
+  }
+
+  const updated: Expense = { ...existing, status: "due", updated_at: nowIso() };
+  writeExpenses(readExpenses().map((e) => (e.id === id ? updated : e)));
+  recordTimelineActivity(existing.workspace_id, "expense", id, "expense_marked_due", "Expense marked due");
+
+  return ok(updated);
+}
+
+export async function markExpensePaid(id: string): Promise<DataResult<Expense>> {
+  const existing = readExpenses().find((e) => e.id === id);
+  if (!existing) {
+    return fail("Expense not found.");
+  }
+  if (!canTransitionExpenseStatus(existing.status, "paid")) {
+    return fail(`Cannot mark ${EXPENSE_STATUS_LABELS[existing.status].toLowerCase()} expense as paid.`);
+  }
+
+  const timestamp = nowIso();
+  const updated: Expense = { ...existing, status: "paid", paid_at: timestamp, updated_at: timestamp };
+  writeExpenses(readExpenses().map((e) => (e.id === id ? updated : e)));
+  recordTimelineActivity(existing.workspace_id, "expense", id, "expense_paid", "Expense paid");
+
+  return ok(updated);
+}
+
+export async function markExpenseReimbursed(id: string): Promise<DataResult<Expense>> {
+  const existing = readExpenses().find((e) => e.id === id);
+  if (!existing) {
+    return fail("Expense not found.");
+  }
+  if (!existing.reimbursable) {
+    return fail("This expense isn't marked reimbursable.");
+  }
+  if (!canTransitionExpenseStatus(existing.status, "reimbursed")) {
+    return fail(`Cannot mark ${EXPENSE_STATUS_LABELS[existing.status].toLowerCase()} expense as reimbursed.`);
+  }
+
+  const timestamp = nowIso();
+  const updated: Expense = { ...existing, status: "reimbursed", reimbursed_at: timestamp, updated_at: timestamp };
+  writeExpenses(readExpenses().map((e) => (e.id === id ? updated : e)));
+  recordTimelineActivity(existing.workspace_id, "expense", id, "expense_reimbursed", "Expense reimbursed");
+
+  return ok(updated);
+}
+
+export async function cancelExpense(id: string): Promise<DataResult<Expense>> {
+  const existing = readExpenses().find((e) => e.id === id);
+  if (!existing) {
+    return fail("Expense not found.");
+  }
+  if (!canTransitionExpenseStatus(existing.status, "cancelled")) {
+    return fail(`Cannot cancel an expense that is already ${EXPENSE_STATUS_LABELS[existing.status].toLowerCase()}.`);
+  }
+
+  const updated: Expense = { ...existing, status: "cancelled", updated_at: nowIso() };
+  writeExpenses(readExpenses().map((e) => (e.id === id ? updated : e)));
+  recordTimelineActivity(existing.workspace_id, "expense", id, "expense_cancelled", "Expense cancelled");
+
+  return ok(updated);
+}
+
+export async function archiveExpense(id: string): Promise<DataResult<Expense>> {
+  const existing = readExpenses().find((e) => e.id === id);
+  if (!existing) {
+    return fail("Expense not found.");
+  }
+  if (existing.status === "archived") {
+    return fail("This expense is already archived.");
+  }
+
+  const timestamp = nowIso();
+  const updated: Expense = { ...existing, status: "archived", archived_at: timestamp, updated_at: timestamp };
+  writeExpenses(readExpenses().map((e) => (e.id === id ? updated : e)));
+  recordTimelineActivity(existing.workspace_id, "expense", id, "expense_archived", "Expense archived");
+
+  return ok(updated);
+}
+
+/** Restoring returns the Expense to "planned" — same "reasonable resumption point" precedent as restoreContract/restoreInvoice. */
+export async function restoreExpense(id: string): Promise<DataResult<Expense>> {
+  const existing = readExpenses().find((e) => e.id === id);
+  if (!existing) {
+    return fail("Expense not found.");
+  }
+  if (existing.status !== "archived") {
+    return fail("This expense is not archived.");
+  }
+
+  const updated: Expense = { ...existing, status: "planned", archived_at: null, updated_at: nowIso() };
+  writeExpenses(readExpenses().map((e) => (e.id === id ? updated : e)));
+  recordTimelineActivity(existing.workspace_id, "expense", id, "expense_restored", "Expense restored");
+
+  return ok(updated);
+}
+
+/** Fresh "planned" copy of an Expense's content with a new id, resetting status/paid_at/reimbursed_at/archived_at — mirrors duplicateContract/duplicateInvoice. */
+export async function duplicateExpense(id: string): Promise<DataResult<Expense>> {
+  const existing = readExpenses().find((e) => e.id === id);
+  if (!existing) {
+    return fail("Expense not found.");
+  }
+
+  const timestamp = nowIso();
+  const duplicate: Expense = {
+    ...existing,
+    id: generateId("expense"),
+    status: "planned",
+    paid_at: null,
+    reimbursed_at: null,
+    archived_at: null,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+
+  writeExpenses([...readExpenses(), duplicate]);
+  recordTimelineActivity(
+    duplicate.workspace_id,
+    "expense",
+    duplicate.id,
+    "expense_created",
+    `Expense created (duplicated from ${existing.id})`,
+  );
+
+  return ok(duplicate);
+}
+
+export async function getExpenseNextAction(expenseId: string): Promise<string | null> {
+  const expense = await getExpenseById(expenseId);
+  return getExpenseNextRecommendedAction(expense);
+}
+
+// ---------------------------------------------------------------------------
+// Financial summaries
+// ---------------------------------------------------------------------------
+
+export async function getEventFinancialSummary(eventId: string): Promise<EventFinancialSummary> {
+  await delay(150);
+  return computeEventFinancialSummary(eventId, readContracts(), readInvoices(), readPayments(), readExpenses());
+}
+
+export async function getWorkspaceFinancialSummary(): Promise<WorkspaceFinancialSummary> {
+  await delay(150);
+  return computeWorkspaceFinancialSummary(readContracts(), readInvoices(), readPayments(), readExpenses());
+}
+
+const INACTIVE_CONTRACT_STATUSES_FOR_STATUS: ContractStatus[] = ["cancelled", "declined", "expired", "archived"];
+
+export async function getEventFinancialStatus(eventId: string): Promise<EventFinancialStatus> {
+  await delay(150);
+  const event = readEvents().find((e) => e.id === eventId);
+  if (!event) {
+    throw new NotFoundError(`Event ${eventId} was not found`);
+  }
+
+  const contracts = readContracts().filter((c) => c.event_id === eventId);
+  const activeContracts = contracts.filter((c) => !INACTIVE_CONTRACT_STATUSES_FOR_STATUS.includes(c.status));
+  const invoices = readInvoices().filter((i) => i.event_id === eventId && i.status !== "voided");
+  const summary = computeEventFinancialSummary(eventId, readContracts(), readInvoices(), readPayments(), readExpenses());
+
+  const eventCancelled =
+    event.status === "cancelled" ||
+    (contracts.length > 0 && contracts.every((c) => c.status === "cancelled" || c.status === "declined"));
+
+  return deriveEventFinancialStatus({
+    eventCancelled,
+    hasActiveContract: activeContracts.length > 0,
+    hasInvoice: invoices.length > 0,
+    hasOverdueInvoice: invoices.some((i) => i.status === "overdue"),
+    depositRequired: activeContracts.some((c) => c.deposit_required),
+    depositRequiredMinor: summary.deposit_required_minor,
+    depositPaidMinor: summary.deposit_paid_minor,
+    invoicedTotalMinor: summary.invoiced_total_minor,
+    outstandingMinor: summary.outstanding_minor,
+    refundedMinor: summary.refunded_minor,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Invoice/Payment/Expense Notes and Timeline — reuse the shared
+// owner_type/owner_id Notes and Timeline architecture, same precedent as
+// Contract Notes/Timeline. No InvoiceNote/PaymentNote/ExpenseNote type.
+// ---------------------------------------------------------------------------
+
+export async function getNotesByInvoiceId(invoiceId: string): Promise<Note[]> {
+  const invoice = readInvoices().find((i) => i.id === invoiceId);
+  if (!invoice) return [];
+  return getNotesByOwner(invoice.workspace_id, "invoice", invoiceId);
+}
+
+export async function createInvoiceNote(invoiceId: string, input: NoteFormInput): Promise<DataResult<Note>> {
+  const invoice = readInvoices().find((i) => i.id === invoiceId);
+  if (!invoice) {
+    return fail("Invoice not found.");
+  }
+  return createNoteForOwner(invoice.workspace_id, "invoice", invoiceId, input);
+}
+
+export async function getTimelineByInvoiceId(invoiceId: string): Promise<TimelineActivity[]> {
+  const invoice = readInvoices().find((i) => i.id === invoiceId);
+  if (!invoice) return [];
+  return getTimelineByOwner(invoice.workspace_id, "invoice", invoiceId);
+}
+
+export async function getNotesByPaymentId(paymentId: string): Promise<Note[]> {
+  const payment = readPayments().find((p) => p.id === paymentId);
+  if (!payment) return [];
+  return getNotesByOwner(payment.workspace_id, "payment", paymentId);
+}
+
+export async function createPaymentNote(paymentId: string, input: NoteFormInput): Promise<DataResult<Note>> {
+  const payment = readPayments().find((p) => p.id === paymentId);
+  if (!payment) {
+    return fail("Payment not found.");
+  }
+  return createNoteForOwner(payment.workspace_id, "payment", paymentId, input);
+}
+
+export async function getTimelineByPaymentId(paymentId: string): Promise<TimelineActivity[]> {
+  const payment = readPayments().find((p) => p.id === paymentId);
+  if (!payment) return [];
+  return getTimelineByOwner(payment.workspace_id, "payment", paymentId);
+}
+
+export async function getNotesByExpenseId(expenseId: string): Promise<Note[]> {
+  const expense = readExpenses().find((e) => e.id === expenseId);
+  if (!expense) return [];
+  return getNotesByOwner(expense.workspace_id, "expense", expenseId);
+}
+
+export async function createExpenseNote(expenseId: string, input: NoteFormInput): Promise<DataResult<Note>> {
+  const expense = readExpenses().find((e) => e.id === expenseId);
+  if (!expense) {
+    return fail("Expense not found.");
+  }
+  return createNoteForOwner(expense.workspace_id, "expense", expenseId, input);
+}
+
+export async function getTimelineByExpenseId(expenseId: string): Promise<TimelineActivity[]> {
+  const expense = readExpenses().find((e) => e.id === expenseId);
+  if (!expense) return [];
+  return getTimelineByOwner(expense.workspace_id, "expense", expenseId);
+}
+
+// ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
 
@@ -2217,6 +3442,12 @@ export async function getDashboardMetrics(): Promise<DashboardMetric[]> {
     getContracts({ includeArchived: true }),
   ]);
   const contractStats = computeContractStats(contracts);
+  const invoices = readInvoices();
+  const payments = readPayments();
+  const expenses = readExpenses();
+  const workspaceFinancial = computeWorkspaceFinancialSummary(contracts, invoices, payments, expenses);
+  const allTimeFinancial = computeAllTimeFinancialTotals(invoices, payments);
+  const unpaidExpenses = expenses.filter((e) => e.status === "planned" || e.status === "approved" || e.status === "due");
   const activeLeads = leads.filter((lead) => lead.status !== "archived");
   const activeClients = clients.filter((client) => client.internal_status === "active");
   const vipClients = clients.filter((client) => client.is_vip);
@@ -2235,6 +3466,34 @@ export async function getDashboardMetrics(): Promise<DashboardMetric[]> {
   const eventsThisWeek = upcomingEvents.filter(
     (event) => new Date(event.event_date as string).getTime() - now <= oneWeekMs,
   );
+  const eventFinancialStatuses = activeEvents.map((event) => {
+    const eventContracts = contracts.filter((c) => c.event_id === event.id);
+    const activeEventContracts = eventContracts.filter(
+      (c) => !INACTIVE_CONTRACT_STATUSES_FOR_STATUS.includes(c.status),
+    );
+    const eventInvoices = invoices.filter((i) => i.event_id === event.id && i.status !== "voided");
+    const eventSummary = computeEventFinancialSummary(event.id, contracts, invoices, payments, expenses);
+    const eventCancelled =
+      event.status === "cancelled" ||
+      (eventContracts.length > 0 && eventContracts.every((c) => c.status === "cancelled" || c.status === "declined"));
+    return deriveEventFinancialStatus({
+      eventCancelled,
+      hasActiveContract: activeEventContracts.length > 0,
+      hasInvoice: eventInvoices.length > 0,
+      hasOverdueInvoice: eventInvoices.some((i) => i.status === "overdue"),
+      depositRequired: activeEventContracts.some((c) => c.deposit_required),
+      depositRequiredMinor: eventSummary.deposit_required_minor,
+      depositPaidMinor: eventSummary.deposit_paid_minor,
+      invoicedTotalMinor: eventSummary.invoiced_total_minor,
+      outstandingMinor: eventSummary.outstanding_minor,
+      refundedMinor: eventSummary.refunded_minor,
+    });
+  });
+  // Distinct from "Events Awaiting Deposit" above (events.status, a manually-progressed lifecycle
+  // stage) — this is derived strictly from Contract/Payment data and can disagree with it, which is
+  // the point: a staff-marked "ready" Event whose deposit was never actually collected still shows here.
+  const eventsAwaitingDepositFinance = eventFinancialStatuses.filter((s) => s === "awaiting_deposit").length;
+  const eventsPaidInFull = eventFinancialStatuses.filter((s) => s === "paid_in_full").length;
   const eventsAwaitingContract = activeEvents.filter((event) => event.status === "awaiting_contract");
   const eventsAwaitingDeposit = activeEvents.filter((event) => event.status === "awaiting_deposit");
   const eventsInPlanning = activeEvents.filter((event) => event.status === "planning");
@@ -2328,7 +3587,34 @@ export async function getDashboardMetrics(): Promise<DashboardMetric[]> {
     { label: "Contract Value", value: formatCurrency(contractStats.contractValue), href: "/contracts" },
     { label: "Deposit Pending", value: formatCurrency(contractStats.depositPending), href: "/contracts" },
     { label: "Completed Value", value: formatCurrency(contractStats.completedValue), href: "/contracts" },
-    { label: "Finance", value: "—", href: "/finance" },
+    { label: "Total Invoiced", value: formatMoney(allTimeFinancial.total_invoiced_minor, "USD"), href: "/finance" },
+    { label: "Total Collected", value: formatMoney(allTimeFinancial.total_collected_minor, "USD"), href: "/finance" },
+    {
+      label: "Outstanding Receivables",
+      value: formatMoney(workspaceFinancial.outstanding_receivables_minor, "USD"),
+      href: "/finance",
+    },
+    {
+      label: "Overdue Receivables",
+      value: formatMoney(workspaceFinancial.overdue_receivables_minor, "USD"),
+      href: "/finance",
+    },
+    { label: "Deposits Pending", value: formatMoney(workspaceFinancial.deposits_pending_minor, "USD"), href: "/finance" },
+    {
+      label: "Expenses This Month",
+      value: formatMoney(workspaceFinancial.expenses_this_month_minor, "USD"),
+      href: "/finance",
+    },
+    { label: "Gross Profit", value: formatMoney(workspaceFinancial.gross_profit_minor, "USD"), href: "/finance" },
+    { label: "Net Profit", value: formatMoney(workspaceFinancial.net_profit_minor, "USD"), href: "/finance" },
+    {
+      label: "Refunds This Month",
+      value: formatMoney(workspaceFinancial.refunds_this_month_minor, "USD"),
+      href: "/finance",
+    },
+    { label: "Unpaid Expenses", value: String(unpaidExpenses.length), href: "/finance" },
+    { label: "Events Awaiting Deposit (Finance)", value: String(eventsAwaitingDepositFinance), href: "/finance" },
+    { label: "Events Paid in Full", value: String(eventsPaidInFull), href: "/finance" },
   ];
 }
 
@@ -2348,6 +3634,9 @@ export function resetAllMockData(): void {
   resetContractsStore();
   resetContractTemplatesStore();
   resetContractExhibitsStore();
+  resetInvoicesStore();
+  resetPaymentsStore();
+  resetExpensesStore();
 }
 
 /**
