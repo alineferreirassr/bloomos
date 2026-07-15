@@ -18,6 +18,7 @@ import type { EventPriority } from "@/core/enums/eventPriority";
 import { EVENT_PRIORITY_LABELS } from "@/core/enums/eventPriority";
 import type { ChecklistStatus } from "@/core/enums/checklistStatus";
 import { SCHEDULE_STATUS_LABELS, type ScheduleStatus } from "@/core/enums/scheduleStatus";
+import type { SignatureStatus } from "@/core/enums/signatureStatus";
 import {
   canTransitionContractStatus,
   isContractClosed,
@@ -45,7 +46,12 @@ import { noteFormSchema, type NoteFormInput } from "@/modules/notes/schema";
 import { clientDataSchema, type ClientFormInput } from "@/modules/clients/schema";
 import { eventDataSchema, scheduleItemSchema, type EventFormInput, type ScheduleItemInput } from "@/modules/events/schema";
 import { checklistItemSchema, type ChecklistItemInput } from "@/modules/checklist/schema";
-import { contractSchema, type ContractInput } from "@/modules/contracts/schema";
+import {
+  contractSchema,
+  contractExhibitSchema,
+  type ContractInput,
+  type ContractExhibitInput,
+} from "@/modules/contracts/schema";
 import { computeContractStats } from "@/modules/contracts/contractStats";
 import { DEFAULT_CHECKLIST_TEMPLATES } from "@/modules/events/constants/checklistTemplates";
 import { convertLeadToClient as convertLeadToClientService } from "@/modules/leads/services/LeadConversionService";
@@ -97,6 +103,7 @@ import {
 } from "@/lib/data/mock/contractTemplatesStore";
 import {
   readContractExhibits,
+  writeContractExhibits,
   resetContractExhibitsStore,
 } from "@/lib/data/mock/contractExhibitsStore";
 
@@ -1474,27 +1481,48 @@ export async function getTimelineByEventId(eventId: string): Promise<TimelineAct
 export interface ContractFilters {
   search?: string;
   status?: ContractStatus | "all";
+  signatureStatus?: SignatureStatus | "all";
   clientId?: string;
   eventId?: string;
+  /** Inclusive; contracts with no effective_date never match when either bound is set. */
+  effectiveDateFrom?: string;
+  effectiveDateTo?: string;
   includeArchived?: boolean;
 }
 
 export async function getContracts(filters: ContractFilters = {}): Promise<Contract[]> {
   await delay(200);
-  const { search, status, clientId, eventId, includeArchived = false } = filters;
+  const {
+    search,
+    status,
+    signatureStatus,
+    clientId,
+    eventId,
+    effectiveDateFrom,
+    effectiveDateTo,
+    includeArchived = false,
+  } = filters;
   const clientsById = new Map(readClients().map((client) => [client.id, client]));
+  const eventsById = new Map(readEvents().map((event) => [event.id, event]));
 
   return readContracts().filter((contract) => {
     if (!includeArchived && contract.status === "archived") return false;
     if (status && status !== "all" && contract.status !== status) return false;
+    if (signatureStatus && signatureStatus !== "all" && contract.signature_status !== signatureStatus) return false;
     if (clientId && contract.client_id !== clientId) return false;
     if (eventId && contract.event_id !== eventId) return false;
+    if (effectiveDateFrom || effectiveDateTo) {
+      if (!contract.effective_date) return false;
+      if (effectiveDateFrom && contract.effective_date < effectiveDateFrom) return false;
+      if (effectiveDateTo && contract.effective_date > effectiveDateTo) return false;
+    }
     if (search) {
       const q = search.trim().toLowerCase();
       if (!q) return true;
       const client = clientsById.get(contract.client_id);
       const clientName = client ? `${client.first_name} ${client.last_name}` : "";
-      const haystack = `${contract.contract_number} ${contract.title} ${clientName}`.toLowerCase();
+      const event = contract.event_id ? eventsById.get(contract.event_id) : undefined;
+      const haystack = `${contract.contract_number} ${contract.title} ${clientName} ${event?.title ?? ""}`.toLowerCase();
       if (!haystack.includes(q)) return false;
     }
     return true;
@@ -2062,7 +2090,12 @@ export async function getContractTemplateById(id: string): Promise<ContractTempl
 }
 
 // ---------------------------------------------------------------------------
-// Contract Exhibits — model support only ("No editor yet").
+// Contract Exhibits — no document upload yet (document_id stays null until a
+// Documents module exists), but the UI does manage title/description/order.
+// Read-only enforcement for locked/closed Contracts happens in the UI layer
+// (which knows the Contract's status), the same precedent as
+// deleteScheduleItem/deleteChecklistItem having no status check of their
+// own — these functions stay generic and reusable.
 // ---------------------------------------------------------------------------
 
 export async function getContractExhibitsByContractId(contractId: string): Promise<ContractExhibit[]> {
@@ -2070,6 +2103,92 @@ export async function getContractExhibitsByContractId(contractId: string): Promi
   return readContractExhibits()
     .filter((exhibit) => exhibit.contract_id === contractId)
     .sort((a, b) => a.display_order - b.display_order);
+}
+
+export async function createContractExhibit(
+  contractId: string,
+  input: ContractExhibitInput,
+): Promise<DataResult<ContractExhibit>> {
+  const contract = readContracts().find((c) => c.id === contractId);
+  if (!contract) {
+    return fail("Contract not found.");
+  }
+
+  const parsed = contractExhibitSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  const ownExhibits = readContractExhibits().filter((e) => e.contract_id === contractId);
+  const timestamp = nowIso();
+  const exhibit: ContractExhibit = {
+    id: generateId("exhibit"),
+    contract_id: contractId,
+    ...parsed.data,
+    display_order: ownExhibits.length,
+    document_id: null,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+
+  writeContractExhibits([...readContractExhibits(), exhibit]);
+
+  return ok(exhibit);
+}
+
+export async function updateContractExhibit(
+  id: string,
+  input: ContractExhibitInput,
+): Promise<DataResult<ContractExhibit>> {
+  const existing = readContractExhibits().find((e) => e.id === id);
+  if (!existing) {
+    return fail("Exhibit not found.");
+  }
+
+  const parsed = contractExhibitSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  const updated: ContractExhibit = { ...existing, ...parsed.data, updated_at: nowIso() };
+  writeContractExhibits(readContractExhibits().map((e) => (e.id === id ? updated : e)));
+
+  return ok(updated);
+}
+
+export async function deleteContractExhibit(id: string): Promise<DataResult<null>> {
+  const existing = readContractExhibits().find((e) => e.id === id);
+  if (!existing) {
+    return fail("Exhibit not found.");
+  }
+
+  writeContractExhibits(readContractExhibits().filter((e) => e.id !== id));
+
+  return ok(null);
+}
+
+export async function reorderContractExhibits(
+  contractId: string,
+  orderedIds: string[],
+): Promise<DataResult<ContractExhibit[]>> {
+  const ownExhibits = readContractExhibits().filter((e) => e.contract_id === contractId);
+  if (orderedIds.length !== ownExhibits.length || !ownExhibits.every((e) => orderedIds.includes(e.id))) {
+    return fail("The provided order doesn't match this contract's exhibits.");
+  }
+
+  const timestamp = nowIso();
+  const order = new Map(orderedIds.map((id, index) => [id, index]));
+  writeContractExhibits(
+    readContractExhibits().map((e) =>
+      order.has(e.id) ? { ...e, display_order: order.get(e.id) as number, updated_at: timestamp } : e,
+    ),
+  );
+
+  const updated = readContractExhibits()
+    .filter((e) => e.contract_id === contractId)
+    .sort((a, b) => a.display_order - b.display_order);
+
+  return ok(updated);
 }
 
 // ---------------------------------------------------------------------------

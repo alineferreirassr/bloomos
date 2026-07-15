@@ -77,6 +77,35 @@ export function isContractClosed(status: ContractStatus): boolean {
   return CLOSED_CONTRACT_STATUSES.includes(status);
 }
 
+/**
+ * UI-facing editability policy — two tiers, distinct from
+ * isContractStatusTerminal/isContractClosed above (which describe
+ * transition legality, not what a form/detail page should let a user edit).
+ * Centralized here so the Contracts UI never hardcodes this per component:
+ *
+ * - "fully locked" (archived/cancelled/declined/expired): normal edits are
+ *   restricted altogether — the phase spec's "archived/cancelled/declined/
+ *   expired Contracts should restrict normal edits."
+ * - "commercial locked" (fully locked, plus signed/completed): only
+ *   commercial terms (value, dates, deposit, currency) are restricted —
+ *   "signed/completed Contracts should restrict commercial-term editing."
+ *   Title/description/notes/template/event links stay editable.
+ */
+export const FULLY_LOCKED_CONTRACT_STATUSES: ContractStatus[] = [
+  "archived",
+  "cancelled",
+  "declined",
+  "expired",
+];
+
+export function isContractFullyLocked(status: ContractStatus): boolean {
+  return FULLY_LOCKED_CONTRACT_STATUSES.includes(status);
+}
+
+export function isContractCommercialLocked(status: ContractStatus): boolean {
+  return isContractFullyLocked(status) || status === "signed" || status === "completed";
+}
+
 interface ContractForNextAction {
   status: ContractStatus;
   total_value: number | null;
