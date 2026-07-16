@@ -115,6 +115,18 @@ The single shared file system every other module attaches files through — see 
 
 No money model applies here (Documents carry no monetary fields). No real file storage, upload, download, OCR, e-signature, or PDF generation exists in this phase — every mock Document's `storage_provider` is `"mock"`; see `docs/integrations.md`.
 
+## Auth & session (Supabase Foundation)
+
+Infrastructure only in this phase — no business module reads/writes live Supabase yet (`docs/integrations.md`). Active only when `NEXT_PUBLIC_DATA_MODE=supabase`; in `mock` mode (the default) none of this runs.
+
+- **Sign in** (`signInWithPassword`, `lib/auth/actions.ts`) — email/password only. On success, redirects to the `redirectTo` query param if it's a same-origin path (`safeRedirectTarget` rejects anything not starting with `/`, and rejects `//` to block protocol-relative external redirects), otherwise `/dashboard`.
+- **Route protection** (`src/middleware.ts` + pure `lib/middleware/routeProtection.ts`) — on every request to a protected route prefix (`/dashboard`, `/leads`, `/clients`, `/events`, `/contracts`, `/finance`, `/documents`) without a session, redirects to `/sign-in?redirectTo=<original path>`, preserving the intended destination for sign-in to return to. Auth routes themselves (`/sign-in`, `/reset-password`, `/update-password`, `/auth/callback`) are always allowed regardless of session state, which is what prevents a redirect loop.
+- **Session refresh** (`lib/supabase/middleware.ts`) — runs on every matched request when in `supabase` mode, refreshing the Supabase session cookie before the route-protection decision is made.
+- **Sign out** (`signOut`) — clears the session, redirects to `/sign-in`.
+- **Password reset** is two steps, both Server Actions: `requestPasswordReset` emails a link that lands on `/auth/callback?next=/update-password` (the callback route exchanges the code for a session), then `updatePassword` sets the new password and redirects to `/sign-in`.
+- **`getCurrentUser()`** (`lib/auth/session.ts`) is the preferred read for any auth-gating decision — it revalidates the token against Supabase Auth rather than trusting the (spoofable) session cookie the way `getSession()` does.
+- Every Supabase Auth/Postgres error surfaced by any of the above is passed through `normalizeSupabaseError` (`lib/supabase/errors.ts`) first — a raw database/auth error message never reaches a form's error state.
+
 ## Business rules
 
 - An `events` record cannot exist without a `clients` record.

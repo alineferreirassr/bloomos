@@ -20,16 +20,39 @@ The first company operating on BloomOS is **Amoré Bloom**, a luxury proposal an
 
 ## Project status
 
-**Pre-implementation.** The repository currently contains project documentation and architecture only. No application code has been written yet. See [`ROADMAP.md`](./ROADMAP.md) for the phased plan and [`TODO.md`](./TODO.md) for the current checklist.
+**MVP modules in active development.** Leads, Clients, Events, Contracts, Finance, and Documents each have a working UI on top of an in-memory mock data layer, plus a Supabase Foundation (Auth, Workspace membership schema, RLS, Storage bucket policies) that is built and tested but not yet connected to a live project. See [`ROADMAP.md`](./ROADMAP.md) for the phased plan and [`TODO.md`](./TODO.md) for the current checklist.
 
 ## Stack
 
 - **Next.js** (App Router) + **TypeScript** (strict)
 - **Tailwind CSS**
-- **Supabase** (Postgres, Auth, Storage) — connected only once real credentials exist
+- **Supabase** (Postgres, Auth, Storage) — foundation built (`@supabase/ssr`), connected only once real credentials exist; see "Running locally" below
 - **GitHub** for source control and CI
 
 No unnecessary dependencies. Every library added must earn its place.
+
+## Running locally
+
+```
+npm install
+npm run dev
+```
+
+No environment configuration is required by default — the app runs entirely on an in-memory mock data layer (`NEXT_PUBLIC_DATA_MODE=mock`, the default). To opt into the Supabase Auth/Workspace foundation:
+
+```
+cp .env.example .env.local
+# set NEXT_PUBLIC_DATA_MODE=supabase and both NEXT_PUBLIC_SUPABASE_* values
+```
+
+Business modules (Leads/Clients/Events/Contracts/Finance/Documents) stay on the mock data layer regardless of this setting — see [`docs/integrations.md`](./docs/integrations.md) for the full data-mode model and the local Supabase CLI workflow (`npm run supabase:*`).
+
+```
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+```
 
 ## Documentation map
 

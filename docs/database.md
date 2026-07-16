@@ -1,6 +1,6 @@
 # Database
 
-This document defines the data model for BloomOS. It is a design reference, written ahead of any live Supabase connection — no schema here has been applied to a real database yet. Terminology follows `BLOOMOS_BIBLE.md`; if they ever disagree, the Bible wins and this file gets corrected.
+This document defines the data model for BloomOS. Most of it is a design reference, written ahead of any live Supabase connection — no schema here has been applied to a real database yet. The exception is the **Supabase Foundation** (`profiles`, `workspaces`, `workspace_members` below): these three tables have real, ordered SQL migrations under `supabase/migrations/` (see "Supabase Foundation" below), ready to apply the moment a project is linked — see `docs/integrations.md`. Every other table in this document (Leads, Clients, Events, Contracts, Finance, Documents, etc.) remains mock-only; no migration exists for them yet. Terminology follows `BLOOMOS_BIBLE.md`; if they ever disagree, the Bible wins and this file gets corrected.
 
 ## Principles
 
@@ -10,16 +10,48 @@ This document defines the data model for BloomOS. It is a design reference, writ
 - **Status/stage as constrained enums**, not free text, so the lifecycle in `docs/workflows.md` is enforced at the data layer.
 - **No business data lives only in the frontend.** Mock data during MVP development mirrors this schema exactly, so swapping in Supabase later is a data-source change, not a rewrite.
 
-## MVP entities
+## Supabase Foundation
+
+The three tables below are the only tables in this document with real, applied-and-ready SQL migrations (`supabase/migrations/`, 8 files, ordered) — see `docs/integrations.md` for connection status and `docs/permissions.md` for the RLS policies layered on top of each.
+
+### `profiles`
+One row per Supabase Auth user (`auth.users.id`). Provisioned automatically by a `handle_new_user()` trigger on `auth.users` insert — application code never inserts a profile directly.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK, FK → auth.users, on delete cascade |
+| full_name | text | nullable |
+| email | text | |
+| avatar_url | text | nullable — expected to point at the `avatars` Storage bucket once real upload exists |
+| created_at / updated_at | timestamptz | |
 
 ### `workspaces`
-The schema representation of a Workspace (`BLOOMOS_BIBLE.md` §7) — one row per business operating on BloomOS. Reserved for multi-tenancy readiness. In the MVP, exactly one row exists (Amoré Bloom).
+The schema representation of a Workspace (`BLOOMOS_BIBLE.md` §7) — one row per business operating on BloomOS. The MVP *UI* assumes a single active Workspace per session (`CURRENT_WORKSPACE_ID`, `core/constants/workspace.ts`), but this table and `workspace_members` below already support a user belonging to several.
 
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
 | name | text | |
-| created_at | timestamptz | |
+| slug | text | unique |
+| created_by | uuid | FK → auth.users |
+| created_at / updated_at | timestamptz | |
+| archived_at | timestamptz | nullable — soft delete, matching every other archivable entity in this schema |
+
+### `workspace_members`
+Join table between `auth.users` and `workspaces`, carrying role and status. Unique on (`workspace_id`, `user_id`).
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workspace_id | uuid | FK → workspaces, on delete cascade |
+| user_id | uuid | FK → auth.users, on delete cascade |
+| role | enum | `owner`, `admin`, `manager`, `team`, `viewer` — `core/enums/workspaceRole.ts` |
+| status | enum | `active`, `invited`, `suspended` — `core/enums/workspaceMemberStatus.ts`. A `suspended` member fails every RLS membership check (see `docs/permissions.md`) without needing a separate "disabled account" concept |
+| created_at / updated_at | timestamptz | |
+
+No signup flow or Workspace-creation UI exists yet — the first owner/admin account and its Workspace row are created manually via the Supabase Dashboard/SQL once real credentials exist (see `docs/integrations.md`), not through application code.
+
+## MVP entities
 
 ### `leads`
 | Column | Type | Notes |
@@ -479,5 +511,6 @@ No payment-provider (Stripe, Square, PayPal, banks, accounting software) is conn
 
 ## Supabase-specific notes
 
-- Row-Level Security (RLS) is designed alongside the schema but **enabled only once Supabase is actually connected** with real credentials — see `docs/permissions.md`.
-- Enum values above are the intended constraint; whether they're implemented as Postgres `enum` types or `check` constraints is an implementation decision made at connection time, not before.
+- Row-Level Security (RLS) is **written and ready** for the three Supabase Foundation tables (`profiles`, `workspaces`, `workspace_members` — migration 7 of 8, `supabase/migrations/`) but not yet **applied to a live database**, since no real Supabase project is connected. For every other table in this document, RLS remains design-only — no migration exists for them yet. See `docs/permissions.md`.
+- Enum values above are the intended constraint; whether they're implemented as Postgres `enum` types or `check` constraints is an implementation decision made at connection time, not before — except `workspace_members.role`/`status`, which are already implemented as `check` constraints in migration 4 (`supabase/migrations/20260715150300_workspace_members.sql`).
+- `role`/`allowed_roles` values passed into the `has_workspace_role()` SQL helper function are plain `text`/`text[]`, not a Postgres enum — this mirrors the `check`-constraint choice above and keeps role checks a single string comparison rather than a cross-schema enum-type dependency.
