@@ -117,7 +117,7 @@ No money model applies here (Documents carry no monetary fields). No real file s
 
 ## Auth & session (Supabase Foundation)
 
-Infrastructure only in this phase — no business module reads/writes live Supabase yet (`docs/integrations.md`). Active only when `NEXT_PUBLIC_DATA_MODE=supabase`; in `mock` mode (the default) none of this runs.
+Active only when `NEXT_PUBLIC_DATA_MODE=supabase`; in `mock` mode (the default) none of this runs. Leads is the first business module wired to live Supabase (`docs/integrations.md`); every other business module still runs on the mock data layer regardless of this setting.
 
 - **Sign in** (`signInWithPassword`, `lib/auth/actions.ts`) — email/password only. On success, redirects to the `redirectTo` query param if it's a same-origin path (`safeRedirectTarget` rejects anything not starting with `/`, and rejects `//` to block protocol-relative external redirects), otherwise `/dashboard`.
 - **Route protection** (`src/middleware.ts` + pure `lib/middleware/routeProtection.ts`) — on every request to a protected route prefix (`/dashboard`, `/leads`, `/clients`, `/events`, `/contracts`, `/finance`, `/documents`) without a session, redirects to `/sign-in?redirectTo=<original path>`, preserving the intended destination for sign-in to return to. Auth routes themselves (`/sign-in`, `/reset-password`, `/update-password`, `/auth/callback`) are always allowed regardless of session state, which is what prevents a redirect loop.
@@ -126,6 +126,22 @@ Infrastructure only in this phase — no business module reads/writes live Supab
 - **Password reset** is two steps, both Server Actions: `requestPasswordReset` emails a link that lands on `/auth/callback?next=/update-password` (the callback route exchanges the code for a session), then `updatePassword` sets the new password and redirects to `/sign-in`.
 - **`getCurrentUser()`** (`lib/auth/session.ts`) is the preferred read for any auth-gating decision — it revalidates the token against Supabase Auth rather than trusting the (spoofable) session cookie the way `getSession()` does.
 - Every Supabase Auth/Postgres error surfaced by any of the above is passed through `normalizeSupabaseError` (`lib/supabase/errors.ts`) first — a raw database/auth error message never reaches a form's error state.
+
+## Invitation lifecycle (architecture, planned — not implemented)
+
+Ahead of Client Portal/Team Portal implementation — see `docs/permissions.md`'s "Client and Team Portal invitations" section for the full flow, the "never generate/email/store a password" rule, and the server-only `service_role` exception. Nothing below exists in code yet; no `core/workflows/invitationWorkflow.ts` file exists.
+
+Canonical statuses: `invited`, `sent`, `accepted`, `expired`, `revoked`. Intended transition rules, mirroring the terminal-status pattern already used by `core/workflows/leadWorkflow.ts` and every other module's workflow file:
+
+| From | Legal next states |
+|---|---|
+| `invited` | `sent` (link dispatched) |
+| `sent` | `accepted` (recipient completes activation), `expired` (time limit passed unaccepted), `revoked` (administrator cancels), `sent` again (resend, extends/resets expiration) |
+| `accepted` | *(terminal — the invitation's job is done; the resulting membership's own `status` — `active`/`suspended` — governs access from here, not the invitation)* |
+| `expired` | *(terminal — a new invitation must be created; an expired one is never silently reactivated)* |
+| `revoked` | *(terminal — same as `expired`)* |
+
+Every transition is expected to record a Timeline entry via the existing `recordTimelineActivity` mechanism, exactly like every other module's lifecycle — never constructed by hand, never skipped.
 
 ## Business rules
 

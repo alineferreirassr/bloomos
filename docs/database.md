@@ -503,6 +503,29 @@ invoices 1—0/* payments             (payment.invoice_id — optional)
 
 Anticipated, not implemented: `inventory_items`, `suppliers`, `team_members`, `event_team_assignments`, `vehicles`, `client_portal_access`, `team_portal_access`, `automations`, `automation_runs`, `emails`, `gallery_media`, `feedback`, `knowledge_base_articles`. When these ship, `checklist_items.owner_type`/`schedule_items.owner_type` and `checklist_items.assigned_type` are expected to gain `employee`/`vendor`/`inventory`/`vehicle` values rather than needing new tables — that reuse is the reason those two tables were generalized ahead of time; `documents.owner_type` is expected to gain `supplier`/`inventory_item`/`team_member` the same way. These will be specified in detail when their phase (see `ROADMAP.md`) begins.
 
+### `invitations` (planned, not created)
+
+Ahead of Client Portal/Team Portal implementation — see `docs/permissions.md`'s "Client and Team Portal invitations" section for the full flow and rules (never a temporary password; single-use Supabase Auth invitation link only) and `docs/workflows.md`'s "Invitation lifecycle" for the status state machine. Sketched here for shape only — column names/types are not final until that phase begins.
+
+| Column (sketch) | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workspace_id | uuid | FK → workspaces |
+| email | text | recipient |
+| name | text | recipient's display name |
+| portal_type | enum | `client`, `team` — never both on one invitation |
+| role | text | the role to grant on acceptance |
+| permissions | jsonb | nullable — finer-grained grant beyond `role`, if needed |
+| related_client_id | uuid | nullable — links to a `clients` row (Client Portal invitations); no FK possible before Clients migrates (same polymorphic-ownership caveat as `notes`/`timeline_activities` above) |
+| related_team_member_id | uuid | nullable — links to a future `team_members` row (Team Portal invitations) |
+| status | enum | `invited`, `sent`, `accepted`, `expired`, `revoked` — see `docs/workflows.md` |
+| invited_by | uuid | FK → auth.users — the owner/admin who created the invitation |
+| expires_at | timestamptz | |
+| created_at / updated_at | timestamptz | |
+| accepted_at / revoked_at | timestamptz | nullable |
+
+Sending, resending, and revoking requires the Supabase Auth Admin API (`service_role`) — the one narrow, server-only exception to this codebase's "no service-role client anywhere" rule, detailed in `docs/permissions.md`.
+
 `documents` now exists (see above) — `contract_exhibits.document_id`, `payments.document_id`, and `expenses.document_id` remain nullable placeholder columns that a real Document's id can be written into via the placeholder attachment helpers (`attachDocumentToContractExhibit`, `attachDocumentToPayment`, `attachDocumentToExpense`, and their Invoice/Event/Client counterparts) — metadata-only linking, no real binary upload. These helpers are additive: they never rewrite an existing `document_id` automatically, and no seed data populates them yet.
 
 Future Client Portal and Team Portal access (both listed above as not-yet-implemented) are expected to read `documents.visibility`/`document_folders.visibility` once real authentication exists — see `docs/permissions.md`.

@@ -28,7 +28,7 @@ Business modules migrate to Supabase one at a time through the centralized selec
 
 - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` — both public-by-design (Supabase Dashboard → Project Settings → API), safe to expose to client-side JavaScript.
 - The Supabase project reference/name, for CLI linking (`npm run supabase:link`).
-- **Never** the `service_role` key, the database password, or any access/secret token — no code in this repository requests, stores, or has a slot for any of these. There is deliberately no service-role client anywhere in the app.
+- **Never** the `service_role` key, the database password, or any access/secret token — no code in this repository requests, stores, or has a slot for any of these today. There is deliberately no service-role client anywhere in the app as of this phase. The one documented, narrow, future exception is Client/Team Portal invitation-admin operations (Supabase Auth Admin API calls, which require `service_role`) — server-only, never browser-exposed, never used anywhere else; see `docs/permissions.md`'s "Client and Team Portal invitations" section. Nothing in this exception is implemented yet.
 
 #### Local Supabase workflow
 

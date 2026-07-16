@@ -8,7 +8,7 @@ Access control model for BloomOS. Most of this document is written ahead of a li
 
 - **Email/password only.** No social providers are enabled.
 - **No public signup.** There is no "create an account" flow for arbitrary visitors — the first owner/admin account and its Workspace row are created manually via the Supabase Dashboard/SQL once real credentials exist (see `docs/integrations.md`).
-- **No invitations yet.** Adding a second `workspace_members` row for a teammate is a manual/SQL operation for now; an invitation flow is future scope.
+- **No invitations yet.** Adding a second `workspace_members` row for a teammate is a manual/SQL operation for now; the invitation-link architecture is documented below ("Client and Team Portal invitations") but not implemented — no invitation UI, no email sending, no `invitations` table exists yet.
 - **Minimal pages, not final UI.** `/sign-in`, `/reset-password`, `/update-password` exist so the Auth foundation is exercisable end-to-end, but are not the polished Auth experience the product will ship.
 - **`getCurrentUser()` over `getSession()`** for anything auth-gating — it revalidates the token against Supabase Auth rather than trusting the session cookie alone (`lib/auth/session.ts`).
 - **Route protection is opt-in this phase.** `src/middleware.ts` only redirects unauthenticated visitors away from protected routes (`/dashboard`, `/leads`, `/clients`, `/events`, `/contracts`, `/finance`, `/documents`) when `NEXT_PUBLIC_DATA_MODE=supabase`. In `mock` mode (the default), every route is open and local development never requires a login — see `docs/integrations.md`.
@@ -43,6 +43,55 @@ The MVP runs for a single Workspace (Amoré Bloom — see `BLOOMOS_BIBLE.md` §7
 | **Team Member** | Operational access to Leads, Clients, Events, Contracts, Finance, Documents for day-to-day work. No account/billing administration. |
 
 No client-facing role exists in the MVP — the future **Client Portal** module (Phase 3) introduces an external, scoped-down role for clients to view their own event only, and the future **Team Portal** introduces a scoped-down internal role for team members who aren't full Owner/Admin/Team Member users (e.g. day-of staff or contractors). Both are expected to read `documents.visibility`/`document_folders.visibility` once they exist (see "Documents visibility" below) — no such access exists yet.
+
+## Client and Team Portal invitations (architecture, planned — not implemented)
+
+**This is a permanent BloomOS principle, documented ahead of Client Portal/Team Portal implementation.** No invitation UI, invitation-sending code, `invitations` table, or activation page exists yet — nothing below changes current application behavior. This section exists so the eventual implementation follows one settled design rather than being decided ad hoc when Client Portal/Team Portal work begins.
+
+**The core rule: BloomOS never generates, emails, or displays a temporary password, for any portal, ever.** Every Client Portal and Team Portal account is provisioned through a single-use Supabase Auth invitation link. The recipient — never BloomOS or a BloomOS administrator — is the only party who ever sets their own password.
+
+### Required flow
+
+1. An authorized Workspace owner/admin creates an invitation specifying: recipient email, recipient name, portal type (Client Portal or Team Portal), Workspace, role, permissions, and an optional related `clients` or `team_members` record to link the invitation to.
+2. The invitation/membership row is created with status `invited` — consistent with how `workspace_members.status = 'invited'` already works today (see "Workspace membership model" above): an `invited` row grants no access until it becomes `active`.
+3. A single-use Supabase Auth invitation link is sent to the recipient (`supabase.auth.admin.inviteUserByEmail()` or equivalent) — this is the only mechanism that ever reaches the recipient; BloomOS never constructs, stores, or transmits a password on their behalf.
+4. The recipient follows the link to a branded Amoré Bloom activation page (not a generic Supabase page).
+5. The recipient sets their own password on that activation page. This is the first and only time a password for that account is chosen — by the recipient, never by BloomOS.
+6. On successful password creation: the invitation is marked `accepted`, the corresponding membership is activated (`status = 'active'`), and the recipient is redirected to the correct portal for their portal type/role.
+
+### Never
+
+- Generate a temporary password.
+- Send a password by email, SMS, or any other channel.
+- Display a password to an administrator, in any UI, log, or export.
+- Store a plaintext password anywhere (Supabase Auth already handles password hashing; no BloomOS code ever needs to see, store, or compare a raw password).
+- Log a password, anywhere, at any log level.
+- Expose admin/service-role authentication credentials in frontend code (see "Server-only administrative operations" below).
+
+### Invitation statuses
+
+`invited` → `sent` → `accepted`, with `expired` and `revoked` as terminal off-ramps from `sent` (an already-`accepted` invitation is never expired or revoked — only the underlying membership can later be suspended, via the existing `workspace_members.status` mechanism). This mirrors the terminal-status pattern already used by Leads (`core/workflows/leadWorkflow.ts`) and other modules — canonical values and transition rules belong in a future `core/workflows/invitationWorkflow.ts`, not duplicated here. See `docs/workflows.md`'s "Invitation lifecycle" section.
+
+### Required supporting operations
+
+- **Resend** — re-sends the invitation link without creating a duplicate invitation row; expected to move status back to `sent` and reset expiration.
+- **Revoke** — administrator-initiated, moves status to `revoked`, invalidates the link.
+- **Expiration** — invitations are time-limited; an unaccepted invitation past its expiration is `expired`, not silently left as `sent` forever.
+- **Existing-user handling** — if the invited email already has a Supabase Auth account (e.g. inviting the same person to a second Workspace, or to both a Client and Team Portal), the flow must detect this and add the new membership to the existing account rather than erroring or creating a duplicate `auth.users` row.
+- **Password recovery for existing users** — unrelated to invitation acceptance; reuses the existing `requestPasswordReset()`/`updatePassword()` flow (`lib/auth/actions.ts`) already built in the Supabase Foundation.
+- **Audit Timeline entries** — every invitation lifecycle transition (created, sent, resent, accepted, expired, revoked) is expected to record a Timeline entry, following the same `recordTimelineActivity` mechanism every other module already uses (`docs/workflows.md`) — never constructed by hand.
+
+### Client Portal vs. Team Portal
+
+The two portal types are never conflated: an invitation is for exactly one portal type, and Client Portal and Team Portal accounts are expected to receive **different `workspace_members`-equivalent memberships, different roles, different permissions, and different post-activation redirect destinations** — a Client Portal invitation never grants Team Portal access and vice versa, even for the same email address (see "Existing-user handling" above for the case where one person legitimately needs both).
+
+### Server-only administrative operations
+
+Sending, resending, and revoking an invitation (and any other Supabase Auth Admin API call) requires the Supabase `service_role` key — the Admin API is not reachable with the publishable/anon key used everywhere else in this app. This is a **narrow, deliberate, server-only exception** to this codebase's otherwise-absolute "no service-role client anywhere in the app" rule (`docs/integrations.md`):
+
+- A `service_role` client, if and when built, is expected to live in its own dedicated server-only module (e.g. `lib/supabase/admin.ts`, gated by `import "server-only"` exactly like `lib/supabase/server.ts` already is), used **only** by invitation-admin Server Actions/Route Handlers — never imported by any other module, and never by anything reachable from a Client Component (see `docs/integrations.md`'s "Client factory choice matters per module" note — the same `server-only` bundling boundary that already governs `lib/supabase/server.ts` applies here, with even higher stakes given the elevated key).
+- The `service_role` key itself follows every existing credential rule (`docs/integrations.md`): never committed, never logged, never printed, never present in any `NEXT_PUBLIC_*` variable, never returned to or constructed in browser code.
+- No other part of the app — Leads, Clients, Events, Contracts, Finance, Documents, or any future module's own Supabase migration — needs or is expected to ever touch `service_role`. This exception is scoped exclusively to invitation-admin operations.
 
 ## Guiding rules
 
@@ -129,3 +178,4 @@ Once Supabase RLS is connected, `documents`/`document_folders` policies are expe
 - Any client-facing access (until Client Portal, Phase 3)
 - Enforcing `documents`/`document_folders` `visibility` at the data-layer or RLS level (metadata only until real auth exists)
 - Real file upload, signed URLs, or migrating any Documents metadata to Supabase — the `documents`/`avatars` Storage buckets and their access policies exist (see "Storage Foundation" above) but nothing uploads to them yet
+- Client Portal and Team Portal implementation, invitation UI, actual invitation sending, an `invitations` table, or a `service_role` admin client — the architecture is documented above ("Client and Team Portal invitations") but nothing is built
