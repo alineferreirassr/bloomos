@@ -57,7 +57,8 @@ Current, actionable tasks. Keep this in sync with reality — check items off as
 - [x] Typed database access: hand-authored placeholder `src/types/database.types.ts` (regenerate via `npm run supabase:types` once a project is linked) + `lib/supabase/mappers.ts` mapping boundary
 - [x] Typed Supabase error normalization (`lib/supabase/errors.ts`) into `core/errors`' existing taxonomy, extended with `UnauthorizedError`/`ForbiddenError`/`NetworkError`/`UnknownError`
 - [x] Documented local Supabase CLI workflow + `npm run supabase:*` scripts (all `npx`-based, nothing installed globally)
-- [ ] Provide real Supabase credentials, manually create the first owner/admin account and Workspace row, switch `NEXT_PUBLIC_DATA_MODE=supabase`, and verify the Auth foundation against a live project (not done in this phase — see `docs/integrations.md`)
-- [ ] Migrate business modules (Leads/Clients/Events/Contracts/Finance/Documents) to live Supabase repositories, one module at a time, through the `lib/data/provider.ts` boundary — not started
+- [x] Provide real Supabase credentials, manually create the first owner/admin account and Workspace row, switch `NEXT_PUBLIC_DATA_MODE=supabase`, and verify the Auth foundation against a live project
+- [x] Migrate Leads to a live Supabase repository (`lib/data/leads/`) through the `lib/data/provider.ts` boundary — first business module migrated; uses the browser Supabase client (`lib/supabase/client.ts`) since its UI fetches from Client Components, see `docs/integrations.md`
+- [ ] Migrate remaining business modules (Clients/Events/Contracts/Finance/Documents) to live Supabase repositories, one module at a time — not started
 - [ ] Connect Supabase Storage for real Documents upload, signed URLs — not started
-- [ ] Use mock data exclusively for all business modules until each module's own migration phase is reached
+- [ ] Use mock data exclusively for Clients/Events/Contracts/Finance/Documents until each module's own migration phase is reached

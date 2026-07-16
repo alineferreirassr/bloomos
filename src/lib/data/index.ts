@@ -21,7 +21,7 @@ import type { PaymentType } from "@/core/enums/paymentType";
 import type { PaymentMethod } from "@/core/enums/paymentMethod";
 import type { ExpenseCategory } from "@/core/enums/expenseCategory";
 import { PAYMENT_STATUSES_COUNTING_TOWARD_PAID } from "@/core/enums/paymentStatus";
-import { LEAD_STATUS_LABELS, type LeadStatus } from "@/core/enums/leadStatus";
+import type { LeadStatus } from "@/core/enums/leadStatus";
 import { CLIENT_STATUS_LABELS, type ClientStatus } from "@/core/enums/clientStatus";
 import { CONTACT_METHOD_LABELS, type ContactMethod } from "@/core/enums/contactMethod";
 import { EVENT_TYPE_LABELS, type EventType } from "@/core/enums/eventType";
@@ -66,10 +66,8 @@ import {
   type DocumentStatus,
 } from "@/core/workflows/documentWorkflow";
 import { canMoveFolder, getFolderPath, getFolderChildren } from "@/core/workflows/documentFolderWorkflow";
-import { CURRENT_ACTOR } from "@/core/constants/actor";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 import { NotFoundError } from "@/core/errors";
-import { canTransition, isTerminalStatus } from "@/core/workflows/leadWorkflow";
 import { getClientNextRecommendedAction } from "@/core/workflows/clientWorkflow";
 import {
   canTransitionEventStatus,
@@ -81,8 +79,8 @@ import {
   type EventStatus,
   type EventLifecycleStage,
 } from "@/core/workflows/eventWorkflow";
-import { leadDataSchema, type LeadFormInput } from "@/modules/leads/schema";
-import { noteFormSchema, type NoteFormInput } from "@/modules/notes/schema";
+import type { LeadFormInput } from "@/modules/leads/schema";
+import type { NoteFormInput } from "@/modules/notes/schema";
 import { clientDataSchema, type ClientFormInput } from "@/modules/clients/schema";
 import { eventDataSchema, scheduleItemSchema, type EventFormInput, type ScheduleItemInput } from "@/modules/events/schema";
 import { checklistItemSchema, type ChecklistItemInput } from "@/modules/checklist/schema";
@@ -140,9 +138,12 @@ import { DEFAULT_CHECKLIST_TEMPLATES } from "@/modules/events/constants/checklis
 import { convertLeadToClient as convertLeadToClientService } from "@/modules/leads/services/LeadConversionService";
 import { type DataResult, ok, fail } from "@/lib/data/result";
 import { delay, generateId, nowIso } from "@/lib/data/utils";
+import { selectRepository } from "@/lib/data/provider";
+import type { LeadFilters } from "@/lib/data/leads/repository";
+import { mockLeadsRepository } from "@/lib/data/leads/mockRepository";
+import { supabaseLeadsRepository } from "@/lib/data/leads/supabaseRepository";
 import {
   readLeads,
-  writeLeads,
   resetLeadsStore,
 } from "@/lib/data/mock/leadsStore";
 import {
@@ -151,10 +152,10 @@ import {
   resetNotesStore,
 } from "@/lib/data/mock/notesStore";
 import {
-  readActivities,
   recordTimelineActivity,
   resetTimelineStore,
 } from "@/lib/data/mock/timelineStore";
+import { getNotesByOwner, createNoteForOwner, getTimelineByOwner } from "@/lib/data/mock/notesTimelineShared";
 import {
   readClients,
   writeClients,
@@ -230,181 +231,62 @@ function fieldErrorsFromZod(error: {
 
 // ---------------------------------------------------------------------------
 // Leads
+//
+// The first business module with a live Supabase repository
+// (lib/data/leads/supabaseRepository.ts) alongside the original mock one
+// (lib/data/leads/mockRepository.ts) — lib/data/provider.ts's
+// selectRepository() picks between them per NEXT_PUBLIC_DATA_MODE. Every
+// function below is a thin, backend-agnostic wrapper; neither this file nor
+// any UI ever branches on data mode directly. Lead -> Client conversion
+// (convertLeadToClient, below) is the one exception — it stays entirely on
+// the mock stores regardless of mode until Clients has its own migration
+// phase, since it reads and writes both leadsStore and clientsStore.
 // ---------------------------------------------------------------------------
 
-export interface LeadFilters {
-  search?: string;
-  status?: LeadStatus | "all";
-  source?: string | "all";
-  eventType?: string | "all";
-  includeArchived?: boolean;
+export type { LeadFilters } from "@/lib/data/leads/repository";
+
+function leadsRepository() {
+  return selectRepository({ mock: mockLeadsRepository, supabase: supabaseLeadsRepository });
 }
 
 export async function getLeads(filters: LeadFilters = {}): Promise<Lead[]> {
-  await delay(200);
-  const { search, status, source, eventType, includeArchived = false } = filters;
-
-  return readLeads().filter((lead) => {
-    if (!includeArchived && lead.status === "archived") return false;
-    if (status && status !== "all" && lead.status !== status) return false;
-    if (source && source !== "all" && lead.source !== source) return false;
-    if (eventType && eventType !== "all" && lead.event_type !== eventType) return false;
-    if (search) {
-      const q = search.trim().toLowerCase();
-      if (!q) return true;
-      const haystack = `${lead.first_name} ${lead.last_name} ${lead.email}`.toLowerCase();
-      if (!haystack.includes(q)) return false;
-    }
-    return true;
-  });
+  return leadsRepository().getLeads(filters);
 }
 
 export async function getLeadById(id: string): Promise<Lead> {
-  await delay(150);
-  const lead = readLeads().find((l) => l.id === id);
-  if (!lead) {
-    throw new NotFoundError(`Lead ${id} was not found`);
-  }
-  return lead;
+  return leadsRepository().getLeadById(id);
 }
 
 export async function createLead(input: LeadFormInput): Promise<DataResult<Lead>> {
-  const parsed = leadDataSchema.safeParse(input);
-  if (!parsed.success) {
-    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
-  }
-
-  const timestamp = nowIso();
-  const lead: Lead = {
-    id: generateId("lead"),
-    workspace_id: CURRENT_WORKSPACE_ID,
-    ...parsed.data,
-    status: "new",
-    converted_client_id: null,
-    created_at: timestamp,
-    updated_at: timestamp,
-    archived_at: null,
-  };
-
-  writeLeads([...readLeads(), lead]);
-  recordTimelineActivity(lead.workspace_id, "lead", lead.id, "lead_created", "Lead created");
-
-  return ok(lead);
+  return leadsRepository().createLead(input);
 }
 
 export async function updateLead(
   id: string,
   input: LeadFormInput,
 ): Promise<DataResult<Lead>> {
-  const existing = readLeads().find((l) => l.id === id);
-  if (!existing) {
-    return fail("Lead not found.");
-  }
-  if (existing.status === "converted") {
-    return fail("This lead was converted to a Client and is read-only.");
-  }
-
-  const parsed = leadDataSchema.safeParse(input);
-  if (!parsed.success) {
-    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
-  }
-
-  const updated: Lead = {
-    ...existing,
-    ...parsed.data,
-    updated_at: nowIso(),
-  };
-
-  writeLeads(readLeads().map((l) => (l.id === id ? updated : l)));
-  recordTimelineActivity(existing.workspace_id, "lead", id, "lead_updated", "Lead information updated");
-
-  return ok(updated);
+  return leadsRepository().updateLead(id, input);
 }
 
 export async function updateLeadStatus(
   id: string,
   status: LeadStatus,
 ): Promise<DataResult<Lead>> {
-  const existing = readLeads().find((l) => l.id === id);
-  if (!existing) {
-    return fail("Lead not found.");
-  }
-  if (!canTransition(existing.status, status)) {
-    return fail(
-      `Cannot move a lead from "${LEAD_STATUS_LABELS[existing.status]}" to "${LEAD_STATUS_LABELS[status]}".`,
-    );
-  }
-
-  const updated: Lead = { ...existing, status, updated_at: nowIso() };
-  writeLeads(readLeads().map((l) => (l.id === id ? updated : l)));
-  recordTimelineActivity(
-    existing.workspace_id,
-    "lead",
-    id,
-    "status_changed",
-    `Status changed from ${LEAD_STATUS_LABELS[existing.status]} to ${LEAD_STATUS_LABELS[status]}`,
-    { from: existing.status, to: status },
-  );
-
-  return ok(updated);
+  return leadsRepository().updateLeadStatus(id, status);
 }
 
 export async function archiveLead(id: string): Promise<DataResult<Lead>> {
-  const existing = readLeads().find((l) => l.id === id);
-  if (!existing) {
-    return fail("Lead not found.");
-  }
-  if (existing.status === "converted") {
-    return fail("This lead was converted to a Client and is read-only.");
-  }
-  if (existing.status === "archived") {
-    return fail("This lead is already archived.");
-  }
-
-  const timestamp = nowIso();
-  const updated: Lead = {
-    ...existing,
-    status: "archived",
-    archived_at: timestamp,
-    updated_at: timestamp,
-  };
-  writeLeads(readLeads().map((l) => (l.id === id ? updated : l)));
-  recordTimelineActivity(existing.workspace_id, "lead", id, "lead_archived", "Lead archived");
-
-  return ok(updated);
+  return leadsRepository().archiveLead(id);
 }
 
 export async function markWelcomeGuideSent(id: string): Promise<DataResult<Lead>> {
-  const existing = readLeads().find((l) => l.id === id);
-  if (!existing) {
-    return fail("Lead not found.");
-  }
-  if (isTerminalStatus(existing.status)) {
-    return fail("This lead is read-only and can't be updated.");
-  }
-
-  const shouldAdvanceStatus = existing.status === "new" || existing.status === "contacted";
-  const updated: Lead = {
-    ...existing,
-    status: shouldAdvanceStatus ? "welcome_guide_sent" : existing.status,
-    updated_at: nowIso(),
-  };
-
-  writeLeads(readLeads().map((l) => (l.id === id ? updated : l)));
-  recordTimelineActivity(
-    existing.workspace_id,
-    "lead",
-    id,
-    "welcome_guide_sent",
-    "Welcome Guide marked as sent (mock email service — no real email sent)",
-  );
-
-  return ok(updated);
+  return leadsRepository().markWelcomeGuideSent(id);
 }
 
 /**
  * Conversion's business logic lives entirely in LeadConversionService — this
  * is a thin re-export so the UI keeps importing everything from one place.
+ * Mock-only regardless of data mode — see the module comment above.
  */
 export const convertLeadToClient = convertLeadToClientService;
 
@@ -417,74 +299,22 @@ export const convertLeadToClient = convertLeadToClientService;
 // so a workspace can't ever see another workspace's notes even if two ids
 // happened to collide. See docs/database.md's `notes` section and Supabase
 // RLS policies (once connected) for how this gets enforced at the DB layer.
+//
+// getNotesByOwner/createNoteForOwner (imported from
+// lib/data/mock/notesTimelineShared) remain mock-only — Client (and every
+// other) owner type has no Supabase-backed notes yet. Lead notes route
+// through leadsRepository() above instead, which is backend-aware.
 // ---------------------------------------------------------------------------
 
-async function getNotesByOwner(
-  workspaceId: string,
-  ownerType: EntityType,
-  ownerId: string,
-): Promise<Note[]> {
-  await delay(150);
-  return readNotes()
-    .filter(
-      (note) =>
-        note.workspace_id === workspaceId && note.owner_type === ownerType && note.owner_id === ownerId,
-    )
-    .sort((a, b) => {
-      if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
-      return b.created_at.localeCompare(a.created_at);
-    });
-}
-
-async function createNoteForOwner(
-  workspaceId: string,
-  ownerType: EntityType,
-  ownerId: string,
-  input: NoteFormInput,
-): Promise<DataResult<Note>> {
-  const parsed = noteFormSchema.safeParse(input);
-  if (!parsed.success) {
-    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
-  }
-
-  const timestamp = nowIso();
-  const note: Note = {
-    id: generateId("note"),
-    workspace_id: workspaceId,
-    owner_type: ownerType,
-    owner_id: ownerId,
-    ...parsed.data,
-    is_pinned: false,
-    attachments: [],
-    created_by: CURRENT_ACTOR,
-    created_at: timestamp,
-    updated_at: timestamp,
-  };
-
-  writeNotes([...readNotes(), note]);
-  recordTimelineActivity(workspaceId, ownerType, ownerId, "note_added", `Note added: "${note.title}"`);
-
-  return ok(note);
-}
-
 export async function getNotesByLeadId(leadId: string): Promise<Note[]> {
-  const lead = readLeads().find((l) => l.id === leadId);
-  if (!lead) return [];
-  return getNotesByOwner(lead.workspace_id, "lead", leadId);
+  return leadsRepository().getNotesByLeadId(leadId);
 }
 
 export async function createNote(
   leadId: string,
   input: NoteFormInput,
 ): Promise<DataResult<Note>> {
-  const lead = readLeads().find((l) => l.id === leadId);
-  if (!lead) {
-    return fail("Lead not found.");
-  }
-  if (lead.status === "converted") {
-    return fail("This lead was converted to a Client and is read-only.");
-  }
-  return createNoteForOwner(lead.workspace_id, "lead", leadId, input);
+  return leadsRepository().createNote(leadId, input);
 }
 
 export async function getNotesByClientId(clientId: string): Promise<Note[]> {
@@ -538,28 +368,14 @@ export async function togglePinNote(noteId: string): Promise<DataResult<Note>> {
 //
 // Same polymorphic-owner caveat as Notes above: owner_id alone is never a
 // safe scope, so every read filters by workspace_id + owner_type + owner_id.
+//
+// getTimelineByOwner (imported from lib/data/mock/notesTimelineShared)
+// remains mock-only — see the Notes section comment above; Lead timeline
+// routes through leadsRepository() instead.
 // ---------------------------------------------------------------------------
 
-async function getTimelineByOwner(
-  workspaceId: string,
-  ownerType: EntityType,
-  ownerId: string,
-): Promise<TimelineActivity[]> {
-  await delay(150);
-  return readActivities()
-    .filter(
-      (activity) =>
-        activity.workspace_id === workspaceId &&
-        activity.owner_type === ownerType &&
-        activity.owner_id === ownerId,
-    )
-    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-}
-
 export async function getTimelineByLeadId(leadId: string): Promise<TimelineActivity[]> {
-  const lead = readLeads().find((l) => l.id === leadId);
-  if (!lead) return [];
-  return getTimelineByOwner(lead.workspace_id, "lead", leadId);
+  return leadsRepository().getTimelineByLeadId(leadId);
 }
 
 export async function getTimelineByClientId(clientId: string): Promise<TimelineActivity[]> {

@@ -1,6 +1,6 @@
 # Database
 
-This document defines the data model for BloomOS. Most of it is a design reference, written ahead of any live Supabase connection — no schema here has been applied to a real database yet. The exception is the **Supabase Foundation** (`profiles`, `workspaces`, `workspace_members` below): these three tables have real, ordered SQL migrations under `supabase/migrations/` (see "Supabase Foundation" below), ready to apply the moment a project is linked — see `docs/integrations.md`. Every other table in this document (Leads, Clients, Events, Contracts, Finance, Documents, etc.) remains mock-only; no migration exists for them yet. Terminology follows `BLOOMOS_BIBLE.md`; if they ever disagree, the Bible wins and this file gets corrected.
+This document defines the data model for BloomOS. Most of it is a design reference, written ahead of any live Supabase connection for the tables it covers. The exceptions are the **Supabase Foundation** (`profiles`, `workspaces`, `workspace_members`) and the **Leads** module (`leads`, `notes`, `timeline_activities`) — these tables have real, ordered SQL migrations under `supabase/migrations/`, applied to a live, connected Supabase project (see `docs/integrations.md`). Every other table in this document (Clients, Events, Contracts, Finance, Documents, etc.) remains mock-only; no migration exists for them yet. Terminology follows `BLOOMOS_BIBLE.md`; if they ever disagree, the Bible wins and this file gets corrected.
 
 ## Principles
 
@@ -12,7 +12,7 @@ This document defines the data model for BloomOS. Most of it is a design referen
 
 ## Supabase Foundation
 
-The three tables below are the only tables in this document with real, applied-and-ready SQL migrations (`supabase/migrations/`, 8 files, ordered) — see `docs/integrations.md` for connection status and `docs/permissions.md` for the RLS policies layered on top of each.
+The three tables below have real, applied SQL migrations (`supabase/migrations/`, 8 files, ordered) — see `docs/integrations.md` for connection status and `docs/permissions.md` for the RLS policies layered on top of each. The **Leads** module (`leads`, `notes`, `timeline_activities` — 5 further migrations) is also live; see the "Leads" and "Notes"/"timeline_activities" entries under "MVP entities" below, each marked accordingly.
 
 ### `profiles`
 One row per Supabase Auth user (`auth.users.id`). Provisioned automatically by a `handle_new_user()` trigger on `auth.users` insert — application code never inserts a profile directly.
@@ -53,7 +53,7 @@ No signup flow or Workspace-creation UI exists yet — the first owner/admin acc
 
 ## MVP entities
 
-### `leads`
+### `leads` — **live** (`supabase/migrations/20260716100000_leads.sql`)
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
@@ -76,8 +76,8 @@ No signup flow or Workspace-creation UI exists yet — the first owner/admin acc
 | created_at / updated_at | timestamptz | |
 | archived_at | timestamptz | nullable, set when status becomes `archived` |
 
-### `notes`
-Shared by Leads and Clients — one polymorphic table (`owner_type` + `owner_id`) rather than a separate `lead_notes` and `client_notes` table, so the shape doesn't duplicate itself as more owner types are added.
+### `notes` — **live for `owner_type = 'lead'`** (`supabase/migrations/20260716100100_notes.sql`)
+Shared by Leads and Clients — one polymorphic table (`owner_type` + `owner_id`) rather than a separate `lead_notes` and `client_notes` table, so the shape doesn't duplicate itself as more owner types are added. The live Supabase table's `owner_type` CHECK constraint currently only allows `'lead'` — Client (and every other) note-taking still runs on the mock store. Each future owner type's own migration phase must widen this constraint, exactly as `core/enums/entityType.ts` grew one value per mock-phase.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -94,8 +94,8 @@ Shared by Leads and Clients — one polymorphic table (`owner_type` + `owner_id`
 | created_by | text | actor name; becomes a real FK once auth exists |
 | created_at / updated_at | timestamptz | |
 
-### `timeline_activities`
-Shared by Leads and Clients — one polymorphic, append-only table (`owner_type` + `owner_id`). Every entry is written through one shared mechanism (`recordTimelineActivity`), never constructed by hand — see `docs/workflows.md`.
+### `timeline_activities` — **live for `owner_type = 'lead'`** (`supabase/migrations/20260716100200_timeline_activities.sql`)
+Shared by Leads and Clients — one polymorphic, append-only table (`owner_type` + `owner_id`). Every entry is written through one shared mechanism (`recordTimelineActivity`), never constructed by hand — see `docs/workflows.md`. The live Supabase table's `owner_type` CHECK constraint currently only allows `'lead'`, and its `type` CHECK constraint only allows the 8 activity types the Leads Supabase repository actually writes (`lead_created`, `lead_updated`, `status_changed`, `note_added`, `note_pinned`, `note_unpinned`, `welcome_guide_sent`, `lead_archived`) — notably **not** `lead_converted`, since Lead→Client conversion (`LeadConversionService`) remains mock-only until Clients migrates (see `docs/integrations.md`). Both constraints widen per module as each one's own migration phase adds real Supabase-backed activity.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -115,8 +115,8 @@ Shared by Leads and Clients — one polymorphic, append-only table (`owner_type`
 
 Because referential integrity and workspace isolation can't be guaranteed by a FK here, both are enforced elsewhere instead:
 
-- **Data layer (now):** every read/write in `lib/data/index.ts` derives `workspace_id` from the owning record and filters by `workspace_id` **and** `owner_type`/`owner_id` together — never `owner_id` alone. A note, timeline, checklist, or schedule row is only ever reachable through its actual owner's own workspace.
-- **Supabase RLS (once connected):** row-level security policies must independently re-check `workspace_id` against the authenticated user's workspace, and validate that `owner_id` actually exists in the table named by `owner_type`, on every `SELECT`/`INSERT`/`UPDATE`. A `CHECK` constraint can validate `owner_type IN ('lead','client','event', ...)`, but the owner's existence and workspace match must be enforced by RLS policy logic (or trigger-based validation) rather than a FK.
+- **Data layer:** every read/write (mock or Supabase) derives `workspace_id` from the owning record and filters by `workspace_id` **and** `owner_type`/`owner_id` together — never `owner_id` alone. A note, timeline, checklist, or schedule row is only ever reachable through its actual owner's own workspace.
+- **Supabase RLS (live for `leads`/`notes`/`timeline_activities`):** `is_workspace_member(workspace_id)` gates every policy — see `docs/permissions.md`. A `CHECK` constraint validates `owner_type IN ('lead')` today (widening per module as each migrates), but the owner row's actual existence isn't independently re-validated by policy logic or a trigger in this phase — the data layer's own "fetch the owner first, derive `workspace_id` from it" discipline is what keeps a note/timeline row's `owner_id` honest, not the database. Tightening this (e.g., a trigger validating `owner_id` exists in the table named by `owner_type`) is a documented future improvement, not yet built.
 
 Checklist assignment (`assigned_type`/`assigned_id`/`assigned_name`) is a second, smaller instance of the same pattern, prepared ahead of the Employee/Vendor modules that will eventually populate `assigned_id` for real.
 

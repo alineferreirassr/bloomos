@@ -72,12 +72,24 @@ All three are `security definer` — deliberately, and only here: without it, ev
 
 A `suspended` (or still-`invited`) member fails every one of these checks automatically, since each requires `status = 'active'` — no separate "disabled account" flag exists or is needed.
 
-## Supabase Row-Level Security for business tables (planned)
+## Supabase RLS for Leads (live)
 
-Once Supabase is connected and a business module's own migration phase begins (see `docs/integrations.md`), RLS policies for that module are expected to enforce:
+`supabase/migrations/20260716100400_leads_rls.sql` enables RLS and defines every policy below on `leads`, `notes`, and `timeline_activities`. Applied to a live, connected Supabase project. Same rules as the Foundation RLS above — no bare `using (true)`, every policy scoped `to authenticated`.
+
+| Table | Policy | Rule |
+|---|---|---|
+| `leads` | select/insert/update | Any user with an **active** membership (`is_workspace_member(workspace_id)`) may read and write that Workspace's Leads — **Workspace isolation only**, no `owner`/`admin` role gating (unlike `workspaces`/`workspace_members` above). No delete policy — archival is via `status = 'archived'` + `archived_at`, never physical delete. |
+| `notes` | select/insert/update | Same `is_workspace_member(workspace_id)` rule, scoped further at the `CHECK` constraint level to `owner_type = 'lead'` only this phase (see `docs/database.md`). No delete policy. |
+| `timeline_activities` | select/insert | Same `is_workspace_member(workspace_id)` rule. No update or delete policy — every entry is immutable and append-only. |
+
+This is the first business-module RLS policy set built on top of the Foundation's `is_workspace_member()` helper — no new SQL function was needed. `lib/data/leads/supabaseRepository.ts` (the Leads module's Supabase repository) uses the **browser** Supabase client (`lib/supabase/client.ts`), not the server one, since the Leads UI fetches from Client Components — RLS is what actually enforces every rule above regardless of which client issues the query; see `docs/integrations.md`'s "Client factory choice matters per module" note.
+
+## Supabase Row-Level Security for future business tables (planned)
+
+Once a further business module's own migration phase begins (see `docs/integrations.md`), RLS policies for that module are expected to enforce:
 
 - Every table with `workspace_id` — a row is only visible/writable to authenticated users belonging to that `workspace_id`, using the same `is_workspace_member()`/`has_workspace_role()` helpers documented above rather than duplicating the check.
-- `Owner/Admin` vs `Team Member` distinctions enforced via `workspace_members.role`, checked in policy, not in application code alone.
+- `Owner/Admin` vs `Team Member` distinctions enforced via `workspace_members.role`, checked in policy, not in application code alone, where that module's spec calls for it (Leads above deliberately does not — Workspace isolation only).
 - The future Client Portal role restricted, at the policy level, to its own `client_id`'s and linked `event_id`'s rows only — never a broader query.
 
 ## Storage Foundation (buckets ready, no upload UI yet)

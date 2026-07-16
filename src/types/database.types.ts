@@ -4,8 +4,9 @@
  * Shaped to match the output of `npm run supabase:types` (`supabase gen
  * types typescript`) so it's a drop-in replacement once a real project is
  * linked and the migrations in `supabase/migrations/` have been applied.
- * Covers only the Supabase Foundation tables (profiles, workspaces,
- * workspace_members) and their RLS helper functions — regenerate this file
+ * Covers the Supabase Foundation tables (profiles, workspaces,
+ * workspace_members) plus the Leads migration tables (leads, notes,
+ * timeline_activities) and their RLS helper functions — regenerate this file
  * after every migration change; do not hand-edit table shapes once live
  * generation is available.
  */
@@ -99,6 +100,159 @@ export interface Database {
           status?: string;
           created_at?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      leads: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          first_name: string;
+          last_name: string;
+          email: string;
+          phone: string | null;
+          instagram: string | null;
+          source: string;
+          event_type: string | null;
+          event_date: string | null;
+          location: string | null;
+          budget_min: number | null;
+          budget_max: number | null;
+          message: string | null;
+          status: string;
+          assigned_to: string | null;
+          converted_client_id: string | null;
+          created_at: string;
+          updated_at: string;
+          archived_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          first_name: string;
+          last_name: string;
+          email: string;
+          phone?: string | null;
+          instagram?: string | null;
+          source: string;
+          event_type?: string | null;
+          event_date?: string | null;
+          location?: string | null;
+          budget_min?: number | null;
+          budget_max?: number | null;
+          message?: string | null;
+          status?: string;
+          assigned_to?: string | null;
+          converted_client_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          archived_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          first_name?: string;
+          last_name?: string;
+          email?: string;
+          phone?: string | null;
+          instagram?: string | null;
+          source?: string;
+          event_type?: string | null;
+          event_date?: string | null;
+          location?: string | null;
+          budget_min?: number | null;
+          budget_max?: number | null;
+          message?: string | null;
+          status?: string;
+          assigned_to?: string | null;
+          converted_client_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          archived_at?: string | null;
+        };
+        Relationships: [];
+      };
+      notes: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          owner_type: string;
+          owner_id: string;
+          title: string;
+          content: string;
+          category: string;
+          priority: string;
+          is_pinned: boolean;
+          attachments: Json;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          owner_type: string;
+          owner_id: string;
+          title: string;
+          content: string;
+          category: string;
+          priority: string;
+          is_pinned?: boolean;
+          attachments?: Json;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          owner_type?: string;
+          owner_id?: string;
+          title?: string;
+          content?: string;
+          category?: string;
+          priority?: string;
+          is_pinned?: boolean;
+          attachments?: Json;
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      timeline_activities: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          owner_type: string;
+          owner_id: string;
+          type: string;
+          description: string;
+          actor: string;
+          timestamp: string;
+          metadata: Json | null;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          owner_type: string;
+          owner_id: string;
+          type: string;
+          description: string;
+          actor: string;
+          timestamp?: string;
+          metadata?: Json | null;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          owner_type?: string;
+          owner_id?: string;
+          type?: string;
+          description?: string;
+          actor?: string;
+          timestamp?: string;
+          metadata?: Json | null;
         };
         Relationships: [];
       };
