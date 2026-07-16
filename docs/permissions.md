@@ -159,6 +159,16 @@ This is the first business-module RLS policy set built on top of the Foundation'
 
 `lib/data/events/supabaseRepository.ts` uses the **browser** Supabase client, same rationale as Leads/Clients — bundles Events, Checklist, Schedule, and Event Notes/Timeline into one repository file since every Checklist/Schedule/Note/Timeline operation needs the owning Event's `workspace_id` first. Default checklist template application (`apply_default_event_checklist`, `docs/database.md`) is a `security invoker` Postgres function, same rationale as `convert_lead_to_client` — every insert it performs is still checked against the caller's own `checklist_items`/`timeline_activities` policies. No `service_role` is used anywhere in the Events migration. Event/Client consistency (a selected Client must exist and belong to the same Workspace) is enforced implicitly by `clients` RLS: fetching a `client_id` from another Workspace returns no row, since that row is invisible to the caller — the same mechanism that already prevents cross-Workspace Lead→Client conversion.
 
+## Supabase RLS for the Media Library (live)
+
+`supabase/migrations/20260719100400_media_assets_rls.sql` enables RLS and defines the policies below on `media_assets`. Applied to a live, connected Supabase project. Same rules as Leads/Clients/Events above — no bare `using (true)`, every policy scoped `to authenticated`, Workspace isolation only (no `owner`/`admin` role gating).
+
+| Table | Policy | Rule |
+|---|---|---|
+| `media_assets` | select/insert/update | Any user with an **active** membership (`is_workspace_member(workspace_id)`) may read and write that Workspace's media assets. No delete policy — soft delete only, via `archived_at`, reversible via `restoreMediaAsset`. |
+
+`lib/data/media/supabaseRepository.ts` uses the **browser** Supabase client, same rationale as Leads/Clients/Events. No `service_role` is used anywhere. This table is deliberately independent of Documents/Contracts/Finance/Knowledge Base/Notifications/Automation — it knows nothing about any of them; those modules become consumers of `media_assets` (via `owner_type`/`owner_id`) in their own future migrations, not the other way around. See `docs/database.md`'s `media_assets` section for the full schema and future-extension notes.
+
 ## Supabase Row-Level Security for future business tables (planned)
 
 Once a further business module's own migration phase begins (see `docs/integrations.md`), RLS policies for that module are expected to enforce:
@@ -169,14 +179,15 @@ Once a further business module's own migration phase begins (see `docs/integrati
 
 ## Storage Foundation (buckets ready, no upload UI yet)
 
-`supabase/migrations/20260715150700_storage_buckets_and_policies.sql` creates two **private** (`public = false`) Storage buckets and their `storage.objects` policies — infrastructure only. No upload UI exists yet and no Documents metadata is migrated to Supabase in this phase (see `docs/integrations.md`).
+`supabase/migrations/20260715150700_storage_buckets_and_policies.sql` creates two **private** (`public = false`) Storage buckets and their `storage.objects` policies — infrastructure only, still unused (no Documents metadata is migrated to Supabase). `supabase/migrations/20260719100100_media_assets_bucket_and_storage_policies.sql` adds a third, dedicated bucket for the Media Library — **live and used** by `lib/data/media/supabaseRepository.ts`'s upload/download/replace-version functions, unlike the two below.
 
 | Bucket | Path convention | Access rule |
 |---|---|---|
-| `documents` | `{workspace_id}/{owner_type}/{owner_id}/{document_id}/{file_name}` | select/insert/update/delete require `is_workspace_member()` on the path's first segment (the `workspace_id`), parsed via `storage.foldername(name)`. |
+| `documents` | `{workspace_id}/{owner_type}/{owner_id}/{document_id}/{file_name}` | select/insert/update/delete require `is_workspace_member()` on the path's first segment (the `workspace_id`), parsed via `storage.foldername(name)`. Still unused — reserved for Documents' own future migration. |
 | `avatars` | `{user_id}/{file_name}` | select/insert/update/delete require the path's first segment to equal `auth.uid()`. |
+| `media-assets` | `{workspace_id}/{owner_type}/{owner_id}/{media_asset_id}/v{version}/{stored_filename}` | select/insert/update/delete require `is_workspace_member()` on the path's first segment, same rule as `documents`. A dedicated bucket, deliberately not the `documents` bucket above — see `docs/database.md`'s `media_assets` section. |
 
-Neither bucket permits anonymous read, and neither is ever expected to hand out a permanent public URL. The intended future access model is **short-lived signed URLs**, generated per-request and scoped to the requester's already-established Workspace membership/role — never a bare public bucket URL embedded in a page. This mirrors the same principle already documented for the Documents domain below.
+No bucket permits anonymous read, and none is ever expected to hand out a permanent public URL. The access model is **short-lived signed URLs**, generated per-request and scoped to the requester's already-established Workspace membership/role (`getMediaAssetDownloadUrl`) — never a bare public bucket URL embedded in a page. This mirrors the same principle already documented for the Documents domain below.
 
 ## Documents visibility (metadata only in this phase)
 

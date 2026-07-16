@@ -6,12 +6,12 @@
  * linked and the migrations in `supabase/migrations/` have been applied.
  * Covers the Supabase Foundation tables (profiles, workspaces,
  * workspace_members), the Leads migration tables (leads, notes,
- * timeline_activities), the Clients migration table (clients), and the
- * Events migration tables (events, checklist_items, event_schedule_items)
- * plus their RLS helper functions and the convert_lead_to_client/
- * apply_default_event_checklist RPCs — regenerate this file after every
- * migration change; do not hand-edit table shapes once live generation is
- * available.
+ * timeline_activities), the Clients migration table (clients), the
+ * Events migration tables (events, checklist_items, event_schedule_items),
+ * and the Media Library table (media_assets) plus their RLS helper
+ * functions and the convert_lead_to_client/apply_default_event_checklist
+ * RPCs — regenerate this file after every migration change; do not
+ * hand-edit table shapes once live generation is available.
  */
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
@@ -637,6 +637,75 @@ export interface Database {
           sort_order?: number;
           created_at?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      media_assets: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          owner_type: string;
+          owner_id: string;
+          original_filename: string;
+          stored_filename: string;
+          storage_bucket: string;
+          storage_path: string;
+          mime_type: string;
+          extension: string;
+          file_size: number;
+          checksum: string;
+          width: number | null;
+          height: number | null;
+          duration: number | null;
+          version: number;
+          uploaded_by: string | null;
+          created_at: string;
+          updated_at: string;
+          archived_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          owner_type: string;
+          owner_id: string;
+          original_filename: string;
+          stored_filename: string;
+          storage_bucket: string;
+          storage_path: string;
+          mime_type: string;
+          extension: string;
+          file_size: number;
+          checksum: string;
+          width?: number | null;
+          height?: number | null;
+          duration?: number | null;
+          version?: number;
+          uploaded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          archived_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          owner_type?: string;
+          owner_id?: string;
+          original_filename?: string;
+          stored_filename?: string;
+          storage_bucket?: string;
+          storage_path?: string;
+          mime_type?: string;
+          extension?: string;
+          file_size?: number;
+          checksum?: string;
+          width?: number | null;
+          height?: number | null;
+          duration?: number | null;
+          version?: number;
+          uploaded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          archived_at?: string | null;
         };
         Relationships: [];
       };

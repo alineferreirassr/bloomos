@@ -1,6 +1,6 @@
 # Database
 
-This document defines the data model for BloomOS. Most of it is a design reference, written ahead of any live Supabase connection for the tables it covers. The exceptions are the **Supabase Foundation** (`profiles`, `workspaces`, `workspace_members`) and the **Leads** module (`leads`, `notes`, `timeline_activities`) — these tables have real, ordered SQL migrations under `supabase/migrations/`, applied to a live, connected Supabase project (see `docs/integrations.md`). Every other table in this document (Clients, Events, Contracts, Finance, Documents, etc.) remains mock-only; no migration exists for them yet. Terminology follows `BLOOMOS_BIBLE.md`; if they ever disagree, the Bible wins and this file gets corrected.
+This document defines the data model for BloomOS. Most of it is a design reference, written ahead of any live Supabase connection for the tables it covers. The exceptions are the **Supabase Foundation** (`profiles`, `workspaces`, `workspace_members`), the **Leads**, **Clients**, and **Events** modules (`leads`, `clients`, `events`, `checklist_items`, `event_schedule_items`, `notes`, `timeline_activities`), and the **Media Library** (`media_assets`) — these tables have real, ordered SQL migrations under `supabase/migrations/`, applied to a live, connected Supabase project (see `docs/integrations.md`). Every other table in this document (Contracts, Finance, Documents, etc.) remains mock-only; no migration exists for them yet. Terminology follows `BLOOMOS_BIBLE.md`; if they ever disagree, the Bible wins and this file gets corrected.
 
 ## Principles
 
@@ -237,6 +237,47 @@ The day-of run-of-show. Generalized the same way as `checklist_items` — `owner
 #### Default checklist template application — **live** (`supabase/migrations/20260718100700_apply_default_event_checklist.sql`)
 
 `public.apply_default_event_checklist(p_event_id uuid, p_items jsonb, p_description text, p_actor text) returns jsonb` — the Supabase equivalent of the mock's internal `applyDefaultChecklistTemplate()`. Inserts every template item and records exactly one summarized `checklist_template_applied` timeline entry as a single atomic operation (Postgres function bodies are always one transaction), called via `supabase.rpc(...)` from `lib/data/events/supabaseRepository.ts` only when `DEFAULT_CHECKLIST_TEMPLATES` has an entry for the new Event's `event_type` — exactly like the mock's `createEvent()`. `security invoker` (not `security definer`), the same rationale as `convert_lead_to_client`: every insert is still checked against the caller's own `checklist_items`/`timeline_activities` RLS policies, no `service_role` needed. Item validation (`checklistItemSchema`) happens in TypeScript before the RPC is ever called, mirroring the mock's "validate everything first, write nothing on failure" behavior — the function itself does not re-validate.
+
+### `media_assets` — **live for `owner_type` in `('lead', 'client', 'event')`** (`supabase/migrations/20260719100000_media_assets.sql`)
+
+The Shared Media Library — a single, generic, polymorphic attachment system every module (current and future) attaches files through via `owner_type`/`owner_id`, the same shape as `notes`/`timeline_activities`/`checklist_items`. Deliberately independent of the `documents` table below: this table represents **storage objects only** (name, MIME type, size, checksum, storage location, version) and carries **no business-specific fields** — no category, folder, visibility, or workflow status. `document` is one of this table's supported owner types (a future Document row can own attached media), not the other way around — a future Documents migration is expected to become a consumer of this table for its actual file storage, rather than owning `storage_*`/`checksum`/version columns itself the way the mock-only design below still does.
+
+Versioning is **in-place**, not a row chain: `replaceMediaAssetVersion` updates the same row's `version`/`checksum`/`file_size`/`mime_type` rather than inserting a new row. The storage path embeds the version number (`{workspace_id}/{owner_type}/{owner_id}/{media_asset_id}/v{version}/{stored_filename}`), so a prior version's bytes are never overwritten in Storage even though only the latest metadata row is kept. Soft delete only (`archived_at`), reversible via `restoreMediaAsset` — no `deleted_at`, no physical `DELETE` from the app.
+
+Checksums are real SHA-256 digests of actual file bytes (`src/lib/media/checksum.ts`, Web Crypto `crypto.subtle`), unlike the `documents` table's older placeholder hash below. `width`/`height` are populated by a best-effort image-dimension-detection hook (`src/lib/media/imageMetadata.ts`) that fails soft (`null`) for non-images or unsupported environments; `duration` and image optimization are reserved fields/hooks, not populated yet — see "Future extensions" below.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workspace_id | uuid | FK → workspaces |
+| owner_type | enum | `lead`, `client`, `event` — only these have a live parent table; see "Future extensions" |
+| owner_id | uuid | references the owning row — **not** a database-enforced FK; see "Polymorphic ownership" above |
+| original_filename | text | as uploaded, unnormalized |
+| stored_filename | text | normalized, storage-safe (lowercased extension, unsafe characters stripped) |
+| storage_bucket | text | always `media-assets` today — a dedicated bucket, not the `documents` bucket (see `docs/permissions.md`) |
+| storage_path | text | `{workspace_id}/{owner_type}/{owner_id}/{media_asset_id}/v{version}/{stored_filename}` |
+| mime_type | text | |
+| extension | text | lowercase, no dot |
+| file_size | bigint | bytes; `> 0` |
+| checksum | text | `sha256:<hex>` |
+| width / height | integer | nullable — image dimensions, best-effort |
+| duration | numeric | nullable — reserved for future video/audio duration detection |
+| version | integer | `> 0`, default `1`; incremented in place by `replaceMediaAssetVersion` |
+| uploaded_by | uuid | nullable, FK → `auth.users` |
+| created_at / updated_at | timestamptz | |
+| archived_at | timestamptz | nullable — soft delete, reversible |
+
+#### Future extensions (additive, not built)
+
+Confirmed against every future capability requested for this foundation — none require changing this table's existing columns, only new nullable columns or new companion tables added later:
+
+- **Folder organization** — a future `media_folders` table + a nullable `folder_id` column.
+- **Image galleries / attachment ordering** — a future nullable `sort_order` column.
+- **Derived previews/thumbnails** — a future nullable `parent_media_asset_id` self-reference (+ optional `derived_kind`); a thumbnail is just another `media_assets` row.
+- **Storage quotas** — `workspace_id` + `file_size` already support `SUM(file_size) WHERE workspace_id = X AND archived_at IS NULL` today; a future formal quota is a separate `workspace_storage_quotas` table.
+- **AI indexing/search** — a future nullable generated `tsvector` column, or a separate `media_asset_embeddings` table keyed on `id`.
+- **File version history** — the storage path already preserves every prior version's bytes (see above); every upload/replace/archive/restore also logs a Timeline entry against the owning entity (`media_asset_uploaded`/`media_asset_version_replaced`/`media_asset_archived`/`media_asset_restored`, with old/new checksum and version in `metadata`), giving a durable audit trail a future `media_asset_versions` table could even be backfilled from.
+- **Multiple attachments per record, drag-and-drop uploads, bulk uploads** — already supported today (no schema or repository change needed): nothing enforces one row per `(owner_type, owner_id)`, and uploads operate on one `Blob` regardless of how the UI collects it.
 
 ### `contracts`
 Closes the commercial cycle: Lead -> Client -> Event -> Contract -> Invoice (future) -> Payments (future). Reusable across every Workspace — nothing here is designed around a single business. `client_id` is required; `event_id` is deliberately nullable — a Contract can stand on its own (e.g. a retainer) ahead of or without a dedicated Event record. Replaces the earlier draft/sent/signed/cancelled sketch below with the actual shipped model (`core/workflows/contractWorkflow.ts`).
@@ -759,6 +800,6 @@ No payment-provider (Stripe, Square, PayPal, banks, accounting software) is conn
 ## Supabase-specific notes
 
 - **Remaining mock-only modules still read the mock `clients`/`events` stores, not the live tables.** Contracts, Finance, and Documents (all still entirely mock, per their own future migration phases) cross-reference Client and Event records — e.g. a Contract's `clientsById`/`eventsById` lookups for search and validation — via `readClients()`/`readEvents()` against the in-memory mock stores, unconditionally, regardless of `NEXT_PUBLIC_DATA_MODE`. In `supabase` mode this means those still-mock modules see the mock stores' seeded Clients/Events while the Clients and Events modules themselves (list/detail/dashboard metrics) show live Supabase data — the two can disagree until each of those modules gets its own Supabase migration. This is the same shape of caveat the Leads migration created for `convertLeadToClient` until the Clients phase, now shifted to Contracts/Finance/Documents.
-- Row-Level Security (RLS) is **live** for `profiles`/`workspaces`/`workspace_members` (the Supabase Foundation), `leads`/`notes`/`timeline_activities`, `clients`, and `events`/`checklist_items`/`event_schedule_items` — a real Supabase project is connected (see `docs/integrations.md`). For every other table in this document (Contracts, Finance, Documents, and beyond), RLS remains design-only — no migration exists for them yet. See `docs/permissions.md`.
+- Row-Level Security (RLS) is **live** for `profiles`/`workspaces`/`workspace_members` (the Supabase Foundation), `leads`/`notes`/`timeline_activities`, `clients`, `events`/`checklist_items`/`event_schedule_items`, and `media_assets` — a real Supabase project is connected (see `docs/integrations.md`). For every other table in this document (Contracts, Finance, Documents, and beyond), RLS remains design-only — no migration exists for them yet. See `docs/permissions.md`.
 - Enum values above are the intended constraint; whether they're implemented as Postgres `enum` types or `check` constraints is an implementation decision made at connection time, not before — except `workspace_members.role`/`status`, which are already implemented as `check` constraints in migration 4 (`supabase/migrations/20260715150300_workspace_members.sql`).
 - `role`/`allowed_roles` values passed into the `has_workspace_role()` SQL helper function are plain `text`/`text[]`, not a Postgres enum — this mirrors the `check`-constraint choice above and keeps role checks a single string comparison rather than a cross-schema enum-type dependency.

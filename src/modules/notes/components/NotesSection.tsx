@@ -21,6 +21,10 @@ const OWNER_LABEL: Record<EntityType, string> = {
   document: "Document",
   document_folder: "Folder",
   workspace: "Workspace",
+  team_kb_article: "Team Knowledge Base Article",
+  client_kb_article: "Client Knowledge Base Article",
+  notification: "Notification",
+  automation: "Automation",
 };
 
 /**

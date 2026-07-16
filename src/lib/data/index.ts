@@ -5,6 +5,7 @@ import type { Client } from "@/types/client";
 import type { Event } from "@/types/event";
 import type { ChecklistItem } from "@/types/checklistItem";
 import type { EventScheduleItem } from "@/types/eventScheduleItem";
+import type { MediaAsset } from "@/types/mediaAsset";
 import type { Contract, ContractVersionSnapshot } from "@/types/contract";
 import type { ContractTemplate } from "@/types/contractTemplate";
 import type { ContractExhibit } from "@/types/contractExhibit";
@@ -139,6 +140,16 @@ import {
   applyDefaultChecklistTemplate as applyDefaultChecklistTemplateForTests,
 } from "@/lib/data/events/mockRepository";
 import { supabaseEventsRepository } from "@/lib/data/events/supabaseRepository";
+import type {
+  MediaAssetFilters,
+  UploadMediaAssetInput,
+  ReplaceMediaAssetVersionInput,
+  MediaAssetDownload,
+  MediaAssetDownloadUrl,
+  MediaAssetChecksumVerification,
+} from "@/lib/data/media/repository";
+import { mockMediaAssetsRepository } from "@/lib/data/media/mockRepository";
+import { supabaseMediaAssetsRepository } from "@/lib/data/media/supabaseRepository";
 import {
   readLeads,
   resetLeadsStore,
@@ -636,6 +647,76 @@ export async function createEventNote(eventId: string, input: NoteFormInput): Pr
 
 export async function getTimelineByEventId(eventId: string): Promise<TimelineActivity[]> {
   return eventsRepository().getTimelineByEventId(eventId);
+}
+
+// ---------------------------------------------------------------------------
+// Media Library — the single reusable attachment system every module (Lead,
+// Client, Event, and eventually Document, Contract, Invoice, Payment,
+// Expense, Team/Client Knowledge Base, Notification, Automation) attaches
+// files through via owner_type/owner_id. Infrastructure only: this file's
+// wrappers are the same thin, backend-agnostic pattern as Events above, and
+// this module knows nothing about any of the business modules that will
+// eventually call it. See lib/data/media/repository.ts and
+// src/lib/media/ownerTypes.ts for the full design.
+// ---------------------------------------------------------------------------
+
+export type {
+  MediaAssetFilters,
+  UploadMediaAssetInput,
+  ReplaceMediaAssetVersionInput,
+  MediaAssetDownload,
+  MediaAssetDownloadUrl,
+  MediaAssetChecksumVerification,
+} from "@/lib/data/media/repository";
+
+function mediaAssetsRepository() {
+  return selectRepository({ mock: mockMediaAssetsRepository, supabase: supabaseMediaAssetsRepository });
+}
+
+export async function getMediaAssetById(id: string): Promise<MediaAsset> {
+  return mediaAssetsRepository().getMediaAssetById(id);
+}
+
+export async function getMediaAssetsByOwner(
+  ownerType: EntityType,
+  ownerId: string,
+  filters?: MediaAssetFilters,
+): Promise<MediaAsset[]> {
+  return mediaAssetsRepository().getMediaAssetsByOwner(ownerType, ownerId, filters);
+}
+
+export async function uploadMediaAsset(input: UploadMediaAssetInput): Promise<DataResult<MediaAsset>> {
+  return mediaAssetsRepository().uploadMediaAsset(input);
+}
+
+export async function replaceMediaAssetVersion(
+  id: string,
+  input: ReplaceMediaAssetVersionInput,
+): Promise<DataResult<MediaAsset>> {
+  return mediaAssetsRepository().replaceMediaAssetVersion(id, input);
+}
+
+export async function downloadMediaAsset(id: string): Promise<DataResult<MediaAssetDownload>> {
+  return mediaAssetsRepository().downloadMediaAsset(id);
+}
+
+export async function getMediaAssetDownloadUrl(
+  id: string,
+  expiresInSeconds?: number,
+): Promise<DataResult<MediaAssetDownloadUrl>> {
+  return mediaAssetsRepository().getMediaAssetDownloadUrl(id, expiresInSeconds);
+}
+
+export async function verifyMediaAssetChecksum(id: string): Promise<DataResult<MediaAssetChecksumVerification>> {
+  return mediaAssetsRepository().verifyMediaAssetChecksum(id);
+}
+
+export async function deleteMediaAsset(id: string): Promise<DataResult<MediaAsset>> {
+  return mediaAssetsRepository().deleteMediaAsset(id);
+}
+
+export async function restoreMediaAsset(id: string): Promise<DataResult<MediaAsset>> {
+  return mediaAssetsRepository().restoreMediaAsset(id);
 }
 
 // ---------------------------------------------------------------------------

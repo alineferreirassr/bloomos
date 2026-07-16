@@ -9,6 +9,7 @@ import type { ChecklistItem } from "@/types/checklistItem";
 import type { EventScheduleItem } from "@/types/eventScheduleItem";
 import type { Note, NoteAttachment } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
+import type { MediaAsset } from "@/types/mediaAsset";
 import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 import type { WorkspaceMemberStatus } from "@/core/enums/workspaceMemberStatus";
 import type { LeadStatus } from "@/core/enums/leadStatus";
@@ -38,6 +39,7 @@ type ChecklistItemRow = Database["public"]["Tables"]["checklist_items"]["Row"];
 type EventScheduleItemRow = Database["public"]["Tables"]["event_schedule_items"]["Row"];
 type NoteRow = Database["public"]["Tables"]["notes"]["Row"];
 type TimelineActivityRow = Database["public"]["Tables"]["timeline_activities"]["Row"];
+type MediaAssetRow = Database["public"]["Tables"]["media_assets"]["Row"];
 
 /**
  * Deliberate seam between raw database rows and domain types, even though
@@ -256,6 +258,31 @@ export function mapNoteRow(row: NoteRow): Note {
     created_by: row.created_by,
     created_at: row.created_at,
     updated_at: row.updated_at,
+  };
+}
+
+export function mapMediaAssetRow(row: MediaAssetRow): MediaAsset {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    owner_type: row.owner_type as EntityType,
+    owner_id: row.owner_id,
+    original_filename: row.original_filename,
+    stored_filename: row.stored_filename,
+    storage_bucket: row.storage_bucket,
+    storage_path: row.storage_path,
+    mime_type: row.mime_type,
+    extension: row.extension,
+    file_size: row.file_size,
+    checksum: row.checksum,
+    width: row.width,
+    height: row.height,
+    duration: row.duration,
+    version: row.version,
+    uploaded_by: row.uploaded_by,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    archived_at: row.archived_at,
   };
 }
 

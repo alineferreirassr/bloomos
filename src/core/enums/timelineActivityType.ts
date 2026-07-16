@@ -82,6 +82,10 @@ export const TIMELINE_ACTIVITY_TYPES = [
   "document_folder_archived",
   "document_folder_restored",
   "document_folder_template_applied",
+  "media_asset_uploaded",
+  "media_asset_version_replaced",
+  "media_asset_archived",
+  "media_asset_restored",
 ] as const;
 
 export type TimelineActivityType = (typeof TIMELINE_ACTIVITY_TYPES)[number];
@@ -170,4 +174,8 @@ export const TIMELINE_ACTIVITY_LABELS: Record<TimelineActivityType, string> = {
   document_folder_archived: "Folder archived",
   document_folder_restored: "Folder restored",
   document_folder_template_applied: "Default folder template applied",
+  media_asset_uploaded: "File uploaded",
+  media_asset_version_replaced: "File replaced with a new version",
+  media_asset_archived: "File archived",
+  media_asset_restored: "File restored",
 };
