@@ -40,4 +40,15 @@ export interface LeadsRepository {
   getNotesByLeadId(leadId: string): Promise<Note[]>;
   createNote(leadId: string, input: NoteFormInput): Promise<DataResult<Note>>;
   getTimelineByLeadId(leadId: string): Promise<TimelineActivity[]>;
+  /**
+   * Toggle pin on a note, scoped to owner_type = 'lead'. Returns null when
+   * the note doesn't belong to this repository's backend (a Client/Contract/
+   * etc.-owned note, or simply no such note here) — the shared
+   * lib/data/index.ts togglePinNote() falls through to the generic
+   * mock-only Notes path in that case, so notes owned by every other
+   * (not-yet-migrated) entity type are completely unaffected. Returns
+   * DataResult<Note> once the note IS confirmed Lead-owned: ok(...) on
+   * success, fail(...) if the owning Lead was converted (read-only).
+   */
+  togglePinNote(noteId: string): Promise<DataResult<Note> | null>;
 }

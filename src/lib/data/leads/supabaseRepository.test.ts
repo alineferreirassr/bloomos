@@ -542,3 +542,117 @@ describe("supabaseLeadsRepository.getTimelineByLeadId", () => {
     expect(orderCall?.args).toEqual(["timestamp", { ascending: false }]);
   });
 });
+
+function noteRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: "note_1",
+    workspace_id: "workspace_1",
+    owner_type: "lead",
+    owner_id: "lead_1",
+    title: "Allergy",
+    content: "Shellfish allergy",
+    category: "allergy",
+    priority: "critical",
+    is_pinned: false,
+    attachments: [],
+    created_by: "Amoré Bloom Owner",
+    created_at: "2026-07-16T00:00:00Z",
+    updated_at: "2026-07-16T00:00:00Z",
+    ...overrides,
+  };
+}
+
+describe("supabaseLeadsRepository.togglePinNote", () => {
+  it("pins an unpinned Lead-owned note and records a note_pinned timeline entry", async () => {
+    mockSession();
+    const { client, calls } = createMockSupabase([
+      { data: noteRow({ is_pinned: false }), error: null },
+      { data: leadRow({ status: "qualified" }), error: null },
+      { data: noteRow({ is_pinned: true }), error: null },
+      { data: null, error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseLeadsRepository.togglePinNote("note_1");
+
+    expect(result).not.toBeNull();
+    expect(result?.success).toBe(true);
+    if (!result || !result.success) throw new Error("expected success");
+    expect(result.data.is_pinned).toBe(true);
+
+    const updateCall = calls.find((c) => c.table === "notes" && c.method === "update");
+    expect((updateCall?.args[0] as Record<string, unknown>).is_pinned).toBe(true);
+    const timelineInsert = calls.find((c) => c.table === "timeline_activities" && c.method === "insert");
+    const payload = timelineInsert?.args[0] as Record<string, unknown>;
+    expect(payload.type).toBe("note_pinned");
+    expect(payload.owner_id).toBe("lead_1");
+  });
+
+  it("unpins a pinned Lead-owned note and records a note_unpinned timeline entry", async () => {
+    mockSession();
+    const { client, calls } = createMockSupabase([
+      { data: noteRow({ is_pinned: true }), error: null },
+      { data: leadRow({ status: "qualified" }), error: null },
+      { data: noteRow({ is_pinned: false }), error: null },
+      { data: null, error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseLeadsRepository.togglePinNote("note_1");
+
+    expect(result?.success).toBe(true);
+    if (!result || !result.success) throw new Error("expected success");
+    expect(result.data.is_pinned).toBe(false);
+
+    const timelineInsert = calls.find((c) => c.table === "timeline_activities" && c.method === "insert");
+    expect((timelineInsert?.args[0] as Record<string, unknown>).type).toBe("note_unpinned");
+  });
+
+  it("returns null when no note matches this Workspace (cross-Workspace note is invisible, not an error)", async () => {
+    mockSession();
+    const { client } = createMockSupabase([{ data: null, error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseLeadsRepository.togglePinNote("note_in_other_workspace");
+
+    expect(result).toBeNull();
+  });
+
+  it("returns null when the note is not Lead-owned (wrong owner_type — e.g. a Client note), leaving it for the generic mock path", async () => {
+    mockSession();
+    // The owner_type='lead' filter means a Client-owned (or any other
+    // not-yet-migrated owner type) note never comes back from this query.
+    const { client } = createMockSupabase([{ data: null, error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseLeadsRepository.togglePinNote("client_note_1");
+
+    expect(result).toBeNull();
+  });
+
+  it("fails without pinning when the owning Lead has been converted (read-only)", async () => {
+    mockSession();
+    const { client, calls } = createMockSupabase([
+      { data: noteRow(), error: null },
+      { data: leadRow({ status: "converted" }), error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseLeadsRepository.togglePinNote("note_1");
+
+    expect(result).not.toBeNull();
+    expect(result?.success).toBe(false);
+    if (!result || result.success) throw new Error("expected failure");
+    expect(result.error).toContain("read-only");
+    expect(calls.some((c) => c.table === "notes" && c.method === "update")).toBe(false);
+    expect(calls.some((c) => c.table === "timeline_activities")).toBe(false);
+  });
+
+  it("throws Unauthorized when there is no signed-in user", async () => {
+    vi.mocked(getClientWorkspaceSession).mockResolvedValue({ status: "unauthenticated" });
+    const { client } = createMockSupabase([]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await expect(supabaseLeadsRepository.togglePinNote("note_1")).rejects.toThrow("Authentication is required.");
+  });
+});

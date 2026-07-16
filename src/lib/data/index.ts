@@ -335,6 +335,9 @@ export async function createClientNote(
 }
 
 export async function togglePinNote(noteId: string): Promise<DataResult<Note>> {
+  const leadResult = await leadsRepository().togglePinNote(noteId);
+  if (leadResult !== null) return leadResult;
+
   const existing = readNotes().find((n) => n.id === noteId);
   if (!existing) {
     return fail("Note not found.");

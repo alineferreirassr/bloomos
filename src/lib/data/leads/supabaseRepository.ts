@@ -352,6 +352,51 @@ async function getTimelineByLeadId(leadId: string): Promise<TimelineActivity[]> 
   return (data ?? []).map(mapTimelineActivityRow);
 }
 
+async function togglePinNote(noteId: string): Promise<DataResult<Note> | null> {
+  const session = await requireWorkspaceSession();
+  const supabase = createClient();
+
+  const { data: noteRow, error: fetchError } = await supabase
+    .from("notes")
+    .select("*")
+    .eq("id", noteId)
+    .eq("owner_type", "lead")
+    .eq("workspace_id", session.workspace.id)
+    .maybeSingle();
+  if (fetchError) throw normalizeSupabaseError(fetchError);
+  if (!noteRow) return null;
+
+  const note = mapNoteRow(noteRow);
+  const lead = await fetchLeadRow(note.owner_id);
+  if (lead?.status === "converted") {
+    return fail("This lead was converted to a Client and is read-only.");
+  }
+
+  const nextPinned = !note.is_pinned;
+  const { data: updatedRow, error: updateError } = await supabase
+    .from("notes")
+    .update({ is_pinned: nextPinned })
+    .eq("id", noteId)
+    .eq("owner_type", "lead")
+    .eq("owner_id", note.owner_id)
+    .eq("workspace_id", session.workspace.id)
+    .select("*")
+    .single();
+  if (updateError) throw normalizeSupabaseError(updateError);
+
+  const updated = mapNoteRow(updatedRow);
+  await insertTimelineActivity(
+    supabase,
+    resolveActorName(session),
+    note.workspace_id,
+    note.owner_id,
+    nextPinned ? "note_pinned" : "note_unpinned",
+    `${nextPinned ? "Note pinned" : "Note unpinned"}: "${note.title}"`,
+  );
+
+  return ok(updated);
+}
+
 export const supabaseLeadsRepository: LeadsRepository = {
   getLeads,
   getLeadById,
@@ -363,4 +408,5 @@ export const supabaseLeadsRepository: LeadsRepository = {
   getNotesByLeadId,
   createNote,
   getTimelineByLeadId,
+  togglePinNote,
 };

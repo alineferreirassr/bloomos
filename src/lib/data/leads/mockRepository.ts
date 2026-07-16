@@ -9,6 +9,7 @@ import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 import { generateId, nowIso, delay } from "@/lib/data/utils";
 import { type DataResult, ok, fail } from "@/lib/data/result";
 import { readLeads, writeLeads } from "@/lib/data/mock/leadsStore";
+import { readNotes, writeNotes } from "@/lib/data/mock/notesStore";
 import { recordTimelineActivity } from "@/lib/data/mock/timelineStore";
 import { getNotesByOwner, createNoteForOwner, getTimelineByOwner } from "@/lib/data/mock/notesTimelineShared";
 import type { LeadFilters, LeadsRepository } from "@/lib/data/leads/repository";
@@ -205,6 +206,32 @@ async function getTimelineByLeadId(leadId: string) {
   return getTimelineByOwner(lead.workspace_id, "lead", leadId);
 }
 
+async function togglePinNote(noteId: string): Promise<DataResult<Note> | null> {
+  const existing = readNotes().find((n) => n.id === noteId && n.owner_type === "lead");
+  if (!existing) return null;
+
+  const lead = readLeads().find((l) => l.id === existing.owner_id);
+  if (lead?.status === "converted") {
+    return fail("This lead was converted to a Client and is read-only.");
+  }
+
+  const updated: Note = {
+    ...existing,
+    is_pinned: !existing.is_pinned,
+    updated_at: nowIso(),
+  };
+  writeNotes(readNotes().map((n) => (n.id === noteId ? updated : n)));
+  recordTimelineActivity(
+    existing.workspace_id,
+    "lead",
+    existing.owner_id,
+    updated.is_pinned ? "note_pinned" : "note_unpinned",
+    `${updated.is_pinned ? "Note pinned" : "Note unpinned"}: "${existing.title}"`,
+  );
+
+  return ok(updated);
+}
+
 export const mockLeadsRepository: LeadsRepository = {
   getLeads,
   getLeadById,
@@ -216,4 +243,5 @@ export const mockLeadsRepository: LeadsRepository = {
   getNotesByLeadId,
   createNote,
   getTimelineByLeadId,
+  togglePinNote,
 };
