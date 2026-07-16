@@ -3,11 +3,14 @@ import type { Profile } from "@/types/profile";
 import type { Workspace } from "@/types/workspace";
 import type { WorkspaceMember } from "@/types/workspaceMember";
 import type { Lead } from "@/types/lead";
+import type { Client, ClientImportantDate } from "@/types/client";
 import type { Note, NoteAttachment } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
 import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 import type { WorkspaceMemberStatus } from "@/core/enums/workspaceMemberStatus";
 import type { LeadStatus } from "@/core/enums/leadStatus";
+import type { ClientStatus } from "@/core/enums/clientStatus";
+import type { ContactMethod } from "@/core/enums/contactMethod";
 import type { EntityType } from "@/core/enums/entityType";
 import type { NoteCategory } from "@/core/enums/noteCategory";
 import type { NotePriority } from "@/core/enums/notePriority";
@@ -17,6 +20,7 @@ type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
 type WorkspaceMemberRow = Database["public"]["Tables"]["workspace_members"]["Row"];
 type LeadRow = Database["public"]["Tables"]["leads"]["Row"];
+type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
 type NoteRow = Database["public"]["Tables"]["notes"]["Row"];
 type TimelineActivityRow = Database["public"]["Tables"]["timeline_activities"]["Row"];
 
@@ -81,6 +85,55 @@ export function mapLeadRow(row: LeadRow): Lead {
     status: row.status as LeadStatus,
     assigned_to: row.assigned_to,
     converted_client_id: row.converted_client_id,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    archived_at: row.archived_at,
+  };
+}
+
+export function mapClientRow(row: ClientRow): Client {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    originating_lead_id: row.originating_lead_id,
+    first_name: row.first_name,
+    last_name: row.last_name,
+    email: row.email,
+    phone: row.phone,
+    instagram: row.instagram,
+    preferred_contact_method: row.preferred_contact_method as ContactMethod | null,
+    partner_name: row.partner_name,
+    relationship_status: row.relationship_status,
+    important_dates: (row.important_dates as unknown as ClientImportantDate[] | null) ?? [],
+    address: row.address,
+    city: row.city,
+    state: row.state,
+    zip_code: row.zip_code,
+    source: row.source,
+    tags: row.tags,
+    internal_status: row.internal_status as ClientStatus,
+    is_returning: row.is_returning,
+    how_they_met: row.how_they_met,
+    first_date: row.first_date,
+    relationship_anniversary: row.relationship_anniversary,
+    engagement_date: row.engagement_date,
+    wedding_date: row.wedding_date,
+    favorite_colors: row.favorite_colors,
+    favorite_flowers: row.favorite_flowers,
+    favorite_music: row.favorite_music,
+    favorite_food: row.favorite_food,
+    favorite_drinks: row.favorite_drinks,
+    preferred_style: row.preferred_style,
+    disliked_elements: row.disliked_elements,
+    allergies: row.allergies,
+    accessibility_needs: row.accessibility_needs,
+    dietary_restrictions: row.dietary_restrictions,
+    preferred_communication_time: row.preferred_communication_time,
+    do_not_call: row.do_not_call,
+    surprise_event_confidentiality: row.surprise_event_confidentiality,
+    emergency_contact_name: row.emergency_contact_name,
+    emergency_contact_phone: row.emergency_contact_phone,
+    is_vip: row.is_vip,
     created_at: row.created_at,
     updated_at: row.updated_at,
     archived_at: row.archived_at,

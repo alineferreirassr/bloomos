@@ -76,8 +76,8 @@ No signup flow or Workspace-creation UI exists yet — the first owner/admin acc
 | created_at / updated_at | timestamptz | |
 | archived_at | timestamptz | nullable, set when status becomes `archived` |
 
-### `notes` — **live for `owner_type = 'lead'`** (`supabase/migrations/20260716100100_notes.sql`)
-Shared by Leads and Clients — one polymorphic table (`owner_type` + `owner_id`) rather than a separate `lead_notes` and `client_notes` table, so the shape doesn't duplicate itself as more owner types are added. The live Supabase table's `owner_type` CHECK constraint currently only allows `'lead'` — Client (and every other) note-taking still runs on the mock store. Each future owner type's own migration phase must widen this constraint, exactly as `core/enums/entityType.ts` grew one value per mock-phase.
+### `notes` — **live for `owner_type` in `('lead', 'client')`** (`supabase/migrations/20260716100100_notes.sql`, widened by `20260717100100_notes_timeline_client_owner_type.sql`)
+Shared by Leads and Clients — one polymorphic table (`owner_type` + `owner_id`) rather than a separate `lead_notes` and `client_notes` table, so the shape doesn't duplicate itself as more owner types are added. The live Supabase table's `owner_type` CHECK constraint allows `'lead'` and `'client'` — every other owner type (Contract, Invoice, Payment, Expense, Document, DocumentFolder) still runs its note-taking on the mock store. Each future owner type's own migration phase must widen this constraint further, exactly as `core/enums/entityType.ts` grew one value per mock-phase.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -94,8 +94,8 @@ Shared by Leads and Clients — one polymorphic table (`owner_type` + `owner_id`
 | created_by | text | actor name; becomes a real FK once auth exists |
 | created_at / updated_at | timestamptz | |
 
-### `timeline_activities` — **live for `owner_type = 'lead'`** (`supabase/migrations/20260716100200_timeline_activities.sql`)
-Shared by Leads and Clients — one polymorphic, append-only table (`owner_type` + `owner_id`). Every entry is written through one shared mechanism (`recordTimelineActivity`), never constructed by hand — see `docs/workflows.md`. The live Supabase table's `owner_type` CHECK constraint currently only allows `'lead'`, and its `type` CHECK constraint only allows the 8 activity types the Leads Supabase repository actually writes (`lead_created`, `lead_updated`, `status_changed`, `note_added`, `note_pinned`, `note_unpinned`, `welcome_guide_sent`, `lead_archived`) — notably **not** `lead_converted`, since Lead→Client conversion (`LeadConversionService`) remains mock-only until Clients migrates (see `docs/integrations.md`). Both constraints widen per module as each one's own migration phase adds real Supabase-backed activity.
+### `timeline_activities` — **live for `owner_type` in `('lead', 'client')`** (`supabase/migrations/20260716100200_timeline_activities.sql`, widened by `20260717100100_notes_timeline_client_owner_type.sql`)
+Shared by Leads and Clients — one polymorphic, append-only table (`owner_type` + `owner_id`). Every entry is written through one shared mechanism (`recordTimelineActivity` in mock mode, `insertTimelineActivity` per-repository in Supabase mode), never constructed by hand — see `docs/workflows.md`. The live Supabase table's `owner_type` CHECK constraint allows `'lead'` and `'client'`, and its `type` CHECK constraint allows the 8 Lead activity types plus `lead_converted` and the 7 Client activity types (`client_created`, `client_updated`, `tags_changed`, `vip_status_changed`, `communication_preference_changed`, `client_archived`, `client_restored`) — `lead_converted` went live in the same migration as Clients, since Lead→Client conversion (`convert_lead_to_client`, see below) writes both a `lead_converted` and a `client_created` entry atomically. Both constraints widen per module as each one's own migration phase adds real Supabase-backed activity.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -116,11 +116,11 @@ Shared by Leads and Clients — one polymorphic, append-only table (`owner_type`
 Because referential integrity and workspace isolation can't be guaranteed by a FK here, both are enforced elsewhere instead:
 
 - **Data layer:** every read/write (mock or Supabase) derives `workspace_id` from the owning record and filters by `workspace_id` **and** `owner_type`/`owner_id` together — never `owner_id` alone. A note, timeline, checklist, or schedule row is only ever reachable through its actual owner's own workspace.
-- **Supabase RLS (live for `leads`/`notes`/`timeline_activities`):** `is_workspace_member(workspace_id)` gates every policy — see `docs/permissions.md`. A `CHECK` constraint validates `owner_type IN ('lead')` today (widening per module as each migrates), but the owner row's actual existence isn't independently re-validated by policy logic or a trigger in this phase — the data layer's own "fetch the owner first, derive `workspace_id` from it" discipline is what keeps a note/timeline row's `owner_id` honest, not the database. Tightening this (e.g., a trigger validating `owner_id` exists in the table named by `owner_type`) is a documented future improvement, not yet built.
+- **Supabase RLS (live for `leads`/`clients`/`notes`/`timeline_activities`):** `is_workspace_member(workspace_id)` gates every policy — see `docs/permissions.md`. A `CHECK` constraint validates `owner_type IN ('lead', 'client')` today (widening per module as each migrates), but the owner row's actual existence isn't independently re-validated by policy logic or a trigger in this phase — the data layer's own "fetch the owner first, derive `workspace_id` from it" discipline is what keeps a note/timeline row's `owner_id` honest, not the database. Tightening this (e.g., a trigger validating `owner_id` exists in the table named by `owner_type`) is a documented future improvement, not yet built.
 
 Checklist assignment (`assigned_type`/`assigned_id`/`assigned_name`) is a second, smaller instance of the same pattern, prepared ahead of the Employee/Vendor modules that will eventually populate `assigned_id` for real.
 
-### `clients`
+### `clients` — **live** (`supabase/migrations/20260717100000_clients.sql`)
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
@@ -148,6 +148,22 @@ Checklist assignment (`assigned_type`/`assigned_id`/`assigned_name`) is a second
 | is_vip | boolean | VIP / high-priority flag |
 | created_at / updated_at | timestamptz | |
 | archived_at | timestamptz | nullable, set when internal_status becomes `archived` |
+
+Indexes (`supabase/migrations/20260717100400_clients_indexes_and_constraints.sql`): `(workspace_id)`, `(workspace_id, internal_status)`, `(workspace_id, created_at desc)`, a partial `(workspace_id, is_vip) where is_vip = true`, a `gin` index on `tags`, and `(originating_lead_id)`.
+
+#### Lead → Client conversion — **live** (`supabase/migrations/20260717100500_lead_to_client_conversion.sql`)
+
+`leads.converted_client_id` now carries a real `FOREIGN KEY` → `clients.id` (added in this migration, once `clients` existed to reference — it was a bare nullable `uuid` before). `clients.originating_lead_id` carries a `UNIQUE` constraint (nulls are distinct in Postgres, so any number of directly-created Clients with no originating Lead are unaffected) — a database-level guarantee that a second Client can never point at the same converted Lead.
+
+Conversion itself is a single Postgres function, `public.convert_lead_to_client(p_lead_id uuid, p_actor text) returns jsonb`, called via `supabase.rpc(...)` from `lib/data/conversion/supabaseConversionRepository.ts`:
+
+- `security invoker` (the default, not `security definer`) — every statement inside the function runs with the calling user's own privileges, so RLS on `leads`, `clients`, and `timeline_activities` still applies exactly as if the caller had issued those statements directly. No `service_role` is needed or used.
+- `select ... for update` locks the Lead row for the function's implicit transaction, so a concurrent duplicate-conversion attempt blocks until the first commits, then observes `status = 'converted'` and is rejected — this is what makes duplicate-conversion prevention atomic rather than a check-then-act race, on top of the `UNIQUE` constraint above.
+- Rejects (via `raise exception ... using errcode = 'P0001'`, surfaced by the repository as a `DataResult` failure, not a thrown error) a not-found Lead, an already-converted Lead, or an **archived** Lead. Any rejection rolls back everything the function has done so far — a Postgres function body is always one transaction — so a rejected conversion never leaves a half-created Client or a partially-updated Lead behind.
+- Field-copy semantics mirror `modules/leads/services/LeadConversionService.ts` (the mock implementation, left untouched — mock mode still uses it via `lib/data/conversion/mockConversionRepository.ts`) exactly: only `workspace_id`, `first_name`, `last_name`, `email`, `phone`, `instagram`, and `source` are copied from the Lead; every other Client field defaults (`internal_status = 'active'`, `is_returning = false`, `tags = '{}'`, all preference/relationship fields null/false). No Event is created.
+- Records exactly two `timeline_activities` rows: `lead_converted` on the Lead (`metadata: { client_id }`) and `client_created` on the Client (`metadata: { originating_lead_id }`).
+
+`lib/data/conversion/` holds this pair (`mockConversionRepository.ts` / `supabaseConversionRepository.ts`) behind the same `selectRepository()` pattern as every other module — it lives in its own directory rather than under `leads/` or `clients/` since it spans both.
 
 ### `events`
 The operational center of BloomOS — the record tying a Client to a specific engagement, carrying its own independent status and lifecycle_stage state machines (`core/workflows/eventWorkflow.ts`; the earlier `lead`/`consultation`/.../`completed` single-stage model below in `docs/workflows.md` predates this and is superseded by the two-state-machine design — see the note under "MVP note on stage coverage").
@@ -481,7 +497,7 @@ document_folders 1—* notes          (owner_type = 'document_folder')
 document_folders 1—* timeline_activities (owner_type = 'document_folder')
 documents 1—0/* documents           (document.parent_document_id — version chain, optional)
 contract_exhibits 1—0/* documents   (document.contract_exhibit_id — optional)
-leads 1—0/1 clients        (via clients.originating_lead_id)
+leads 1—0/1 clients        (via clients.originating_lead_id, and back via leads.converted_client_id — both real FKs as of the Clients migration)
 clients 1—* events                  (event.client_id — required)
 clients 1—* contracts               (contract.client_id — required)
 clients 1—* invoices                (invoice.client_id — required)
@@ -516,7 +532,7 @@ Ahead of Client Portal/Team Portal implementation — see `docs/permissions.md`'
 | portal_type | enum | `client`, `team` — never both on one invitation |
 | role | text | the role to grant on acceptance |
 | permissions | jsonb | nullable — finer-grained grant beyond `role`, if needed |
-| related_client_id | uuid | nullable — links to a `clients` row (Client Portal invitations); no FK possible before Clients migrates (same polymorphic-ownership caveat as `notes`/`timeline_activities` above) |
+| related_client_id | uuid | nullable — links to a `clients` row (Client Portal invitations); `clients` is now live, so this can be a real FK once `invitations` itself is built |
 | related_team_member_id | uuid | nullable — links to a future `team_members` row (Team Portal invitations) |
 | status | enum | `invited`, `sent`, `accepted`, `expired`, `revoked` — see `docs/workflows.md` |
 | invited_by | uuid | FK → auth.users — the owner/admin who created the invitation |
@@ -534,6 +550,7 @@ No payment-provider (Stripe, Square, PayPal, banks, accounting software) is conn
 
 ## Supabase-specific notes
 
+- **Remaining mock-only modules still read the mock `clients` store, not the live table.** Events, Contracts, Finance, and Documents (all still entirely mock, per their own future migration phases) cross-reference Client records — e.g. an Event's client name, a Contract's `clientsById` lookup for search — via `readClients()` against the in-memory mock store, unconditionally, regardless of `NEXT_PUBLIC_DATA_MODE`. In `supabase` mode this means those still-mock modules see the mock store's seeded Clients while the Clients module itself (list/detail/dashboard metrics) shows live Supabase data — the two can disagree until each of those modules gets its own Supabase migration. This is the same shape of caveat the Leads migration created for `convertLeadToClient` until this phase, now shifted one module later.
 - Row-Level Security (RLS) is **written and ready** for the three Supabase Foundation tables (`profiles`, `workspaces`, `workspace_members` — migration 7 of 8, `supabase/migrations/`) but not yet **applied to a live database**, since no real Supabase project is connected. For every other table in this document, RLS remains design-only — no migration exists for them yet. See `docs/permissions.md`.
 - Enum values above are the intended constraint; whether they're implemented as Postgres `enum` types or `check` constraints is an implementation decision made at connection time, not before — except `workspace_members.role`/`status`, which are already implemented as `check` constraints in migration 4 (`supabase/migrations/20260715150300_workspace_members.sql`).
 - `role`/`allowed_roles` values passed into the `has_workspace_role()` SQL helper function are plain `text`/`text[]`, not a Postgres enum — this mirrors the `check`-constraint choice above and keeps role checks a single string comparison rather than a cross-schema enum-type dependency.

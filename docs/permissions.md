@@ -128,17 +128,29 @@ A `suspended` (or still-`invited`) member fails every one of these checks automa
 | Table | Policy | Rule |
 |---|---|---|
 | `leads` | select/insert/update | Any user with an **active** membership (`is_workspace_member(workspace_id)`) may read and write that Workspace's Leads — **Workspace isolation only**, no `owner`/`admin` role gating (unlike `workspaces`/`workspace_members` above). No delete policy — archival is via `status = 'archived'` + `archived_at`, never physical delete. |
-| `notes` | select/insert/update | Same `is_workspace_member(workspace_id)` rule, scoped further at the `CHECK` constraint level to `owner_type = 'lead'` only this phase (see `docs/database.md`). No delete policy. |
+| `notes` | select/insert/update | Same `is_workspace_member(workspace_id)` rule, scoped further at the `CHECK` constraint level to `owner_type in ('lead', 'client')` as of the Clients migration (see `docs/database.md`). No delete policy. |
 | `timeline_activities` | select/insert | Same `is_workspace_member(workspace_id)` rule. No update or delete policy — every entry is immutable and append-only. |
 
 This is the first business-module RLS policy set built on top of the Foundation's `is_workspace_member()` helper — no new SQL function was needed. `lib/data/leads/supabaseRepository.ts` (the Leads module's Supabase repository) uses the **browser** Supabase client (`lib/supabase/client.ts`), not the server one, since the Leads UI fetches from Client Components — RLS is what actually enforces every rule above regardless of which client issues the query; see `docs/integrations.md`'s "Client factory choice matters per module" note.
+
+## Supabase RLS for Clients (live)
+
+`supabase/migrations/20260717100300_clients_rls.sql` enables RLS and defines the policy below on `clients`. Applied to a live, connected Supabase project. Same rules as Leads above — no bare `using (true)`, every policy scoped `to authenticated`.
+
+| Table | Policy | Rule |
+|---|---|---|
+| `clients` | select/insert/update | Any user with an **active** membership (`is_workspace_member(workspace_id)`) may read and write that Workspace's Clients — **Workspace isolation only**, same as `leads`, no `owner`/`admin` role gating. No delete policy — archival is via `internal_status = 'archived'` + `archived_at`, and (unlike Leads) is reversible via `restoreClient`. |
+
+`notes`/`timeline_activities` needed no new policies for Client-owned rows — their existing `is_workspace_member(workspace_id)` policies (above) already cover any `owner_type`; only the `CHECK` constraint governing which `owner_type` values are accepted needed widening (`docs/database.md`).
+
+`lib/data/clients/supabaseRepository.ts` uses the **browser** Supabase client, same rationale as Leads. Lead → Client conversion (`convert_lead_to_client`, `docs/database.md`) is a `security invoker` Postgres function called via `supabase.rpc(...)` from `lib/data/conversion/supabaseConversionRepository.ts` — every insert/update it performs is still checked against these exact same `leads`/`clients`/`timeline_activities` policies, since `security invoker` runs with the calling user's own privileges rather than elevating them. No `service_role` is used anywhere in the Clients migration.
 
 ## Supabase Row-Level Security for future business tables (planned)
 
 Once a further business module's own migration phase begins (see `docs/integrations.md`), RLS policies for that module are expected to enforce:
 
 - Every table with `workspace_id` — a row is only visible/writable to authenticated users belonging to that `workspace_id`, using the same `is_workspace_member()`/`has_workspace_role()` helpers documented above rather than duplicating the check.
-- `Owner/Admin` vs `Team Member` distinctions enforced via `workspace_members.role`, checked in policy, not in application code alone, where that module's spec calls for it (Leads above deliberately does not — Workspace isolation only).
+- `Owner/Admin` vs `Team Member` distinctions enforced via `workspace_members.role`, checked in policy, not in application code alone, where that module's spec calls for it (Leads/Clients above deliberately do not — Workspace isolation only).
 - The future Client Portal role restricted, at the policy level, to its own `client_id`'s and linked `event_id`'s rows only — never a broader query.
 
 ## Storage Foundation (buckets ready, no upload UI yet)

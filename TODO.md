@@ -59,6 +59,7 @@ Current, actionable tasks. Keep this in sync with reality — check items off as
 - [x] Documented local Supabase CLI workflow + `npm run supabase:*` scripts (all `npx`-based, nothing installed globally)
 - [x] Provide real Supabase credentials, manually create the first owner/admin account and Workspace row, switch `NEXT_PUBLIC_DATA_MODE=supabase`, and verify the Auth foundation against a live project
 - [x] Migrate Leads to a live Supabase repository (`lib/data/leads/`) through the `lib/data/provider.ts` boundary — first business module migrated; uses the browser Supabase client (`lib/supabase/client.ts`) since its UI fetches from Client Components, see `docs/integrations.md`
-- [ ] Migrate remaining business modules (Clients/Events/Contracts/Finance/Documents) to live Supabase repositories, one module at a time — not started
+- [x] Migrate Clients to a live Supabase repository (`lib/data/clients/`) — second business module migrated, same pattern as Leads; includes atomic Lead → Client conversion in `supabase` mode (`convert_lead_to_client` Postgres function, `lib/data/conversion/`), which now also rejects archived Leads (the mock version never did)
+- [ ] Migrate remaining business modules (Events/Contracts/Finance/Documents) to live Supabase repositories, one module at a time — not started
 - [ ] Connect Supabase Storage for real Documents upload, signed URLs — not started
-- [ ] Use mock data exclusively for Clients/Events/Contracts/Finance/Documents until each module's own migration phase is reached
+- [ ] Use mock data exclusively for Events/Contracts/Finance/Documents until each module's own migration phase is reached — they still read the mock Clients store directly for cross-references even in `supabase` mode, a known limitation until their own migrations land

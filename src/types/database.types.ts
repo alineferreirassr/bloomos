@@ -5,9 +5,10 @@
  * types typescript`) so it's a drop-in replacement once a real project is
  * linked and the migrations in `supabase/migrations/` have been applied.
  * Covers the Supabase Foundation tables (profiles, workspaces,
- * workspace_members) plus the Leads migration tables (leads, notes,
- * timeline_activities) and their RLS helper functions — regenerate this file
- * after every migration change; do not hand-edit table shapes once live
+ * workspace_members), the Leads migration tables (leads, notes,
+ * timeline_activities), and the Clients migration table (clients) plus their
+ * RLS helper functions and the convert_lead_to_client RPC — regenerate this
+ * file after every migration change; do not hand-edit table shapes once live
  * generation is available.
  */
 
@@ -256,6 +257,147 @@ export interface Database {
         };
         Relationships: [];
       };
+      clients: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          originating_lead_id: string | null;
+          first_name: string;
+          last_name: string;
+          email: string;
+          phone: string | null;
+          instagram: string | null;
+          preferred_contact_method: string | null;
+          partner_name: string | null;
+          relationship_status: string | null;
+          important_dates: Json;
+          address: string | null;
+          city: string | null;
+          state: string | null;
+          zip_code: string | null;
+          source: string | null;
+          tags: string[];
+          internal_status: string;
+          is_returning: boolean;
+          how_they_met: string | null;
+          first_date: string | null;
+          relationship_anniversary: string | null;
+          engagement_date: string | null;
+          wedding_date: string | null;
+          favorite_colors: string | null;
+          favorite_flowers: string | null;
+          favorite_music: string | null;
+          favorite_food: string | null;
+          favorite_drinks: string | null;
+          preferred_style: string | null;
+          disliked_elements: string | null;
+          allergies: string | null;
+          accessibility_needs: string | null;
+          dietary_restrictions: string | null;
+          preferred_communication_time: string | null;
+          do_not_call: boolean;
+          surprise_event_confidentiality: boolean;
+          emergency_contact_name: string | null;
+          emergency_contact_phone: string | null;
+          is_vip: boolean;
+          created_at: string;
+          updated_at: string;
+          archived_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          originating_lead_id?: string | null;
+          first_name: string;
+          last_name: string;
+          email: string;
+          phone?: string | null;
+          instagram?: string | null;
+          preferred_contact_method?: string | null;
+          partner_name?: string | null;
+          relationship_status?: string | null;
+          important_dates?: Json;
+          address?: string | null;
+          city?: string | null;
+          state?: string | null;
+          zip_code?: string | null;
+          source?: string | null;
+          tags?: string[];
+          internal_status?: string;
+          is_returning?: boolean;
+          how_they_met?: string | null;
+          first_date?: string | null;
+          relationship_anniversary?: string | null;
+          engagement_date?: string | null;
+          wedding_date?: string | null;
+          favorite_colors?: string | null;
+          favorite_flowers?: string | null;
+          favorite_music?: string | null;
+          favorite_food?: string | null;
+          favorite_drinks?: string | null;
+          preferred_style?: string | null;
+          disliked_elements?: string | null;
+          allergies?: string | null;
+          accessibility_needs?: string | null;
+          dietary_restrictions?: string | null;
+          preferred_communication_time?: string | null;
+          do_not_call?: boolean;
+          surprise_event_confidentiality?: boolean;
+          emergency_contact_name?: string | null;
+          emergency_contact_phone?: string | null;
+          is_vip?: boolean;
+          created_at?: string;
+          updated_at?: string;
+          archived_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          originating_lead_id?: string | null;
+          first_name?: string;
+          last_name?: string;
+          email?: string;
+          phone?: string | null;
+          instagram?: string | null;
+          preferred_contact_method?: string | null;
+          partner_name?: string | null;
+          relationship_status?: string | null;
+          important_dates?: Json;
+          address?: string | null;
+          city?: string | null;
+          state?: string | null;
+          zip_code?: string | null;
+          source?: string | null;
+          tags?: string[];
+          internal_status?: string;
+          is_returning?: boolean;
+          how_they_met?: string | null;
+          first_date?: string | null;
+          relationship_anniversary?: string | null;
+          engagement_date?: string | null;
+          wedding_date?: string | null;
+          favorite_colors?: string | null;
+          favorite_flowers?: string | null;
+          favorite_music?: string | null;
+          favorite_food?: string | null;
+          favorite_drinks?: string | null;
+          preferred_style?: string | null;
+          disliked_elements?: string | null;
+          allergies?: string | null;
+          accessibility_needs?: string | null;
+          dietary_restrictions?: string | null;
+          preferred_communication_time?: string | null;
+          do_not_call?: boolean;
+          surprise_event_confidentiality?: boolean;
+          emergency_contact_name?: string | null;
+          emergency_contact_phone?: string | null;
+          is_vip?: boolean;
+          created_at?: string;
+          updated_at?: string;
+          archived_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -270,6 +412,10 @@ export interface Database {
       current_user_workspace_ids: {
         Args: Record<string, never>;
         Returns: string[];
+      };
+      convert_lead_to_client: {
+        Args: { p_lead_id: string; p_actor: string };
+        Returns: Json;
       };
     };
     Enums: Record<string, never>;

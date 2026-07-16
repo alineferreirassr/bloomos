@@ -22,8 +22,8 @@ import type { PaymentMethod } from "@/core/enums/paymentMethod";
 import type { ExpenseCategory } from "@/core/enums/expenseCategory";
 import { PAYMENT_STATUSES_COUNTING_TOWARD_PAID } from "@/core/enums/paymentStatus";
 import type { LeadStatus } from "@/core/enums/leadStatus";
-import { CLIENT_STATUS_LABELS, type ClientStatus } from "@/core/enums/clientStatus";
-import { CONTACT_METHOD_LABELS, type ContactMethod } from "@/core/enums/contactMethod";
+import type { ClientStatus } from "@/core/enums/clientStatus";
+import type { ContactMethod } from "@/core/enums/contactMethod";
 import { EVENT_TYPE_LABELS, type EventType } from "@/core/enums/eventType";
 import type { EventPriority } from "@/core/enums/eventPriority";
 import { EVENT_PRIORITY_LABELS } from "@/core/enums/eventPriority";
@@ -68,7 +68,6 @@ import {
 import { canMoveFolder, getFolderPath, getFolderChildren } from "@/core/workflows/documentFolderWorkflow";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 import { NotFoundError } from "@/core/errors";
-import { getClientNextRecommendedAction } from "@/core/workflows/clientWorkflow";
 import {
   canTransitionEventStatus,
   canTransitionLifecycleStage,
@@ -81,7 +80,7 @@ import {
 } from "@/core/workflows/eventWorkflow";
 import type { LeadFormInput } from "@/modules/leads/schema";
 import type { NoteFormInput } from "@/modules/notes/schema";
-import { clientDataSchema, type ClientFormInput } from "@/modules/clients/schema";
+import type { ClientFormInput } from "@/modules/clients/schema";
 import { eventDataSchema, scheduleItemSchema, type EventFormInput, type ScheduleItemInput } from "@/modules/events/schema";
 import { checklistItemSchema, type ChecklistItemInput } from "@/modules/checklist/schema";
 import {
@@ -135,13 +134,17 @@ import {
 } from "@/modules/finance/eventFinancialStatus";
 import { calculateBalance, subtractMinor, addMinor, sumMinor, majorToMinor, formatMoney } from "@/lib/money";
 import { DEFAULT_CHECKLIST_TEMPLATES } from "@/modules/events/constants/checklistTemplates";
-import { convertLeadToClient as convertLeadToClientService } from "@/modules/leads/services/LeadConversionService";
 import { type DataResult, ok, fail } from "@/lib/data/result";
 import { delay, generateId, nowIso } from "@/lib/data/utils";
 import { selectRepository } from "@/lib/data/provider";
 import type { LeadFilters } from "@/lib/data/leads/repository";
 import { mockLeadsRepository } from "@/lib/data/leads/mockRepository";
 import { supabaseLeadsRepository } from "@/lib/data/leads/supabaseRepository";
+import type { ClientFilters } from "@/lib/data/clients/repository";
+import { mockClientsRepository } from "@/lib/data/clients/mockRepository";
+import { supabaseClientsRepository } from "@/lib/data/clients/supabaseRepository";
+import { mockConversionRepository } from "@/lib/data/conversion/mockConversionRepository";
+import { supabaseConversionRepository } from "@/lib/data/conversion/supabaseConversionRepository";
 import {
   readLeads,
   resetLeadsStore,
@@ -158,7 +161,6 @@ import {
 import { getNotesByOwner, createNoteForOwner, getTimelineByOwner } from "@/lib/data/mock/notesTimelineShared";
 import {
   readClients,
-  writeClients,
   resetClientsStore,
 } from "@/lib/data/mock/clientsStore";
 import {
@@ -237,10 +239,7 @@ function fieldErrorsFromZod(error: {
 // (lib/data/leads/mockRepository.ts) — lib/data/provider.ts's
 // selectRepository() picks between them per NEXT_PUBLIC_DATA_MODE. Every
 // function below is a thin, backend-agnostic wrapper; neither this file nor
-// any UI ever branches on data mode directly. Lead -> Client conversion
-// (convertLeadToClient, below) is the one exception — it stays entirely on
-// the mock stores regardless of mode until Clients has its own migration
-// phase, since it reads and writes both leadsStore and clientsStore.
+// any UI ever branches on data mode directly.
 // ---------------------------------------------------------------------------
 
 export type { LeadFilters } from "@/lib/data/leads/repository";
@@ -283,12 +282,21 @@ export async function markWelcomeGuideSent(id: string): Promise<DataResult<Lead>
   return leadsRepository().markWelcomeGuideSent(id);
 }
 
+function conversionRepository() {
+  return selectRepository({ mock: mockConversionRepository, supabase: supabaseConversionRepository });
+}
+
 /**
- * Conversion's business logic lives entirely in LeadConversionService — this
- * is a thin re-export so the UI keeps importing everything from one place.
- * Mock-only regardless of data mode — see the module comment above.
+ * Conversion routes through its own repository pair (lib/data/conversion/) —
+ * spans both Leads and Clients, so it isn't owned by either
+ * leadsRepository() or clientsRepository(). Mock delegates unchanged to
+ * LeadConversionService (mockConversionRepository.ts); Supabase calls the
+ * convert_lead_to_client(uuid, text) Postgres function (an atomic, RLS-scoped
+ * transaction — see supabase/migrations/20260717100500_lead_to_client_conversion.sql).
  */
-export const convertLeadToClient = convertLeadToClientService;
+export async function convertLeadToClient(leadId: string) {
+  return conversionRepository().convertLeadToClient(leadId);
+}
 
 // ---------------------------------------------------------------------------
 // Notes (shared by Leads and Clients — one Note shape, keyed by owner_type/owner_id)
@@ -298,12 +306,14 @@ export const convertLeadToClient = convertLeadToClientService;
 // by workspace_id together with owner_type/owner_id — never owner_id alone —
 // so a workspace can't ever see another workspace's notes even if two ids
 // happened to collide. See docs/database.md's `notes` section and Supabase
-// RLS policies (once connected) for how this gets enforced at the DB layer.
+// RLS policies for how this gets enforced at the DB layer.
 //
 // getNotesByOwner/createNoteForOwner (imported from
-// lib/data/mock/notesTimelineShared) remain mock-only — Client (and every
-// other) owner type has no Supabase-backed notes yet. Lead notes route
-// through leadsRepository() above instead, which is backend-aware.
+// lib/data/mock/notesTimelineShared) remain mock-only — every owner type
+// besides Lead and Client (Contract, Invoice, Payment, Expense, Document,
+// DocumentFolder) has no Supabase-backed notes yet. Lead and Client notes
+// route through leadsRepository()/clientsRepository() above instead, which
+// are backend-aware.
 // ---------------------------------------------------------------------------
 
 export async function getNotesByLeadId(leadId: string): Promise<Note[]> {
@@ -318,25 +328,22 @@ export async function createNote(
 }
 
 export async function getNotesByClientId(clientId: string): Promise<Note[]> {
-  const client = readClients().find((c) => c.id === clientId);
-  if (!client) return [];
-  return getNotesByOwner(client.workspace_id, "client", clientId);
+  return clientsRepository().getNotesByClientId(clientId);
 }
 
 export async function createClientNote(
   clientId: string,
   input: NoteFormInput,
 ): Promise<DataResult<Note>> {
-  const client = readClients().find((c) => c.id === clientId);
-  if (!client) {
-    return fail("Client not found.");
-  }
-  return createNoteForOwner(client.workspace_id, "client", clientId, input);
+  return clientsRepository().createClientNote(clientId, input);
 }
 
 export async function togglePinNote(noteId: string): Promise<DataResult<Note>> {
   const leadResult = await leadsRepository().togglePinNote(noteId);
   if (leadResult !== null) return leadResult;
+
+  const clientResult = await clientsRepository().togglePinClientNote(noteId);
+  if (clientResult !== null) return clientResult;
 
   const existing = readNotes().find((n) => n.id === noteId);
   if (!existing) {
@@ -373,8 +380,8 @@ export async function togglePinNote(noteId: string): Promise<DataResult<Note>> {
 // safe scope, so every read filters by workspace_id + owner_type + owner_id.
 //
 // getTimelineByOwner (imported from lib/data/mock/notesTimelineShared)
-// remains mock-only — see the Notes section comment above; Lead timeline
-// routes through leadsRepository() instead.
+// remains mock-only — see the Notes section comment above; Lead and Client
+// timeline route through leadsRepository()/clientsRepository() instead.
 // ---------------------------------------------------------------------------
 
 export async function getTimelineByLeadId(leadId: string): Promise<TimelineActivity[]> {
@@ -382,233 +389,78 @@ export async function getTimelineByLeadId(leadId: string): Promise<TimelineActiv
 }
 
 export async function getTimelineByClientId(clientId: string): Promise<TimelineActivity[]> {
-  const client = readClients().find((c) => c.id === clientId);
-  if (!client) return [];
-  return getTimelineByOwner(client.workspace_id, "client", clientId);
+  return clientsRepository().getTimelineByClientId(clientId);
 }
 
 // ---------------------------------------------------------------------------
 // Clients
+//
+// The second business module with a live Supabase repository
+// (lib/data/clients/supabaseRepository.ts) alongside the original mock one
+// (lib/data/clients/mockRepository.ts) — same selectRepository() pattern as
+// Leads. Every function below is a thin, backend-agnostic wrapper.
 // ---------------------------------------------------------------------------
 
-export interface ClientFilters {
-  search?: string;
-  status?: ClientStatus | "all";
-  source?: string | "all";
-  tags?: string[];
-  vipOnly?: boolean;
-  includeArchived?: boolean;
+export type { ClientFilters } from "@/lib/data/clients/repository";
+
+function clientsRepository() {
+  return selectRepository({ mock: mockClientsRepository, supabase: supabaseClientsRepository });
 }
 
 export async function getClients(filters: ClientFilters = {}): Promise<Client[]> {
-  await delay(200);
-  const { search, status, source, tags, vipOnly, includeArchived = false } = filters;
-
-  return readClients().filter((client) => {
-    if (!includeArchived && client.internal_status === "archived") return false;
-    if (status && status !== "all" && client.internal_status !== status) return false;
-    if (source && source !== "all" && client.source !== source) return false;
-    if (vipOnly && !client.is_vip) return false;
-    if (tags && tags.length > 0 && !tags.some((tag) => client.tags.includes(tag))) return false;
-    if (search) {
-      const q = search.trim().toLowerCase();
-      if (!q) return true;
-      const haystack = `${client.first_name} ${client.last_name} ${client.email} ${client.phone ?? ""} ${client.partner_name ?? ""}`.toLowerCase();
-      if (!haystack.includes(q)) return false;
-    }
-    return true;
-  });
+  return clientsRepository().getClients(filters);
 }
 
 export async function getClientById(id: string): Promise<Client> {
-  await delay(150);
-  const client = readClients().find((c) => c.id === id);
-  if (!client) {
-    throw new NotFoundError(`Client ${id} was not found`);
-  }
-  return client;
+  return clientsRepository().getClientById(id);
 }
 
 export async function createClient(input: ClientFormInput): Promise<DataResult<Client>> {
-  const parsed = clientDataSchema.safeParse(input);
-  if (!parsed.success) {
-    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
-  }
-
-  const timestamp = nowIso();
-  const client: Client = {
-    id: generateId("client"),
-    workspace_id: CURRENT_WORKSPACE_ID,
-    originating_lead_id: null,
-    ...parsed.data,
-    preferred_contact_method: null,
-    tags: [],
-    internal_status: "active",
-    is_returning: false,
-    is_vip: false,
-    created_at: timestamp,
-    updated_at: timestamp,
-    archived_at: null,
-  };
-
-  writeClients([...readClients(), client]);
-  recordTimelineActivity(client.workspace_id, "client", client.id, "client_created", "Client created");
-
-  return ok(client);
+  return clientsRepository().createClient(input);
 }
 
 export async function updateClient(
   id: string,
   input: ClientFormInput,
 ): Promise<DataResult<Client>> {
-  const existing = readClients().find((c) => c.id === id);
-  if (!existing) {
-    return fail("Client not found.");
-  }
-
-  const parsed = clientDataSchema.safeParse(input);
-  if (!parsed.success) {
-    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
-  }
-
-  const updated: Client = { ...existing, ...parsed.data, updated_at: nowIso() };
-  writeClients(readClients().map((c) => (c.id === id ? updated : c)));
-  recordTimelineActivity(existing.workspace_id, "client", id, "client_updated", "Client information updated");
-
-  return ok(updated);
+  return clientsRepository().updateClient(id, input);
 }
 
 export async function updateClientStatus(
   id: string,
   status: ClientStatus,
 ): Promise<DataResult<Client>> {
-  const existing = readClients().find((c) => c.id === id);
-  if (!existing) {
-    return fail("Client not found.");
-  }
-
-  const updated: Client = { ...existing, internal_status: status, updated_at: nowIso() };
-  writeClients(readClients().map((c) => (c.id === id ? updated : c)));
-  recordTimelineActivity(
-    existing.workspace_id,
-    "client",
-    id,
-    "status_changed",
-    `Status changed from ${CLIENT_STATUS_LABELS[existing.internal_status]} to ${CLIENT_STATUS_LABELS[status]}`,
-    { from: existing.internal_status, to: status },
-  );
-
-  return ok(updated);
+  return clientsRepository().updateClientStatus(id, status);
 }
 
 export async function updateClientTags(id: string, tags: string[]): Promise<DataResult<Client>> {
-  const existing = readClients().find((c) => c.id === id);
-  if (!existing) {
-    return fail("Client not found.");
-  }
-
-  const updated: Client = { ...existing, tags, updated_at: nowIso() };
-  writeClients(readClients().map((c) => (c.id === id ? updated : c)));
-  recordTimelineActivity(existing.workspace_id, "client", id, "tags_changed", "Tags updated", {
-    tags: tags.join(", "),
-  });
-
-  return ok(updated);
+  return clientsRepository().updateClientTags(id, tags);
 }
 
 export async function setClientVipStatus(
   id: string,
   isVip: boolean,
 ): Promise<DataResult<Client>> {
-  const existing = readClients().find((c) => c.id === id);
-  if (!existing) {
-    return fail("Client not found.");
-  }
-
-  const updated: Client = { ...existing, is_vip: isVip, updated_at: nowIso() };
-  writeClients(readClients().map((c) => (c.id === id ? updated : c)));
-  recordTimelineActivity(
-    existing.workspace_id,
-    "client",
-    id,
-    "vip_status_changed",
-    isVip ? "Marked as VIP" : "Removed VIP status",
-  );
-
-  return ok(updated);
+  return clientsRepository().setClientVipStatus(id, isVip);
 }
 
 export async function updateClientContactPreference(
   id: string,
   method: ContactMethod | null,
 ): Promise<DataResult<Client>> {
-  const existing = readClients().find((c) => c.id === id);
-  if (!existing) {
-    return fail("Client not found.");
-  }
-
-  const updated: Client = { ...existing, preferred_contact_method: method, updated_at: nowIso() };
-  writeClients(readClients().map((c) => (c.id === id ? updated : c)));
-  recordTimelineActivity(
-    existing.workspace_id,
-    "client",
-    id,
-    "communication_preference_changed",
-    method
-      ? `Preferred contact method set to ${CONTACT_METHOD_LABELS[method]}`
-      : "Preferred contact method cleared",
-  );
-
-  return ok(updated);
+  return clientsRepository().updateClientContactPreference(id, method);
 }
 
 export async function archiveClient(id: string): Promise<DataResult<Client>> {
-  const existing = readClients().find((c) => c.id === id);
-  if (!existing) {
-    return fail("Client not found.");
-  }
-  if (existing.archived_at) {
-    return fail("This client is already archived.");
-  }
-
-  const timestamp = nowIso();
-  const updated: Client = {
-    ...existing,
-    internal_status: "archived",
-    archived_at: timestamp,
-    updated_at: timestamp,
-  };
-  writeClients(readClients().map((c) => (c.id === id ? updated : c)));
-  recordTimelineActivity(existing.workspace_id, "client", id, "client_archived", "Client archived");
-
-  return ok(updated);
+  return clientsRepository().archiveClient(id);
 }
 
 export async function restoreClient(id: string): Promise<DataResult<Client>> {
-  const existing = readClients().find((c) => c.id === id);
-  if (!existing) {
-    return fail("Client not found.");
-  }
-  if (!existing.archived_at) {
-    return fail("This client is not archived.");
-  }
-
-  const updated: Client = {
-    ...existing,
-    internal_status: "active",
-    archived_at: null,
-    updated_at: nowIso(),
-  };
-  writeClients(readClients().map((c) => (c.id === id ? updated : c)));
-  recordTimelineActivity(existing.workspace_id, "client", id, "client_restored", "Client restored");
-
-  return ok(updated);
+  return clientsRepository().restoreClient(id);
 }
 
-/** Events doesn't exist yet, so hasRelatedEvent is always false until that module is built. */
 export async function getClientNextAction(clientId: string): Promise<string | null> {
-  const [client, notes] = await Promise.all([getClientById(clientId), getNotesByClientId(clientId)]);
-  return getClientNextRecommendedAction(client, { hasNotes: notes.length > 0, hasRelatedEvent: false });
+  return clientsRepository().getClientNextAction(clientId);
 }
 
 // ---------------------------------------------------------------------------
