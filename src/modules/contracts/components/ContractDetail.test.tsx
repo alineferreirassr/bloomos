@@ -21,6 +21,7 @@ vi.mock("@/lib/data", () => ({
   getContractFinanceSummary: vi.fn(),
   createContractNote: vi.fn(),
   togglePinNote: vi.fn(),
+  getDocumentOwnerSummary: vi.fn(),
 }));
 
 import * as dataLayer from "@/lib/data";
@@ -66,6 +67,18 @@ function mockReady(overrides: Partial<ReturnType<typeof makeContract>> = {}) {
     depositStatus: "not_required",
     depositRequiredMinor: 0,
     depositPaidMinor: 0,
+  });
+  vi.mocked(dataLayer.getDocumentOwnerSummary).mockResolvedValue({
+    total: 0,
+    active: 0,
+    draft: 0,
+    expiringSoon: 0,
+    expired: 0,
+    archived: 0,
+    deleted: 0,
+    totalStorageBytes: 0,
+    byCategory: {} as never,
+    latestUploads: [],
   });
   return contract;
 }

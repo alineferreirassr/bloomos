@@ -3,7 +3,7 @@ import { DOCUMENT_CATEGORIES } from "@/core/enums/documentCategory";
 import { DOCUMENT_STATUSES } from "@/core/enums/documentStatus";
 import { DOCUMENT_VISIBILITIES } from "@/core/enums/documentVisibility";
 import { STORAGE_PROVIDERS } from "@/core/enums/storageProvider";
-import { ENTITY_TYPES } from "@/core/enums/entityType";
+import { ENTITY_TYPES, type EntityType } from "@/core/enums/entityType";
 import {
   extractFileExtension,
   isAllowedFileExtension,
@@ -28,6 +28,17 @@ import {
  */
 
 const entityTypeEnum = z.enum(ENTITY_TYPES);
+
+/** Practical owner types for a Document/DocumentFolder today — narrower than the full EntityType union, which also carries lead/document/document_folder for Notes/Timeline reuse. Supplier/inventory_item/team_member are reserved for future modules (see src/types/document.ts) and intentionally not added to EntityType yet. Single source of truth — both lib/data/index.ts and the Documents UI import this rather than each keeping their own copy. */
+export const VALID_DOCUMENT_OWNER_TYPES: EntityType[] = [
+  "workspace",
+  "client",
+  "event",
+  "contract",
+  "invoice",
+  "payment",
+  "expense",
+];
 
 function extensionRefinement(fileName: string): { valid: boolean; error: string | null } {
   const extension = extractFileExtension(fileName);
@@ -237,3 +248,133 @@ export const documentFolderSchema = z.object({
 });
 
 export type DocumentFolderRecord = z.infer<typeof documentFolderSchema>;
+
+/**
+ * Client-side (react-hook-form) form schemas for the Documents UI — every
+ * field is a plain string or boolean, matching what HTML form inputs
+ * actually produce, mirroring modules/finance/schema.ts's
+ * invoiceFormSchema/invoiceFormToInput split. `size_mb` is entered in
+ * megabytes (e.g. "2.5") since that's what a human reasons in; each
+ * `*FormToInput` below converts it to `size_bytes` before handing the value
+ * to the authoritative schema above — the data layer never sees a
+ * megabyte figure. Extension/MIME/size validity, owner/reference
+ * consistency, and folder ownership are re-checked by the authoritative
+ * schema and the data layer regardless of what passes here.
+ */
+
+const BYTES_PER_MB = 1024 * 1024;
+
+const megabyteString = z
+  .string()
+  .trim()
+  .refine((v) => v !== "" && !Number.isNaN(Number(v)) && Number(v) > 0, { message: "Enter a size greater than zero" });
+
+export const documentMetadataFormSchema = z.object({
+  owner_type: entityTypeEnum,
+  owner_id: z.string().trim().min(1, "Owner is required"),
+  folder_id: z.string().trim(),
+  title: z.string().trim(),
+  description: z.string().trim(),
+  category: z.enum(DOCUMENT_CATEGORIES),
+  visibility: z.enum(DOCUMENT_VISIBILITIES),
+  original_file_name: z.string().trim().min(1, "File name is required"),
+  mime_type: z.string().trim().min(1, "MIME type is required"),
+  size_mb: megabyteString,
+  expires_at: z.string().trim(),
+  contract_exhibit_id: z.string().trim(),
+  event_id: z.string().trim(),
+  client_id: z.string().trim(),
+  contract_id: z.string().trim(),
+  invoice_id: z.string().trim(),
+  payment_id: z.string().trim(),
+  expense_id: z.string().trim(),
+});
+
+export type DocumentMetadataFormInput = z.infer<typeof documentMetadataFormSchema>;
+
+export function documentMetadataFormToInput(data: DocumentMetadataFormInput): DocumentMetadataInput {
+  return {
+    owner_type: data.owner_type,
+    owner_id: data.owner_id,
+    folder_id: data.folder_id === "" ? null : data.folder_id,
+    title: data.title === "" ? null : data.title,
+    description: data.description === "" ? null : data.description,
+    category: data.category,
+    visibility: data.visibility,
+    file_name: data.original_file_name,
+    mime_type: data.mime_type,
+    size_bytes: Math.round(Number(data.size_mb) * BYTES_PER_MB),
+    expires_at: data.expires_at === "" ? null : data.expires_at,
+    uploaded_by: null,
+    contract_exhibit_id: data.contract_exhibit_id === "" ? null : data.contract_exhibit_id,
+    event_id: data.event_id === "" ? null : data.event_id,
+    client_id: data.client_id === "" ? null : data.client_id,
+    contract_id: data.contract_id === "" ? null : data.contract_id,
+    invoice_id: data.invoice_id === "" ? null : data.invoice_id,
+    payment_id: data.payment_id === "" ? null : data.payment_id,
+    expense_id: data.expense_id === "" ? null : data.expense_id,
+  };
+}
+
+/** Narrow edit form — mirrors updateDocumentMetadata's own narrow signature (title/description/category/expires_at only; file content/folder/status/visibility each have their own dedicated action). */
+export const documentEditMetadataFormSchema = z.object({
+  title: z.string().trim(),
+  description: z.string().trim(),
+  category: z.enum(DOCUMENT_CATEGORIES),
+  expires_at: z.string().trim(),
+});
+
+export type DocumentEditMetadataFormInput = z.infer<typeof documentEditMetadataFormSchema>;
+
+export interface DocumentEditMetadataInput {
+  title: string | null;
+  description: string | null;
+  category: (typeof DOCUMENT_CATEGORIES)[number];
+  expires_at: string | null;
+}
+
+export function documentEditMetadataFormToInput(data: DocumentEditMetadataFormInput): DocumentEditMetadataInput {
+  return {
+    title: data.title === "" ? null : data.title,
+    description: data.description === "" ? null : data.description,
+    category: data.category,
+    expires_at: data.expires_at === "" ? null : data.expires_at,
+  };
+}
+
+/** Form for the "Add New Version" flow (createDocumentVersion) — category is never part of this form since a version chain always keeps its root's category. */
+export const newDocumentVersionFormSchema = z.object({
+  original_file_name: z.string().trim().min(1, "File name is required"),
+  mime_type: z.string().trim().min(1, "MIME type is required"),
+  size_mb: megabyteString,
+  title: z.string().trim(),
+  visibility: z.union([z.enum(DOCUMENT_VISIBILITIES), z.literal("")]),
+  expires_at: z.string().trim(),
+});
+
+export type NewDocumentVersionFormInput = z.infer<typeof newDocumentVersionFormSchema>;
+
+export function newDocumentVersionFormToInput(
+  documentId: string,
+  data: NewDocumentVersionFormInput,
+): NewDocumentVersionInput {
+  return {
+    document_id: documentId,
+    file_name: data.original_file_name,
+    mime_type: data.mime_type,
+    size_bytes: Math.round(Number(data.size_mb) * BYTES_PER_MB),
+    title: data.title === "" ? null : data.title,
+    visibility: data.visibility === "" ? null : data.visibility,
+    expires_at: data.expires_at === "" ? null : data.expires_at,
+    uploaded_by: null,
+  };
+}
+
+/** Create/rename form for a DocumentFolder — owner_type/owner_id/parent_folder_id/sort_order are supplied programmatically by the caller (the current folder page already knows them), never user-entered. */
+export const documentFolderFormSchema = z.object({
+  name: z.string().trim().min(1, "Folder name is required"),
+  description: z.string().trim(),
+  visibility: z.enum(DOCUMENT_VISIBILITIES),
+});
+
+export type DocumentFolderFormInput = z.infer<typeof documentFolderFormSchema>;

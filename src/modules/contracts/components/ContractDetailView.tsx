@@ -39,6 +39,7 @@ import { ExhibitsSection } from "@/modules/contracts/components/ExhibitsSection"
 import { VersionHistorySection } from "@/modules/contracts/components/VersionHistorySection";
 import { formatContractValue } from "@/modules/contracts/mappers";
 import { ContractFinanceSummaryCard } from "@/modules/finance/components/ContractFinanceSummaryCard";
+import { DocumentsSummarySection } from "@/modules/documents/components/DocumentsSummarySection";
 
 type LoadState =
   | { status: "loading" }
@@ -309,6 +310,11 @@ export function ContractDetailView({ contractId }: { contractId: string }) {
           {client ? (
             <ContractFinanceSummaryCard contractId={contract.id} clientId={client.id} summary={financeSummary} />
           ) : null}
+          <DocumentsSummarySection
+            ownerType="contract"
+            ownerId={contract.id}
+            newDocumentParams={{ contractId: contract.id, clientId: contract.client_id }}
+          />
 
           <Card>
             <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>

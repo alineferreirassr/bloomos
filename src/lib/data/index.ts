@@ -105,6 +105,7 @@ import {
   documentMetadataInputSchema,
   newDocumentVersionInputSchema,
   documentFolderInputSchema,
+  VALID_DOCUMENT_OWNER_TYPES,
   type DocumentMetadataInput,
   type NewDocumentVersionInput,
   type DocumentFolderInput,
@@ -3857,17 +3858,6 @@ export async function getTimelineByExpenseId(expenseId: string): Promise<Timelin
 // ---------------------------------------------------------------------------
 
 const DOCUMENT_STORAGE_BUCKET = "documents";
-
-/** Practical owner types for a Document today — narrower than the full EntityType union, which also carries lead/document/document_folder for Notes/Timeline reuse. Supplier/inventory_item/team_member are reserved for future modules (see src/types/document.ts) and intentionally not added to EntityType yet. */
-const VALID_DOCUMENT_OWNER_TYPES: EntityType[] = [
-  "workspace",
-  "client",
-  "event",
-  "contract",
-  "invoice",
-  "payment",
-  "expense",
-];
 
 type DocumentReferenceType = "contract_exhibit" | "event" | "client" | "contract" | "invoice" | "payment" | "expense";
 

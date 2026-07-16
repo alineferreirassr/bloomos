@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ClientDetailView } from "@/modules/clients/components/ClientDetailView";
 import { makeClient } from "@/modules/clients/testUtils";
@@ -16,11 +16,29 @@ vi.mock("@/lib/data", () => ({
   updateClientStatus: vi.fn(),
   updateClientContactPreference: vi.fn(),
   updateClientTags: vi.fn(),
+  getDocumentOwnerSummary: vi.fn(),
 }));
 
 import * as dataLayer from "@/lib/data";
 
+const EMPTY_DOCUMENT_SUMMARY = {
+  total: 0,
+  active: 0,
+  draft: 0,
+  expiringSoon: 0,
+  expired: 0,
+  archived: 0,
+  deleted: 0,
+  totalStorageBytes: 0,
+  byCategory: {} as never,
+  latestUploads: [],
+};
+
 describe("ClientDetailView", () => {
+  beforeEach(() => {
+    vi.mocked(dataLayer.getDocumentOwnerSummary).mockResolvedValue(EMPTY_DOCUMENT_SUMMARY);
+  });
+
   it("renders header, contact, and internal sections once the client loads", async () => {
     const client = makeClient({
       id: "client_1",

@@ -34,6 +34,7 @@ import { InvoiceStatusBadge } from "@/modules/finance/components/InvoiceStatusBa
 import { PaymentStatusBadge } from "@/modules/finance/components/PaymentStatusBadge";
 import { PaymentTypeBadge } from "@/modules/finance/components/PaymentTypeBadge";
 import { InvoiceActions } from "@/modules/finance/components/InvoiceActions";
+import { DocumentsSummarySection } from "@/modules/documents/components/DocumentsSummarySection";
 
 type LoadState =
   | { status: "loading" }
@@ -310,6 +311,12 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
         </div>
 
         <div className="space-y-6">
+          <DocumentsSummarySection
+            ownerType="invoice"
+            ownerId={invoice.id}
+            newDocumentParams={{ invoiceId: invoice.id, clientId: invoice.client_id }}
+          />
+
           <Card>
             <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
             <div className="mt-3">
@@ -322,7 +329,6 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
             <p className="mt-2 text-xs text-text-muted">Not built yet — reserved for upcoming modules.</p>
             <ul className="mt-3 space-y-1.5 text-sm text-text-muted">
               <li>Invoice PDF export</li>
-              <li>Documents &amp; attachments</li>
             </ul>
           </Card>
         </div>

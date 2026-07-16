@@ -16,6 +16,7 @@ vi.mock("@/lib/data", () => ({
   togglePinNote: vi.fn(),
   getEventFinancialSummary: vi.fn(),
   getEventFinancialStatus: vi.fn(),
+  getDocumentOwnerSummary: vi.fn(),
 }));
 
 import * as dataLayer from "@/lib/data";
@@ -57,6 +58,18 @@ function mockReady(overrides: Partial<ReturnType<typeof makeEvent>> = {}) {
     expense_percentage_of_revenue: 0,
   });
   vi.mocked(dataLayer.getEventFinancialStatus).mockResolvedValue("no_contract");
+  vi.mocked(dataLayer.getDocumentOwnerSummary).mockResolvedValue({
+    total: 0,
+    active: 0,
+    draft: 0,
+    expiringSoon: 0,
+    expired: 0,
+    archived: 0,
+    deleted: 0,
+    totalStorageBytes: 0,
+    byCategory: {} as never,
+    latestUploads: [],
+  });
   return event;
 }
 

@@ -35,6 +35,7 @@ import { PaymentStatusBadge } from "@/modules/finance/components/PaymentStatusBa
 import { PaymentTypeBadge } from "@/modules/finance/components/PaymentTypeBadge";
 import { PaymentMethodBadge } from "@/modules/finance/components/PaymentMethodBadge";
 import { PaymentActions } from "@/modules/finance/components/PaymentActions";
+import { DocumentsSummarySection } from "@/modules/documents/components/DocumentsSummarySection";
 
 type LoadState =
   | { status: "loading" }
@@ -265,6 +266,12 @@ export function PaymentDetailView({ paymentId }: { paymentId: string }) {
         </div>
 
         <div className="space-y-6">
+          <DocumentsSummarySection
+            ownerType="payment"
+            ownerId={payment.id}
+            newDocumentParams={{ paymentId: payment.id, clientId: payment.client_id }}
+          />
+
           <Card>
             <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
             <div className="mt-3">

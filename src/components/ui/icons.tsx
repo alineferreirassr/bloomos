@@ -1,5 +1,5 @@
 import type { SVGProps } from "react";
-import { Home, Users, User, Calendar, FileText, DollarSign, Menu, X } from "lucide-react";
+import { Home, Users, User, Calendar, FileText, DollarSign, Folder, Menu, X } from "lucide-react";
 
 type IconProps = SVGProps<SVGSVGElement>;
 
@@ -28,6 +28,10 @@ export function ContractsIcon(props: IconProps) {
 
 export function FinanceIcon(props: IconProps) {
   return <DollarSign strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+export function DocumentsIcon(props: IconProps) {
+  return <Folder strokeWidth={2} aria-hidden="true" {...props} />;
 }
 
 export function MenuIcon(props: IconProps) {

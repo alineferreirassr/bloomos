@@ -2,6 +2,7 @@ import {
   ClientsIcon,
   ContractsIcon,
   DashboardIcon,
+  DocumentsIcon,
   EventsIcon,
   FinanceIcon,
   LeadsIcon,
@@ -21,4 +22,5 @@ export const navigationItems: NavItem[] = [
   { label: "Events", href: "/events", icon: EventsIcon },
   { label: "Contracts", href: "/contracts", icon: ContractsIcon },
   { label: "Finance", href: "/finance", icon: FinanceIcon },
+  { label: "Documents", href: "/documents", icon: DocumentsIcon },
 ];

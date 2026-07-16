@@ -40,6 +40,7 @@ import { EventHealthCard } from "@/modules/events/components/EventHealthCard";
 import { ChecklistSummaryCard } from "@/modules/events/components/ChecklistSummaryCard";
 import { ScheduleSummaryCard } from "@/modules/events/components/ScheduleSummaryCard";
 import { EventFinancialSummaryCard } from "@/modules/finance/components/EventFinancialSummaryCard";
+import { DocumentsSummarySection } from "@/modules/documents/components/DocumentsSummarySection";
 import type { EventFinancialSummary } from "@/modules/finance/financialSummary";
 import type { EventFinancialStatus } from "@/modules/finance/eventFinancialStatus";
 
@@ -344,6 +345,11 @@ export function EventDetailView({ eventId }: { eventId: string }) {
           />
           <ChecklistSummaryCard eventId={event.id} stats={checklistStats} />
           <ScheduleSummaryCard eventId={event.id} stats={scheduleStats} />
+          <DocumentsSummarySection
+            ownerType="event"
+            ownerId={event.id}
+            newDocumentParams={{ eventId: event.id, clientId: event.client_id }}
+          />
 
           <Card>
             <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>

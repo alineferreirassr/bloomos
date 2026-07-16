@@ -31,6 +31,7 @@ import { isExpenseTerminal } from "@/core/workflows/expenseWorkflow";
 import { ExpenseStatusBadge } from "@/modules/finance/components/ExpenseStatusBadge";
 import { ExpenseCategoryBadge } from "@/modules/finance/components/ExpenseCategoryBadge";
 import { ExpenseActions } from "@/modules/finance/components/ExpenseActions";
+import { DocumentsSummarySection } from "@/modules/documents/components/DocumentsSummarySection";
 
 type LoadState =
   | { status: "loading" }
@@ -269,6 +270,12 @@ export function ExpenseDetailView({ expenseId }: { expenseId: string }) {
         </div>
 
         <div className="space-y-6">
+          <DocumentsSummarySection
+            ownerType="expense"
+            ownerId={expense.id}
+            newDocumentParams={{ expenseId: expense.id }}
+          />
+
           <Card>
             <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
             <div className="mt-3">
