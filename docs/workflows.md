@@ -115,6 +115,54 @@ The single shared file system every other module attaches files through — see 
 
 No money model applies here (Documents carry no monetary fields). No real file storage, upload, download, OCR, e-signature, or PDF generation exists in this phase — every mock Document's `storage_provider` is `"mock"`; see `docs/integrations.md`.
 
+## Team Knowledge Base (architecture, planned — not implemented, Future Phase after Documents)
+
+Reserved as a future module, not started. A private, internal-only knowledge center where the team documents everything needed to work consistently: Company Rules, Employee Handbook, Team Policies, SOPs, Decoration Guidelines, Proposal Setup Checklist, Hotel Decoration Procedures, Luxury Picnic Procedures, Photography Guidelines, Customer Service Standards, Emergency Procedures, Cleaning Checklist, Inventory Instructions, Internal Announcements, Team Training, Video Tutorials, FAQ for Employees.
+
+Eventually expected to support: categories, a rich text editor, image/PDF/video attachments, search, tags, version history, author attribution, "last updated," read tracking, featured articles, role permissions, and a draft/published state — see `docs/database.md`'s `team_kb_articles` sketch. Deliberately **not** merged with Documents (Documents are files; this is structured, versioned, educational content — a different concept), Clients, the future Team Management module, or Contracts. Visibility: authenticated internal team members only, once real role-scoped access exists.
+
+## Client Knowledge Base (architecture, planned — not implemented, Future Phase after Team Knowledge Base)
+
+Reserved as a future module, not started. A self-service knowledge base for clients (a "help center" experience, in the sense of what it does — the canonical module name remains Client Knowledge Base), meant to answer common questions before they contact the company: Frequently Asked Questions, Payment Policies, Cancellation Policy, Rescheduling Policy, Refund Policy, Event Preparation Guide, Welcome Guide, How the Process Works, Timeline Expectations, Contract Explanation, Delivery Information, After Your Event, Contact Information.
+
+Eventually expected to support: categories, a rich text editor, image/PDF/video attachments, search, featured articles, related articles, popular articles, and helpful/not-helpful voting, plus a draft/published state — see `docs/database.md`'s `client_kb_articles` sketch. Deliberately **not** merged with Documents, Clients, or the Team Knowledge Base above — different audience, different visibility model (gated by the future Client Portal), different feature set. Visibility: clients only, via the future Client Portal.
+
+## Notification Center (architecture, planned — not implemented, Future Phase after Client Knowledge Base, before Settings)
+
+Reserved as a future module, not started — the intended single source of truth for every internal and external notification in BloomOS. **Architecture rule**: notifications must never be hardcoded inside an individual module; every future module is expected to publish an event instead, and the Notification Center alone decides who receives it, which channel(s) are used, and which template is rendered. See `docs/database.md`'s `notifications`/`notification_templates`/`notification_preferences`/`notification_deliveries` sketches.
+
+Internal notification events anticipated: New Lead Created, Lead Assigned, Client Converted, Contract Signed, Payment Received, Payment Failed, Event Scheduled, Event Reminder, Document Uploaded, Team Member Invited, Team Member Accepted Invitation, Knowledge Base Updated, Inventory Low, Invoice Due, New Message, New Comment, Automation Completed.
+
+Client-facing notification events anticipated: Welcome Email, Payment Reminder, Proposal Approved, Contract Ready, Contract Signed, Event Reminder, Thank You Message, Review Request, Invoice Available.
+
+Delivery channels anticipated (not all implemented immediately): In-App, Email, SMS, Push, Slack, Discord, WhatsApp. Notification types: Information, Success, Warning, Error, Reminder, Announcement.
+
+Eventually expected to support: unread count, mark as read/mark all as read, archive, delete, priority, scheduled notifications, recurring notifications, notification history, attachments, deep links, a related-entity link (polymorphic, same discipline as Notes/Timeline), filters, categories, and search. Admin-only future capabilities: notification templates, enable/disable templates, preview notifications, broadcast announcement, maintenance alerts.
+
+## Automation Center (architecture, planned — not implemented, Future Phase after Notification Center)
+
+Reserved as a future module, not started — the intended orchestration engine of BloomOS. **Architecture rule**: every business module emits events; the Automation Center listens and decides what actions happen automatically; business modules must never contain automation logic directly. See `docs/database.md`'s `automation_workflows`/`automation_steps`/`automation_runs`/`automation_run_logs`/`automation_variables`/`automation_templates` sketches.
+
+Event sources anticipated: Lead Created, Lead Updated, Lead Converted, Client Created, Client Archived, Contract Created, Contract Signed, Invoice Issued, Invoice Paid, Payment Failed, Event Scheduled, Event Completed, Document Uploaded, Knowledge Base Updated, Team Member Invited, Inventory Low, Notification Delivered.
+
+Supported actions anticipated: Create Notification, Send Email, Send SMS, Send WhatsApp, Create Timeline Entry, Create Internal Task, Assign User, Update Record, Move Pipeline Stage, Generate Document, Generate Invoice, Generate Contract, Call External API, Webhook, Slack, Discord, Google Calendar, Google Drive, Stripe.
+
+Workflow model anticipated (none designed yet): Trigger, Conditions, Filters, Variables, Delays, Wait Until, Branching, Loops, Approval Steps, Manual Review, Retries, Timeouts, Error Handling.
+
+Worked examples, illustrating intent only (no workflow engine exists):
+
+```
+Lead Created → Assign Sales Owner → Send Welcome Email → Create Follow-up Task → Notify Team
+
+Invoice Paid → Update Financial Status → Notify Client → Generate Receipt → Update Dashboard
+
+Contract Signed → Mark Event Confirmed → Create Preparation Checklist → Notify Team → Notify Client
+```
+
+Execution modes anticipated: Immediate, Scheduled, Recurring, Manual. Every execution is eventually expected to log: Execution Status, Execution Time, Duration, Triggered By, Workflow Version, Error Message, Retry Count — see `automation_runs`/`automation_run_logs` in `docs/database.md`.
+
+**Relationship to Notification Center**: the Automation Center is expected to publish to the Notification Center, Timeline, Documents, future Integrations, and business modules — but must never duplicate Notification Center logic. The Notification Center remains responsible only for delivery; the Automation Center only decides that a notification should happen and hands it off.
+
 ## Auth & session (Supabase Foundation)
 
 Active only when `NEXT_PUBLIC_DATA_MODE=supabase`; in `mock` mode (the default) none of this runs. Leads and Clients are the first two business modules wired to live Supabase (`docs/integrations.md`), including Lead → Client conversion (`convert_lead_to_client`, see `docs/database.md`); every other business module (Events, Contracts, Finance, Documents) still runs on the mock data layer regardless of this setting.

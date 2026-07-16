@@ -517,7 +517,7 @@ invoices 1—0/* payments             (payment.invoice_id — optional)
 
 ## Post-MVP tables (not created yet)
 
-Anticipated, not implemented: `inventory_items`, `suppliers`, `team_members`, `event_team_assignments`, `vehicles`, `client_portal_access`, `team_portal_access`, `automations`, `automation_runs`, `emails`, `gallery_media`, `feedback`, `knowledge_base_articles`. When these ship, `checklist_items.owner_type`/`schedule_items.owner_type` and `checklist_items.assigned_type` are expected to gain `employee`/`vendor`/`inventory`/`vehicle` values rather than needing new tables — that reuse is the reason those two tables were generalized ahead of time; `documents.owner_type` is expected to gain `supplier`/`inventory_item`/`team_member` the same way. These will be specified in detail when their phase (see `ROADMAP.md`) begins.
+Anticipated, not implemented: `inventory_items`, `suppliers`, `team_members`, `event_team_assignments`, `vehicles`, `client_portal_access`, `team_portal_access`, `automations`, `automation_runs`, `emails`, `gallery_media`, `feedback`. When these ship, `checklist_items.owner_type`/`schedule_items.owner_type` and `checklist_items.assigned_type` are expected to gain `employee`/`vendor`/`inventory`/`vehicle` values rather than needing new tables — that reuse is the reason those two tables were generalized ahead of time; `documents.owner_type` is expected to gain `supplier`/`inventory_item`/`team_member` the same way. These will be specified in detail when their phase (see `ROADMAP.md`) begins. The former single `knowledge_base_articles` placeholder has been split into two separate, independent future modules — see `team_kb_articles` and `client_kb_articles` below.
 
 ### `invitations` (planned, not created)
 
@@ -545,6 +545,210 @@ Sending, resending, and revoking requires the Supabase Auth Admin API (`service_
 `documents` now exists (see above) — `contract_exhibits.document_id`, `payments.document_id`, and `expenses.document_id` remain nullable placeholder columns that a real Document's id can be written into via the placeholder attachment helpers (`attachDocumentToContractExhibit`, `attachDocumentToPayment`, `attachDocumentToExpense`, and their Invoice/Event/Client counterparts) — metadata-only linking, no real binary upload. These helpers are additive: they never rewrite an existing `document_id` automatically, and no seed data populates them yet.
 
 Future Client Portal and Team Portal access (both listed above as not-yet-implemented) are expected to read `documents.visibility`/`document_folders.visibility` once real authentication exists — see `docs/permissions.md`.
+
+### `team_kb_articles` (planned, not created — Future Phase, after Documents)
+
+**Team Knowledge Base** — a private, internal-only knowledge center for Amoré Bloom team members: Company Rules, Employee Handbook, Team Policies, SOPs, Decoration/Proposal-Setup/Hotel-Decoration/Luxury-Picnic procedures, Photography Guidelines, Customer Service Standards, Emergency Procedures, Cleaning Checklist, Inventory Instructions, Internal Announcements, Team Training/Video Tutorials, FAQ for Employees. This is a deliberately **independent module** — never merged into `documents` (Documents are files; this is structured, versioned, read-tracked educational content, a different concept entirely), `clients`, `contracts`, or the future `team_members` table. Reserved here for shape only; nothing below is final and nothing is implemented.
+
+| Column (sketch) | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workspace_id | uuid | FK → workspaces |
+| category | text | curated set (e.g. Company Rules, SOPs, Decoration Guidelines) — not finalized |
+| title | text | |
+| body | text/jsonb | rich text; exact storage format (markdown vs. a structured rich-text document) not decided |
+| tags | text[] | |
+| status | enum | `draft`, `published` — a `draft` article is never visible to any team member regardless of role |
+| featured | boolean | |
+| author_id | uuid | FK → auth.users |
+| version | integer | version-history mechanism (full-snapshot table vs. append-only diff) not decided |
+| created_at / updated_at | timestamptz | |
+| published_at | timestamptz | nullable |
+
+Expected future companions, not designed yet: a read-tracking table (`user_id` × `article_id` × `read_at`), and image/PDF/video attachments via the existing `documents`/Storage foundation (attached to an article, never duplicating file storage). Role permissions are expected to reuse `workspace_members.role`/`has_workspace_role()` (`docs/permissions.md`), not a new permission system. Visibility: authenticated internal team members only, once real role-scoped access exists — never exposed to the future Client Portal.
+
+### `client_kb_articles` (planned, not created — Future Phase, after Team Knowledge Base)
+
+**Client Knowledge Base** — a self-service, client-facing knowledge base: Frequently Asked Questions, Payment/Cancellation/Rescheduling/Refund Policies, Event Preparation Guide, Welcome Guide, How the Process Works, Timeline Expectations, Contract Explanation, Delivery Information, After Your Event, Contact Information. Also an **independent module** — never merged into `documents`, `clients`, or `team_kb_articles` above (different audience, different visibility model gated by the future Client Portal, and a different feature set — voting, "related"/"popular" article surfacing — that the Team Knowledge Base has no need for).
+
+| Column (sketch) | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workspace_id | uuid | FK → workspaces |
+| category | text | curated set (e.g. FAQ, Policies, Event Preparation) — not finalized |
+| title | text | |
+| body | text/jsonb | rich text — same open storage-format question as `team_kb_articles` |
+| status | enum | `draft`, `published` — a `draft` article is never visible to the future Client Portal |
+| featured | boolean | |
+| related_article_ids | uuid[] | nullable — manually curated "related articles," not computed/inferred |
+| helpful_count / not_helpful_count | integer | future helpful/not-helpful voting; simple counters in this sketch, no per-user vote uniqueness designed yet |
+| created_at / updated_at | timestamptz | |
+| published_at | timestamptz | nullable |
+
+Search for both modules is expected to be Postgres full-text search (`tsvector`/`to_tsquery`) over `title`/`body`, not a separate search service — consistent with this codebase's existing "no third-party service until there's a real need" posture. Visibility: clients only, gated by the future Client Portal (`docs/permissions.md`'s "Client and Team Portal invitations" section) — never available to an anonymous visitor, and never merged with the internal Team Knowledge Base above.
+
+### Notification Center (planned, not created — Future Phase, after Client Knowledge Base, before Settings)
+
+The intended single source of truth for every internal and external notification across BloomOS, so future modules publish events into this system rather than each implementing its own notification logic. Nothing below is final and nothing is implemented — reserved for shape only. Four tables sketched, deliberately kept separate rather than one wide table, since each has an independent lifecycle:
+
+#### `notifications` (planned, not created)
+
+One row per notification instance actually generated for a recipient.
+
+| Column (sketch) | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workspace_id | uuid | FK → workspaces |
+| recipient_user_id | uuid | nullable FK → auth.users — internal recipient |
+| recipient_client_id | uuid | nullable FK → clients — external/client recipient; exactly one of `recipient_user_id`/`recipient_client_id` set, never both |
+| type | enum | `information`, `success`, `warning`, `error`, `reminder`, `announcement` |
+| event_key | text | e.g. `lead_created`, `payment_received`, `contract_signed` — the internal/client event catalog, not finalized |
+| title | text | |
+| body | text | |
+| related_entity_type | text | polymorphic, same discipline as `notes`/`timeline_activities`'s `owner_type`/`owner_id` (see "Polymorphic ownership" above) — e.g. `lead`, `client`, `contract`, `payment` |
+| related_entity_id | uuid | nullable — no database-enforced FK, same rationale as every other polymorphic owner in this schema |
+| deep_link | text | nullable — where the notification should navigate to when opened |
+| priority | enum | not finalized |
+| is_read / read_at | boolean / timestamptz | |
+| is_archived / archived_at | boolean / timestamptz | soft-dismiss, distinct from delete |
+| scheduled_for | timestamptz | nullable — future-dated/recurring notifications; recurrence mechanism not designed |
+| created_at | timestamptz | |
+
+#### `notification_templates` (planned, not created)
+
+| Column (sketch) | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workspace_id | uuid | nullable — a workspace-level override of a global default template, if that's how templating ends up working; not decided |
+| event_key | text | matches `notifications.event_key` |
+| channel | enum | `in_app`, `email`, `sms`, `push`, `slack`, `discord`, `whatsapp` — not all implemented immediately |
+| subject_template | text | nullable — channels without a subject (SMS, push) leave this null |
+| body_template | text | |
+| enabled | boolean | admin enable/disable per template |
+| created_at / updated_at | timestamptz | |
+
+#### `notification_preferences` (planned, not created)
+
+Per-recipient, per-event, per-channel opt-in/opt-out.
+
+| Column (sketch) | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workspace_id | uuid | FK → workspaces |
+| user_id | uuid | nullable FK → auth.users |
+| client_id | uuid | nullable FK → clients — exactly one of `user_id`/`client_id` set, same pattern as `notifications` above |
+| event_key | text | |
+| channel | enum | same set as `notification_templates.channel` |
+| enabled | boolean | |
+
+#### `notification_deliveries` (planned, not created)
+
+One row per channel-delivery attempt for a given notification — separate from `notifications` itself since one notification can fan out to multiple channels, each with its own delivery outcome.
+
+| Column (sketch) | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| notification_id | uuid | FK → notifications |
+| channel | enum | same set as `notification_templates.channel` |
+| status | enum | `pending`, `sent`, `delivered`, `failed` — not finalized |
+| attempted_at | timestamptz | |
+| delivered_at | timestamptz | nullable |
+| error_message | text | nullable |
+
+**Architecture rule**: notifications are never expected to be hardcoded inside an individual module — every module is expected to publish an event (an `event_key` + related entity), and the Notification Center alone decides who receives it, which channel(s) are used, and which template renders it. This keeps notification logic centralized rather than duplicated per module, the same centralization principle already applied to Notes/Timeline (`getNotesByOwner`/`recordTimelineActivity`) and Documents (the shared file system every module attaches to) elsewhere in this schema.
+
+### Automation Center (planned, not created — Future Phase, after Notification Center)
+
+The intended orchestration engine of BloomOS: every business module emits events, the Automation Center listens and decides what happens automatically, and business modules never contain automation logic directly. Nothing below is final and nothing is implemented — reserved for shape only. Six tables sketched:
+
+#### `automation_workflows` (planned, not created)
+
+| Column (sketch) | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workspace_id | uuid | FK → workspaces |
+| name | text | |
+| description | text | nullable |
+| trigger_event_key | text | the business-module event that starts this workflow (e.g. `lead_created`, `invoice_paid`, `contract_signed`) — same event-catalog concept as Notification Center's `event_key`, not necessarily the same catalog |
+| status | enum | `draft`, `active`, `inactive` — not finalized |
+| version | integer | referenced by `automation_runs.workflow_version` below, so a run can be traced to the exact workflow definition that produced it even after later edits |
+| created_by | uuid | FK → auth.users |
+| created_at / updated_at | timestamptz | |
+
+#### `automation_steps` (planned, not created)
+
+Ordered steps belonging to a workflow — the workflow model (conditions, filters, variables, delays, wait-until, branching, loops, approval steps, manual review) is not designed yet, so `config`/`conditions` are placeholders for whatever structure that ends up needing, not a final shape.
+
+| Column (sketch) | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workflow_id | uuid | FK → automation_workflows |
+| step_order | integer | |
+| action_type | text | e.g. `create_notification`, `send_email`, `create_timeline_entry`, `assign_user`, `update_record`, `generate_document`, `webhook` — catalog not finalized |
+| config | jsonb | action-specific parameters; shape undecided |
+| conditions | jsonb | nullable — branching/filter logic; shape undecided |
+| delay | interval | nullable |
+| created_at / updated_at | timestamptz | |
+
+#### `automation_runs` (planned, not created)
+
+One row per workflow execution.
+
+| Column (sketch) | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workflow_id | uuid | FK → automation_workflows |
+| workspace_id | uuid | FK → workspaces |
+| trigger_event_key | text | |
+| related_entity_type / related_entity_id | text / uuid | polymorphic, same discipline as `notifications.related_entity_type`/`related_entity_id` above — no database-enforced FK |
+| execution_mode | enum | `immediate`, `scheduled`, `recurring`, `manual` |
+| status | enum | e.g. `pending`, `running`, `succeeded`, `failed`, `retrying` — not finalized |
+| triggered_by | uuid | nullable FK → auth.users — set only for `manual` executions |
+| workflow_version | integer | the `automation_workflows.version` this run executed, so later edits to the workflow never rewrite the history of a past run |
+| started_at / completed_at | timestamptz | |
+| duration_ms | integer | nullable |
+| retry_count | integer | |
+| error_message | text | nullable |
+
+#### `automation_run_logs` (planned, not created)
+
+Per-step log entries within a run — separate from `automation_runs` since one run has many steps, each independently loggable.
+
+| Column (sketch) | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| run_id | uuid | FK → automation_runs |
+| step_id | uuid | nullable FK → automation_steps |
+| status | text | |
+| message | text | nullable |
+| logged_at | timestamptz | |
+
+#### `automation_variables` (planned, not created)
+
+Workflow-scoped variables referenced by steps — mechanism (how a step reads/writes one) not designed.
+
+| Column (sketch) | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workflow_id | uuid | FK → automation_workflows |
+| key | text | |
+| value_type | text | nullable |
+| default_value | jsonb | nullable |
+
+#### `automation_templates` (planned, not created)
+
+Reusable workflow blueprints an Owner/Admin starts a new `automation_workflows` row from — distinct from `notification_templates` above (those are per-message templates; these are whole-workflow starting points).
+
+| Column (sketch) | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| name | text | |
+| description | text | nullable |
+| category | text | nullable |
+| default_steps | jsonb | a serialized starting `automation_steps` set; shape undecided |
+| created_at / updated_at | timestamptz | |
+
+**Relationship to other modules**: the Automation Center is expected to publish to the Notification Center, Timeline, Documents, future third-party Integrations, and business modules themselves (via `update_record`/`assign_user`/pipeline-stage actions) — but it must never duplicate Notification Center's delivery logic. The Automation Center's `create_notification` action is expected to call into the Notification Center (above) exactly the same way a business module would; the Notification Center alone remains responsible for deciding channels/templates/delivery, never the Automation Center.
 
 No payment-provider (Stripe, Square, PayPal, banks, accounting software) is connected. `payments.payment_method` values that name a provider (`stripe`, `square`, `paypal`, `credit_card`, `debit_card`) are labels only, recorded exactly like `cash`/`check`/`zelle`/`venmo` — none of them trigger a real charge, webhook, or reconciliation. `createPayment`'s initial `status` (`succeeded` for manual/bank-style methods, `pending` for card/wallet-style ones) simulates the outcome a provider round-trip would eventually produce, nothing more. **No card numbers, bank account numbers, or other sensitive payment credentials are ever stored** — `payments.reference` is a free-text field limited to non-sensitive identifiers (a check number, a provider transaction id).
 
