@@ -24,11 +24,9 @@ import { PAYMENT_STATUSES_COUNTING_TOWARD_PAID } from "@/core/enums/paymentStatu
 import type { LeadStatus } from "@/core/enums/leadStatus";
 import type { ClientStatus } from "@/core/enums/clientStatus";
 import type { ContactMethod } from "@/core/enums/contactMethod";
-import { EVENT_TYPE_LABELS, type EventType } from "@/core/enums/eventType";
 import type { EventPriority } from "@/core/enums/eventPriority";
-import { EVENT_PRIORITY_LABELS } from "@/core/enums/eventPriority";
 import type { ChecklistStatus } from "@/core/enums/checklistStatus";
-import { SCHEDULE_STATUS_LABELS, type ScheduleStatus } from "@/core/enums/scheduleStatus";
+import type { ScheduleStatus } from "@/core/enums/scheduleStatus";
 import type { SignatureStatus } from "@/core/enums/signatureStatus";
 import {
   canTransitionContractStatus,
@@ -68,21 +66,12 @@ import {
 import { canMoveFolder, getFolderPath, getFolderChildren } from "@/core/workflows/documentFolderWorkflow";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 import { NotFoundError } from "@/core/errors";
-import {
-  canTransitionEventStatus,
-  canTransitionLifecycleStage,
-  isEventTerminal,
-  getEventNextRecommendedAction,
-  EVENT_STATUS_LABELS,
-  EVENT_LIFECYCLE_STAGE_LABELS,
-  type EventStatus,
-  type EventLifecycleStage,
-} from "@/core/workflows/eventWorkflow";
+import type { EventStatus, EventLifecycleStage } from "@/core/workflows/eventWorkflow";
 import type { LeadFormInput } from "@/modules/leads/schema";
 import type { NoteFormInput } from "@/modules/notes/schema";
 import type { ClientFormInput } from "@/modules/clients/schema";
-import { eventDataSchema, scheduleItemSchema, type EventFormInput, type ScheduleItemInput } from "@/modules/events/schema";
-import { checklistItemSchema, type ChecklistItemInput } from "@/modules/checklist/schema";
+import type { EventFormInput, ScheduleItemInput } from "@/modules/events/schema";
+import type { ChecklistItemInput } from "@/modules/checklist/schema";
 import {
   contractSchema,
   contractExhibitSchema,
@@ -133,7 +122,6 @@ import {
   type EventFinancialStatus,
 } from "@/modules/finance/eventFinancialStatus";
 import { calculateBalance, subtractMinor, addMinor, sumMinor, majorToMinor, formatMoney } from "@/lib/money";
-import { DEFAULT_CHECKLIST_TEMPLATES } from "@/modules/events/constants/checklistTemplates";
 import { type DataResult, ok, fail } from "@/lib/data/result";
 import { delay, generateId, nowIso } from "@/lib/data/utils";
 import { selectRepository } from "@/lib/data/provider";
@@ -145,6 +133,12 @@ import { mockClientsRepository } from "@/lib/data/clients/mockRepository";
 import { supabaseClientsRepository } from "@/lib/data/clients/supabaseRepository";
 import { mockConversionRepository } from "@/lib/data/conversion/mockConversionRepository";
 import { supabaseConversionRepository } from "@/lib/data/conversion/supabaseConversionRepository";
+import type { EventFilters } from "@/lib/data/events/repository";
+import {
+  mockEventsRepository,
+  applyDefaultChecklistTemplate as applyDefaultChecklistTemplateForTests,
+} from "@/lib/data/events/mockRepository";
+import { supabaseEventsRepository } from "@/lib/data/events/supabaseRepository";
 import {
   readLeads,
   resetLeadsStore,
@@ -165,19 +159,10 @@ import {
 } from "@/lib/data/mock/clientsStore";
 import {
   readEvents,
-  writeEvents,
   resetEventsStore,
 } from "@/lib/data/mock/eventsStore";
-import {
-  readChecklistItems,
-  writeChecklistItems,
-  resetChecklistStore,
-} from "@/lib/data/mock/checklistStore";
-import {
-  readScheduleItems,
-  writeScheduleItems,
-  resetScheduleStore,
-} from "@/lib/data/mock/scheduleStore";
+import { resetChecklistStore } from "@/lib/data/mock/checklistStore";
+import { resetScheduleStore } from "@/lib/data/mock/scheduleStore";
 import {
   readContracts,
   writeContracts,
@@ -345,6 +330,9 @@ export async function togglePinNote(noteId: string): Promise<DataResult<Note>> {
   const clientResult = await clientsRepository().togglePinClientNote(noteId);
   if (clientResult !== null) return clientResult;
 
+  const eventResult = await eventsRepository().togglePinEventNote(noteId);
+  if (eventResult !== null) return eventResult;
+
   const existing = readNotes().find((n) => n.id === noteId);
   if (!existing) {
     return fail("Note not found.");
@@ -471,777 +459,183 @@ export async function getClientNextAction(clientId: string): Promise<string | nu
 // status and lifecycle_stage are independent state machines (see
 // core/workflows/eventWorkflow.ts) — each has its own setter and its own
 // timeline activity type, never inferred from the other.
+//
+// The third business module with a live Supabase repository
+// (lib/data/events/supabaseRepository.ts) alongside the original mock one
+// (lib/data/events/mockRepository.ts) — same selectRepository() pattern as
+// Leads/Clients. Bundles Events, Checklist, Schedule, and Event Notes/
+// Timeline into one repository pair (lib/data/events/repository.ts) since
+// every Checklist/Schedule/Note/Timeline operation needs the owning Event's
+// workspace_id first. Every function below is a thin, backend-agnostic
+// wrapper; neither this file nor any UI ever branches on data mode.
 // ---------------------------------------------------------------------------
 
-export interface EventFilters {
-  search?: string;
-  status?: EventStatus | "all";
-  lifecycleStage?: EventLifecycleStage | "all";
-  eventType?: EventType | "all";
-  priority?: EventPriority | "all";
-  clientId?: string;
-  /** Inclusive; events with no event_date never match when either bound is set. */
-  dateFrom?: string;
-  dateTo?: string;
-  includeArchived?: boolean;
+export type { EventFilters } from "@/lib/data/events/repository";
+
+function eventsRepository() {
+  return selectRepository({ mock: mockEventsRepository, supabase: supabaseEventsRepository });
 }
 
 export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
-  await delay(200);
-  const {
-    search,
-    status,
-    lifecycleStage,
-    eventType,
-    priority,
-    clientId,
-    dateFrom,
-    dateTo,
-    includeArchived = false,
-  } = filters;
-  const clientsById = new Map(readClients().map((client) => [client.id, client]));
-
-  return readEvents().filter((event) => {
-    if (!includeArchived && event.status === "archived") return false;
-    if (status && status !== "all" && event.status !== status) return false;
-    if (lifecycleStage && lifecycleStage !== "all" && event.lifecycle_stage !== lifecycleStage) return false;
-    if (eventType && eventType !== "all" && event.event_type !== eventType) return false;
-    if (priority && priority !== "all" && event.priority !== priority) return false;
-    if (clientId && event.client_id !== clientId) return false;
-    if (dateFrom || dateTo) {
-      if (!event.event_date) return false;
-      if (dateFrom && event.event_date < dateFrom) return false;
-      if (dateTo && event.event_date > dateTo) return false;
-    }
-    if (search) {
-      const q = search.trim().toLowerCase();
-      if (!q) return true;
-      const client = clientsById.get(event.client_id);
-      const clientName = client ? `${client.first_name} ${client.last_name}` : "";
-      const haystack = `${event.title} ${clientName} ${event.location_name ?? ""} ${event.city ?? ""}`.toLowerCase();
-      if (!haystack.includes(q)) return false;
-    }
-    return true;
-  });
+  return eventsRepository().getEvents(filters);
 }
 
 export async function getEventById(id: string): Promise<Event> {
-  await delay(150);
-  const event = readEvents().find((e) => e.id === id);
-  if (!event) {
-    throw new NotFoundError(`Event ${id} was not found`);
-  }
-  return event;
+  return eventsRepository().getEventById(id);
 }
 
-/**
- * Internal batch initializer for a default checklist template — not
- * exported for UI use (createEvent() is the only caller; test-only access
- * is exported separately at the bottom of this file, same convention as
- * resetAllMockData). Treats populating the template as one atomic
- * initialization operation rather than N independent createChecklistItem
- * calls:
- *
- * 1. validates every template item first (checklistItemSchema) — if any
- *    fails, nothing is written and the function returns fail();
- * 2. only then builds the full ChecklistItem[] and writes it as one batch;
- * 3. records exactly one summarized timeline activity afterward (not one
- *    per item) — an 11-item template would otherwise bury a fresh Event's
- *    timeline in noise a user never asked to see.
- *
- * Manually created checklist items (createChecklistItem, the public
- * function below) are unaffected and continue recording their own
- * individual checklist_item_created activity as before.
- */
-async function applyDefaultChecklistTemplate(
-  event: Event,
-  templateItems: ChecklistItemInput[],
-): Promise<DataResult<ChecklistItem[]>> {
-  const parsedItems: ChecklistItemInput[] = [];
-  for (const templateItem of templateItems) {
-    const parsed = checklistItemSchema.safeParse(templateItem);
-    if (!parsed.success) {
-      return fail(
-        "The default checklist template failed validation; no items were created.",
-        fieldErrorsFromZod(parsed.error),
-      );
-    }
-    parsedItems.push(parsed.data);
-  }
-
-  const timestamp = nowIso();
-  const newItems: ChecklistItem[] = parsedItems.map((data, index) => ({
-    id: generateId("checklist"),
-    workspace_id: event.workspace_id,
-    owner_type: "event",
-    owner_id: event.id,
-    ...data,
-    status: "pending",
-    completed_at: null,
-    sort_order: index,
-    created_at: timestamp,
-    updated_at: timestamp,
-  }));
-
-  writeChecklistItems([...readChecklistItems(), ...newItems]);
-  recordTimelineActivity(
-    event.workspace_id,
-    "event",
-    event.id,
-    "checklist_template_applied",
-    `Default ${EVENT_TYPE_LABELS[event.event_type]} checklist created with ${newItems.length} item${newItems.length === 1 ? "" : "s"}.`,
-  );
-
-  return ok(newItems);
-}
-
-/**
- * Events can be created from an existing Client or from a converted Lead's
- * Client — either way, the caller passes client_id (and, for the latter,
- * originating_lead_id, typically the Client's own originating_lead_id).
- * client_id is required and must reference a real Client; workspace_id is
- * derived from that Client rather than assumed, so an Event can never be
- * silently created in the wrong workspace.
- */
 export async function createEvent(input: EventFormInput): Promise<DataResult<Event>> {
-  const parsed = eventDataSchema.safeParse(input);
-  if (!parsed.success) {
-    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
-  }
-
-  const client = readClients().find((c) => c.id === parsed.data.client_id);
-  if (!client) {
-    return fail("Please select a valid client.", { client_id: "Client not found." });
-  }
-
-  const timestamp = nowIso();
-  const event: Event = {
-    id: generateId("event"),
-    workspace_id: client.workspace_id,
-    ...parsed.data,
-    status: "draft",
-    lifecycle_stage: "intake",
-    created_at: timestamp,
-    updated_at: timestamp,
-    archived_at: null,
-    completed_at: null,
-    cancelled_at: null,
-  };
-
-  writeEvents([...readEvents(), event]);
-  recordTimelineActivity(event.workspace_id, "event", event.id, "event_created", "Event created");
-
-  const defaultChecklist = DEFAULT_CHECKLIST_TEMPLATES[event.event_type];
-  if (defaultChecklist) {
-    await applyDefaultChecklistTemplate(event, defaultChecklist);
-  }
-
-  return ok(event);
+  return eventsRepository().createEvent(input);
 }
 
 export async function updateEvent(id: string, input: EventFormInput): Promise<DataResult<Event>> {
-  const existing = readEvents().find((e) => e.id === id);
-  if (!existing) {
-    return fail("Event not found.");
-  }
-
-  const parsed = eventDataSchema.safeParse(input);
-  if (!parsed.success) {
-    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
-  }
-
-  const client = readClients().find((c) => c.id === parsed.data.client_id);
-  if (!client) {
-    return fail("Please select a valid client.", { client_id: "Client not found." });
-  }
-
-  const updated: Event = { ...existing, ...parsed.data, updated_at: nowIso() };
-  writeEvents(readEvents().map((e) => (e.id === id ? updated : e)));
-  recordTimelineActivity(existing.workspace_id, "event", id, "event_updated", "Event information updated");
-
-  return ok(updated);
+  return eventsRepository().updateEvent(id, input);
 }
 
 export async function updateEventStatus(id: string, status: EventStatus): Promise<DataResult<Event>> {
-  const existing = readEvents().find((e) => e.id === id);
-  if (!existing) {
-    return fail("Event not found.");
-  }
-  if (!canTransitionEventStatus(existing.status, status)) {
-    return fail(
-      `Cannot move an event from "${EVENT_STATUS_LABELS[existing.status]}" to "${EVENT_STATUS_LABELS[status]}".`,
-    );
-  }
-
-  const updated: Event = { ...existing, status, updated_at: nowIso() };
-  writeEvents(readEvents().map((e) => (e.id === id ? updated : e)));
-  recordTimelineActivity(
-    existing.workspace_id,
-    "event",
-    id,
-    "status_changed",
-    `Status changed from ${EVENT_STATUS_LABELS[existing.status]} to ${EVENT_STATUS_LABELS[status]}`,
-    { from: existing.status, to: status },
-  );
-
-  return ok(updated);
+  return eventsRepository().updateEventStatus(id, status);
 }
 
 export async function updateEventLifecycleStage(
   id: string,
   stage: EventLifecycleStage,
 ): Promise<DataResult<Event>> {
-  const existing = readEvents().find((e) => e.id === id);
-  if (!existing) {
-    return fail("Event not found.");
-  }
-  if (!canTransitionLifecycleStage(existing.lifecycle_stage, stage)) {
-    return fail(
-      `Cannot move an event from "${EVENT_LIFECYCLE_STAGE_LABELS[existing.lifecycle_stage]}" to "${EVENT_LIFECYCLE_STAGE_LABELS[stage]}".`,
-    );
-  }
-
-  const updated: Event = { ...existing, lifecycle_stage: stage, updated_at: nowIso() };
-  writeEvents(readEvents().map((e) => (e.id === id ? updated : e)));
-  recordTimelineActivity(
-    existing.workspace_id,
-    "event",
-    id,
-    "lifecycle_stage_changed",
-    `Lifecycle stage changed from ${EVENT_LIFECYCLE_STAGE_LABELS[existing.lifecycle_stage]} to ${EVENT_LIFECYCLE_STAGE_LABELS[stage]}`,
-    { from: existing.lifecycle_stage, to: stage },
-  );
-
-  return ok(updated);
+  return eventsRepository().updateEventLifecycleStage(id, stage);
 }
 
 export async function updateEventPriority(
   id: string,
   priority: EventPriority,
 ): Promise<DataResult<Event>> {
-  const existing = readEvents().find((e) => e.id === id);
-  if (!existing) {
-    return fail("Event not found.");
-  }
-
-  const updated: Event = { ...existing, priority, updated_at: nowIso() };
-  writeEvents(readEvents().map((e) => (e.id === id ? updated : e)));
-  recordTimelineActivity(
-    existing.workspace_id,
-    "event",
-    id,
-    "priority_changed",
-    `Priority changed from ${EVENT_PRIORITY_LABELS[existing.priority]} to ${EVENT_PRIORITY_LABELS[priority]}`,
-    { from: existing.priority, to: priority },
-  );
-
-  return ok(updated);
+  return eventsRepository().updateEventPriority(id, priority);
 }
 
 export async function archiveEvent(id: string): Promise<DataResult<Event>> {
-  const existing = readEvents().find((e) => e.id === id);
-  if (!existing) {
-    return fail("Event not found.");
-  }
-  if (existing.status === "archived") {
-    return fail("This event is already archived.");
-  }
-
-  const timestamp = nowIso();
-  const updated: Event = {
-    ...existing,
-    status: "archived",
-    archived_at: timestamp,
-    updated_at: timestamp,
-  };
-  writeEvents(readEvents().map((e) => (e.id === id ? updated : e)));
-  recordTimelineActivity(existing.workspace_id, "event", id, "event_archived", "Event archived");
-
-  return ok(updated);
+  return eventsRepository().archiveEvent(id);
 }
 
-/**
- * Restoring returns the Event to "planning" — a reasonable resumption
- * point. The pre-archive status isn't tracked separately (mirrors
- * restoreClient, which always resumes to "active"), so a genuinely
- * different resumption status is a manual updateEventStatus call away.
- */
 export async function restoreEvent(id: string): Promise<DataResult<Event>> {
-  const existing = readEvents().find((e) => e.id === id);
-  if (!existing) {
-    return fail("Event not found.");
-  }
-  if (existing.status !== "archived") {
-    return fail("This event is not archived.");
-  }
-
-  const updated: Event = {
-    ...existing,
-    status: "planning",
-    archived_at: null,
-    updated_at: nowIso(),
-  };
-  writeEvents(readEvents().map((e) => (e.id === id ? updated : e)));
-  recordTimelineActivity(existing.workspace_id, "event", id, "event_restored", "Event restored");
-
-  return ok(updated);
+  return eventsRepository().restoreEvent(id);
 }
 
 export async function cancelEvent(id: string): Promise<DataResult<Event>> {
-  const existing = readEvents().find((e) => e.id === id);
-  if (!existing) {
-    return fail("Event not found.");
-  }
-  if (isEventTerminal(existing.status)) {
-    return fail(`This event is already ${EVENT_STATUS_LABELS[existing.status].toLowerCase()} and can't be cancelled.`);
-  }
-
-  const timestamp = nowIso();
-  const updated: Event = {
-    ...existing,
-    status: "cancelled",
-    cancelled_at: timestamp,
-    updated_at: timestamp,
-  };
-  writeEvents(readEvents().map((e) => (e.id === id ? updated : e)));
-  recordTimelineActivity(existing.workspace_id, "event", id, "event_cancelled", "Event cancelled");
-
-  return ok(updated);
+  return eventsRepository().cancelEvent(id);
 }
 
 export async function completeEvent(id: string): Promise<DataResult<Event>> {
-  const existing = readEvents().find((e) => e.id === id);
-  if (!existing) {
-    return fail("Event not found.");
-  }
-  if (isEventTerminal(existing.status)) {
-    return fail(`This event is already ${EVENT_STATUS_LABELS[existing.status].toLowerCase()} and can't be completed.`);
-  }
-
-  const timestamp = nowIso();
-  const updated: Event = {
-    ...existing,
-    status: "completed",
-    completed_at: timestamp,
-    updated_at: timestamp,
-  };
-  writeEvents(readEvents().map((e) => (e.id === id ? updated : e)));
-  recordTimelineActivity(existing.workspace_id, "event", id, "event_completed", "Event completed");
-
-  return ok(updated);
+  return eventsRepository().completeEvent(id);
 }
 
-/** No post-event-review entity/module exists yet, so hasPostEventReview is always false until that's built. */
 export async function getEventNextAction(eventId: string): Promise<string | null> {
-  const [event, checklist, schedule] = await Promise.all([
-    getEventById(eventId),
-    getChecklistByEventId(eventId),
-    getScheduleByEventId(eventId),
-  ]);
-
-  const now = Date.now();
-  const daysUntilEvent = event.event_date
-    ? Math.floor((new Date(event.event_date).getTime() - now) / (1000 * 60 * 60 * 24))
-    : null;
-  const hasOverdueChecklistItems = checklist.some(
-    (item) =>
-      item.status !== "completed" &&
-      item.status !== "cancelled" &&
-      item.due_date !== null &&
-      new Date(item.due_date).getTime() < now,
-  );
-
-  return getEventNextRecommendedAction(event, {
-    hasChecklistItems: checklist.length > 0,
-    hasOverdueChecklistItems,
-    hasScheduleItems: schedule.length > 0,
-    hasPostEventReview: false,
-    daysUntilEvent,
-  });
+  return eventsRepository().getEventNextAction(eventId);
 }
 
 // ---------------------------------------------------------------------------
 // Checklist — reusable across owner types (only "event" is a real owner
-// today; see types/checklistItem.ts). Same polymorphic-owner scoping rule
-// as Notes/Timeline: every query filters by workspace_id together with
-// owner_type/owner_id, never owner_id alone.
+// today; see types/checklistItem.ts). Routes through eventsRepository(),
+// same as Events above.
 // ---------------------------------------------------------------------------
 
 export async function getChecklistByEventId(eventId: string): Promise<ChecklistItem[]> {
-  const event = readEvents().find((e) => e.id === eventId);
-  if (!event) return [];
-  await delay(150);
-  return readChecklistItems()
-    .filter(
-      (item) =>
-        item.workspace_id === event.workspace_id &&
-        item.owner_type === "event" &&
-        item.owner_id === eventId,
-    )
-    .sort((a, b) => a.sort_order - b.sort_order);
+  return eventsRepository().getChecklistByEventId(eventId);
 }
 
 export async function createChecklistItem(
   eventId: string,
   input: ChecklistItemInput,
 ): Promise<DataResult<ChecklistItem>> {
-  const event = readEvents().find((e) => e.id === eventId);
-  if (!event) {
-    return fail("Event not found.");
-  }
-
-  const parsed = checklistItemSchema.safeParse(input);
-  if (!parsed.success) {
-    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
-  }
-
-  const ownItems = readChecklistItems().filter(
-    (item) =>
-      item.workspace_id === event.workspace_id && item.owner_type === "event" && item.owner_id === eventId,
-  );
-
-  const timestamp = nowIso();
-  const item: ChecklistItem = {
-    id: generateId("checklist"),
-    workspace_id: event.workspace_id,
-    owner_type: "event",
-    owner_id: eventId,
-    ...parsed.data,
-    status: "pending",
-    completed_at: null,
-    sort_order: ownItems.length,
-    created_at: timestamp,
-    updated_at: timestamp,
-  };
-
-  writeChecklistItems([...readChecklistItems(), item]);
-  recordTimelineActivity(
-    event.workspace_id,
-    "event",
-    eventId,
-    "checklist_item_created",
-    `Checklist item created: "${item.title}"`,
-  );
-
-  return ok(item);
+  return eventsRepository().createChecklistItem(eventId, input);
 }
 
 export async function updateChecklistItem(
   id: string,
   input: ChecklistItemInput,
 ): Promise<DataResult<ChecklistItem>> {
-  const existing = readChecklistItems().find((item) => item.id === id);
-  if (!existing) {
-    return fail("Checklist item not found.");
-  }
-
-  const parsed = checklistItemSchema.safeParse(input);
-  if (!parsed.success) {
-    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
-  }
-
-  const updated: ChecklistItem = { ...existing, ...parsed.data, updated_at: nowIso() };
-  writeChecklistItems(readChecklistItems().map((item) => (item.id === id ? updated : item)));
-
-  return ok(updated);
+  return eventsRepository().updateChecklistItem(id, input);
 }
 
 export async function updateChecklistItemStatus(
   id: string,
   status: ChecklistStatus,
 ): Promise<DataResult<ChecklistItem>> {
-  const existing = readChecklistItems().find((item) => item.id === id);
-  if (!existing) {
-    return fail("Checklist item not found.");
-  }
-
-  const updated: ChecklistItem = {
-    ...existing,
-    status,
-    completed_at: status === "completed" ? (existing.completed_at ?? nowIso()) : null,
-    updated_at: nowIso(),
-  };
-  writeChecklistItems(readChecklistItems().map((item) => (item.id === id ? updated : item)));
-
-  return ok(updated);
+  return eventsRepository().updateChecklistItemStatus(id, status);
 }
 
 export async function completeChecklistItem(id: string): Promise<DataResult<ChecklistItem>> {
-  const existing = readChecklistItems().find((item) => item.id === id);
-  if (!existing) {
-    return fail("Checklist item not found.");
-  }
-  if (existing.status === "completed") {
-    return fail("This checklist item is already completed.");
-  }
-
-  const timestamp = nowIso();
-  const updated: ChecklistItem = {
-    ...existing,
-    status: "completed",
-    completed_at: timestamp,
-    updated_at: timestamp,
-  };
-  writeChecklistItems(readChecklistItems().map((item) => (item.id === id ? updated : item)));
-  recordTimelineActivity(
-    existing.workspace_id,
-    existing.owner_type,
-    existing.owner_id,
-    "checklist_item_completed",
-    `Checklist item completed: "${existing.title}"`,
-  );
-
-  return ok(updated);
+  return eventsRepository().completeChecklistItem(id);
 }
 
 /** Refuses to delete a completed checklist item — it's part of the event's completed history, not a mistake to undo. */
 export async function deleteChecklistItem(id: string): Promise<DataResult<null>> {
-  const existing = readChecklistItems().find((item) => item.id === id);
-  if (!existing) {
-    return fail("Checklist item not found.");
-  }
-  if (existing.status === "completed") {
-    return fail("Completed checklist items can't be deleted.");
-  }
-
-  writeChecklistItems(readChecklistItems().filter((item) => item.id !== id));
-
-  return ok(null);
+  return eventsRepository().deleteChecklistItem(id);
 }
 
 export async function reorderChecklistItems(
   eventId: string,
   orderedIds: string[],
 ): Promise<DataResult<ChecklistItem[]>> {
-  const event = readEvents().find((e) => e.id === eventId);
-  if (!event) {
-    return fail("Event not found.");
-  }
-
-  const ownItems = readChecklistItems().filter(
-    (item) =>
-      item.workspace_id === event.workspace_id && item.owner_type === "event" && item.owner_id === eventId,
-  );
-  if (orderedIds.length !== ownItems.length || !ownItems.every((item) => orderedIds.includes(item.id))) {
-    return fail("The provided order doesn't match this event's checklist items.");
-  }
-
-  const timestamp = nowIso();
-  const order = new Map(orderedIds.map((id, index) => [id, index]));
-  writeChecklistItems(
-    readChecklistItems().map((item) =>
-      order.has(item.id) ? { ...item, sort_order: order.get(item.id) as number, updated_at: timestamp } : item,
-    ),
-  );
-
-  const updatedItems = readChecklistItems()
-    .filter(
-      (item) =>
-        item.workspace_id === event.workspace_id && item.owner_type === "event" && item.owner_id === eventId,
-    )
-    .sort((a, b) => a.sort_order - b.sort_order);
-
-  return ok(updatedItems);
+  return eventsRepository().reorderChecklistItems(eventId, orderedIds);
 }
 
 // ---------------------------------------------------------------------------
 // Schedule — reusable across owner types, generalized the same way as
 // Checklist (only "event" is a real owner today; see
-// types/eventScheduleItem.ts). Same polymorphic-owner scoping rule as
-// Notes/Timeline/Checklist: every query filters by workspace_id together
-// with owner_type/owner_id, never owner_id alone.
+// types/eventScheduleItem.ts). Routes through eventsRepository(), same as
+// Events/Checklist above.
 // ---------------------------------------------------------------------------
 
-async function getScheduleByOwner(
-  workspaceId: string,
-  ownerType: EntityType,
-  ownerId: string,
-): Promise<EventScheduleItem[]> {
-  await delay(150);
-  return readScheduleItems()
-    .filter(
-      (item) =>
-        item.workspace_id === workspaceId && item.owner_type === ownerType && item.owner_id === ownerId,
-    )
-    .sort((a, b) => a.sort_order - b.sort_order);
-}
-
-async function createScheduleItemForOwner(
-  workspaceId: string,
-  ownerType: EntityType,
-  ownerId: string,
-  input: ScheduleItemInput,
-): Promise<DataResult<EventScheduleItem>> {
-  const parsed = scheduleItemSchema.safeParse(input);
-  if (!parsed.success) {
-    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
-  }
-
-  const ownItems = readScheduleItems().filter(
-    (item) => item.workspace_id === workspaceId && item.owner_type === ownerType && item.owner_id === ownerId,
-  );
-
-  const timestamp = nowIso();
-  const item: EventScheduleItem = {
-    id: generateId("schedule"),
-    workspace_id: workspaceId,
-    owner_type: ownerType,
-    owner_id: ownerId,
-    ...parsed.data,
-    status: "planned",
-    sort_order: ownItems.length,
-    created_at: timestamp,
-    updated_at: timestamp,
-  };
-
-  writeScheduleItems([...readScheduleItems(), item]);
-  recordTimelineActivity(
-    workspaceId,
-    ownerType,
-    ownerId,
-    "schedule_item_created",
-    `Schedule item created: "${item.title}"`,
-  );
-
-  return ok(item);
-}
-
 export async function getScheduleByEventId(eventId: string): Promise<EventScheduleItem[]> {
-  const event = readEvents().find((e) => e.id === eventId);
-  if (!event) return [];
-  return getScheduleByOwner(event.workspace_id, "event", eventId);
+  return eventsRepository().getScheduleByEventId(eventId);
 }
 
 export async function createScheduleItem(
   eventId: string,
   input: ScheduleItemInput,
 ): Promise<DataResult<EventScheduleItem>> {
-  const event = readEvents().find((e) => e.id === eventId);
-  if (!event) {
-    return fail("Event not found.");
-  }
-  return createScheduleItemForOwner(event.workspace_id, "event", eventId, input);
+  return eventsRepository().createScheduleItem(eventId, input);
 }
 
 export async function updateScheduleItem(
   id: string,
   input: ScheduleItemInput,
 ): Promise<DataResult<EventScheduleItem>> {
-  const existing = readScheduleItems().find((item) => item.id === id);
-  if (!existing) {
-    return fail("Schedule item not found.");
-  }
-
-  const parsed = scheduleItemSchema.safeParse(input);
-  if (!parsed.success) {
-    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
-  }
-
-  const updated: EventScheduleItem = { ...existing, ...parsed.data, updated_at: nowIso() };
-  writeScheduleItems(readScheduleItems().map((item) => (item.id === id ? updated : item)));
-  recordTimelineActivity(
-    existing.workspace_id,
-    existing.owner_type,
-    existing.owner_id,
-    "schedule_item_updated",
-    `Schedule item updated: "${updated.title}"`,
-  );
-
-  return ok(updated);
+  return eventsRepository().updateScheduleItem(id, input);
 }
 
 export async function updateScheduleItemStatus(
   id: string,
   status: ScheduleStatus,
 ): Promise<DataResult<EventScheduleItem>> {
-  const existing = readScheduleItems().find((item) => item.id === id);
-  if (!existing) {
-    return fail("Schedule item not found.");
-  }
-
-  const updated: EventScheduleItem = { ...existing, status, updated_at: nowIso() };
-  writeScheduleItems(readScheduleItems().map((item) => (item.id === id ? updated : item)));
-  recordTimelineActivity(
-    existing.workspace_id,
-    existing.owner_type,
-    existing.owner_id,
-    "schedule_item_updated",
-    `Schedule item status changed to ${SCHEDULE_STATUS_LABELS[status]}: "${existing.title}"`,
-  );
-
-  return ok(updated);
+  return eventsRepository().updateScheduleItemStatus(id, status);
 }
 
 export async function deleteScheduleItem(id: string): Promise<DataResult<null>> {
-  const existing = readScheduleItems().find((item) => item.id === id);
-  if (!existing) {
-    return fail("Schedule item not found.");
-  }
-
-  writeScheduleItems(readScheduleItems().filter((item) => item.id !== id));
-
-  return ok(null);
+  return eventsRepository().deleteScheduleItem(id);
 }
 
 export async function reorderScheduleItems(
   eventId: string,
   orderedIds: string[],
 ): Promise<DataResult<EventScheduleItem[]>> {
-  const event = readEvents().find((e) => e.id === eventId);
-  if (!event) {
-    return fail("Event not found.");
-  }
-
-  const ownItems = readScheduleItems().filter(
-    (item) =>
-      item.workspace_id === event.workspace_id && item.owner_type === "event" && item.owner_id === eventId,
-  );
-  if (orderedIds.length !== ownItems.length || !ownItems.every((item) => orderedIds.includes(item.id))) {
-    return fail("The provided order doesn't match this event's schedule items.");
-  }
-
-  const timestamp = nowIso();
-  const order = new Map(orderedIds.map((id, index) => [id, index]));
-  writeScheduleItems(
-    readScheduleItems().map((item) =>
-      order.has(item.id) ? { ...item, sort_order: order.get(item.id) as number, updated_at: timestamp } : item,
-    ),
-  );
-
-  const updatedItems = readScheduleItems()
-    .filter(
-      (item) =>
-        item.workspace_id === event.workspace_id && item.owner_type === "event" && item.owner_id === eventId,
-    )
-    .sort((a, b) => a.sort_order - b.sort_order);
-
-  return ok(updatedItems);
+  return eventsRepository().reorderScheduleItems(eventId, orderedIds);
 }
 
 // ---------------------------------------------------------------------------
-// Event Notes and Timeline — reuse the shared owner_type/owner_id Notes and
-// Timeline architecture (getNotesByOwner/createNoteForOwner/getTimelineByOwner,
-// defined above in the Notes/Timeline sections) rather than duplicating it.
+// Event Notes and Timeline — routes through eventsRepository(), same as
+// Events/Checklist/Schedule above, instead of the generic mock-only
+// getNotesByOwner/createNoteForOwner/getTimelineByOwner helpers.
 // ---------------------------------------------------------------------------
 
 export async function getNotesByEventId(eventId: string): Promise<Note[]> {
-  const event = readEvents().find((e) => e.id === eventId);
-  if (!event) return [];
-  return getNotesByOwner(event.workspace_id, "event", eventId);
+  return eventsRepository().getNotesByEventId(eventId);
 }
 
 export async function createEventNote(eventId: string, input: NoteFormInput): Promise<DataResult<Note>> {
-  const event = readEvents().find((e) => e.id === eventId);
-  if (!event) {
-    return fail("Event not found.");
-  }
-  return createNoteForOwner(event.workspace_id, "event", eventId, input);
+  return eventsRepository().createEventNote(eventId, input);
 }
 
 export async function getTimelineByEventId(eventId: string): Promise<TimelineActivity[]> {
-  const event = readEvents().find((e) => e.id === eventId);
-  if (!event) return [];
-  return getTimelineByOwner(event.workspace_id, "event", eventId);
+  return eventsRepository().getTimelineByEventId(eventId);
 }
 
 // ---------------------------------------------------------------------------
@@ -3173,10 +2567,12 @@ const INACTIVE_CONTRACT_STATUSES_FOR_STATUS: ContractStatus[] = ["cancelled", "d
 
 export async function getEventFinancialStatus(eventId: string): Promise<EventFinancialStatus> {
   await delay(150);
-  const event = readEvents().find((e) => e.id === eventId);
-  if (!event) {
-    throw new NotFoundError(`Event ${eventId} was not found`);
-  }
+  // Events is repository-routed (mock or Supabase); Contracts/Invoices/Payments/
+  // Expenses below remain mock-only regardless of data mode — this function
+  // straddles both, so the Event lookup itself must go through getEventById()
+  // (this file, above) rather than reading the mock eventsStore directly, or
+  // a real Supabase-backed Event would never be found here.
+  const event = await getEventById(eventId);
 
   const contracts = readContracts().filter((c) => c.event_id === eventId);
   const activeContracts = contracts.filter((c) => !INACTIVE_CONTRACT_STATUSES_FOR_STATUS.includes(c.status));
@@ -4580,7 +3976,12 @@ export async function getDashboardMetrics(): Promise<DashboardMetric[]> {
       new Date(event.completed_at).getUTCMonth() === nowDate.getUTCMonth(),
   );
   const criticalEvents = activeEvents.filter((event) => event.priority === "critical");
-  const eventOwnedChecklistItems = readChecklistItems().filter((item) => item.owner_type === "event");
+  // Repository-routed (not a direct mock-store read) so this reflects live
+  // Supabase checklist data in supabase mode — one getChecklistByEventId per
+  // Event rather than a single workspace-wide read, since that's the
+  // function every module (including this one) already routes through.
+  const eventChecklistsByEvent = await Promise.all(events.map((event) => getChecklistByEventId(event.id)));
+  const eventOwnedChecklistItems = eventChecklistsByEvent.flat();
   const overdueChecklistItems = eventOwnedChecklistItems.filter(
     (item) =>
       item.status !== "completed" &&
@@ -4748,6 +4149,7 @@ export function resetAllMockData(): void {
 /**
  * Test-only: exercises the internal default-checklist batch initializer
  * directly (e.g. to verify atomicity on a deliberately invalid template).
- * Never imported by UI — createEvent() is the only real caller.
+ * Never imported by UI — createEvent() (lib/data/events/mockRepository.ts)
+ * is the only real caller.
  */
-export const __applyDefaultChecklistTemplateForTests = applyDefaultChecklistTemplate;
+export const __applyDefaultChecklistTemplateForTests = applyDefaultChecklistTemplateForTests;

@@ -6,10 +6,12 @@
  * linked and the migrations in `supabase/migrations/` have been applied.
  * Covers the Supabase Foundation tables (profiles, workspaces,
  * workspace_members), the Leads migration tables (leads, notes,
- * timeline_activities), and the Clients migration table (clients) plus their
- * RLS helper functions and the convert_lead_to_client RPC — regenerate this
- * file after every migration change; do not hand-edit table shapes once live
- * generation is available.
+ * timeline_activities), the Clients migration table (clients), and the
+ * Events migration tables (events, checklist_items, event_schedule_items)
+ * plus their RLS helper functions and the convert_lead_to_client/
+ * apply_default_event_checklist RPCs — regenerate this file after every
+ * migration change; do not hand-edit table shapes once live generation is
+ * available.
  */
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
@@ -398,6 +400,246 @@ export interface Database {
         };
         Relationships: [];
       };
+      events: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          client_id: string;
+          originating_lead_id: string | null;
+          title: string;
+          event_type: string;
+          status: string;
+          lifecycle_stage: string;
+          event_date: string | null;
+          start_time: string | null;
+          end_time: string | null;
+          timezone: string | null;
+          location_name: string | null;
+          address: string | null;
+          city: string | null;
+          state: string | null;
+          zip_code: string | null;
+          latitude: number | null;
+          longitude: number | null;
+          guest_count: number | null;
+          budget_min: number | null;
+          budget_max: number | null;
+          package_name: string | null;
+          theme: string | null;
+          color_palette: string | null;
+          surprise_event: boolean;
+          confidentiality_notes: string | null;
+          accessibility_notes: string | null;
+          dietary_notes: string | null;
+          weather_plan: string | null;
+          backup_location: string | null;
+          internal_summary: string | null;
+          assigned_owner: string | null;
+          priority: string;
+          created_at: string;
+          updated_at: string;
+          archived_at: string | null;
+          completed_at: string | null;
+          cancelled_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          client_id: string;
+          originating_lead_id?: string | null;
+          title: string;
+          event_type: string;
+          status?: string;
+          lifecycle_stage?: string;
+          event_date?: string | null;
+          start_time?: string | null;
+          end_time?: string | null;
+          timezone?: string | null;
+          location_name?: string | null;
+          address?: string | null;
+          city?: string | null;
+          state?: string | null;
+          zip_code?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+          guest_count?: number | null;
+          budget_min?: number | null;
+          budget_max?: number | null;
+          package_name?: string | null;
+          theme?: string | null;
+          color_palette?: string | null;
+          surprise_event?: boolean;
+          confidentiality_notes?: string | null;
+          accessibility_notes?: string | null;
+          dietary_notes?: string | null;
+          weather_plan?: string | null;
+          backup_location?: string | null;
+          internal_summary?: string | null;
+          assigned_owner?: string | null;
+          priority?: string;
+          created_at?: string;
+          updated_at?: string;
+          archived_at?: string | null;
+          completed_at?: string | null;
+          cancelled_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          client_id?: string;
+          originating_lead_id?: string | null;
+          title?: string;
+          event_type?: string;
+          status?: string;
+          lifecycle_stage?: string;
+          event_date?: string | null;
+          start_time?: string | null;
+          end_time?: string | null;
+          timezone?: string | null;
+          location_name?: string | null;
+          address?: string | null;
+          city?: string | null;
+          state?: string | null;
+          zip_code?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+          guest_count?: number | null;
+          budget_min?: number | null;
+          budget_max?: number | null;
+          package_name?: string | null;
+          theme?: string | null;
+          color_palette?: string | null;
+          surprise_event?: boolean;
+          confidentiality_notes?: string | null;
+          accessibility_notes?: string | null;
+          dietary_notes?: string | null;
+          weather_plan?: string | null;
+          backup_location?: string | null;
+          internal_summary?: string | null;
+          assigned_owner?: string | null;
+          priority?: string;
+          created_at?: string;
+          updated_at?: string;
+          archived_at?: string | null;
+          completed_at?: string | null;
+          cancelled_at?: string | null;
+        };
+        Relationships: [];
+      };
+      checklist_items: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          owner_type: string;
+          owner_id: string;
+          title: string;
+          description: string | null;
+          category: string;
+          priority: string;
+          status: string;
+          due_date: string | null;
+          completed_at: string | null;
+          assigned_type: string;
+          assigned_id: string | null;
+          assigned_name: string | null;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          owner_type: string;
+          owner_id: string;
+          title: string;
+          description?: string | null;
+          category: string;
+          priority: string;
+          status?: string;
+          due_date?: string | null;
+          completed_at?: string | null;
+          assigned_type?: string;
+          assigned_id?: string | null;
+          assigned_name?: string | null;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          owner_type?: string;
+          owner_id?: string;
+          title?: string;
+          description?: string | null;
+          category?: string;
+          priority?: string;
+          status?: string;
+          due_date?: string | null;
+          completed_at?: string | null;
+          assigned_type?: string;
+          assigned_id?: string | null;
+          assigned_name?: string | null;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      event_schedule_items: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          owner_type: string;
+          owner_id: string;
+          title: string;
+          description: string | null;
+          start_time: string | null;
+          end_time: string | null;
+          location: string | null;
+          assigned_to: string | null;
+          category: string;
+          status: string;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          owner_type: string;
+          owner_id: string;
+          title: string;
+          description?: string | null;
+          start_time?: string | null;
+          end_time?: string | null;
+          location?: string | null;
+          assigned_to?: string | null;
+          category: string;
+          status?: string;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          owner_type?: string;
+          owner_id?: string;
+          title?: string;
+          description?: string | null;
+          start_time?: string | null;
+          end_time?: string | null;
+          location?: string | null;
+          assigned_to?: string | null;
+          category?: string;
+          status?: string;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -415,6 +657,10 @@ export interface Database {
       };
       convert_lead_to_client: {
         Args: { p_lead_id: string; p_actor: string };
+        Returns: Json;
+      };
+      apply_default_event_checklist: {
+        Args: { p_event_id: string; p_items: Json; p_description: string; p_actor: string };
         Returns: Json;
       };
     };

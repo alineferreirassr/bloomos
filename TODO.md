@@ -60,9 +60,10 @@ Current, actionable tasks. Keep this in sync with reality — check items off as
 - [x] Provide real Supabase credentials, manually create the first owner/admin account and Workspace row, switch `NEXT_PUBLIC_DATA_MODE=supabase`, and verify the Auth foundation against a live project
 - [x] Migrate Leads to a live Supabase repository (`lib/data/leads/`) through the `lib/data/provider.ts` boundary — first business module migrated; uses the browser Supabase client (`lib/supabase/client.ts`) since its UI fetches from Client Components, see `docs/integrations.md`
 - [x] Migrate Clients to a live Supabase repository (`lib/data/clients/`) — second business module migrated, same pattern as Leads; includes atomic Lead → Client conversion in `supabase` mode (`convert_lead_to_client` Postgres function, `lib/data/conversion/`), which now also rejects archived Leads (the mock version never did)
-- [ ] Migrate remaining business modules (Events/Contracts/Finance/Documents) to live Supabase repositories, one module at a time — not started
+- [x] Migrate Events to a live Supabase repository (`lib/data/events/`) — third business module migrated, same pattern as Leads/Clients; bundles Events, Checklist (`checklist_items`), Schedule (`event_schedule_items`), and Event Notes/Timeline into one repository pair; default checklist template application stays atomic via the `apply_default_event_checklist` Postgres function
+- [ ] Migrate remaining business modules (Contracts/Finance/Documents) to live Supabase repositories, one module at a time — not started
 - [ ] Connect Supabase Storage for real Documents upload, signed URLs — not started
-- [ ] Use mock data exclusively for Events/Contracts/Finance/Documents until each module's own migration phase is reached — they still read the mock Clients store directly for cross-references even in `supabase` mode, a known limitation until their own migrations land
+- [ ] Use mock data exclusively for Contracts/Finance/Documents until each module's own migration phase is reached — they still read the mock Clients/Events stores directly for cross-references even in `supabase` mode, a known limitation until their own migrations land
 
 ## Phase 2 — Post-MVP modules (not started, reserved in the architecture only)
 

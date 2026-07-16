@@ -145,6 +145,20 @@ This is the first business-module RLS policy set built on top of the Foundation'
 
 `lib/data/clients/supabaseRepository.ts` uses the **browser** Supabase client, same rationale as Leads. Lead → Client conversion (`convert_lead_to_client`, `docs/database.md`) is a `security invoker` Postgres function called via `supabase.rpc(...)` from `lib/data/conversion/supabaseConversionRepository.ts` — every insert/update it performs is still checked against these exact same `leads`/`clients`/`timeline_activities` policies, since `security invoker` runs with the calling user's own privileges rather than elevating them. No `service_role` is used anywhere in the Clients migration.
 
+## Supabase RLS for Events (live)
+
+`supabase/migrations/20260718100600_events_rls.sql` enables RLS and defines the policies below on `events`, `checklist_items`, and `event_schedule_items`. Applied to a live, connected Supabase project. Same rules as Leads/Clients above — no bare `using (true)`, every policy scoped `to authenticated`.
+
+| Table | Policy | Rule |
+|---|---|---|
+| `events` | select/insert/update | Any user with an **active** membership (`is_workspace_member(workspace_id)`) may read and write that Workspace's Events — **Workspace isolation only**, no `owner`/`admin` role gating. No delete policy — archival is via `status = 'archived'` + `archived_at`, reversible via `restoreEvent`. |
+| `checklist_items` | select/insert/update/**delete** | Same `is_workspace_member(workspace_id)` rule. **Unlike every other Supabase-backed table so far, this one gets a delete policy** — `deleteChecklistItem` physically deletes rows. The "can't delete a completed item" rule is enforced by the data layer before the delete call, not by RLS or a second policy. |
+| `event_schedule_items` | select/insert/update/**delete** | Same `is_workspace_member(workspace_id)` rule and delete policy as `checklist_items` — `deleteScheduleItem` physically deletes rows, with no completed-item guard (unlike checklist items). |
+
+`notes`/`timeline_activities` needed no new policies for Event-owned rows — their existing `is_workspace_member(workspace_id)` policies already cover any `owner_type`; only the `CHECK` constraint governing which `owner_type`/`type` values are accepted needed widening (`docs/database.md`).
+
+`lib/data/events/supabaseRepository.ts` uses the **browser** Supabase client, same rationale as Leads/Clients — bundles Events, Checklist, Schedule, and Event Notes/Timeline into one repository file since every Checklist/Schedule/Note/Timeline operation needs the owning Event's `workspace_id` first. Default checklist template application (`apply_default_event_checklist`, `docs/database.md`) is a `security invoker` Postgres function, same rationale as `convert_lead_to_client` — every insert it performs is still checked against the caller's own `checklist_items`/`timeline_activities` policies. No `service_role` is used anywhere in the Events migration. Event/Client consistency (a selected Client must exist and belong to the same Workspace) is enforced implicitly by `clients` RLS: fetching a `client_id` from another Workspace returns no row, since that row is invisible to the caller — the same mechanism that already prevents cross-Workspace Lead→Client conversion.
+
 ## Supabase Row-Level Security for future business tables (planned)
 
 Once a further business module's own migration phase begins (see `docs/integrations.md`), RLS policies for that module are expected to enforce:
