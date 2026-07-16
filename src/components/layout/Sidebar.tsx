@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navigationItems } from "@/config/navigation";
@@ -11,8 +12,17 @@ export function Sidebar() {
   return (
     <aside className="hidden md:flex md:w-56 md:flex-col md:bg-sidebar md:border-r md:border-border md:py-6">
       <div className="mb-4 border-b border-border px-[23px] pb-[23px]">
-        <div className="font-serif text-xl font-semibold tracking-[0.01em] text-text">BloomOS</div>
-        <div className="mt-1 text-[11px] tracking-[0.06em] text-text/55 uppercase">Amoré Bloom</div>
+        <Image
+          src="/brand/amore-bloom-logo.png"
+          alt="Amoré Bloom"
+          width={640}
+          height={426}
+          priority
+          className="h-auto w-36"
+        />
+        <div className="mt-1 text-[11px] tracking-[0.06em] text-text/55 uppercase">
+          Luxury Proposal &amp; Event Studio
+        </div>
       </div>
 
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3.5">

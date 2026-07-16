@@ -33,7 +33,7 @@ export function TopBar({ onMenuClick }: TopBarProps) {
         breadcrumb, so the one large title stays where it already lives.
       */}
       <p className="text-sm font-medium tracking-tight text-text-muted">
-        {activeItem?.label ?? "BloomOS"}
+        {activeItem?.label ?? "Amoré Bloom"}
       </p>
     </header>
   );

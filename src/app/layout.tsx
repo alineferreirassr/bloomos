@@ -17,8 +17,8 @@ const cormorant = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "BloomOS",
-  description: "The operating system for luxury event businesses.",
+  title: "Amoré Bloom",
+  description: "Amoré Bloom — Luxury Proposal & Event Studio.",
 };
 
 export default function RootLayout({
