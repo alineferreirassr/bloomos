@@ -5,14 +5,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navigationItems } from "@/config/navigation";
 import { CloseIcon } from "@/components/ui/icons";
-import { CURRENT_ACTOR } from "@/core/constants/actor";
+import { WorkspaceAvatar } from "@/components/layout/WorkspaceAvatar";
 
 interface MobileNavProps {
   open: boolean;
   onClose: () => void;
+  workspaceDisplayName: string;
 }
 
-export function MobileNav({ open, onClose }: MobileNavProps) {
+export function MobileNav({ open, onClose, workspaceDisplayName }: MobileNavProps) {
   const pathname = usePathname();
 
   return (
@@ -80,11 +81,9 @@ export function MobileNav({ open, onClose }: MobileNavProps) {
           })}
         </nav>
         <div className="mt-3 flex items-center gap-2.5 border-t border-border px-[23px] pt-4">
-          <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border border-border font-serif text-[13px] text-text">
-            AB
-          </div>
+          <WorkspaceAvatar />
           <div className="leading-tight">
-            <div className="text-[13px] text-text">{CURRENT_ACTOR}</div>
+            <div className="text-[13px] text-text">{workspaceDisplayName}</div>
             <div className="text-[11.5px] text-text/55">Amoré Bloom</div>
           </div>
         </div>
