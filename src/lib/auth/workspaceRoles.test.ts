@@ -3,10 +3,10 @@ import { currentUserWorkspaceIds, hasWorkspaceRole, isWorkspaceMember } from "@/
 
 const memberships = [
   { workspace_id: "ws_1", user_id: "user_owner", role: "owner" as const, status: "active" as const },
-  { workspace_id: "ws_1", user_id: "user_team", role: "team" as const, status: "active" as const },
+  { workspace_id: "ws_1", user_id: "user_team", role: "staff" as const, status: "active" as const },
   { workspace_id: "ws_1", user_id: "user_suspended", role: "admin" as const, status: "suspended" as const },
-  { workspace_id: "ws_1", user_id: "user_invited", role: "viewer" as const, status: "invited" as const },
-  { workspace_id: "ws_2", user_id: "user_owner", role: "viewer" as const, status: "active" as const },
+  { workspace_id: "ws_1", user_id: "user_invited", role: "staff" as const, status: "invited" as const },
+  { workspace_id: "ws_2", user_id: "user_owner", role: "staff" as const, status: "active" as const },
 ];
 
 describe("isWorkspaceMember", () => {

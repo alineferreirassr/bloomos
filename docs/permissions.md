@@ -1,17 +1,17 @@
 # Permissions
 
-Access control model for BloomOS. Most of this document is written ahead of a live Supabase connection — RLS policies below are the intended design, not yet applied to a real database. The exception is the **Supabase Foundation** (`profiles`/`workspaces`/`workspace_members`, `feature/supabase-foundation`): RLS for those three tables is written, reviewed, and ready in `supabase/migrations/` — see "Supabase Foundation RLS (ready, not yet live)" below — but still not applied to any real database, since no Supabase project is connected. Leads/Clients/Events/Contracts/Finance now have live RLS (see their own sections below); Documents does not yet.
+Access control model for BloomOS. Most of this document is written ahead of a live Supabase connection — RLS policies below are the intended design, not yet applied to a real database. The exception is the **Supabase Foundation** (`profiles`/`workspaces`/`workspace_members`, `feature/supabase-foundation`): RLS for those three tables is written, reviewed, and ready in `supabase/migrations/` — see "Supabase Foundation RLS (ready, not yet live)" below — but still not applied to any real database, since no Supabase project is connected. Leads/Clients/Events/Contracts/Finance/Documents and the Team foundation (`roles`/`permissions`/`role_permissions`/`workspace_invitations`, plus the upgraded `workspace_members` policies) now have live RLS (see their own sections below).
 
 ## Auth foundation (email/password only)
 
-`lib/auth/` provides sign in, sign out, session retrieval, current-user retrieval, password reset request, and password update — all normalized through `lib/supabase/errors.ts` so a raw Supabase/Postgres error never reaches the UI. This is infrastructure, not a finished product surface:
+`lib/auth/` provides sign in, sign up, sign out, session retrieval, current-user retrieval, password reset request, and password update — all normalized through `lib/supabase/errors.ts` so a raw Supabase/Postgres error never reaches the UI. This is infrastructure, not a finished product surface:
 
 - **Email/password only.** No social providers are enabled.
-- **No public signup.** There is no "create an account" flow for arbitrary visitors — the first owner/admin account and its Workspace row are created manually via the Supabase Dashboard/SQL once real credentials exist (see `docs/integrations.md`).
-- **No invitations yet.** Adding a second `workspace_members` row for a teammate is a manual/SQL operation for now; the invitation-link architecture is documented below ("Client and Team Portal invitations") but not implemented — no invitation UI, no email sending, no `invitations` table exists yet.
-- **Minimal pages, not final UI.** `/sign-in`, `/reset-password`, `/update-password` exist so the Auth foundation is exercisable end-to-end, but are not the polished Auth experience the product will ship.
-- **`getCurrentUser()` over `getSession()`** for anything auth-gating — it revalidates the token against Supabase Auth rather than trusting the session cookie alone (`lib/auth/session.ts`).
-- **Route protection is opt-in this phase.** `src/middleware.ts` only redirects unauthenticated visitors away from protected routes (`/dashboard`, `/leads`, `/clients`, `/events`, `/contracts`, `/finance`, `/documents`) when `NEXT_PUBLIC_DATA_MODE=supabase`. In `mock` mode (the default), every route is open and local development never requires a login — see `docs/integrations.md`.
+- **No public signup for arbitrary visitors.** `signUpWithPassword` exists, but it's reachable only from the invitation acceptance flow below (`/invitations/[token]`) — there is still no general "create an account" page. The very first owner/admin account and its Workspace row are created manually via the Supabase Dashboard/SQL once real credentials exist (see `docs/integrations.md`); every account after that is provisioned through an invitation.
+- **Internal team invitations are live.** A Workspace owner/admin/manager (per role authority, see "Team membership and invitations" below) can invite a new team member by email; the recipient signs up or signs in, confirms the invited email, and becomes an active `workspace_members` row — see "Team membership and invitations (live)" below for the full flow, security design, and role/permission matrix. **Client Portal and Team Portal invitations remain unimplemented** — see "Client and Team Portal invitations" further below, which now describes only that separate, still-future scope.
+- **Minimal pages, not final UI.** `/sign-in`, `/reset-password`, `/update-password`, `/invitations/[token]` exist so the Auth foundation and Team foundation are exercisable end-to-end, but are not the polished Auth experience the product will ship.
+- **`getCurrentUser()` over `getSession()`** for anything auth-gating — it revalidates the token against Supabase Auth rather than trusting the session cookie alone (`lib/auth/session.ts`). The one exception is the invitation acceptance page itself, which checks auth state directly via `supabase.auth.getUser()` client-side, since it must render correctly for a visitor with no Workspace membership yet — `getCurrentUser()`'s usual callers all assume an existing membership.
+- **Route protection is opt-in this phase.** `src/middleware.ts` only redirects unauthenticated visitors away from protected routes (`/dashboard`, `/leads`, `/clients`, `/events`, `/contracts`, `/finance`, `/documents`, `/team`) when `NEXT_PUBLIC_DATA_MODE=supabase`. In `mock` mode (the default), every route is open and local development never requires a login — see `docs/integrations.md`. `/invitations/[token]` is never protected in either mode — it must be reachable pre-authentication.
 
 ## Workspace membership model
 
@@ -19,45 +19,138 @@ Access control model for BloomOS. Most of this document is written ahead of a li
 
 | Role | Intent |
 |---|---|
-| `owner` | Full control, including Workspace settings and membership management. |
-| `admin` | Same practical access as `owner` for day-to-day purposes; both are the only roles permitted to update Workspace settings or manage memberships in the RLS policies below. |
-| `manager` | Reserved for a future finer-grained permission tier — no policy distinguishes it from `team` yet. |
-| `team` | Operational member — the eventual Postgres-level equivalent of today's "Team Member" MVP role below. |
-| `viewer` | Reserved for future read-only access — no policy distinguishes it from `team` yet. |
+| `owner` | Full Workspace control, including roles, invitations, and billing-related settings. Cannot be removed or demoted by anyone else, and the last active owner can never be removed — see "Last-owner protection" below. |
+| `admin` | Broad operational access across every business module; may invite and manage `manager`/`staff` roles. Cannot promote anyone to `owner`, and cannot remove or demote the owner. |
+| `manager` | Operational access to leads, clients, events, contracts, finance, and documents. Cannot manage `owner`/`admin` roles or change Workspace-level security settings. |
+| `staff` | Limited, explicit, view-only operational access by default. No team-management access. |
+
+`owner`/`admin`/`manager`/`staff` replaces the Supabase Foundation phase's placeholder set (`owner`/`admin`/`manager`/`team`/`viewer`) — `team` and `viewer` were never referenced by any RLS policy, application code, or live data, so the Team foundation migration cleanly replaced rather than additively widened the role enum (the one deliberate exception to this schema's usual widen-only discipline; see `docs/database.md`).
 
 | Status | Effect |
 |---|---|
-| `active` | Normal access, gated by role. |
-| `invited` | Not yet active — every RLS membership check (`is_workspace_member()`, `has_workspace_role()`) requires `status = 'active'`, so an `invited` row grants no access yet. |
+| `active` | Normal access, gated by role/permission. |
+| `invited` | Reserved, currently unused — every RLS membership check (`is_workspace_member()`, `has_workspace_role()`, `has_permission()`) requires `status = 'active'`, so an `invited` row would grant no access. The live invitation flow (below) does not create an `invited` membership row at all: a `workspace_members` row is created directly with `status: 'active'` at the moment an invitation is accepted. |
 | `suspended` | Explicitly locked out — same mechanism as `invited`: fails every membership check without needing a separate "disabled" concept. |
 
 The MVP *UI* assumes one active Workspace per session (`CURRENT_WORKSPACE_ID`, `core/constants/workspace.ts`), but the schema already supports a user belonging to several Workspaces — `current_user_workspace_ids()` returns all of them.
 
-## MVP roles
+**Do not rely on role names alone anywhere new.** Every access decision in the Team foundation and beyond is expected to check a granular permission (`has_permission(workspace_id, permission)`, below) rather than a role string, so a future fifth role can be added by inserting a `roles` row and a `role_permissions` set, without rewriting RLS policies or application `if` statements. `has_workspace_role()` remains in use only where role *identity itself* — not a granted capability — is what matters, e.g. owner-only branding (`getWorkspaceDisplayName()`, `docs/workflows.md`).
 
-The MVP runs for a single Workspace (Amoré Bloom — see `BLOOMOS_BIBLE.md` §7) with a small team, so the role model is intentionally minimal:
+## Granular permissions (Team foundation — live)
 
-| Role | Description |
-|---|---|
-| **Owner/Admin** | Full access to all MVP modules: Dashboard, Leads, Clients, Events, Contracts, Finance, Documents. Can manage team access. |
-| **Team Member** | Operational access to Leads, Clients, Events, Contracts, Finance, Documents for day-to-day work. No account/billing administration. |
+`roles`, `permissions`, and `role_permissions` (`docs/database.md`'s "Team foundation" section) are live, global (non-Workspace-scoped) catalog tables: every Workspace shares the same 4 roles, same 30 permissions, and same default role→permission grants. `has_permission(p_workspace_id, p_permission)` (a `security definer`, `stable` SQL function, same shape as `has_workspace_role()`) is the canonical check — true iff the caller has an `active` membership in the Workspace whose role is granted that permission in `role_permissions`. `lib/team/permissionMatrix.ts`'s `DEFAULT_ROLE_PERMISSIONS` is the mock-mode mirror of the same table (mock mode has no `role_permissions` table to query) and must be kept in sync with the seed migration by comment.
 
-No client-facing role exists in the MVP — the future **Client Portal** module (Phase 3) introduces an external, scoped-down role for clients to view their own event only, and the future **Team Portal** introduces a scoped-down internal role for team members who aren't full Owner/Admin/Team Member users (e.g. day-of staff or contractors). Both are expected to read `documents.visibility`/`document_folders.visibility` once they exist (see "Documents visibility" below) — no such access exists yet.
+The full default matrix (`supabase/migrations/20260724101000_team_seed_data.sql`):
+
+| Permission | Owner | Admin | Manager | Staff |
+|---|---|---|---|---|
+| `workspace.view` | ✓ | ✓ | ✓ | ✓ |
+| `workspace.manage` | ✓ | ✓ | | |
+| `team.view` | ✓ | ✓ | ✓ | ✓ |
+| `team.invite` | ✓ | ✓ | | |
+| `team.manage_roles` | ✓ | ✓ | | |
+| `team.deactivate` | ✓ | ✓ | | |
+| `leads.view` | ✓ | ✓ | ✓ | ✓ |
+| `leads.create` | ✓ | ✓ | ✓ | |
+| `leads.update` | ✓ | ✓ | ✓ | |
+| `leads.archive` | ✓ | ✓ | ✓ | |
+| `clients.view` | ✓ | ✓ | ✓ | ✓ |
+| `clients.create` | ✓ | ✓ | ✓ | |
+| `clients.update` | ✓ | ✓ | ✓ | |
+| `clients.archive` | ✓ | ✓ | ✓ | |
+| `events.view` | ✓ | ✓ | ✓ | ✓ |
+| `events.create` | ✓ | ✓ | ✓ | |
+| `events.update` | ✓ | ✓ | ✓ | |
+| `events.archive` | ✓ | ✓ | ✓ | |
+| `contracts.view` | ✓ | ✓ | ✓ | ✓ |
+| `contracts.create` | ✓ | ✓ | ✓ | |
+| `contracts.update` | ✓ | ✓ | ✓ | |
+| `contracts.lifecycle` | ✓ | ✓ | ✓ | |
+| `finance.view` | ✓ | ✓ | ✓ | ✓ |
+| `finance.create` | ✓ | ✓ | ✓ | |
+| `finance.update` | ✓ | ✓ | ✓ | |
+| `finance.refund` | ✓ | ✓ | | |
+| `documents.view` | ✓ | ✓ | ✓ | ✓ |
+| `documents.create` | ✓ | ✓ | ✓ | |
+| `documents.update` | ✓ | ✓ | ✓ | |
+| `documents.archive` | ✓ | ✓ | ✓ | |
+
+Owner and admin are granted the identical permission set on purpose — the meaningful difference between them (cannot promote to owner, cannot remove/demote the last owner) is enforced by trigger (`trg_protect_workspace_owners`/`trg_validate_invitation_role_authority`, below), not by withholding a permission with no owner-specific equivalent in this catalog. Manager gets real create/update/archive access across every business module except the two most sensitive reversal-type actions (`finance.refund`, and all `team.*` beyond viewing). Staff gets view-only across the board — "permissions must be explicit," so nothing beyond `*.view` is granted by default.
+
+**Member-specific permission overrides are explicitly out of scope for this phase** — not necessary for MVP; if a future need arises for one member to have a permission their role doesn't otherwise grant, that's documented here as future scope rather than built now (a per-member override table would need its own precedence rules against `role_permissions`, not worth the complexity without a concrete use case).
+
+This granular catalog governs the **team-management surface only** in this phase — business-module RLS itself (Leads/Clients/Events/Contracts/Finance/Documents) remains Workspace-isolation-only, unchanged by the Team foundation migration (see each module's own RLS section below). Wiring `leads.create`/`documents.archive`/etc. into business-module RLS policies is anticipated future work, not part of this phase's scope.
+
+## Team membership and invitations (Team foundation — live)
+
+Internal team members authenticate through Supabase Auth like any other user — there is no separate auth system and no permanent password ever generated by BloomOS for an invited teammate. See `docs/workflows.md`'s "Team membership and invitations" section for the full invitation status machine (`pending`/`accepted`/`expired`/`revoked`) and the step-by-step acceptance flow. This section covers the security design specifically.
+
+### Required flow (as built)
+
+1. An authorized Workspace member (role authority below) creates an invitation specifying: recipient email and invited role. `createWorkspaceInvitation` fails if a `pending` invitation already exists for that Workspace/email pair, or if the caller lacks authority to grant the requested role.
+2. A raw invitation token (32 random bytes, base64url) is generated client/server-side (`lib/team/invitationToken.ts`) and returned to the caller exactly once. Only its SHA-256 hash (`token_hash`) is written to `workspace_invitations` — **the raw token is never persisted anywhere.**
+3. The invitation link (`/invitations/{token}`) is constructed from that raw token. In this phase, no production email provider is integrated — the link is surfaced via a dev-safe "copy link" affordance in the Invitations UI (see "UI scope" below), not emailed.
+4. The recipient opens the link. `get_invitation_by_token` (an RPC granted to `anon` as well as `authenticated`, since the visitor has no session yet) re-hashes the supplied token and returns only the minimum safe fields to render the page: Workspace name, invited email, invited role, status, expiry.
+5. If the recipient has no account, they sign up (`signUpWithPassword`); if they do, they sign in (`signInWithPassword`) — both are the same Server Actions every other Auth flow uses, not a parallel invitation-specific auth path.
+6. The recipient must confirm the **same email the invitation was sent to** — `accept_workspace_invitation` compares the authenticated caller's `auth.uid()` email against the invitation's `email` and rejects a mismatch, even for a visitor signed in as some other legitimate Workspace member.
+7. Acceptance is atomic and server-side (`accept_workspace_invitation`, row-locked `for update` to prevent a double-accept race): the invitation flips to `accepted`, and a `workspace_members` row is created directly with `status: 'active'` in the same transaction. There is no intermediate `invited` membership row.
+8. The recipient is redirected to a safe post-acceptance page (the dashboard) — never to an arbitrary `redirectTo`, avoiding the open-redirect class of bug `safeRedirectTarget` already guards against elsewhere.
+
+### Never
+
+- Generate or email a temporary password.
+- Store a raw invitation token anywhere — only `token_hash` (SHA-256 hex) is ever written, in both Supabase and mock mode.
+- Expose the Supabase `service_role` key in browser code, or use it for ordinary invitation acceptance — the entire flow above runs through RLS-gated inserts (creation/resend) and two narrowly-scoped `security definer` RPCs (lookup/acceptance), never `service_role`.
+- Integrate a production email provider (Resend, SendGrid, Mailgun, Postmark, or otherwise) without a separate, explicit approval — see "Email sending" below.
+
+### Role authority (who can invite/promote whom)
+
+Enforced by `trg_validate_invitation_role_authority` (a `before insert` trigger on `workspace_invitations`, not just RLS or UI-layer logic):
+
+- Only an `owner` may invite/promote to `owner` or `admin`.
+- An `admin` may invite/promote only to `manager` or `staff`.
+- A `manager`/`staff` cannot invite anyone or manage roles at all — gated upstream by the `team.invite`/`team.manage_roles` permissions before the trigger is even reached.
+
+### Last-owner protection
+
+Enforced by `trg_protect_workspace_owners` (a `before update or delete` trigger on `workspace_members`): a Workspace's sole remaining `owner` can never be removed, demoted to a non-owner role, or suspended — the action fails outright at the database level regardless of which repository, RPC, or future admin tool attempts it, not just a check the UI happens to perform.
+
+### Required supporting operations (as built)
+
+- **Resend** (`resendWorkspaceInvitation`) — generates a fresh token/hash and a fresh `expires_at` for an existing `pending` invitation, superseding the old token in place (the old link stops working immediately) rather than creating a second row.
+- **Revoke** (`revokeWorkspaceInvitation`) — moves a `pending` invitation to `revoked`, permanently invalidating its link.
+- **Expiration** (`expireWorkspaceInvitations`) — a `pending` invitation past its `expires_at` is treated as expired by `getInvitationStatus`/`getInvitationNextAction` (`core/workflows/invitationWorkflow.ts`); its next recommended action is to resend rather than silently leaving it `pending` forever.
+- **Password recovery for existing users** — unrelated to invitation acceptance; reuses the existing `requestPasswordReset()`/`updatePassword()` flow (`lib/auth/actions.ts`).
+
+### Email sending (dev-safe copy-link only, this phase)
+
+No production email provider is wired up — building one wasn't required, so none was added. `createWorkspaceInvitation`/`resendWorkspaceInvitation` generate the invitation URL and return it to the caller; the Invitations UI offers a "copy link" action so a real invitation can be tested end-to-end without sending real email. The repository's shape (`createWorkspaceInvitation` returning the link, independent of any delivery mechanism) leaves room for a future provider interface, but **no Resend/SendGrid/Mailgun/Postmark integration exists or was added**, matching the explicit instruction not to add one without separate approval.
+
+### Server-only administrative operations
+
+Unlike the Client/Team Portal sketch below (which anticipated needing the Supabase Auth Admin API and `service_role`), **the live internal-invitation flow above needs no `service_role` client anywhere.** `createWorkspaceInvitation`/`resendWorkspaceInvitation`/`revokeWorkspaceInvitation` are plain RLS-gated inserts/updates (the caller already has a Workspace membership and the relevant `team.invite` permission by the time they call these); `getInvitationByToken`/`acceptWorkspaceInvitation` are the two narrowly-scoped `security definer` RPCs described above, chosen specifically because an ordinary RLS-gated statement can't authorize a caller who has no Workspace membership yet — the token itself (256 bits of entropy, single-use, hashed at rest) is the security boundary for those two operations, not an elevated credential. Both RPCs pin `set search_path = public` and validate everything they touch (token match, expiry, status, email match, workspace_id) before writing anything.
+
+### UI scope (minimum only, this phase)
+
+- **Team Members page** (`/team`) — list of Workspace members: name, email, role, status, joined date, and permission-gated actions (change role, deactivate/reactivate, remove) — visible to anyone with `team.view`, actions gated by `team.manage_roles`/`team.deactivate`.
+- **Invitations** (same page) — list by status, create (email + role select, role options limited to what the caller's own role may grant), dev copy-link, resend, revoke.
+- **Invitation acceptance page** (`/invitations/[token]`) — validates the token, shows Workspace name/invited email/role, sign-in/sign-up CTA, accept action, and clear error states for expired/revoked/already-accepted/email-mismatch.
+
+**Explicitly not built this phase**: a full Team Portal navigation shell or dashboard, Client Accounts, a Client Portal, a Team Knowledge Base, a Client Knowledge Base, a Notification Center, or an Automation Center — see "Client and Team Portal invitations" and the Knowledge Base/Notification/Automation sections below, all still architecture-only.
 
 ## Client and Team Portal invitations (architecture, planned — not implemented)
 
-**This is a permanent BloomOS principle, documented ahead of Client Portal/Team Portal implementation.** No invitation UI, invitation-sending code, `invitations` table, or activation page exists yet — nothing below changes current application behavior. This section exists so the eventual implementation follows one settled design rather than being decided ad hoc when Client Portal/Team Portal work begins.
+**Distinct from, and narrower than, the live internal-invitation flow above.** This section is a permanent BloomOS principle, documented ahead of Client Portal/Team Portal implementation — the future work of letting a *client* or a non-full-member internal user (e.g. day-of staff or contractors) self-activate a scoped-down external/internal-lite account. No invitation UI, invitation-sending code, or activation page for *this* scope exists yet; nothing below changes current application behavior. The live `workspace_invitations` table/flow above **is not reused as-is** for this future scope — a Client Portal or Team Portal persona is not a `workspace_members` row with role `owner`/`admin`/`manager`/`staff`, so this future work is expected to need its own linking table (e.g. keyed to a `clients` row rather than a Workspace role) even if it reuses the same token-hash security pattern proven above.
 
-**The core rule: BloomOS never generates, emails, or displays a temporary password, for any portal, ever.** Every Client Portal and Team Portal account is provisioned through a single-use Supabase Auth invitation link. The recipient — never BloomOS or a BloomOS administrator — is the only party who ever sets their own password.
+**The core rule: BloomOS never generates, emails, or displays a temporary password, for any portal, ever.** Every Client Portal and Team Portal account is provisioned through a single-use invitation link. The recipient — never BloomOS or a BloomOS administrator — is the only party who ever sets their own password. (This rule is already proven out end-to-end by the live internal-invitation flow above; the open question for Client/Team Portal is the linking/membership shape, not the password-security principle.)
 
 ### Required flow
 
-1. An authorized Workspace owner/admin creates an invitation specifying: recipient email, recipient name, portal type (Client Portal or Team Portal), Workspace, role, permissions, and an optional related `clients` or `team_members` record to link the invitation to.
-2. The invitation/membership row is created with status `invited` — consistent with how `workspace_members.status = 'invited'` already works today (see "Workspace membership model" above): an `invited` row grants no access until it becomes `active`.
-3. A single-use Supabase Auth invitation link is sent to the recipient (`supabase.auth.admin.inviteUserByEmail()` or equivalent) — this is the only mechanism that ever reaches the recipient; BloomOS never constructs, stores, or transmits a password on their behalf.
-4. The recipient follows the link to a branded Amoré Bloom activation page (not a generic Supabase page).
-5. The recipient sets their own password on that activation page. This is the first and only time a password for that account is chosen — by the recipient, never by BloomOS.
-6. On successful password creation: the invitation is marked `accepted`, the corresponding membership is activated (`status = 'active'`), and the recipient is redirected to the correct portal for their portal type/role.
+1. An authorized Workspace owner/admin creates an invitation specifying: recipient email, recipient name, portal type (Client Portal or Team Portal), Workspace, role, permissions, and an optional related `clients` record (or, for a Team Portal persona that isn't a full `owner`/`admin`/`manager`/`staff` member, whatever future linking shape that scoped-down role ends up needing — not `workspace_members`, since Team Portal is deliberately a narrower, internal-lite tier) to link the invitation to.
+2. A single-use invitation link is sent to the recipient — this is the only mechanism that ever reaches the recipient; BloomOS never constructs, stores, or transmits a password on their behalf. Whether this reuses a `workspace_invitations`-style token-hash link (proven above) or the Supabase Auth Admin API (`supabase.auth.admin.inviteUserByEmail()`, which would require the narrow `service_role` exception below) is an open implementation decision for whenever this phase begins — the live internal-invitation flow above demonstrates the token-hash approach avoids `service_role` entirely, and is the preferred starting point.
+3. The recipient follows the link to a branded Amoré Bloom activation page (not a generic Supabase page).
+4. The recipient sets their own password on that activation page. This is the first and only time a password for that account is chosen — by the recipient, never by BloomOS.
+5. On successful activation: the invitation is marked accepted, the corresponding Client Portal/Team Portal membership is activated, and the recipient is redirected to the correct portal for their portal type/role.
 
 ### Never
 
@@ -66,32 +159,26 @@ No client-facing role exists in the MVP — the future **Client Portal** module 
 - Display a password to an administrator, in any UI, log, or export.
 - Store a plaintext password anywhere (Supabase Auth already handles password hashing; no BloomOS code ever needs to see, store, or compare a raw password).
 - Log a password, anywhere, at any log level.
-- Expose admin/service-role authentication credentials in frontend code (see "Server-only administrative operations" below).
-
-### Invitation statuses
-
-`invited` → `sent` → `accepted`, with `expired` and `revoked` as terminal off-ramps from `sent` (an already-`accepted` invitation is never expired or revoked — only the underlying membership can later be suspended, via the existing `workspace_members.status` mechanism). This mirrors the terminal-status pattern already used by Leads (`core/workflows/leadWorkflow.ts`) and other modules — canonical values and transition rules belong in a future `core/workflows/invitationWorkflow.ts`, not duplicated here. See `docs/workflows.md`'s "Invitation lifecycle" section.
+- Expose admin/service-role authentication credentials in frontend code (see "Server-only administrative operations" below), unless and until a Client/Team Portal implementation genuinely requires the Auth Admin API — the live internal-invitation flow above proves that requirement is avoidable for an ordinary invite-and-accept flow.
 
 ### Required supporting operations
 
-- **Resend** — re-sends the invitation link without creating a duplicate invitation row; expected to move status back to `sent` and reset expiration.
-- **Revoke** — administrator-initiated, moves status to `revoked`, invalidates the link.
-- **Expiration** — invitations are time-limited; an unaccepted invitation past its expiration is `expired`, not silently left as `sent` forever.
+- **Resend / Revoke / Expiration** — same shape as the live internal-invitation flow above, whichever underlying mechanism is chosen.
 - **Existing-user handling** — if the invited email already has a Supabase Auth account (e.g. inviting the same person to a second Workspace, or to both a Client and Team Portal), the flow must detect this and add the new membership to the existing account rather than erroring or creating a duplicate `auth.users` row.
-- **Password recovery for existing users** — unrelated to invitation acceptance; reuses the existing `requestPasswordReset()`/`updatePassword()` flow (`lib/auth/actions.ts`) already built in the Supabase Foundation.
-- **Audit Timeline entries** — every invitation lifecycle transition (created, sent, resent, accepted, expired, revoked) is expected to record a Timeline entry, following the same `recordTimelineActivity` mechanism every other module already uses (`docs/workflows.md`) — never constructed by hand.
+- **Password recovery for existing users** — unrelated to invitation acceptance; reuses the existing `requestPasswordReset()`/`updatePassword()` flow (`lib/auth/actions.ts`).
+- **Audit Timeline entries** — every invitation lifecycle transition is expected to record a Timeline entry, following the same `recordTimelineActivity` mechanism every other module already uses (`docs/workflows.md`) — never constructed by hand.
 
 ### Client Portal vs. Team Portal
 
-The two portal types are never conflated: an invitation is for exactly one portal type, and Client Portal and Team Portal accounts are expected to receive **different `workspace_members`-equivalent memberships, different roles, different permissions, and different post-activation redirect destinations** — a Client Portal invitation never grants Team Portal access and vice versa, even for the same email address (see "Existing-user handling" above for the case where one person legitimately needs both).
+The two portal types are never conflated: an invitation is for exactly one portal type, and Client Portal and Team Portal accounts are expected to receive **different memberships, different roles, different permissions, and different post-activation redirect destinations** — a Client Portal invitation never grants Team Portal access and vice versa, even for the same email address (see "Existing-user handling" above for the case where one person legitimately needs both). Neither portal type is the same thing as the internal `owner`/`admin`/`manager`/`staff` role model above.
 
-### Server-only administrative operations
+### Server-only administrative operations (only if the Auth Admin API path is chosen)
 
-Sending, resending, and revoking an invitation (and any other Supabase Auth Admin API call) requires the Supabase `service_role` key — the Admin API is not reachable with the publishable/anon key used everywhere else in this app. This is a **narrow, deliberate, server-only exception** to this codebase's otherwise-absolute "no service-role client anywhere in the app" rule (`docs/integrations.md`):
+If a future Client/Team Portal implementation does end up needing the Supabase Auth Admin API (rather than a `workspace_invitations`-style token-hash link), that requires the Supabase `service_role` key — the Admin API is not reachable with the publishable/anon key used everywhere else in this app. This would be a **narrow, deliberate, server-only exception** to this codebase's otherwise-absolute "no service-role client anywhere in the app" rule (`docs/integrations.md`):
 
-- A `service_role` client, if and when built, is expected to live in its own dedicated server-only module (e.g. `lib/supabase/admin.ts`, gated by `import "server-only"` exactly like `lib/supabase/server.ts` already is), used **only** by invitation-admin Server Actions/Route Handlers — never imported by any other module, and never by anything reachable from a Client Component (see `docs/integrations.md`'s "Client factory choice matters per module" note — the same `server-only` bundling boundary that already governs `lib/supabase/server.ts` applies here, with even higher stakes given the elevated key).
+- A `service_role` client, if and when built, is expected to live in its own dedicated server-only module (e.g. `lib/supabase/admin.ts`, gated by `import "server-only"` exactly like `lib/supabase/server.ts` already is), used **only** by invitation-admin Server Actions/Route Handlers — never imported by any other module, and never by anything reachable from a Client Component.
 - The `service_role` key itself follows every existing credential rule (`docs/integrations.md`): never committed, never logged, never printed, never present in any `NEXT_PUBLIC_*` variable, never returned to or constructed in browser code.
-- No other part of the app — Leads, Clients, Events, Contracts, Finance, Documents, or any future module's own Supabase migration — needs or is expected to ever touch `service_role`. This exception is scoped exclusively to invitation-admin operations.
+- No other part of the app — Leads, Clients, Events, Contracts, Finance, Documents, the live Team foundation above, or any future module's own Supabase migration — needs or is expected to ever touch `service_role`. This exception, if ever exercised, would be scoped exclusively to Client/Team Portal invitation-admin operations.
 
 ## Guiding rules
 
@@ -210,12 +297,34 @@ This is the first business-module RLS policy set built on top of the Foundation'
 
 `lib/data/documents/supabaseRepository.ts` uses the **browser** Supabase client, same rationale as every prior module — bundles Documents, Document Folders, and Document/Folder Notes/Timeline into one repository file since Folders need the owning Document's `workspace_id` and Notes/Timeline need both owner types. Atomic version creation (`create_document_version`) and default folder-template application (`apply_default_folder_template`) are both `security invoker` Postgres functions (`docs/database.md`) — every statement inside still runs under the caller's own RLS. No `service_role` is used anywhere in the Documents migration. A Document never independently validates or stores file bytes, checksums, or MIME types — it links to a `media_assets` row (`media_asset_id`) whose own RLS and Storage policies already govern real file access; see "Documents visibility" below for the resulting security model.
 
+## Supabase RLS for the Team foundation (live)
+
+`supabase/migrations/20260724100900_team_rls.sql` enables RLS and defines the policies below on `roles`, `permissions`, `role_permissions`, and `workspace_invitations`, and replaces `workspace_members`' own Foundation-phase policies. Applied to a live, connected Supabase project.
+
+| Table | Policy | Rule |
+|---|---|---|
+| `roles` | select only | `using (true)`, scoped `to authenticated` — global, non-Workspace-scoped reference data (no `workspace_id` column exists to scope by). **The sole, deliberate exception to this codebase's "no bare `using(true)`" convention** — justified because the catalog itself is non-sensitive and identical for every Workspace; no insert/update/delete policy, since only the seed migration ever writes to it. |
+| `permissions` | select only | Same `using (true)`/`to authenticated` exception as `roles`, same justification. |
+| `role_permissions` | select only | Same `using (true)`/`to authenticated` exception as `roles`/`permissions` — the default matrix itself is non-sensitive; per-member overrides (which *would* be sensitive) are explicitly out of scope this phase. |
+| `workspace_invitations` | select/insert/update | Gated by `has_permission(workspace_id, 'team.invite')`, not bare `is_workspace_member()` — only a member with invite authority can list, create, or update (resend/revoke) a Workspace's invitations; a `staff` member with only `team.view` cannot enumerate pending invitations. No delete policy — an invitation is revoked (`status = 'revoked'`), never physically removed, preserving the audit trail. Anonymous token-based lookup/acceptance bypasses this table's RLS entirely via the two `security definer` RPCs (below), which is why those RPCs return only minimum-safe fields rather than relying on a permissive select policy. |
+| `workspace_members` | select | **Replaced** from the Foundation-phase `is_workspace_member(workspace_id)` rule (any active member could see the roster) to `has_permission(workspace_id, 'team.view')` — every default role grants `team.view`, so this is not a practical narrowing today, but it means a future role that omits `team.view` is respected without a further RLS change. |
+| `workspace_members` | insert/update/delete | **Replaced** from the Foundation-phase `has_workspace_role(workspace_id, ['owner','admin'])` array check to `has_permission(workspace_id, 'team.manage_roles')` — same practical effect today (only owner/admin hold that permission by default), but future roles can gain or lose team-management power by editing `role_permissions`, not by shipping a new RLS migration. |
+
+Two reusable pieces back every check above (`supabase/migrations/20260724100600_role_permission_helper_functions.sql`):
+
+- **`has_permission(p_workspace_id, p_permission)`** — the granular counterpart to `has_workspace_role()`: true iff `auth.uid()` has an `active` membership in the given Workspace whose role is granted that permission in `role_permissions`. Same `security definer`/`stable`/pinned-`search_path` shape as `is_workspace_member()`/`has_workspace_role()`, for the same recursion-avoidance reason.
+- **`trg_protect_workspace_owners`** (`before update or delete on workspace_members`) and **`trg_validate_invitation_role_authority`** (`before insert on workspace_invitations`) — the last-owner-protection and role-escalation-prevention triggers described in "Team membership and invitations" above. Both `security definer`, pinned `search_path`, and narrowly scoped to exactly the invariant each enforces — RLS alone can express "who may write this row," but not "this specific write must never leave the table in an invalid state" (no owner, or a role promoted beyond the actor's own authority), which is what a trigger is for here.
+
+`get_invitation_by_token` and `accept_workspace_invitation` (`supabase/migrations/20260724100500_invitation_helper_functions.sql`) are the two `security definer` RPCs used by the acceptance flow — see "Team membership and invitations" above for what each does and why `security definer` is the correct, narrowly-scoped choice for both (an unauthenticated or not-yet-a-member caller has no ordinary RLS path to authorize against). `get_invitation_by_token` is granted to `anon` as well as `authenticated`, since the invitation page must render before sign-in; `accept_workspace_invitation` is granted to `authenticated` only, since acceptance requires a signed-in identity to compare against the invited email.
+
+`lib/data/team/supabaseRepository.ts` uses the **browser** Supabase client, same rationale as every prior module — bundles Team Members and Invitations into one repository file since role/permission checks and invitation authority checks both need the same Workspace-membership context. No `service_role` is used anywhere in the Team foundation migration.
+
 ## Supabase Row-Level Security for future business tables (planned)
 
-Every Phase 1 MVP module (Leads, Clients, Events, Contracts, Finance, Documents, plus the Media Library) now has live RLS, per the sections above. Once a further, post-MVP module's own migration phase begins (Team Members, Knowledge Base, Notification Center, Automation Center — see `docs/integrations.md`), RLS policies for that module are expected to enforce:
+Every Phase 1 MVP module (Leads, Clients, Events, Contracts, Finance, Documents, plus the Media Library) plus the Team foundation now has live RLS, per the sections above. Once a further, post-MVP module's own migration phase begins (Client Portal, Team Portal, Knowledge Base, Notification Center, Automation Center — see `docs/integrations.md`), RLS policies for that module are expected to enforce:
 
-- Every table with `workspace_id` — a row is only visible/writable to authenticated users belonging to that `workspace_id`, using the same `is_workspace_member()`/`has_workspace_role()` helpers documented above rather than duplicating the check.
-- `Owner/Admin` vs `Team Member` distinctions enforced via `workspace_members.role`, checked in policy, not in application code alone, where that module's spec calls for it (Leads/Clients above deliberately do not — Workspace isolation only).
+- Every table with `workspace_id` — a row is only visible/writable to authenticated users belonging to that `workspace_id`, using the same `is_workspace_member()`/`has_workspace_role()`/`has_permission()` helpers documented above rather than duplicating the check.
+- Role/permission distinctions enforced via `has_permission(workspace_id, ...)` (preferred, granular — see "Granular permissions" above) rather than a hardcoded `has_workspace_role()` role array, where that module's spec calls for it (Leads/Clients/Events/Contracts/Finance/Documents above deliberately do not — Workspace isolation only, unaffected by the Team foundation).
 - The future Client Portal role restricted, at the policy level, to its own `client_id`'s and linked `event_id`'s rows only — never a broader query.
 
 ## Storage Foundation (one live bucket, plus one reserved for future user avatars)
@@ -245,7 +354,7 @@ Security principles this domain is built around, ahead of Portal-level enforceme
 - **No executable uploads, ever.** `exe`/`dmg`/`pkg`/`app`/`js`/`sh`/`bat`/`cmd` are blocked at the Media Library's validation layer (`src/lib/media/mediaFile.ts`) regardless of role, owner type, or visibility — enforced once, for every consumer, not duplicated per module.
 - **No client-visible access without an explicit `visibility` value permitting it**, once Portal-level enforcement exists — the default should never accidentally expose an internal document to a future Client Portal session.
 
-`documents`/`document_folders` RLS (above) currently enforces Workspace isolation only — a `client` or `client_and_team`-visible row is not yet separately restricted at the policy level from an `internal`/`restricted` one; any authenticated member of the Workspace can read both today. Once the Client Portal / Team Portal roles exist, policies are expected to layer `visibility`-aware filtering on top: a `client`/`client_and_team`-visible row readable by the Client Portal role scoped to its own `client_id`/`event_id`, a `team`/`client_and_team`-visible row readable by the Team Portal role, and `internal`/`restricted` rows never exposed outside Owner/Admin/Team Member.
+`documents`/`document_folders` RLS (above) currently enforces Workspace isolation only — a `client` or `client_and_team`-visible row is not yet separately restricted at the policy level from an `internal`/`restricted` one; any authenticated member of the Workspace can read both today. Once the Client Portal / Team Portal roles exist, policies are expected to layer `visibility`-aware filtering on top: a `client`/`client_and_team`-visible row readable by the Client Portal role scoped to its own `client_id`/`event_id`, a `team`/`client_and_team`-visible row readable by the Team Portal role, and `internal`/`restricted` rows never exposed outside an internal Workspace member (`owner`/`admin`/`manager`/`staff`).
 
 ## Team Knowledge Base and Client Knowledge Base (architecture, planned — not implemented)
 
@@ -278,10 +387,13 @@ Reserved for a future module (see `docs/database.md`'s `automation_workflows`/`a
 ## Explicitly out of scope for now
 
 - Granular per-field permissions
-- Custom/configurable roles
+- Custom/configurable roles (a fifth role can be added by inserting a `roles` row and a `role_permissions` set — see "Granular permissions" above — but there is no self-service "create a role" UI or arbitrary per-Workspace role customization)
+- Member-specific permission overrides (a member's permissions come entirely from their role today; documented as future scope, not built — see "Granular permissions" above)
+- Wiring `has_permission()` into business-module RLS (Leads/Clients/Events/Contracts/Finance/Documents remain Workspace-isolation-only; the granular catalog governs the team-management surface only this phase)
+- A production email provider for invitations (Resend, SendGrid, Mailgun, Postmark, or otherwise) — the live internal-invitation flow generates a link and offers a dev-safe copy-link UI instead; see "Email sending" above
 - Any client-facing access (until Client Portal, Phase 3)
 - Enforcing `documents`/`document_folders` `visibility` at the data-layer or RLS level beyond plain Workspace isolation (a real Client Portal / Team Portal role, scoped filtering by `visibility`, is not built yet)
-- Client Portal and Team Portal implementation, invitation UI, actual invitation sending, an `invitations` table, or a `service_role` admin client — the architecture is documented above ("Client and Team Portal invitations") but nothing is built
+- Client Portal and Team Portal implementation, invitation UI, actual invitation sending, a linking table for a Client Portal/Team Portal persona, or a `service_role` admin client — the architecture is documented above ("Client and Team Portal invitations") but nothing is built. This is separate from, and does not block, the live internal-invitation flow above (`workspace_invitations`), which needs no `service_role`.
 - Team Knowledge Base and Client Knowledge Base: any table, migration, RLS policy, route, UI, or CMS — the architecture is documented above ("Team Knowledge Base and Client Knowledge Base") but nothing is built; reserved for a Future Phase after Documents
 - Notification Center: any table, migration, RLS policy, route, UI, component, notification, or delivery channel integration — the architecture is documented above ("Notification Center") but nothing is built; reserved for a Future Phase after Client Knowledge Base, before Settings
 - Automation Center: any table, migration, RLS policy, route, UI, component, workflow engine, or third-party integration (Slack, Discord, Google Calendar, Google Drive, Stripe, webhooks) — the architecture is documented above ("Automation Center") but nothing is built; reserved for a Future Phase after Notification Center

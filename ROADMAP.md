@@ -31,9 +31,9 @@ Scope, and only scope: **Dashboard, Leads, Clients, Events, Contracts, Finance.*
 
 ## Phase 2 — Operational depth
 
+- Team Management — **Team Members + Invitations foundation complete** (internal `owner`/`admin`/`manager`/`staff` roles, granular permissions, Supabase Auth-backed invitation flow; see `docs/permissions.md`, `docs/workflows.md`). Team Portal (a scoped-down internal tier for non-full members) remains unstarted.
 - Inventory
 - Suppliers
-- Team Management
 - Calendar
 
 ## Phase 3 — Client-facing & intelligence

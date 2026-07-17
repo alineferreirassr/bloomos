@@ -4,16 +4,11 @@
  * Shaped to match the output of `npm run supabase:types` (`supabase gen
  * types typescript`) so it's a drop-in replacement once a real project is
  * linked and the migrations in `supabase/migrations/` have been applied.
- * Covers the Supabase Foundation tables (profiles, workspaces,
- * workspace_members), the Leads migration tables (leads, notes,
- * timeline_activities), the Clients migration table (clients), the
- * Events migration tables (events, checklist_items, event_schedule_items),
- * the Media Library table (media_assets), and the Contracts migration
- * tables (contract_templates, contracts, contract_exhibits) plus their RLS
- * helper functions and the convert_lead_to_client/
- * apply_default_event_checklist/generate_contract_number RPCs — regenerate
- * this file after every migration change; do not hand-edit table shapes
- * once live generation is available.
+ * Covers every table and RPC function from every applied migration
+ * (Supabase Foundation through the Team foundation: roles, permissions,
+ * role_permissions, workspace_invitations) — regenerate this file after
+ * every migration change; do not hand-edit table shapes once live
+ * generation is available.
  */
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
@@ -103,6 +98,120 @@ export interface Database {
           user_id?: string;
           role?: string;
           status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      roles: {
+        Row: {
+          id: string;
+          name: string;
+          description: string;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          name: string;
+          description: string;
+          sort_order: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          description?: string;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      permissions: {
+        Row: {
+          id: string;
+          description: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          description: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          description?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      role_permissions: {
+        Row: {
+          role_id: string;
+          permission_id: string;
+          created_at: string;
+        };
+        Insert: {
+          role_id: string;
+          permission_id: string;
+          created_at?: string;
+        };
+        Update: {
+          role_id?: string;
+          permission_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      workspace_invitations: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          email: string;
+          invited_role: string;
+          invited_by: string;
+          token_hash: string;
+          status: string;
+          expires_at: string;
+          accepted_at: string | null;
+          accepted_by: string | null;
+          revoked_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          email: string;
+          invited_role: string;
+          invited_by: string;
+          token_hash: string;
+          status?: string;
+          expires_at: string;
+          accepted_at?: string | null;
+          accepted_by?: string | null;
+          revoked_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          email?: string;
+          invited_role?: string;
+          invited_by?: string;
+          token_hash?: string;
+          status?: string;
+          expires_at?: string;
+          accepted_at?: string | null;
+          accepted_by?: string | null;
+          revoked_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1317,6 +1426,24 @@ export interface Database {
           p_template_kind: string;
         };
         Returns: Json;
+      };
+      has_permission: {
+        Args: { p_workspace_id: string; p_permission: string };
+        Returns: boolean;
+      };
+      get_invitation_by_token: {
+        Args: { p_token: string };
+        Returns: {
+          workspace_name: string;
+          email: string;
+          invited_role: string;
+          status: string;
+          expires_at: string;
+        }[];
+      };
+      accept_workspace_invitation: {
+        Args: { p_token: string };
+        Returns: Database["public"]["Tables"]["workspace_members"]["Row"];
       };
     };
     Enums: Record<string, never>;

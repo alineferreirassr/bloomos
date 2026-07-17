@@ -12,12 +12,13 @@ vi.mock("next/headers", () => ({
   headers: vi.fn(async () => new Map([["host", "app.bloomos.test"]])),
 }));
 
-import { requestPasswordReset, signInWithPassword, signOut, updatePassword } from "@/lib/auth/actions";
+import { requestPasswordReset, signInWithPassword, signOut, signUpWithPassword, updatePassword } from "@/lib/auth/actions";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 function mockSupabaseClient(overrides: {
   signInWithPassword?: () => Promise<{ error: unknown }>;
+  signUp?: () => Promise<{ data: { session: unknown }; error: unknown }>;
   signOut?: () => Promise<{ error: unknown }>;
   resetPasswordForEmail?: () => Promise<{ error: unknown }>;
   updateUser?: () => Promise<{ error: unknown }>;
@@ -25,6 +26,7 @@ function mockSupabaseClient(overrides: {
   return {
     auth: {
       signInWithPassword: overrides.signInWithPassword ?? (async () => ({ error: null })),
+      signUp: overrides.signUp ?? (async () => ({ data: { session: null }, error: null })),
       signOut: overrides.signOut ?? (async () => ({ error: null })),
       resetPasswordForEmail: overrides.resetPasswordForEmail ?? (async () => ({ error: null })),
       updateUser: overrides.updateUser ?? (async () => ({ error: null })),
@@ -47,6 +49,46 @@ function clearSupabaseConfig() {
 afterEach(() => {
   clearSupabaseConfig();
   vi.clearAllMocks();
+});
+
+describe("signUpWithPassword", () => {
+  it("returns a clear error when Supabase is not configured (mock mode)", async () => {
+    clearSupabaseConfig();
+    const result = await signUpWithPassword({ email: "a@b.com", password: "secret" });
+    expect(result).toEqual({ success: false, error: expect.stringContaining("not configured") });
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("does not redirect when Supabase returns no immediate session (email confirmation required)", async () => {
+    setSupabaseConfigured();
+    vi.mocked(createClient).mockResolvedValue(mockSupabaseClient({}) as never);
+
+    const result = await signUpWithPassword({ email: "a@b.com", password: "secret" });
+
+    expect(result).toEqual({ success: true });
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("redirects to redirectTo when Supabase returns an immediate session (auto-confirm)", async () => {
+    setSupabaseConfigured();
+    vi.mocked(createClient).mockResolvedValue(
+      mockSupabaseClient({ signUp: async () => ({ data: { session: { access_token: "t" } }, error: null }) }) as never,
+    );
+
+    await signUpWithPassword({ email: "a@b.com", password: "secret", redirectTo: "/invitations/abc" });
+
+    expect(redirect).toHaveBeenCalledWith("/invitations/abc");
+  });
+
+  it("surfaces a Supabase error", async () => {
+    setSupabaseConfigured();
+    vi.mocked(createClient).mockResolvedValue(
+      mockSupabaseClient({ signUp: async () => ({ data: { session: null }, error: { message: "Email already registered", name: "AuthApiError" } }) }) as never,
+    );
+
+    const result = await signUpWithPassword({ email: "a@b.com", password: "secret" });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("signInWithPassword", () => {

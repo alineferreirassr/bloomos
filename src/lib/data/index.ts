@@ -14,6 +14,15 @@ import type { Payment } from "@/types/payment";
 import type { Expense } from "@/types/expense";
 import type { Document } from "@/types/document";
 import type { DocumentFolder } from "@/types/documentFolder";
+import type { TeamMember } from "@/types/teamMember";
+import type { WorkspaceInvitation, WorkspaceInvitationWithToken, InvitationPreview } from "@/types/workspaceInvitation";
+import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
+import type { InvitationStatus } from "@/core/enums/invitationStatus";
+import type { Permission } from "@/core/enums/permission";
+import type {
+  CreateWorkspaceInvitationInput,
+  WorkspaceInvitationFilters,
+} from "@/lib/data/team/repository";
 import type { EntityType } from "@/core/enums/entityType";
 import type { DocumentCategory } from "@/core/enums/documentCategory";
 import type { DocumentVisibility } from "@/core/enums/documentVisibility";
@@ -96,6 +105,8 @@ import type {
 } from "@/lib/data/documents/repository";
 import { mockDocumentsRepository } from "@/lib/data/documents/mockRepository";
 import { supabaseDocumentsRepository } from "@/lib/data/documents/supabaseRepository";
+import { mockTeamRepository, resetTeamMembersStore, resetWorkspaceInvitationsStore } from "@/lib/data/team/mockRepository";
+import { supabaseTeamRepository } from "@/lib/data/team/supabaseRepository";
 import {
   readLeads,
   resetLeadsStore,
@@ -1531,6 +1542,98 @@ export async function getTimelineByDocumentFolderId(folderId: string): Promise<T
 }
 
 // ---------------------------------------------------------------------------
+// Team (members + invitations)
+// ---------------------------------------------------------------------------
+
+function teamRepository() {
+  return selectRepository({ mock: mockTeamRepository, supabase: supabaseTeamRepository });
+}
+
+export async function getWorkspaceMembers(): Promise<TeamMember[]> {
+  return teamRepository().getWorkspaceMembers();
+}
+
+export async function getWorkspaceMemberById(id: string): Promise<TeamMember> {
+  return teamRepository().getWorkspaceMemberById(id);
+}
+
+export async function getCurrentWorkspaceMember(): Promise<TeamMember | null> {
+  return teamRepository().getCurrentWorkspaceMember();
+}
+
+export async function updateWorkspaceMemberRole(id: string, role: WorkspaceMemberRole): Promise<DataResult<TeamMember>> {
+  return teamRepository().updateWorkspaceMemberRole(id, role);
+}
+
+export async function deactivateWorkspaceMember(id: string): Promise<DataResult<TeamMember>> {
+  return teamRepository().deactivateWorkspaceMember(id);
+}
+
+export async function reactivateWorkspaceMember(id: string): Promise<DataResult<TeamMember>> {
+  return teamRepository().reactivateWorkspaceMember(id);
+}
+
+export async function removeWorkspaceMember(id: string): Promise<DataResult<null>> {
+  return teamRepository().removeWorkspaceMember(id);
+}
+
+export async function getWorkspaceMemberPermissions(id: string): Promise<Permission[]> {
+  return teamRepository().getWorkspaceMemberPermissions(id);
+}
+
+export async function canWorkspaceMember(id: string, permission: Permission): Promise<boolean> {
+  return teamRepository().canWorkspaceMember(id, permission);
+}
+
+export async function getRolePermissions(role: WorkspaceMemberRole): Promise<Permission[]> {
+  return teamRepository().getRolePermissions(role);
+}
+
+export async function getWorkspaceInvitations(filters: WorkspaceInvitationFilters = {}): Promise<WorkspaceInvitation[]> {
+  return teamRepository().getWorkspaceInvitations(filters);
+}
+
+export async function getWorkspaceInvitationById(id: string): Promise<WorkspaceInvitation> {
+  return teamRepository().getWorkspaceInvitationById(id);
+}
+
+export async function createWorkspaceInvitation(
+  input: CreateWorkspaceInvitationInput,
+): Promise<DataResult<WorkspaceInvitationWithToken>> {
+  return teamRepository().createWorkspaceInvitation(input);
+}
+
+export async function resendWorkspaceInvitation(id: string): Promise<DataResult<WorkspaceInvitationWithToken>> {
+  return teamRepository().resendWorkspaceInvitation(id);
+}
+
+export async function revokeWorkspaceInvitation(id: string): Promise<DataResult<WorkspaceInvitation>> {
+  return teamRepository().revokeWorkspaceInvitation(id);
+}
+
+export async function acceptWorkspaceInvitation(token: string): Promise<DataResult<TeamMember>> {
+  return teamRepository().acceptWorkspaceInvitation(token);
+}
+
+export async function expireWorkspaceInvitations(): Promise<void> {
+  return teamRepository().expireWorkspaceInvitations();
+}
+
+export async function getInvitationByToken(token: string): Promise<InvitationPreview | null> {
+  return teamRepository().getInvitationByToken(token);
+}
+
+export async function getInvitationStatus(id: string): Promise<InvitationStatus> {
+  return teamRepository().getInvitationStatus(id);
+}
+
+export async function getInvitationNextAction(id: string): Promise<string | null> {
+  return teamRepository().getInvitationNextAction(id);
+}
+
+export type { CreateWorkspaceInvitationInput, WorkspaceInvitationFilters } from "@/lib/data/team/repository";
+
+// ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
 
@@ -1791,6 +1894,8 @@ export function resetAllMockData(): void {
   resetExpensesStore();
   resetDocumentsStore();
   resetDocumentFoldersStore();
+  resetTeamMembersStore();
+  resetWorkspaceInvitationsStore();
 }
 
 /**

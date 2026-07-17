@@ -2,6 +2,9 @@ import type { Database } from "@/types/database.types";
 import type { Profile } from "@/types/profile";
 import type { Workspace } from "@/types/workspace";
 import type { WorkspaceMember } from "@/types/workspaceMember";
+import type { Role } from "@/types/role";
+import type { PermissionRecord, RolePermission } from "@/types/permissionRecord";
+import type { WorkspaceInvitation } from "@/types/workspaceInvitation";
 import type { Lead } from "@/types/lead";
 import type { Client, ClientImportantDate } from "@/types/client";
 import type { Event } from "@/types/event";
@@ -20,6 +23,8 @@ import type { Document } from "@/types/document";
 import type { DocumentFolder } from "@/types/documentFolder";
 import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 import type { WorkspaceMemberStatus } from "@/core/enums/workspaceMemberStatus";
+import type { Permission } from "@/core/enums/permission";
+import type { InvitationStatus } from "@/core/enums/invitationStatus";
 import type { LeadStatus } from "@/core/enums/leadStatus";
 import type { ClientStatus } from "@/core/enums/clientStatus";
 import type { ContactMethod } from "@/core/enums/contactMethod";
@@ -52,6 +57,10 @@ import type { DocumentVisibility } from "@/core/enums/documentVisibility";
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
 type WorkspaceMemberRow = Database["public"]["Tables"]["workspace_members"]["Row"];
+type RoleRow = Database["public"]["Tables"]["roles"]["Row"];
+type PermissionRow = Database["public"]["Tables"]["permissions"]["Row"];
+type RolePermissionRow = Database["public"]["Tables"]["role_permissions"]["Row"];
+type WorkspaceInvitationRow = Database["public"]["Tables"]["workspace_invitations"]["Row"];
 type LeadRow = Database["public"]["Tables"]["leads"]["Row"];
 type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
 type EventRow = Database["public"]["Tables"]["events"]["Row"];
@@ -106,6 +115,51 @@ export function mapWorkspaceMemberRow(row: WorkspaceMemberRow): WorkspaceMember 
     user_id: row.user_id,
     role: row.role as WorkspaceMemberRole,
     status: row.status as WorkspaceMemberStatus,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapRoleRow(row: RoleRow): Role {
+  return {
+    id: row.id as WorkspaceMemberRole,
+    name: row.name,
+    description: row.description,
+    sort_order: row.sort_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapPermissionRow(row: PermissionRow): PermissionRecord {
+  return {
+    id: row.id as Permission,
+    description: row.description,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapRolePermissionRow(row: RolePermissionRow): RolePermission {
+  return {
+    role_id: row.role_id,
+    permission_id: row.permission_id as Permission,
+    created_at: row.created_at,
+  };
+}
+
+export function mapWorkspaceInvitationRow(row: WorkspaceInvitationRow): WorkspaceInvitation {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    email: row.email,
+    invited_role: row.invited_role as WorkspaceMemberRole,
+    invited_by: row.invited_by,
+    status: row.status as InvitationStatus,
+    expires_at: row.expires_at,
+    accepted_at: row.accepted_at,
+    accepted_by: row.accepted_by,
+    revoked_at: row.revoked_at,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };

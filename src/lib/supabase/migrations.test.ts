@@ -23,9 +23,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents migrations + 1 Phase 1 cleanup migration, in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix migrations, in chronological (execution) order", () => {
     const files = migrationFiles();
-    expect(files).toHaveLength(58);
+    expect(files).toHaveLength(70);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -204,5 +204,80 @@ describe("storage buckets and policies migration", () => {
 
   it("never uses a bare permissive `using (true)` policy", () => {
     expect(stripSqlComments(sql)).not.toMatch(/using\s*\(\s*true\s*\)/i);
+  });
+});
+
+describe("Team foundation migrations", () => {
+  it("widens workspace_members' role CHECK to the canonical owner/admin/manager/staff set", () => {
+    const sql = readMigration("20260724100300_workspace_members_role_extension.sql");
+    expect(sql).toMatch(/check \(role in \('owner', 'admin', 'manager', 'staff'\)\)/);
+  });
+
+  it("stores only a token hash on workspace_invitations, never a raw token column", () => {
+    const sql = readMigration("20260724100400_workspace_invitations.sql");
+    expect(sql).toMatch(/token_hash text not null/);
+    expect(sql).not.toMatch(/\btoken text\b/);
+  });
+
+  it("enforces at most one pending invitation per Workspace/email via a partial unique index", () => {
+    const sql = readMigration("20260724100400_workspace_invitations.sql");
+    expect(sql).toMatch(/workspace_invitations_pending_email_unique/);
+    expect(sql).toMatch(/where status = 'pending'/);
+  });
+
+  it("defines the token-based lookup and acceptance functions as security definer with a pinned search_path", () => {
+    const sql = readMigration("20260724100500_invitation_helper_functions.sql");
+    const definerFunctionBlocks = sql.split(/create or replace function/i).slice(1);
+    expect(definerFunctionBlocks.length).toBeGreaterThan(0);
+    for (const block of definerFunctionBlocks) {
+      if (/security definer/i.test(block)) {
+        expect(block).toMatch(/set search_path = public/i);
+      }
+    }
+  });
+
+  it("defines the last-owner and role-escalation protection triggers on workspace_members", () => {
+    const sql = readMigration("20260724100600_role_permission_helper_functions.sql");
+    expect(sql).toMatch(/trg_protect_workspace_owners/);
+    expect(sql).toMatch(/before update or delete on public\.workspace_members/);
+    expect(sql).toMatch(/trg_validate_invitation_role_authority/);
+  });
+
+  it("enables RLS on every new Team foundation table", () => {
+    const sql = readMigration("20260724100900_team_rls.sql");
+    for (const table of ["roles", "permissions", "role_permissions", "workspace_invitations"]) {
+      expect(sql).toMatch(new RegExp(`alter table public\\.${table} enable row level security`, "i"));
+    }
+  });
+
+  it("never uses a bare permissive `using (true)` policy on a Workspace-scoped table", () => {
+    const sql = stripSqlComments(readMigration("20260724100900_team_rls.sql"));
+    // roles/permissions/role_permissions are the sole, documented exception —
+    // global reference data with no workspace_id to scope by.
+    const workspaceScopedPolicies = sql
+      .split(/create policy/i)
+      .slice(1)
+      .filter((block) => /workspace_invitations|workspace_members/i.test(block));
+    for (const block of workspaceScopedPolicies) {
+      expect(block).not.toMatch(/using\s*\(\s*true\s*\)/i);
+    }
+  });
+
+  it("seeds exactly the four canonical roles and grants owner/admin every permission", () => {
+    const sql = readMigration("20260724101000_team_seed_data.sql");
+    for (const role of ["owner", "admin", "manager", "staff"]) {
+      expect(sql).toMatch(new RegExp(`'${role}'`));
+    }
+    expect(sql).toMatch(/select 'owner', id from public\.permissions/);
+    expect(sql).toMatch(/select 'admin', id from public\.permissions/);
+  });
+
+  it("fixes accept_workspace_invitation to never attempt an in-transaction expired-status write, without changing its signature or rejection codes", () => {
+    const sql = readMigration("20260724101100_fix_accept_workspace_invitation_expiry.sql");
+    expect(sql).toMatch(/create or replace function public\.accept_workspace_invitation\(p_token text\)/i);
+    expect(sql).not.toMatch(/set status = 'expired'/i);
+    for (const errcode of ["P0001", "P0002", "P0003", "P0004", "P0005", "P0006", "P0007"]) {
+      expect(sql).toMatch(new RegExp(`errcode = '${errcode}'`));
+    }
   });
 });

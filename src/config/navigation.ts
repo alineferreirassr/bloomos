@@ -6,6 +6,7 @@ import {
   EventsIcon,
   FinanceIcon,
   LeadsIcon,
+  TeamIcon,
 } from "@/components/ui/icons";
 import type { ComponentType, SVGProps } from "react";
 
@@ -23,4 +24,5 @@ export const navigationItems: NavItem[] = [
   { label: "Contracts", href: "/contracts", icon: ContractsIcon },
   { label: "Finance", href: "/finance", icon: FinanceIcon },
   { label: "Documents", href: "/documents", icon: DocumentsIcon },
+  { label: "Team", href: "/team", icon: TeamIcon },
 ];

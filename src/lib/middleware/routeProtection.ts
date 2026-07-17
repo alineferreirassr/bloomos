@@ -9,10 +9,17 @@ export const PROTECTED_ROUTE_PREFIXES = [
   "/contracts",
   "/finance",
   "/documents",
+  "/team",
 ] as const;
 
-/** Never redirect these — doing so would create a redirect loop. */
-export const AUTH_ROUTE_PREFIXES = ["/sign-in", "/reset-password", "/update-password", "/auth/callback"] as const;
+/** Never redirect these — doing so would create a redirect loop. Invitation acceptance is intentionally an auth route: the page must render (and offer sign-up/sign-in) before the visitor has any session at all. */
+export const AUTH_ROUTE_PREFIXES = [
+  "/sign-in",
+  "/reset-password",
+  "/update-password",
+  "/auth/callback",
+  "/invitations",
+] as const;
 
 function matchesPrefix(pathname: string, prefixes: readonly string[]): boolean {
   return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
