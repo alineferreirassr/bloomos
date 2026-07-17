@@ -13,6 +13,9 @@ import type { MediaAsset } from "@/types/mediaAsset";
 import type { Contract, ContractVersionSnapshot } from "@/types/contract";
 import type { ContractTemplate } from "@/types/contractTemplate";
 import type { ContractExhibit } from "@/types/contractExhibit";
+import type { Invoice } from "@/types/invoice";
+import type { Payment } from "@/types/payment";
+import type { Expense } from "@/types/expense";
 import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 import type { WorkspaceMemberStatus } from "@/core/enums/workspaceMemberStatus";
 import type { LeadStatus } from "@/core/enums/leadStatus";
@@ -34,6 +37,12 @@ import type { TimelineActivityType } from "@/core/enums/timelineActivityType";
 import type { ContractStatus } from "@/core/enums/contractStatus";
 import type { SignatureStatus } from "@/core/enums/signatureStatus";
 import type { ContractTemplateCategory } from "@/core/enums/contractTemplateCategory";
+import type { InvoiceStatus } from "@/core/enums/invoiceStatus";
+import type { PaymentType } from "@/core/enums/paymentType";
+import type { PaymentStatus } from "@/core/enums/paymentStatus";
+import type { PaymentMethod } from "@/core/enums/paymentMethod";
+import type { ExpenseCategory } from "@/core/enums/expenseCategory";
+import type { ExpenseStatus } from "@/core/enums/expenseStatus";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
@@ -49,6 +58,9 @@ type ContractExhibitRow = Database["public"]["Tables"]["contract_exhibits"]["Row
 type NoteRow = Database["public"]["Tables"]["notes"]["Row"];
 type TimelineActivityRow = Database["public"]["Tables"]["timeline_activities"]["Row"];
 type MediaAssetRow = Database["public"]["Tables"]["media_assets"]["Row"];
+type InvoiceRow = Database["public"]["Tables"]["invoices"]["Row"];
+type PaymentRow = Database["public"]["Tables"]["payments"]["Row"];
+type ExpenseRow = Database["public"]["Tables"]["expenses"]["Row"];
 
 /**
  * Deliberate seam between raw database rows and domain types, even though
@@ -354,6 +366,91 @@ export function mapContractExhibitRow(row: ContractExhibitRow): ContractExhibit 
     document_id: row.document_id,
     created_at: row.created_at,
     updated_at: row.updated_at,
+  };
+}
+
+export function mapInvoiceRow(row: InvoiceRow): Invoice {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    client_id: row.client_id,
+    event_id: row.event_id,
+    contract_id: row.contract_id,
+    invoice_number: row.invoice_number,
+    title: row.title,
+    description: row.description,
+    status: row.status as InvoiceStatus,
+    issue_date: row.issue_date,
+    due_date: row.due_date,
+    subtotal_minor: row.subtotal_minor,
+    tax_minor: row.tax_minor,
+    discount_minor: row.discount_minor,
+    total_minor: row.total_minor,
+    paid_minor: row.paid_minor,
+    balance_minor: row.balance_minor,
+    currency: row.currency,
+    notes: row.notes,
+    sent_at: row.sent_at,
+    viewed_at: row.viewed_at,
+    paid_at: row.paid_at,
+    overdue_at: row.overdue_at,
+    voided_at: row.voided_at,
+    archived_at: row.archived_at,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapPaymentRow(row: PaymentRow): Payment {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    invoice_id: row.invoice_id,
+    client_id: row.client_id,
+    event_id: row.event_id,
+    contract_id: row.contract_id,
+    payment_type: row.payment_type as PaymentType,
+    status: row.status as PaymentStatus,
+    amount_minor: row.amount_minor,
+    currency: row.currency,
+    payment_method: row.payment_method as PaymentMethod,
+    reference: row.reference,
+    transaction_date: row.transaction_date,
+    received_at: row.received_at,
+    failed_at: row.failed_at,
+    refunded_at: row.refunded_at,
+    notes: row.notes,
+    document_id: row.document_id,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapExpenseRow(row: ExpenseRow): Expense {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    event_id: row.event_id,
+    client_id: row.client_id,
+    contract_id: row.contract_id,
+    supplier_id: row.supplier_id,
+    team_member_id: row.team_member_id,
+    category: row.category as ExpenseCategory,
+    status: row.status as ExpenseStatus,
+    description: row.description,
+    amount_minor: row.amount_minor,
+    currency: row.currency,
+    transaction_date: row.transaction_date,
+    due_date: row.due_date,
+    paid_at: row.paid_at,
+    reimbursable: row.reimbursable,
+    reimbursed_at: row.reimbursed_at,
+    reference: row.reference,
+    notes: row.notes,
+    document_id: row.document_id,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    archived_at: row.archived_at,
   };
 }
 

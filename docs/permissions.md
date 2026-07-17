@@ -1,6 +1,6 @@
 # Permissions
 
-Access control model for BloomOS. Most of this document is written ahead of a live Supabase connection — RLS policies below are the intended design, not yet applied to a real database. The exception is the **Supabase Foundation** (`profiles`/`workspaces`/`workspace_members`, `feature/supabase-foundation`): RLS for those three tables is written, reviewed, and ready in `supabase/migrations/` — see "Supabase Foundation RLS (ready, not yet live)" below — but still not applied to any real database, since no Supabase project is connected. No business-module table (Leads/Clients/Events/Contracts/Finance/Documents) has RLS yet.
+Access control model for BloomOS. Most of this document is written ahead of a live Supabase connection — RLS policies below are the intended design, not yet applied to a real database. The exception is the **Supabase Foundation** (`profiles`/`workspaces`/`workspace_members`, `feature/supabase-foundation`): RLS for those three tables is written, reviewed, and ready in `supabase/migrations/` — see "Supabase Foundation RLS (ready, not yet live)" below — but still not applied to any real database, since no Supabase project is connected. Leads/Clients/Events/Contracts/Finance now have live RLS (see their own sections below); Documents does not yet.
 
 ## Auth foundation (email/password only)
 
