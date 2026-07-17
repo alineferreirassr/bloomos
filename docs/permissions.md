@@ -169,6 +169,20 @@ This is the first business-module RLS policy set built on top of the Foundation'
 
 `lib/data/media/supabaseRepository.ts` uses the **browser** Supabase client, same rationale as Leads/Clients/Events. No `service_role` is used anywhere. This table is deliberately independent of Documents/Contracts/Finance/Knowledge Base/Notifications/Automation — it knows nothing about any of them; those modules become consumers of `media_assets` (via `owner_type`/`owner_id`) in their own future migrations, not the other way around. See `docs/database.md`'s `media_assets` section for the full schema and future-extension notes.
 
+## Supabase RLS for Contracts (live)
+
+`supabase/migrations/20260720100600_contracts_rls.sql` enables RLS and defines the policies below on `contracts`, `contract_templates`, and `contract_exhibits`. Applied to a live, connected Supabase project. Same rules as Leads/Clients/Events/Media Library above — no bare `using (true)`, every policy scoped `to authenticated`, Workspace isolation only (no `owner`/`admin` role gating).
+
+| Table | Policy | Rule |
+|---|---|---|
+| `contracts` | select/insert/update | Any user with an **active** membership (`is_workspace_member(workspace_id)`) may read and write that Workspace's Contracts — **Workspace isolation only**. No delete policy — archival is via `status = 'archived'` + `archived_at`, reversible via `restoreContract`. |
+| `contract_templates` | select only | Same `is_workspace_member(workspace_id)` rule, but **no insert/update/delete policy** — the current public API has no create/update path ("no editor yet"); granting write policies with no app code that ever uses them is needless attack surface, widened when a template editor ships. |
+| `contract_exhibits` | select/insert/update/**delete** | Same `is_workspace_member(workspace_id)` rule. **Gets a delete policy**, since `deleteContractExhibit` physically deletes rows — same precedent as `checklist_items`/`event_schedule_items`. No lock-state guard at the RLS or data-layer level; enforcement of "no exhibit edits once locked" stays a UI-layer concern, matching the existing division of responsibility documented in `lib/data/index.ts`. |
+
+`notes`/`timeline_activities` needed no new policies for Contract-owned rows — their existing `is_workspace_member(workspace_id)` policies already cover any `owner_type`; only the `CHECK` constraint governing which `owner_type`/`type` values are accepted needed widening (`docs/database.md`).
+
+`lib/data/contracts/supabaseRepository.ts` uses the **browser** Supabase client, same rationale as Leads/Clients/Events/Media Library — bundles Contracts, Contract Templates, Contract Exhibits, and Contract Notes/Timeline into one repository file since every Exhibit/Note/Timeline operation needs the owning Contract's `workspace_id` first. Contract numbering (`generate_contract_number`, `docs/database.md`) is a `security invoker` Postgres function, same rationale as `convert_lead_to_client`/`apply_default_event_checklist` — its SELECT is still checked against the caller's own `contracts` RLS policy. No `service_role` is used anywhere in the Contracts migration. Client/Event consistency (a selected Client must exist and belong to the same Workspace; an optional Event must belong to that same Client) is enforced implicitly by `clients`/`events` RLS: fetching a `client_id`/`event_id` from another Workspace returns no row, since that row is invisible to the caller — the same mechanism already relied on for Lead→Client conversion and Event/Client consistency.
+
 ## Supabase Row-Level Security for future business tables (planned)
 
 Once a further business module's own migration phase begins (see `docs/integrations.md`), RLS policies for that module are expected to enforce:

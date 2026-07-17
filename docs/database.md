@@ -1,6 +1,6 @@
 # Database
 
-This document defines the data model for BloomOS. Most of it is a design reference, written ahead of any live Supabase connection for the tables it covers. The exceptions are the **Supabase Foundation** (`profiles`, `workspaces`, `workspace_members`), the **Leads**, **Clients**, and **Events** modules (`leads`, `clients`, `events`, `checklist_items`, `event_schedule_items`, `notes`, `timeline_activities`), and the **Media Library** (`media_assets`) — these tables have real, ordered SQL migrations under `supabase/migrations/`, applied to a live, connected Supabase project (see `docs/integrations.md`). Every other table in this document (Contracts, Finance, Documents, etc.) remains mock-only; no migration exists for them yet. Terminology follows `BLOOMOS_BIBLE.md`; if they ever disagree, the Bible wins and this file gets corrected.
+This document defines the data model for BloomOS. Most of it is a design reference, written ahead of any live Supabase connection for the tables it covers. The exceptions are the **Supabase Foundation** (`profiles`, `workspaces`, `workspace_members`), the **Leads**, **Clients**, **Events**, and **Contracts** modules (`leads`, `clients`, `events`, `checklist_items`, `event_schedule_items`, `contracts`, `contract_templates`, `contract_exhibits`, `notes`, `timeline_activities`), and the **Media Library** (`media_assets`) — these tables have real, ordered SQL migrations under `supabase/migrations/`, applied to a live, connected Supabase project (see `docs/integrations.md`). Every other table in this document (Finance, Documents, etc.) remains mock-only; no migration exists for them yet. Terminology follows `BLOOMOS_BIBLE.md`; if they ever disagree, the Bible wins and this file gets corrected.
 
 ## Principles
 
@@ -279,8 +279,10 @@ Confirmed against every future capability requested for this foundation — none
 - **File version history** — the storage path already preserves every prior version's bytes (see above); every upload/replace/archive/restore also logs a Timeline entry against the owning entity (`media_asset_uploaded`/`media_asset_version_replaced`/`media_asset_archived`/`media_asset_restored`, with old/new checksum and version in `metadata`), giving a durable audit trail a future `media_asset_versions` table could even be backfilled from.
 - **Multiple attachments per record, drag-and-drop uploads, bulk uploads** — already supported today (no schema or repository change needed): nothing enforces one row per `(owner_type, owner_id)`, and uploads operate on one `Blob` regardless of how the UI collects it.
 
-### `contracts`
+### `contracts` — **live** (`supabase/migrations/20260720100100_contracts.sql`)
 Closes the commercial cycle: Lead -> Client -> Event -> Contract -> Invoice (future) -> Payments (future). Reusable across every Workspace — nothing here is designed around a single business. `client_id` is required; `event_id` is deliberately nullable — a Contract can stand on its own (e.g. a retainer) ahead of or without a dedicated Event record. Replaces the earlier draft/sent/signed/cancelled sketch below with the actual shipped model (`core/workflows/contractWorkflow.ts`).
+
+Fourth business module migrated to Supabase — same repository pattern as Leads/Clients/Events (`lib/data/contracts/`), bundling Contracts, Contract Templates, Contract Exhibits, and Contract Notes/Timeline into one repository pair. Invoices/Payments/Expenses/Documents remain entirely mock-only; see "Supabase-specific notes" below for the resulting known limitation.
 
 `status` and `signature_status` are two independent state machines, the same pattern as `events.status`/`events.lifecycle_stage` — `status` is the contract's overall commercial lifecycle; `signature_status` is specifically about the e-signature process and can reach `partially_signed`, a state `status` has no equivalent for. Neither is inferred from the other.
 
@@ -291,13 +293,13 @@ Closes the commercial cycle: Lead -> Client -> Event -> Contract -> Invoice (fut
 | client_id | uuid | FK → clients — **required** |
 | event_id | uuid | nullable FK → events |
 | template_id | uuid | nullable FK → contract_templates |
-| contract_number | text | workspace-scoped and generated uniquely (`CT-{year}-{sequence}`), collision-checked on every creation/duplication |
+| contract_number | text | workspace-scoped and generated uniquely (`CT-{year}-{sequence}`); a real unique index (`contracts_workspace_number_unique`) is the durable collision guarantee in Supabase mode — see "Contract numbering" below |
 | title | text | |
 | description | text | nullable |
 | status | enum | `draft`, `review`, `ready`, `sent`, `viewed`, `signed`, `completed`, `expired`, `cancelled`, `archived`, `declined` — `core/enums/contractStatus.ts`; `sent`/`viewed`/`signed`/`completed`/`expired`/`cancelled`/`archived`/`declined` are reachable only via their own dedicated data-layer action, never the plain status setter; only `draft`/`review`/`ready` remain freely inter-transitionable through it |
 | signature_status | enum | `unsigned`, `sent`, `viewed`, `partially_signed`, `signed`, `declined`, `expired`, `cancelled` — `core/enums/signatureStatus.ts` |
 | version | integer | starts at 1, incremented on every content edit (`updateContract`) |
-| version_history | jsonb | array of `{ version, title, description, total_value, deposit_amount, recorded_at }` snapshots taken immediately before each edit overwrites them — the model's minimal version history; no separate versions table |
+| version_history | jsonb | array of `{ version, title, description, total_value, deposit_amount, recorded_at }` snapshots taken immediately before each edit overwrites them — the model's minimal version history; no separate versions table. Preserved exactly in Supabase mode as a `jsonb` column (not a separate table) — see "Version history" below |
 | effective_date / expiration_date | date | nullable |
 | signed_at / sent_at / viewed_at / declined_at / cancelled_at / archived_at | timestamptz | nullable, set by their respective dedicated action |
 | total_value | numeric | nullable |
@@ -308,8 +310,8 @@ Closes the commercial cycle: Lead -> Client -> Event -> Contract -> Invoice (fut
 | notes | text | nullable — plain internal free-text field (mirrors `events.internal_summary`), separate from the shared `notes` table a Contract also owns via `owner_type = 'contract'` |
 | created_at / updated_at | timestamptz | |
 
-### `contract_templates`
-A reusable contract body a Contract can be created from. Workspace-scoped, reusable across Workspaces. No editor, HTML rendering, or PDF generation exists yet — `body` is plain text containing `{{merge_field}}` placeholders (see "Merge fields" below); nothing parses or renders them yet.
+### `contract_templates` — **live, read-only** (`supabase/migrations/20260720100000_contract_templates.sql`)
+A reusable contract body a Contract can be created from. Workspace-scoped, reusable across Workspaces. No editor, HTML rendering, or PDF generation exists yet — `body` is plain text containing `{{merge_field}}` placeholders (see "Merge fields" below); nothing parses or renders them yet. Created before `contracts` in migration order since `contracts.template_id` references it. RLS grants **select only** — no insert/update/delete policy exists, since the current public API has no create/update path; the migration deliberately seeds no rows.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -323,18 +325,31 @@ A reusable contract body a Contract can be created from. Workspace-scoped, reusa
 | active | boolean | inactive templates are excluded when `activeOnly` is requested; still readable individually |
 | created_at / updated_at | timestamptz | |
 
-### `contract_exhibits`
-A named attachment/appendix to a Contract (e.g. Payment Schedule, Cancellation Policy, Rental Terms, Damage Waiver, Photo Release, Custom Attachment) — model support only this phase; no editor exists yet.
+### `contract_exhibits` — **live** (`supabase/migrations/20260720100200_contract_exhibits.sql`)
+A named attachment/appendix to a Contract (e.g. Payment Schedule, Cancellation Policy, Rental Terms, Damage Waiver, Photo Release, Custom Attachment) — model support only this phase; no real file upload here (`document_id` stays a null placeholder — the future Media Library integration, `docs/database.md`'s `media_assets` section, is expected to populate it). Locking enforcement for closed/signed Contracts is a UI-layer concern, not replicated as a data-layer or DB constraint — same division of responsibility as `checklist_items`/`event_schedule_items`.
+
+Unlike the polymorphic tables (`notes`/`timeline_activities`/`checklist_items`), this is a true single-parent child of `contracts` — `contract_id` is a real, non-polymorphic foreign key (`on delete cascade`).
 
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid | PK |
-| contract_id | uuid | FK → contracts |
+| workspace_id | uuid | FK → workspaces — carried redundantly (not derived only through `contract_id`) so RLS can gate on it directly without a join, same pattern as `checklist_items`/`event_schedule_items` |
+| contract_id | uuid | FK → contracts, `on delete cascade` |
 | title | text | |
 | description | text | nullable |
 | display_order | integer | |
-| document_id | uuid | nullable — placeholder for the future Documents module; always null today |
+| document_id | uuid | nullable — placeholder for the future Media Library integration; always null today |
 | created_at / updated_at | timestamptz | |
+
+Rows here ARE physically deleted (`deleteContractExhibit`) — same precedent as `checklist_items`/`event_schedule_items`.
+
+#### Contract numbering — live
+
+`public.generate_contract_number(p_workspace_id uuid) returns text` (`supabase/migrations/20260720100700_generate_contract_number_function.sql`) proposes the next workspace-scoped `CT-{year}-{sequence}` number using the same algorithm as the mock's `generateContractNumber()`. `security invoker` — the SELECT inside is still governed by the caller's own `contracts` RLS policy. The function only *proposes* a candidate; the durable collision guarantee is the `contracts_workspace_number_unique` unique index (`workspace_id`, `contract_number`) from `20260720100500_contracts_indexes_and_constraints.sql` — `lib/data/contracts/supabaseRepository.ts` retries generation+insert (up to 5 attempts) on a `23505` unique-violation, so concurrent requests can never persist duplicate numbers.
+
+#### Version history — live
+
+Preserved exactly as designed in the mock — `contracts.version_history` is a `jsonb` array column, not a separate table. `updateContract` appends a pre-image snapshot and increments `version` on every call in both mock and Supabase mode; no redesign.
 
 #### Merge fields
 
@@ -799,7 +814,7 @@ No payment-provider (Stripe, Square, PayPal, banks, accounting software) is conn
 
 ## Supabase-specific notes
 
-- **Remaining mock-only modules still read the mock `clients`/`events` stores, not the live tables.** Contracts, Finance, and Documents (all still entirely mock, per their own future migration phases) cross-reference Client and Event records — e.g. a Contract's `clientsById`/`eventsById` lookups for search and validation — via `readClients()`/`readEvents()` against the in-memory mock stores, unconditionally, regardless of `NEXT_PUBLIC_DATA_MODE`. In `supabase` mode this means those still-mock modules see the mock stores' seeded Clients/Events while the Clients and Events modules themselves (list/detail/dashboard metrics) show live Supabase data — the two can disagree until each of those modules gets its own Supabase migration. This is the same shape of caveat the Leads migration created for `convertLeadToClient` until the Clients phase, now shifted to Contracts/Finance/Documents.
-- Row-Level Security (RLS) is **live** for `profiles`/`workspaces`/`workspace_members` (the Supabase Foundation), `leads`/`notes`/`timeline_activities`, `clients`, `events`/`checklist_items`/`event_schedule_items`, and `media_assets` — a real Supabase project is connected (see `docs/integrations.md`). For every other table in this document (Contracts, Finance, Documents, and beyond), RLS remains design-only — no migration exists for them yet. See `docs/permissions.md`.
+- **Remaining mock-only modules (Finance, Documents) still read the mock `clients`/`events`/`contracts` stores directly, not the live tables.** Finance (Invoices/Payments/Expenses — `validateContractBelongsToClient`, `createExpense`/`updateExpense`'s inline contract checks, `getEventFinancialStatus`, `getFinanceDashboardData`) and Documents (`validateDocumentOwnerAndReferences`, `attachDocumentToContractExhibit`) cross-reference Client/Event/Contract records via `readClients()`/`readEvents()`/`readContracts()` against the in-memory mock stores, unconditionally, regardless of `NEXT_PUBLIC_DATA_MODE`. In `supabase` mode this means those still-mock modules see the mock stores' seeded Clients/Events/Contracts while the Clients/Events/Contracts modules themselves (list/detail/dashboard metrics) show live Supabase data — the two can disagree until Finance/Documents get their own Supabase migrations. This is the same shape of caveat the Leads migration created for `convertLeadToClient`, then Clients/Events for Contracts/Finance/Documents, now shifted to Finance/Documents alone following the Contracts migration. One exception was fixed during the Contracts migration: `getContractFinanceSummary` (Finance-domain, but validating a Contract's own existence) now calls the repository-routed `getContract()` instead of reading the mock store directly, since — like `getEventFinancialStatus`'s Event lookup before it — that specific lookup gated the entire Contract Detail page, not just a Finance-only figure.
+- Row-Level Security (RLS) is **live** for `profiles`/`workspaces`/`workspace_members` (the Supabase Foundation), `leads`/`notes`/`timeline_activities`, `clients`, `events`/`checklist_items`/`event_schedule_items`, `media_assets`, and `contracts`/`contract_templates`/`contract_exhibits` — a real Supabase project is connected (see `docs/integrations.md`). For every other table in this document (Finance, Documents, and beyond), RLS remains design-only — no migration exists for them yet. See `docs/permissions.md`.
 - Enum values above are the intended constraint; whether they're implemented as Postgres `enum` types or `check` constraints is an implementation decision made at connection time, not before — except `workspace_members.role`/`status`, which are already implemented as `check` constraints in migration 4 (`supabase/migrations/20260715150300_workspace_members.sql`).
 - `role`/`allowed_roles` values passed into the `has_workspace_role()` SQL helper function are plain `text`/`text[]`, not a Postgres enum — this mirrors the `check`-constraint choice above and keeps role checks a single string comparison rather than a cross-schema enum-type dependency.

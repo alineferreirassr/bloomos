@@ -58,6 +58,7 @@ export function makeContractTemplate(overrides: Partial<ContractTemplate> = {}):
 export function makeContractExhibit(overrides: Partial<ContractExhibit> = {}): ContractExhibit {
   return {
     id: "exhibit_test",
+    workspace_id: "ws_test",
     contract_id: "contract_test",
     title: "Test Exhibit",
     description: null,

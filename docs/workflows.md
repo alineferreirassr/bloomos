@@ -87,6 +87,8 @@ A companion, deterministic `getEventHealthScore()` (`core/workflows/eventHealth.
 
 ## Contracts
 
+**Live in Supabase mode** (`lib/data/contracts/`, `docs/database.md`) — fourth business module migrated, same repository pattern as Leads/Clients/Events, bundling Contracts, Contract Templates, Contract Exhibits, and Contract Notes/Timeline into one repository pair. The workflow rules below apply identically regardless of data mode; nothing here changed for the migration.
+
 As implemented (`core/workflows/contractWorkflow.ts`), a Contract tracks **two independent state machines**, the same pattern as an Event's `status`/`lifecycle_stage`:
 
 - **`status`** — the contract's overall commercial lifecycle: `draft`, `review`, `ready`, `sent`, `viewed`, `signed`, `completed`, `expired`, `cancelled`, `archived`, `declined`. `draft`/`review`/`ready` remain freely inter-transitionable through the plain status setter (`updateContractStatus`); every other value is reachable only through its own dedicated data-layer action (`sendContract`, `markViewed`, `markSigned`, `completeContract`, `expireContract`, `cancelContract`, `archiveContract`, `markDeclined`) and never left again except by a further dedicated action.
@@ -165,7 +167,7 @@ Execution modes anticipated: Immediate, Scheduled, Recurring, Manual. Every exec
 
 ## Auth & session (Supabase Foundation)
 
-Active only when `NEXT_PUBLIC_DATA_MODE=supabase`; in `mock` mode (the default) none of this runs. Leads, Clients, and Events are the first three business modules wired to live Supabase (`docs/integrations.md`), including Lead → Client conversion (`convert_lead_to_client`) and atomic default-checklist application (`apply_default_event_checklist`, see `docs/database.md`); every other business module (Contracts, Finance, Documents) still runs on the mock data layer regardless of this setting.
+Active only when `NEXT_PUBLIC_DATA_MODE=supabase`; in `mock` mode (the default) none of this runs. Leads, Clients, Events, and Contracts are the first four business modules wired to live Supabase (`docs/integrations.md`), including Lead → Client conversion (`convert_lead_to_client`), atomic default-checklist application (`apply_default_event_checklist`), and collision-safe contract numbering (`generate_contract_number`, see `docs/database.md`); every other business module (Finance, Documents) still runs on the mock data layer regardless of this setting.
 
 - **Sign in** (`signInWithPassword`, `lib/auth/actions.ts`) — email/password only. On success, redirects to the `redirectTo` query param if it's a same-origin path (`safeRedirectTarget` rejects anything not starting with `/`, and rejects `//` to block protocol-relative external redirects), otherwise `/dashboard`.
 - **Route protection** (`src/middleware.ts` + pure `lib/middleware/routeProtection.ts`) — on every request to a protected route prefix (`/dashboard`, `/leads`, `/clients`, `/events`, `/contracts`, `/finance`, `/documents`) without a session, redirects to `/sign-in?redirectTo=<original path>`, preserving the intended destination for sign-in to return to. Auth routes themselves (`/sign-in`, `/reset-password`, `/update-password`, `/auth/callback`) are always allowed regardless of session state, which is what prevents a redirect loop.

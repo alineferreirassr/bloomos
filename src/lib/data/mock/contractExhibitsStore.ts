@@ -1,8 +1,10 @@
 import type { ContractExhibit } from "@/types/contractExhibit";
+import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 
 const SEED_EXHIBITS: ContractExhibit[] = [
   {
     id: "exhibit_1",
+    workspace_id: CURRENT_WORKSPACE_ID,
     contract_id: "contract_1",
     title: "Payment Schedule",
     description: "Deposit and remaining balance due dates.",
@@ -13,6 +15,7 @@ const SEED_EXHIBITS: ContractExhibit[] = [
   },
   {
     id: "exhibit_2",
+    workspace_id: CURRENT_WORKSPACE_ID,
     contract_id: "contract_1",
     title: "Cancellation Policy",
     description: "Refund terms if the event is cancelled or rescheduled.",
@@ -23,6 +26,7 @@ const SEED_EXHIBITS: ContractExhibit[] = [
   },
   {
     id: "exhibit_3",
+    workspace_id: CURRENT_WORKSPACE_ID,
     contract_id: "contract_6",
     title: "Rental Terms",
     description: "Terms covering rented decor and furniture for the wedding.",
@@ -33,6 +37,7 @@ const SEED_EXHIBITS: ContractExhibit[] = [
   },
   {
     id: "exhibit_4",
+    workspace_id: CURRENT_WORKSPACE_ID,
     contract_id: "contract_6",
     title: "Damage Waiver",
     description: "Liability terms for rented items and venue property.",

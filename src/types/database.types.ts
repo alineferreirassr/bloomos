@@ -8,10 +8,12 @@
  * workspace_members), the Leads migration tables (leads, notes,
  * timeline_activities), the Clients migration table (clients), the
  * Events migration tables (events, checklist_items, event_schedule_items),
- * and the Media Library table (media_assets) plus their RLS helper
- * functions and the convert_lead_to_client/apply_default_event_checklist
- * RPCs — regenerate this file after every migration change; do not
- * hand-edit table shapes once live generation is available.
+ * the Media Library table (media_assets), and the Contracts migration
+ * tables (contract_templates, contracts, contract_exhibits) plus their RLS
+ * helper functions and the convert_lead_to_client/
+ * apply_default_event_checklist/generate_contract_number RPCs — regenerate
+ * this file after every migration change; do not hand-edit table shapes
+ * once live generation is available.
  */
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
@@ -640,6 +642,174 @@ export interface Database {
         };
         Relationships: [];
       };
+      contract_templates: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          name: string;
+          description: string | null;
+          category: string;
+          body: string;
+          version: number;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          name: string;
+          description?: string | null;
+          category: string;
+          body: string;
+          version?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          name?: string;
+          description?: string | null;
+          category?: string;
+          body?: string;
+          version?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      contracts: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          client_id: string;
+          event_id: string | null;
+          template_id: string | null;
+          contract_number: string;
+          title: string;
+          description: string | null;
+          status: string;
+          signature_status: string;
+          version: number;
+          version_history: Json;
+          effective_date: string | null;
+          expiration_date: string | null;
+          signed_at: string | null;
+          sent_at: string | null;
+          viewed_at: string | null;
+          declined_at: string | null;
+          cancelled_at: string | null;
+          archived_at: string | null;
+          total_value: number | null;
+          deposit_required: boolean;
+          deposit_amount: number | null;
+          remaining_balance: number | null;
+          currency: string;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          client_id: string;
+          event_id?: string | null;
+          template_id?: string | null;
+          contract_number: string;
+          title: string;
+          description?: string | null;
+          status?: string;
+          signature_status?: string;
+          version?: number;
+          version_history?: Json;
+          effective_date?: string | null;
+          expiration_date?: string | null;
+          signed_at?: string | null;
+          sent_at?: string | null;
+          viewed_at?: string | null;
+          declined_at?: string | null;
+          cancelled_at?: string | null;
+          archived_at?: string | null;
+          total_value?: number | null;
+          deposit_required?: boolean;
+          deposit_amount?: number | null;
+          remaining_balance?: number | null;
+          currency?: string;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          client_id?: string;
+          event_id?: string | null;
+          template_id?: string | null;
+          contract_number?: string;
+          title?: string;
+          description?: string | null;
+          status?: string;
+          signature_status?: string;
+          version?: number;
+          version_history?: Json;
+          effective_date?: string | null;
+          expiration_date?: string | null;
+          signed_at?: string | null;
+          sent_at?: string | null;
+          viewed_at?: string | null;
+          declined_at?: string | null;
+          cancelled_at?: string | null;
+          archived_at?: string | null;
+          total_value?: number | null;
+          deposit_required?: boolean;
+          deposit_amount?: number | null;
+          remaining_balance?: number | null;
+          currency?: string;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      contract_exhibits: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          contract_id: string;
+          title: string;
+          description: string | null;
+          display_order: number;
+          document_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          contract_id: string;
+          title: string;
+          description?: string | null;
+          display_order?: number;
+          document_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          contract_id?: string;
+          title?: string;
+          description?: string | null;
+          display_order?: number;
+          document_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       media_assets: {
         Row: {
           id: string;
@@ -731,6 +901,10 @@ export interface Database {
       apply_default_event_checklist: {
         Args: { p_event_id: string; p_items: Json; p_description: string; p_actor: string };
         Returns: Json;
+      };
+      generate_contract_number: {
+        Args: { p_workspace_id: string };
+        Returns: string;
       };
     };
     Enums: Record<string, never>;

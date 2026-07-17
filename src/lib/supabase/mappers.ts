@@ -10,6 +10,9 @@ import type { EventScheduleItem } from "@/types/eventScheduleItem";
 import type { Note, NoteAttachment } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
 import type { MediaAsset } from "@/types/mediaAsset";
+import type { Contract, ContractVersionSnapshot } from "@/types/contract";
+import type { ContractTemplate } from "@/types/contractTemplate";
+import type { ContractExhibit } from "@/types/contractExhibit";
 import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 import type { WorkspaceMemberStatus } from "@/core/enums/workspaceMemberStatus";
 import type { LeadStatus } from "@/core/enums/leadStatus";
@@ -28,6 +31,9 @@ import type { ScheduleStatus } from "@/core/enums/scheduleStatus";
 import type { NoteCategory } from "@/core/enums/noteCategory";
 import type { NotePriority } from "@/core/enums/notePriority";
 import type { TimelineActivityType } from "@/core/enums/timelineActivityType";
+import type { ContractStatus } from "@/core/enums/contractStatus";
+import type { SignatureStatus } from "@/core/enums/signatureStatus";
+import type { ContractTemplateCategory } from "@/core/enums/contractTemplateCategory";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
@@ -37,6 +43,9 @@ type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
 type EventRow = Database["public"]["Tables"]["events"]["Row"];
 type ChecklistItemRow = Database["public"]["Tables"]["checklist_items"]["Row"];
 type EventScheduleItemRow = Database["public"]["Tables"]["event_schedule_items"]["Row"];
+type ContractTemplateRow = Database["public"]["Tables"]["contract_templates"]["Row"];
+type ContractRow = Database["public"]["Tables"]["contracts"]["Row"];
+type ContractExhibitRow = Database["public"]["Tables"]["contract_exhibits"]["Row"];
 type NoteRow = Database["public"]["Tables"]["notes"]["Row"];
 type TimelineActivityRow = Database["public"]["Tables"]["timeline_activities"]["Row"];
 type MediaAssetRow = Database["public"]["Tables"]["media_assets"]["Row"];
@@ -283,6 +292,68 @@ export function mapMediaAssetRow(row: MediaAssetRow): MediaAsset {
     created_at: row.created_at,
     updated_at: row.updated_at,
     archived_at: row.archived_at,
+  };
+}
+
+export function mapContractTemplateRow(row: ContractTemplateRow): ContractTemplate {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    name: row.name,
+    description: row.description,
+    category: row.category as ContractTemplateCategory,
+    body: row.body,
+    version: row.version,
+    active: row.active,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapContractRow(row: ContractRow): Contract {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    client_id: row.client_id,
+    event_id: row.event_id,
+    template_id: row.template_id,
+    contract_number: row.contract_number,
+    title: row.title,
+    description: row.description,
+    status: row.status as ContractStatus,
+    signature_status: row.signature_status as SignatureStatus,
+    version: row.version,
+    version_history: (row.version_history as unknown as ContractVersionSnapshot[] | null) ?? [],
+    effective_date: row.effective_date,
+    expiration_date: row.expiration_date,
+    signed_at: row.signed_at,
+    sent_at: row.sent_at,
+    viewed_at: row.viewed_at,
+    declined_at: row.declined_at,
+    cancelled_at: row.cancelled_at,
+    archived_at: row.archived_at,
+    total_value: row.total_value,
+    deposit_required: row.deposit_required,
+    deposit_amount: row.deposit_amount,
+    remaining_balance: row.remaining_balance,
+    currency: row.currency,
+    notes: row.notes,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapContractExhibitRow(row: ContractExhibitRow): ContractExhibit {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    contract_id: row.contract_id,
+    title: row.title,
+    description: row.description,
+    display_order: row.display_order,
+    document_id: row.document_id,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   };
 }
 
