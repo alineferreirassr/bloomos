@@ -25,7 +25,7 @@ export function DocumentListCards({ rows }: { rows: DocumentListRow[] }) {
             <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted">
               <span>v{document.version}</span>
               <span className="uppercase">{document.file_extension}</span>
-              <span>{formatBytes(document.size_bytes)}</span>
+              <span>{document.size_bytes !== null ? formatBytes(document.size_bytes) : "No file"}</span>
             </div>
             {nextAction ? <p className="mt-2 text-xs text-accent">{nextAction}</p> : null}
           </Card>

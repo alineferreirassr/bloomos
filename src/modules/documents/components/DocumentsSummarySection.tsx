@@ -84,7 +84,9 @@ export function DocumentsSummarySection({ ownerType, ownerId, newDocumentParams 
                 className="flex items-center justify-between gap-2 rounded-md border border-border px-2.5 py-1.5 text-xs hover:border-accent/50"
               >
                 <span className="truncate text-text">{document.title}</span>
-                <span className="shrink-0 text-text-muted">{formatBytes(document.size_bytes)}</span>
+                <span className="shrink-0 text-text-muted">
+                  {document.size_bytes !== null ? formatBytes(document.size_bytes) : "No file"}
+                </span>
               </Link>
             </li>
           ))}

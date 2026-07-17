@@ -720,6 +720,14 @@ async function fetchContractExhibitsForContract(workspaceId: string, contractId:
   return (data ?? []).map(mapContractExhibitRow);
 }
 
+async function getContractExhibitById(id: string): Promise<ContractExhibit> {
+  const exhibit = await fetchContractExhibitRow(id);
+  if (!exhibit) {
+    throw new NotFoundError(`Contract exhibit ${id} was not found`);
+  }
+  return exhibit;
+}
+
 async function getContractExhibitsByContractId(contractId: string): Promise<ContractExhibit[]> {
   const contract = await fetchContractRow(contractId);
   if (!contract) return [];
@@ -964,6 +972,7 @@ export const supabaseContractsRepository: ContractsRepository = {
   getContractTemplates,
   getContractTemplateById,
   getContractExhibitsByContractId,
+  getContractExhibitById,
   createContractExhibit,
   updateContractExhibit,
   deleteContractExhibit,

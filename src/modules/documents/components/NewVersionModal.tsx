@@ -20,15 +20,8 @@ interface NewVersionModalProps {
   onCreated: (document: Document) => void;
 }
 
-const AUTHORITATIVE_TO_FORM_FIELD: Partial<Record<string, string>> = {
-  file_name: "original_file_name",
-  size_bytes: "size_mb",
-};
-
 const emptyDefaults: NewDocumentVersionFormInput = {
-  original_file_name: "",
-  mime_type: "",
-  size_mb: "",
+  media_asset_id: "",
   title: "",
   visibility: "",
   expires_at: "",
@@ -60,8 +53,7 @@ export function NewVersionModal({ open, onClose, document: doc, onCreated }: New
       setFormError(result.error);
       if (result.fieldErrors) {
         for (const [field, message] of Object.entries(result.fieldErrors)) {
-          const formField = AUTHORITATIVE_TO_FORM_FIELD[field] ?? field;
-          setError(formField as keyof NewDocumentVersionFormInput, { message });
+          setError(field as keyof NewDocumentVersionFormInput, { message });
         }
       }
       return;
@@ -75,7 +67,9 @@ export function NewVersionModal({ open, onClose, document: doc, onCreated }: New
     <Modal open={open} onClose={handleClose} title="Add New Version">
       <p className="text-sm text-text-muted">
         Uploads version {doc.version + 1} — the current latest version will be marked superseded. Category, owner,
-        and Workspace carry over automatically. No real file is uploaded.
+        and Workspace carry over automatically. Upload the file through the Media Library first (owner: this
+        Document, id {doc.parent_document_id ?? doc.id}), then paste the resulting MediaAsset id below — or leave it
+        blank for a metadata-only version.
       </p>
       <form onSubmit={submit} noValidate className="mt-4 space-y-4">
         {formError ? (
@@ -83,14 +77,8 @@ export function NewVersionModal({ open, onClose, document: doc, onCreated }: New
             {formError}
           </div>
         ) : null}
-        <FormField label="Original file name" htmlFor="version_file_name" required error={errors.original_file_name?.message}>
-          <Input id="version_file_name" invalid={!!errors.original_file_name} {...register("original_file_name")} />
-        </FormField>
-        <FormField label="MIME type" htmlFor="version_mime_type" required error={errors.mime_type?.message}>
-          <Input id="version_mime_type" invalid={!!errors.mime_type} {...register("mime_type")} />
-        </FormField>
-        <FormField label="Size (MB)" htmlFor="version_size_mb" required error={errors.size_mb?.message}>
-          <Input id="version_size_mb" type="number" min={0} step="0.01" invalid={!!errors.size_mb} {...register("size_mb")} />
+        <FormField label="MediaAsset id" htmlFor="version_media_asset_id" hint="Optional — leave blank for a metadata-only version" error={errors.media_asset_id?.message}>
+          <Input id="version_media_asset_id" invalid={!!errors.media_asset_id} {...register("media_asset_id")} />
         </FormField>
         <FormField label="Title" htmlFor="version_title" hint="Optional — keeps the current title when left blank" error={errors.title?.message}>
           <Input id="version_title" invalid={!!errors.title} {...register("title")} />
@@ -110,7 +98,7 @@ export function NewVersionModal({ open, onClose, document: doc, onCreated }: New
         </FormField>
         <div className="flex items-center gap-3 pt-1">
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Uploading…" : "Add Version"}
+            {isSubmitting ? "Creating…" : "Add Version"}
           </Button>
           <Button type="button" variant="secondary" onClick={handleClose} disabled={isSubmitting}>
             Cancel

@@ -136,14 +136,31 @@ describe("DocumentActions", () => {
 
     await user.click(screen.getByRole("button", { name: /add new version/i }));
     const dialog = screen.getByRole("dialog", { name: /add new version/i });
-    await user.type(within(dialog).getByLabelText(/original file name/i), "contract_v2.pdf");
-    await user.type(within(dialog).getByLabelText(/mime type/i), "application/pdf");
-    await user.type(within(dialog).getByLabelText(/size \(mb\)/i), "1");
+    await user.type(within(dialog).getByLabelText(/mediaasset id/i), "media_1");
     await user.click(within(dialog).getByRole("button", { name: /add version/i }));
 
     await waitFor(() =>
       expect(dataLayer.createDocumentVersion).toHaveBeenCalledWith(
-        expect.objectContaining({ document_id: "document_1", file_name: "contract_v2.pdf" }),
+        expect.objectContaining({ document_id: "document_1", media_asset_id: "media_1" }),
+      ),
+    );
+  });
+
+  it("creates a metadata-only new version when the MediaAsset id field is left blank", async () => {
+    const user = userEvent.setup();
+    vi.mocked(dataLayer.createDocumentVersion).mockResolvedValue({
+      success: true,
+      data: makeDocument({ id: "document_2", version: 2 }),
+    });
+    render(<DocumentActions document={makeDocument({ id: "document_1", status: "active", version: 1 })} onChanged={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /add new version/i }));
+    const dialog = screen.getByRole("dialog", { name: /add new version/i });
+    await user.click(within(dialog).getByRole("button", { name: /add version/i }));
+
+    await waitFor(() =>
+      expect(dataLayer.createDocumentVersion).toHaveBeenCalledWith(
+        expect.objectContaining({ document_id: "document_1", media_asset_id: null }),
       ),
     );
   });

@@ -296,6 +296,10 @@ describe("mockContractsRepository Exhibits", () => {
     expect(deleted.success).toBe(true);
     const remaining = await mockContractsRepository.getContractExhibitsByContractId(contractId);
     expect(remaining.map((e) => e.id)).toEqual([first.data.id]);
+
+    const byId = await mockContractsRepository.getContractExhibitById(first.data.id);
+    expect(byId.id).toBe(first.data.id);
+    await expect(mockContractsRepository.getContractExhibitById("nope")).rejects.toThrow(NotFoundError);
   });
 
   it("fails for an unknown parent contract on create", async () => {

@@ -45,6 +45,7 @@ import {
   getTimelineByClientId,
   getDashboardMetrics,
   resetAllMockData,
+  uploadMediaAsset,
 } from "@/lib/data";
 import type { DocumentMetadataInput, NewDocumentVersionInput } from "@/modules/documents/schema";
 
@@ -56,9 +57,7 @@ const validMetadataInput: DocumentMetadataInput = {
   description: null,
   category: "other",
   visibility: "internal",
-  file_name: "Test File.pdf",
-  mime_type: "application/pdf",
-  size_bytes: 50_000,
+  media_asset_id: null,
   expires_at: null,
   uploaded_by: null,
   contract_exhibit_id: null,
@@ -116,15 +115,16 @@ describe("mock data", () => {
 });
 
 describe("createDocumentMetadata", () => {
-  it("creates a draft Document with a derived title when none is given", async () => {
+  it("creates a draft, metadata-only Document with a default title when none is given", async () => {
     const result = await createDocumentMetadata(validMetadataInput);
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data.status).toBe("draft");
     expect(result.data.version).toBe(1);
     expect(result.data.is_latest_version).toBe(true);
-    expect(result.data.file_name).toBe("test_file.pdf");
-    expect(result.data.title).toBe("Test File");
+    expect(result.data.media_asset_id).toBeNull();
+    expect(result.data.file_name).toBeNull();
+    expect(result.data.title).toBe("Untitled Document");
     expect(result.data.storage_provider).toBe("mock");
   });
 
@@ -164,8 +164,8 @@ describe("createDocumentMetadata", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects a blocked file extension", async () => {
-    const result = await createDocumentMetadata({ ...validMetadataInput, file_name: "app.exe", mime_type: "application/x-msdownload" });
+  it("rejects an unknown MediaAsset id", async () => {
+    const result = await createDocumentMetadata({ ...validMetadataInput, media_asset_id: "media_missing" });
     expect(result.success).toBe(false);
   });
 
@@ -189,6 +189,34 @@ describe("updateDocumentMetadata", () => {
     if (!updated.success) return;
     expect(updated.data.title).toBe("Renamed");
     expect(updated.data.category).toBe("identification");
+  });
+
+  it("links a MediaAsset uploaded through the Shared Media Library, hydrating file_name/mime_type/size_bytes", async () => {
+    const created = await createDocumentMetadata(validMetadataInput);
+    if (!created.success) throw new Error("setup failed");
+
+    const uploaded = await uploadMediaAsset({
+      ownerType: "document",
+      ownerId: created.data.id,
+      file: new Blob(["hello world"], { type: "application/pdf" }),
+      originalFilename: "Test File.pdf",
+      mimeType: "application/pdf",
+    });
+    if (!uploaded.success) throw new Error("media upload failed");
+
+    const linked = await updateDocumentMetadata(created.data.id, {
+      title: null,
+      description: null,
+      category: "other",
+      expires_at: null,
+      media_asset_id: uploaded.data.id,
+    });
+    expect(linked.success).toBe(true);
+    if (!linked.success) return;
+    expect(linked.data.media_asset_id).toBe(uploaded.data.id);
+    expect(linked.data.mime_type).toBe("application/pdf");
+    expect(linked.data.size_bytes).toBeGreaterThan(0);
+    expect(linked.data.storage_provider).toBe("mock");
   });
 
   it("rejects updates on a soft-deleted document", async () => {
@@ -314,9 +342,7 @@ describe("createDocumentVersion", () => {
 
     const input: NewDocumentVersionInput = {
       document_id: "document_1",
-      file_name: "contract_v4.pdf",
-      mime_type: "application/pdf",
-      size_bytes: 190_000,
+      media_asset_id: null,
       uploaded_by: null,
     };
     const result = await createDocumentVersion(input);
@@ -340,9 +366,7 @@ describe("createDocumentVersion", () => {
   it("records document_version_created on the new version and document_superseded on the old one", async () => {
     const result = await createDocumentVersion({
       document_id: "document_1",
-      file_name: "contract_v4.pdf",
-      mime_type: "application/pdf",
-      size_bytes: 190_000,
+      media_asset_id: null,
       uploaded_by: null,
     });
     if (!result.success) throw new Error("setup failed");
@@ -357,9 +381,7 @@ describe("createDocumentVersion", () => {
   it("allows overriding title/visibility/expires_at on the new version", async () => {
     const result = await createDocumentVersion({
       document_id: "document_1",
-      file_name: "contract_v4.pdf",
-      mime_type: "application/pdf",
-      size_bytes: 190_000,
+      media_asset_id: null,
       title: "Custom Title",
       visibility: "restricted",
       uploaded_by: null,
@@ -374,12 +396,31 @@ describe("createDocumentVersion", () => {
   it("rejects a version upload for an unknown document", async () => {
     const result = await createDocumentVersion({
       document_id: "document_missing",
-      file_name: "x.pdf",
-      mime_type: "application/pdf",
-      size_bytes: 1000,
+      media_asset_id: null,
       uploaded_by: null,
     });
     expect(result.success).toBe(false);
+  });
+
+  it("links a new version to a MediaAsset uploaded against the chain root", async () => {
+    const uploaded = await uploadMediaAsset({
+      ownerType: "document",
+      ownerId: "document_1", // the chain root
+      file: new Blob(["v4 bytes"], { type: "application/pdf" }),
+      originalFilename: "contract_v4.pdf",
+      mimeType: "application/pdf",
+    });
+    if (!uploaded.success) throw new Error("media upload failed");
+
+    const result = await createDocumentVersion({
+      document_id: "document_1",
+      media_asset_id: uploaded.data.id,
+      uploaded_by: null,
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.media_asset_id).toBe(uploaded.data.id);
+    expect(result.data.file_name).toBe(uploaded.data.stored_filename);
   });
 });
 
@@ -439,7 +480,7 @@ describe("Document filters and sorting", () => {
   it("sorts by size_bytes ascending", async () => {
     const results = await getDocuments({ ownerType: "event", ownerId: "event_1", sortBy: "size_bytes", sortDirection: "asc" });
     for (let i = 1; i < results.length; i += 1) {
-      expect(results[i].size_bytes).toBeGreaterThanOrEqual(results[i - 1].size_bytes);
+      expect(results[i].size_bytes ?? 0).toBeGreaterThanOrEqual(results[i - 1].size_bytes ?? 0);
     }
   });
 });

@@ -10,6 +10,7 @@ vi.mock("@/lib/auth/workspaceSessionClient", () => ({
 import { supabaseContractsRepository } from "@/lib/data/contracts/supabaseRepository";
 import { createClient } from "@/lib/supabase/client";
 import { getClientWorkspaceSession } from "@/lib/auth/workspaceSessionClient";
+import { NotFoundError } from "@/core/errors";
 
 type QueryResult = { data: unknown; error: unknown; count?: number };
 type RecordedCall = { table: string; method: string; args: unknown[] };
@@ -493,6 +494,21 @@ describe("supabaseContractsRepository Exhibits", () => {
 
     const result = await supabaseContractsRepository.deleteContractExhibit("exhibit_1");
     expect(result.success).toBe(true);
+  });
+
+  it("getContractExhibitById returns the mapped exhibit", async () => {
+    const { client } = createMockSupabase([{ data: exhibitRow(), error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const exhibit = await supabaseContractsRepository.getContractExhibitById("exhibit_1");
+    expect(exhibit.id).toBe("exhibit_1");
+  });
+
+  it("getContractExhibitById throws NotFoundError when missing", async () => {
+    const { client } = createMockSupabase([{ data: null, error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await expect(supabaseContractsRepository.getContractExhibitById("nope")).rejects.toThrow(NotFoundError);
   });
 });
 

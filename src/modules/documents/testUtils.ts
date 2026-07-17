@@ -14,6 +14,7 @@ export function makeDocument(overrides: Partial<Document> = {}): Document {
     category: "other",
     status: "draft",
     visibility: "internal",
+    media_asset_id: null,
     file_name: "test_document.pdf",
     original_file_name: "Test Document.pdf",
     file_extension: "pdf",

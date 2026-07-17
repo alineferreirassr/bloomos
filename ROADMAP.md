@@ -25,7 +25,7 @@ Scope, and only scope: **Dashboard, Leads, Clients, Events, Contracts, Finance.*
 6. Events — list, detail, lifecycle stage tracking, link to Clients/Contracts/Finance → wire its card into the Dashboard
 7. Contracts — list, detail, status, link to Events → wire its card into the Dashboard
 8. Finance — deposits/payments, balances, link to Contracts/Events → wire its card into the Dashboard
-9. Supabase connection (only once real credentials exist) — replace mock data layer with live queries, schema/RLS per `docs/database.md` and `docs/permissions.md`. In progress, one module at a time: Leads, Clients, Events, Contracts, and Finance are now live; Documents remains mock-only pending its own migration (see `TODO.md` for status)
+9. Supabase connection (only once real credentials exist) — replace mock data layer with live queries, schema/RLS per `docs/database.md` and `docs/permissions.md`. Complete for every Phase 1 MVP module: Leads, Clients, Events, Contracts, Finance, and Documents are now live (see `TODO.md` for status)
 
 **Exit criteria:** the full Lead → Client → Event → Contract → Deposit slice of the lifecycle is usable end to end for Amoré Bloom, on desktop and mobile, against real (or realistic mock) data.
 

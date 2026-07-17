@@ -16,6 +16,8 @@ import type { ContractExhibit } from "@/types/contractExhibit";
 import type { Invoice } from "@/types/invoice";
 import type { Payment } from "@/types/payment";
 import type { Expense } from "@/types/expense";
+import type { Document } from "@/types/document";
+import type { DocumentFolder } from "@/types/documentFolder";
 import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 import type { WorkspaceMemberStatus } from "@/core/enums/workspaceMemberStatus";
 import type { LeadStatus } from "@/core/enums/leadStatus";
@@ -43,6 +45,9 @@ import type { PaymentStatus } from "@/core/enums/paymentStatus";
 import type { PaymentMethod } from "@/core/enums/paymentMethod";
 import type { ExpenseCategory } from "@/core/enums/expenseCategory";
 import type { ExpenseStatus } from "@/core/enums/expenseStatus";
+import type { DocumentCategory } from "@/core/enums/documentCategory";
+import type { DocumentStatus } from "@/core/enums/documentStatus";
+import type { DocumentVisibility } from "@/core/enums/documentVisibility";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
@@ -61,6 +66,8 @@ type MediaAssetRow = Database["public"]["Tables"]["media_assets"]["Row"];
 type InvoiceRow = Database["public"]["Tables"]["invoices"]["Row"];
 type PaymentRow = Database["public"]["Tables"]["payments"]["Row"];
 type ExpenseRow = Database["public"]["Tables"]["expenses"]["Row"];
+type DocumentRow = Database["public"]["Tables"]["documents"]["Row"];
+type DocumentFolderRow = Database["public"]["Tables"]["document_folders"]["Row"];
 
 /**
  * Deliberate seam between raw database rows and domain types, even though
@@ -301,6 +308,75 @@ export function mapMediaAssetRow(row: MediaAssetRow): MediaAsset {
     duration: row.duration,
     version: row.version,
     uploaded_by: row.uploaded_by,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    archived_at: row.archived_at,
+  };
+}
+
+/**
+ * Maps a `documents` row into the domain `Document` shape. `mediaAssetRow`
+ * is the joined `media_assets` row (via `documents.media_asset_id`), or
+ * `null`/`undefined` when the Document has no file attached yet — every
+ * storage-derived field (file_name, mime_type, size_bytes, storage_bucket,
+ * storage_path, checksum) comes from here, never from `documents` itself,
+ * which owns none of those columns. `storage_provider` is always
+ * "supabase" here since this mapper only ever runs against real Supabase
+ * rows.
+ */
+export function mapDocumentRow(row: DocumentRow, mediaAssetRow?: MediaAssetRow | null): Document {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    owner_type: row.owner_type as EntityType,
+    owner_id: row.owner_id,
+    folder_id: row.folder_id,
+    title: row.title,
+    description: row.description,
+    category: row.category as DocumentCategory,
+    status: row.status as DocumentStatus,
+    visibility: row.visibility as DocumentVisibility,
+    media_asset_id: row.media_asset_id,
+    file_name: mediaAssetRow ? mediaAssetRow.stored_filename : null,
+    original_file_name: mediaAssetRow ? mediaAssetRow.original_filename : null,
+    file_extension: mediaAssetRow ? mediaAssetRow.extension : null,
+    mime_type: mediaAssetRow ? mediaAssetRow.mime_type : null,
+    size_bytes: mediaAssetRow ? mediaAssetRow.file_size : null,
+    storage_provider: "supabase",
+    storage_bucket: mediaAssetRow ? mediaAssetRow.storage_bucket : null,
+    storage_path: mediaAssetRow ? mediaAssetRow.storage_path : null,
+    checksum: mediaAssetRow ? mediaAssetRow.checksum : null,
+    version: row.version,
+    is_latest_version: row.is_latest_version,
+    parent_document_id: row.parent_document_id,
+    contract_exhibit_id: row.contract_exhibit_id,
+    event_id: row.event_id,
+    client_id: row.client_id,
+    contract_id: row.contract_id,
+    invoice_id: row.invoice_id,
+    payment_id: row.payment_id,
+    expense_id: row.expense_id,
+    uploaded_by: row.uploaded_by,
+    uploaded_at: row.uploaded_at,
+    expires_at: row.expires_at,
+    archived_at: row.archived_at,
+    deleted_at: row.deleted_at,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapDocumentFolderRow(row: DocumentFolderRow): DocumentFolder {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    owner_type: row.owner_type as EntityType,
+    owner_id: row.owner_id,
+    parent_folder_id: row.parent_folder_id,
+    name: row.name,
+    description: row.description,
+    sort_order: row.sort_order,
+    visibility: row.visibility as DocumentVisibility,
     created_at: row.created_at,
     updated_at: row.updated_at,
     archived_at: row.archived_at,

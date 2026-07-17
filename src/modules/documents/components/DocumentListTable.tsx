@@ -66,7 +66,7 @@ export function DocumentListTable({ rows }: { rows: DocumentListRow[] }) {
                 {document.file_extension}
               </td>
               <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
-                {formatBytes(document.size_bytes)}
+                {document.size_bytes !== null ? formatBytes(document.size_bytes) : "—"}
               </td>
               <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
                 {folderName ?? "—"}

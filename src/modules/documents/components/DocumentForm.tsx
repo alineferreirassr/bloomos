@@ -31,7 +31,6 @@ import type { DocumentFolder } from "@/types/documentFolder";
 import type { Document } from "@/types/document";
 import { DOCUMENT_CATEGORIES, DOCUMENT_CATEGORY_LABELS } from "@/core/enums/documentCategory";
 import { DOCUMENT_VISIBILITIES, DOCUMENT_VISIBILITY_LABELS } from "@/core/enums/documentVisibility";
-import { ALLOWED_FILE_EXTENSIONS, BLOCKED_FILE_EXTENSIONS } from "@/lib/documentFile";
 import { documentMetadataFormSchema, VALID_DOCUMENT_OWNER_TYPES, type DocumentMetadataFormInput } from "@/modules/documents/schema";
 import { OWNER_TYPE_LABELS } from "@/modules/documents/components/DocumentFilters";
 import { documentDefaultFormValues } from "@/modules/documents/mappers";
@@ -42,12 +41,6 @@ interface DocumentFormProps {
   defaultValues?: Partial<DocumentMetadataFormInput>;
   onSubmit: (input: DocumentMetadataFormInput) => Promise<DataResult<Document>>;
 }
-
-/** documentMetadataInputSchema (authoritative) field names that differ from this form's own — everything else maps 1:1 by name. */
-const AUTHORITATIVE_TO_FORM_FIELD: Partial<Record<string, string>> = {
-  file_name: "original_file_name",
-  size_bytes: "size_mb",
-};
 
 export function DocumentForm({ defaultValues, onSubmit }: DocumentFormProps) {
   const router = useRouter();
@@ -76,7 +69,6 @@ export function DocumentForm({ defaultValues, onSubmit }: DocumentFormProps) {
   const ownerType = watch("owner_type");
   const ownerId = watch("owner_id");
   const referenceContractId = watch("contract_id");
-  const originalFileName = watch("original_file_name");
 
   useEffect(() => {
     if (ownerType === "workspace") {
@@ -169,11 +161,7 @@ export function DocumentForm({ defaultValues, onSubmit }: DocumentFormProps) {
       setFormError(result.error);
       if (result.fieldErrors) {
         for (const [field, message] of Object.entries(result.fieldErrors)) {
-          // The authoritative schema's field names (file_name, size_bytes) differ from this
-          // form's (original_file_name, size_mb) — translate so the error lands on a field
-          // that's actually registered, rather than being silently dropped by setError.
-          const formField = AUTHORITATIVE_TO_FORM_FIELD[field] ?? field;
-          setError(formField as keyof DocumentMetadataFormInput, { message });
+          setError(field as keyof DocumentMetadataFormInput, { message });
         }
       }
     }
@@ -183,10 +171,9 @@ export function DocumentForm({ defaultValues, onSubmit }: DocumentFormProps) {
     <form onSubmit={submit} noValidate className="space-y-8">
       <Card className="border-accent/30 bg-accent/5">
         <p className="text-xs text-text-muted">
-          <span className="font-medium text-text">This phase creates metadata only.</span> There is no real file
-          selector or upload — the file name, MIME type, and size below simulate what a real upload would record.
-          Extension, size limits, and blocked file types are still enforced. New documents always start as{" "}
-          <span className="font-medium text-text">Draft</span>; activate from the detail page once ready.
+          <span className="font-medium text-text">This creates the Document&apos;s metadata record only.</span> New
+          documents always start as <span className="font-medium text-text">Draft</span>, with no file attached.
+          Attach or replace the file from the detail page afterward, then activate once ready.
         </p>
       </Card>
 
@@ -243,7 +230,7 @@ export function DocumentForm({ defaultValues, onSubmit }: DocumentFormProps) {
       <section>
         <h3 className="text-sm font-semibold text-text">Details</h3>
         <div className="mt-3">
-          <FormField label="Title" htmlFor="title" hint="Optional — auto-generated from the file name when left blank" error={errors.title?.message}>
+          <FormField label="Title" htmlFor="title" hint="Optional — defaults to “Untitled Document” when left blank" error={errors.title?.message}>
             <Input id="title" invalid={!!errors.title} {...register("title")} />
           </FormField>
         </div>
@@ -272,30 +259,6 @@ export function DocumentForm({ defaultValues, onSubmit }: DocumentFormProps) {
             </Select>
           </FormField>
         </div>
-      </section>
-
-      <section>
-        <h3 className="text-sm font-semibold text-text">Simulated file</h3>
-        <p className="mt-1 text-xs text-text-muted">
-          No file is actually read or stored — these three fields describe the file this record represents.
-          Allowed: {ALLOWED_FILE_EXTENSIONS.join(", ")}. Never allowed: {BLOCKED_FILE_EXTENSIONS.join(", ")}.
-        </p>
-        <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
-          <FormField label="Original file name" htmlFor="original_file_name" required hint="e.g. Contract.pdf" error={errors.original_file_name?.message}>
-            <Input id="original_file_name" invalid={!!errors.original_file_name} {...register("original_file_name")} />
-          </FormField>
-          <FormField label="MIME type" htmlFor="mime_type" required hint="e.g. application/pdf" error={errors.mime_type?.message}>
-            <Input id="mime_type" invalid={!!errors.mime_type} {...register("mime_type")} />
-          </FormField>
-          <FormField label="Size (MB)" htmlFor="size_mb" required error={errors.size_mb?.message}>
-            <Input id="size_mb" type="number" min={0} step="0.01" invalid={!!errors.size_mb} {...register("size_mb")} />
-          </FormField>
-        </div>
-        {originalFileName ? (
-          <p className="mt-2 text-xs text-text-muted">
-            Will be stored as a normalized system file name (lowercased, safe characters) once created.
-          </p>
-        ) : null}
       </section>
 
       <section>

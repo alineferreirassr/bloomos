@@ -66,6 +66,8 @@ export interface ContractsRepository {
   getContractTemplateById(id: string): Promise<ContractTemplate>;
 
   getContractExhibitsByContractId(contractId: string): Promise<ContractExhibit[]>;
+  /** Direct lookup by id, independent of its parent Contract — needed by callers (e.g. Documents) that only have an exhibit id on hand. */
+  getContractExhibitById(id: string): Promise<ContractExhibit>;
   createContractExhibit(contractId: string, input: ContractExhibitInput): Promise<DataResult<ContractExhibit>>;
   updateContractExhibit(id: string, input: ContractExhibitInput): Promise<DataResult<ContractExhibit>>;
   deleteContractExhibit(id: string): Promise<DataResult<null>>;

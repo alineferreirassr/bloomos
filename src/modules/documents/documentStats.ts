@@ -51,7 +51,7 @@ export function computeDocumentOwnerSummary(documents: Document[], now: number =
   const deleted = documents.filter((d) => d.status === "deleted").length;
 
   const nonDeleted = documents.filter((d) => d.status !== "deleted");
-  const totalStorageBytes = nonDeleted.reduce((sum, d) => sum + d.size_bytes, 0);
+  const totalStorageBytes = nonDeleted.reduce((sum, d) => sum + (d.size_bytes ?? 0), 0);
 
   const byCategory = emptyCategoryCounts();
   for (const document of nonDeleted) {
@@ -83,7 +83,7 @@ export function computeDocumentWorkspaceSummary(
   const nowDate = new Date(now);
   const total = documents.length;
   const nonDeleted = documents.filter((d) => d.status !== "deleted");
-  const totalStorageBytes = nonDeleted.reduce((sum, d) => sum + d.size_bytes, 0);
+  const totalStorageBytes = nonDeleted.reduce((sum, d) => sum + (d.size_bytes ?? 0), 0);
   const expiring = documents.filter((d) => isExpiringSoon(d, now)).length;
   const expired = documents.filter((d) => d.status === "expired").length;
   const uploadedThisMonth = documents.filter((d) => {

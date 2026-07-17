@@ -574,6 +574,15 @@ async function getContractExhibitsByContractId(contractId: string): Promise<Cont
     .sort((a, b) => a.display_order - b.display_order);
 }
 
+async function getContractExhibitById(id: string): Promise<ContractExhibit> {
+  await delay(100);
+  const exhibit = readContractExhibits().find((e) => e.id === id);
+  if (!exhibit) {
+    throw new NotFoundError(`Contract exhibit ${id} was not found`);
+  }
+  return exhibit;
+}
+
 async function createContractExhibit(
   contractId: string,
   input: ContractExhibitInput,
@@ -727,6 +736,7 @@ export const mockContractsRepository: ContractsRepository = {
   getContractTemplates,
   getContractTemplateById,
   getContractExhibitsByContractId,
+  getContractExhibitById,
   createContractExhibit,
   updateContractExhibit,
   deleteContractExhibit,

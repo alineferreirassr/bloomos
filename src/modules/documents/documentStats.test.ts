@@ -13,6 +13,7 @@ function doc(overrides: Partial<Document> & { id: string }): Document {
     category: "other",
     status: "active",
     visibility: "internal",
+    media_asset_id: null,
     file_name: "doc.pdf",
     original_file_name: "doc.pdf",
     file_extension: "pdf",

@@ -32,7 +32,8 @@ export function DocumentVersionHistorySection({ versions }: { versions: Document
               <span className="text-xs text-text-muted">{new Date(version.uploaded_at).toLocaleDateString()}</span>
             </div>
             <p className="mt-0.5 text-xs text-text-muted">
-              {version.file_name} · {formatBytes(version.size_bytes)}
+              {version.file_name ?? "No file attached"}
+              {version.size_bytes !== null ? ` · ${formatBytes(version.size_bytes)}` : ""}
               {version.expires_at ? ` · Expires ${formatDocumentDate(version.expires_at)}` : ""}
             </p>
             <div className="mt-1">

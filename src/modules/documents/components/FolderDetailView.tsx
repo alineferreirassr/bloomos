@@ -179,7 +179,8 @@ export function FolderDetailView({ folderId }: { folderId: string }) {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-text">{document.title}</p>
                         <p className="mt-0.5 text-xs text-text-muted">
-                          {document.file_name} · {formatBytes(document.size_bytes)}
+                          {document.file_name ?? "No file attached"}
+                          {document.size_bytes !== null ? ` · ${formatBytes(document.size_bytes)}` : ""}
                         </p>
                       </div>
                       <DocumentStatusBadge status={document.status} />

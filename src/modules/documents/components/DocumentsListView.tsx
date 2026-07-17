@@ -15,6 +15,7 @@ import {
   getPayments,
   type DashboardMetric,
 } from "@/lib/data";
+import { getDataPersistenceMessage } from "@/lib/dataModeCopy";
 import type { Document } from "@/types/document";
 import type { Client } from "@/types/client";
 import type { Event } from "@/types/event";
@@ -166,7 +167,7 @@ async function loadDocumentsFor(filters: DocumentFiltersValue): Promise<LoadStat
           case "title":
             return direction * a.document.title.localeCompare(b.document.title);
           case "size_bytes":
-            return direction * (a.document.size_bytes - b.document.size_bytes);
+            return direction * ((a.document.size_bytes ?? 0) - (b.document.size_bytes ?? 0));
           case "version":
             return direction * (a.document.version - b.document.version);
           case "expires_at":
@@ -237,8 +238,7 @@ export function DocumentsListView({ initialOwnerType, initialOwnerId, initialFol
         <div>
           <h2 className="font-serif text-3xl font-semibold text-text">Documents</h2>
           <p className="mt-1 text-sm text-text-muted">
-            The shared file system for BloomOS — metadata only in this phase. No real file storage or upload
-            exists yet; every document here is a simulated record. Data resets on page reload.
+            The shared file system for BloomOS. {getDataPersistenceMessage()}
           </p>
         </div>
         <div className="flex items-center gap-3">

@@ -33,18 +33,14 @@ function mockCommon() {
   vi.mocked(dataLayer.getContractExhibitsByContractId).mockResolvedValue([]);
 }
 
-async function fillMinimumValidFields(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText(/original file name/i), "contract.pdf");
-  await user.type(screen.getByLabelText(/mime type/i), "application/pdf");
-  await user.type(screen.getByLabelText(/size \(mb\)/i), "1");
-}
-
 describe("DocumentForm", () => {
-  it("shows a metadata-only notice and no real file selector", () => {
+  it("shows a metadata-only notice and no file-metadata fields", () => {
     mockCommon();
     render(<DocumentForm onSubmit={vi.fn()} />);
-    expect(screen.getByText(/this phase creates metadata only/i)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/^file$/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/creates the document's metadata record only/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/original file name/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/mime type/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/size \(mb\)/i)).not.toBeInTheDocument();
   });
 
   it("defaults to Workspace owner with the owner field disabled", () => {
@@ -64,66 +60,17 @@ describe("DocumentForm", () => {
     expect(within(ownerSelect).getByRole("option", { name: /jordan ellis/i })).toBeInTheDocument();
   });
 
-  it("requires a file name, MIME type, and size before submitting", async () => {
-    const user = userEvent.setup();
-    mockCommon();
-    const onSubmit = vi.fn();
-    render(<DocumentForm onSubmit={onSubmit} />);
-
-    await user.click(screen.getByRole("button", { name: /add document/i }));
-
-    expect(await screen.findByText(/file name is required/i)).toBeInTheDocument();
-    expect(onSubmit).not.toHaveBeenCalled();
-  });
-
-  it("submits with the entered values on success", async () => {
+  it("submits with the default Workspace owner and no other input", async () => {
     const user = userEvent.setup();
     mockCommon();
     const onSubmit = vi.fn().mockResolvedValue({ success: true, data: {} });
     render(<DocumentForm onSubmit={onSubmit} />);
 
-    await fillMinimumValidFields(user);
     await user.click(screen.getByRole("button", { name: /add document/i }));
 
     await waitFor(() =>
-      expect(onSubmit).toHaveBeenCalledWith(
-        expect.objectContaining({ original_file_name: "contract.pdf", mime_type: "application/pdf", size_mb: "1" }),
-      ),
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ owner_type: "workspace", category: "other" })),
     );
-  });
-
-  it("maps a blocked-extension field error from the data layer onto the file name field", async () => {
-    const user = userEvent.setup();
-    mockCommon();
-    const onSubmit = vi.fn().mockResolvedValue({
-      success: false,
-      error: "Please fix the highlighted fields.",
-      fieldErrors: { file_name: "Unsupported or missing file extension" },
-    });
-    render(<DocumentForm onSubmit={onSubmit} />);
-
-    await user.type(screen.getByLabelText(/original file name/i), "malware.exe");
-    await user.type(screen.getByLabelText(/mime type/i), "application/x-msdownload");
-    await user.type(screen.getByLabelText(/size \(mb\)/i), "1");
-    await user.click(screen.getByRole("button", { name: /add document/i }));
-
-    expect(await screen.findByText(/unsupported or missing file extension/i)).toBeInTheDocument();
-  });
-
-  it("maps a size_bytes field error from the data layer onto the Size (MB) field", async () => {
-    const user = userEvent.setup();
-    mockCommon();
-    const onSubmit = vi.fn().mockResolvedValue({
-      success: false,
-      error: "Please fix the highlighted fields.",
-      fieldErrors: { size_bytes: "File exceeds the size limit for this file type" },
-    });
-    render(<DocumentForm onSubmit={onSubmit} />);
-
-    await fillMinimumValidFields(user);
-    await user.click(screen.getByRole("button", { name: /add document/i }));
-
-    expect(await screen.findByText(/file exceeds the size limit/i)).toBeInTheDocument();
   });
 
   it("surfaces an owner/reference consistency error returned by onSubmit", async () => {
@@ -136,9 +83,23 @@ describe("DocumentForm", () => {
     });
     render(<DocumentForm onSubmit={onSubmit} />);
 
-    await fillMinimumValidFields(user);
     await user.click(screen.getByRole("button", { name: /add document/i }));
 
     expect(await screen.findByText(/event belongs to a different client/i)).toBeInTheDocument();
+  });
+
+  it("surfaces an unknown-MediaAsset error returned by onSubmit", async () => {
+    const user = userEvent.setup();
+    mockCommon();
+    const onSubmit = vi.fn().mockResolvedValue({
+      success: false,
+      error: "Please select a valid file.",
+      fieldErrors: { media_asset_id: "MediaAsset not found." },
+    });
+    render(<DocumentForm onSubmit={onSubmit} />);
+
+    await user.click(screen.getByRole("button", { name: /add document/i }));
+
+    expect(await screen.findByText(/please select a valid file/i)).toBeInTheDocument();
   });
 });

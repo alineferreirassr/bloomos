@@ -18,12 +18,21 @@ import type { EntityType } from "@/core/enums/entityType";
  * module owns those ids yet, the same "field exists, no module owns it
  * yet" precedent as ContractExhibit.document_id).
  *
- * This is Phase 1: metadata only. `storage_provider`/`storage_bucket`/
- * `storage_path` describe *where a real file would live*, but no binary
- * upload, base64 content, or real storage connection exists yet — every
- * mock Document uses `storage_provider: "mock"`. See docs/database.md's
- * Documents section and docs/integrations.md for the planned Supabase
- * Storage integration.
+ * A Document is business metadata only — the physical file is a MediaAsset
+ * (see types/mediaAsset.ts) linked via `media_asset_id`, uploaded through
+ * the Shared Media Library (lib/data/media/) rather than through any
+ * storage logic owned by this domain. `media_asset_id` is nullable: a
+ * Document can exist as metadata-only (e.g. freshly created, `status:
+ * "draft"`) before a file is ever attached. `file_name`/
+ * `original_file_name`/`file_extension`/`mime_type`/`size_bytes`/
+ * `storage_bucket`/`storage_path` are therefore all derived from the
+ * linked MediaAsset by the repository layer (mock and Supabase alike) —
+ * null (or 0 for `size_bytes`) when `media_asset_id` is null — and are
+ * never independently stored on this record. `checksum` follows the same
+ * rule and was already nullable. `storage_provider` is a repository-
+ * synthesized constant reflecting the active data mode ("mock" or
+ * "supabase"), not a stored fact — kept on the type for compatibility with
+ * existing callers.
  *
  * Versioning is a `parent_document_id` + `version` chain, not a snapshot
  * array like Contract.version_history: the first version of a file is its
@@ -31,8 +40,8 @@ import type { EntityType } from "@/core/enums/entityType";
  * later version points `parent_document_id` at that same root, incrementing
  * `version`. Exactly one row in a chain has `is_latest_version: true` at
  * any time — see core/workflows/documentWorkflow.ts and
- * lib/data/index.ts's createDocumentVersion for the invariant this enforces
- * centrally; never toggle `is_latest_version` by hand.
+ * lib/data/documents/ for the invariant this enforces centrally; never
+ * toggle `is_latest_version` by hand.
  *
  * `folder_id` is nullable — a Document doesn't have to live in a folder.
  * The typed reference fields (`contract_exhibit_id`, `event_id`,
@@ -58,14 +67,15 @@ export interface Document {
   category: DocumentCategory;
   status: DocumentStatus;
   visibility: DocumentVisibility;
-  file_name: string;
-  original_file_name: string;
-  file_extension: string;
-  mime_type: string;
-  size_bytes: number;
+  media_asset_id: string | null;
+  file_name: string | null;
+  original_file_name: string | null;
+  file_extension: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
   storage_provider: StorageProvider;
-  storage_bucket: string;
-  storage_path: string;
+  storage_bucket: string | null;
+  storage_path: string | null;
   checksum: string | null;
   version: number;
   is_latest_version: boolean;

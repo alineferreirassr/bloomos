@@ -203,7 +203,7 @@ export function DocumentDetailView({ documentId }: { documentId: string }) {
           <DocumentVisibilityBadge visibility={document.visibility} />
         </div>
         <p className="mt-1 text-sm text-text-muted">
-          {document.file_name} · v{document.version}
+          {document.file_name ?? "No file attached"} · v{document.version}
           {document.is_latest_version ? "" : " (superseded)"}
           {" · "}
           {ownerHref ? (
@@ -245,23 +245,28 @@ export function DocumentDetailView({ documentId }: { documentId: string }) {
               <Field label="Description" value={document.description} />
               <Field label="Original file name" value={document.original_file_name} />
               <Field label="Normalized file name" value={document.file_name} />
-              <Field label="Extension" value={document.file_extension.toUpperCase()} />
+              <Field label="Extension" value={document.file_extension?.toUpperCase() ?? null} />
               <Field label="MIME type" value={document.mime_type} />
-              <Field label="Size" value={formatBytes(document.size_bytes)} />
+              <Field label="Size" value={document.size_bytes !== null ? formatBytes(document.size_bytes) : null} />
               <Field label="Checksum" value={document.checksum} />
             </dl>
           </Card>
 
           <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Storage (architecture only)</h3>
+            <h3 className="font-serif text-[17px] font-semibold text-text">File</h3>
             <p className="mt-1 text-xs text-text-muted">
-              Metadata only in this phase — no real file has ever been uploaded or stored.
+              The physical file is a MediaAsset in the Shared Media Library, linked via media_asset_id — this Document
+              record carries business metadata only.
             </p>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Storage provider" value={document.storage_provider} />
-              <Field label="Bucket" value={document.storage_bucket} />
-              <Field label="Path" value={<code className="text-xs">{document.storage_path}</code>} />
-            </dl>
+            {document.media_asset_id ? (
+              <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="Storage provider" value={document.storage_provider} />
+                <Field label="Bucket" value={document.storage_bucket} />
+                <Field label="Path" value={<code className="text-xs">{document.storage_path}</code>} />
+              </dl>
+            ) : (
+              <p className="mt-3 text-sm text-text-muted">No file attached to this version yet.</p>
+            )}
           </Card>
 
           <Card>
