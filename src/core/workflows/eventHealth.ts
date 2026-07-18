@@ -138,3 +138,22 @@ export function getEventHealthDetails(event: EventHealthInput, context: EventHea
   const score = getEventHealthScore(event, context);
   return { score, factors };
 }
+
+export type EventHealthStatus = "ready" | "waiting" | "blocked";
+
+/**
+ * Condition-based classification for the Operational Pipeline's Kanban card
+ * badge (Booking Workflow, Phase 2) — Ready/Waiting/Blocked, not the
+ * continuous 0-100 score above. Per the approved design: classify by
+ * blocking conditions, using the score only as the Ready/Waiting split once
+ * nothing is actively blocking. "Blocked" is reserved for conditions that
+ * stop forward progress outright (no signed contract, no deposit, an
+ * overdue checklist item) — never just a missing nice-to-have field, which
+ * only ever demotes an Event to "Waiting."
+ */
+export function getEventHealthStatus(event: EventHealthInput, context: EventHealthContext): EventHealthStatus {
+  if (event.status === "awaiting_contract" || event.status === "awaiting_deposit" || context.hasOverdueChecklistItems) {
+    return "blocked";
+  }
+  return getEventHealthScore(event, context) === 100 ? "ready" : "waiting";
+}

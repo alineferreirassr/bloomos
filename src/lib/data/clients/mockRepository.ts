@@ -1,5 +1,6 @@
 import type { Client } from "@/types/client";
 import type { Note } from "@/types/note";
+import type { PendingRecovery } from "@/types/pendingRecovery";
 import { NotFoundError } from "@/core/errors";
 import { CLIENT_STATUS_LABELS, type ClientStatus } from "@/core/enums/clientStatus";
 import { CONTACT_METHOD_LABELS, type ContactMethod } from "@/core/enums/contactMethod";
@@ -13,7 +14,11 @@ import { readClients, writeClients } from "@/lib/data/mock/clientsStore";
 import { readNotes, writeNotes } from "@/lib/data/mock/notesStore";
 import { recordTimelineActivity } from "@/lib/data/mock/timelineStore";
 import { getNotesByOwner, createNoteForOwner, getTimelineByOwner } from "@/lib/data/mock/notesTimelineShared";
-import type { ClientFilters, ClientsRepository } from "@/lib/data/clients/repository";
+import type {
+  ClientFilters,
+  ClientsRepository,
+  MarkClientRecoveryPendingInput,
+} from "@/lib/data/clients/repository";
 
 function fieldErrorsFromZod(error: {
   issues: { path: PropertyKey[]; message: string }[];
@@ -77,6 +82,7 @@ async function createClient(input: ClientFormInput): Promise<DataResult<Client>>
     created_at: timestamp,
     updated_at: timestamp,
     archived_at: null,
+    pending_recovery: null,
   };
 
   writeClients([...readClients(), client]);
@@ -271,6 +277,68 @@ async function getTimelineByClientId(clientId: string) {
   return getTimelineByOwner(client.workspace_id, "client", clientId);
 }
 
+async function markClientRecoveryPending(
+  id: string,
+  input: MarkClientRecoveryPendingInput,
+): Promise<DataResult<Client>> {
+  const existing = readClients().find((c) => c.id === id);
+  if (!existing) {
+    return fail("Client not found.");
+  }
+
+  const timestamp = nowIso();
+  const previous = existing.pending_recovery;
+  const pending: PendingRecovery = {
+    version: 1,
+    workflow: input.workflow,
+    status: "pending",
+    reason: input.reason,
+    payload: input.payload,
+    attempts: previous && previous.workflow === input.workflow ? previous.attempts + 1 : 1,
+    first_attempt_at: previous && previous.workflow === input.workflow ? previous.first_attempt_at : timestamp,
+    last_attempt_at: timestamp,
+  };
+
+  const updated: Client = { ...existing, pending_recovery: pending, updated_at: timestamp };
+  writeClients(readClients().map((c) => (c.id === id ? updated : c)));
+  recordTimelineActivity(
+    existing.workspace_id,
+    "client",
+    id,
+    "client_recovery_pending",
+    `Recovery pending: ${input.reason}`,
+    { workflow: input.workflow, severity: "critical", attempts: pending.attempts },
+  );
+
+  return ok(updated);
+}
+
+async function resolveClientRecoveryPending(id: string): Promise<DataResult<Client>> {
+  const existing = readClients().find((c) => c.id === id);
+  if (!existing) {
+    return fail("Client not found.");
+  }
+  if (!existing.pending_recovery) {
+    return fail("This client has no pending recovery to resolve.");
+  }
+
+  const { workflow, attempts } = existing.pending_recovery;
+  const updated: Client = { ...existing, pending_recovery: null, updated_at: nowIso() };
+  writeClients(readClients().map((c) => (c.id === id ? updated : c)));
+  recordTimelineActivity(existing.workspace_id, "client", id, "client_recovery_resolved", "Recovery resolved", {
+    workflow,
+    attempts,
+  });
+
+  return ok(updated);
+}
+
+async function getClientsWithPendingRecovery(workflow?: string): Promise<Client[]> {
+  return readClients().filter(
+    (c) => c.workspace_id === CURRENT_WORKSPACE_ID && c.pending_recovery !== null && (!workflow || c.pending_recovery.workflow === workflow),
+  );
+}
+
 export const mockClientsRepository: ClientsRepository = {
   getClients,
   getClientById,
@@ -287,4 +355,7 @@ export const mockClientsRepository: ClientsRepository = {
   createClientNote,
   togglePinClientNote,
   getTimelineByClientId,
+  markClientRecoveryPending,
+  resolveClientRecoveryPending,
+  getClientsWithPendingRecovery,
 };

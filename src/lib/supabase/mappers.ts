@@ -7,6 +7,7 @@ import type { PermissionRecord, RolePermission } from "@/types/permissionRecord"
 import type { WorkspaceInvitation } from "@/types/workspaceInvitation";
 import type { Lead } from "@/types/lead";
 import type { Client, ClientImportantDate } from "@/types/client";
+import type { PendingRecovery } from "@/types/pendingRecovery";
 import type { Event } from "@/types/event";
 import type { ChecklistItem } from "@/types/checklistItem";
 import type { EventScheduleItem } from "@/types/eventScheduleItem";
@@ -236,6 +237,7 @@ export function mapClientRow(row: ClientRow): Client {
     created_at: row.created_at,
     updated_at: row.updated_at,
     archived_at: row.archived_at,
+    pending_recovery: (row.pending_recovery as unknown as PendingRecovery | null) ?? null,
   };
 }
 

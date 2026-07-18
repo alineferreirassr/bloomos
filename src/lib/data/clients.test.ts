@@ -8,9 +8,12 @@ import {
   getClientById,
   getClientNextAction,
   getClients,
+  getClientsWithPendingRecovery,
   getNotesByClientId,
   getTimelineByClientId,
+  markClientRecoveryPending,
   resetAllMockData,
+  resolveClientRecoveryPending,
   restoreClient,
   setClientVipStatus,
   togglePinNote,
@@ -359,5 +362,99 @@ describe("getClientNextAction", () => {
 describe("getClientById", () => {
   it("throws NotFoundError for a missing client", async () => {
     await expect(getClientById("does_not_exist")).rejects.toThrow();
+  });
+});
+
+describe("Client recovery-pending (Booking Workflow, Phase 2 — generic infra)", () => {
+  it("marks a pending recovery with attempts=1 and a first Timeline entry", async () => {
+    const created = await createClient(validClientInput);
+    if (!created.success) throw new Error("setup failed");
+
+    const result = await markClientRecoveryPending(created.data.id, {
+      workflow: "booking",
+      reason: "Something failed",
+      payload: { title: "Draft Event" },
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.data.pending_recovery).toMatchObject({
+      workflow: "booking",
+      status: "pending",
+      reason: "Something failed",
+      payload: { title: "Draft Event" },
+      attempts: 1,
+    });
+
+    const timeline = await getTimelineByClientId(created.data.id);
+    expect(timeline.some((t) => t.type === "client_recovery_pending")).toBe(true);
+  });
+
+  it("increments attempts and preserves first_attempt_at when marked again for the same workflow", async () => {
+    const created = await createClient(validClientInput);
+    if (!created.success) throw new Error("setup failed");
+
+    const first = await markClientRecoveryPending(created.data.id, {
+      workflow: "booking",
+      reason: "First failure",
+      payload: {},
+    });
+    expect(first.success).toBe(true);
+    if (!first.success) return;
+    const firstAttemptAt = first.data.pending_recovery?.first_attempt_at;
+
+    const second = await markClientRecoveryPending(created.data.id, {
+      workflow: "booking",
+      reason: "Second failure",
+      payload: {},
+    });
+    expect(second.success).toBe(true);
+    if (!second.success) return;
+
+    expect(second.data.pending_recovery?.attempts).toBe(2);
+    expect(second.data.pending_recovery?.first_attempt_at).toBe(firstAttemptAt);
+    expect(second.data.pending_recovery?.reason).toBe("Second failure");
+  });
+
+  it("resolveClientRecoveryPending clears the state and records a resolved Timeline entry", async () => {
+    const created = await createClient(validClientInput);
+    if (!created.success) throw new Error("setup failed");
+    await markClientRecoveryPending(created.data.id, { workflow: "booking", reason: "x", payload: {} });
+
+    const resolved = await resolveClientRecoveryPending(created.data.id);
+    expect(resolved.success).toBe(true);
+    if (!resolved.success) return;
+    expect(resolved.data.pending_recovery).toBeNull();
+
+    const timeline = await getTimelineByClientId(created.data.id);
+    expect(timeline.some((t) => t.type === "client_recovery_resolved")).toBe(true);
+  });
+
+  it("resolveClientRecoveryPending fails for a Client with no pending recovery", async () => {
+    const created = await createClient(validClientInput);
+    if (!created.success) throw new Error("setup failed");
+
+    const resolved = await resolveClientRecoveryPending(created.data.id);
+    expect(resolved.success).toBe(false);
+  });
+
+  it("getClientsWithPendingRecovery filters by workflow and excludes resolved clients", async () => {
+    const clientA = await createClient(validClientInput);
+    if (!clientA.success) throw new Error("setup failed");
+    const clientB = await createClient({ ...validClientInput, email: "second.client@example.com" });
+    if (!clientB.success) throw new Error("setup failed");
+
+    await markClientRecoveryPending(clientA.data.id, { workflow: "booking", reason: "x", payload: {} });
+    await markClientRecoveryPending(clientB.data.id, { workflow: "some_other_workflow", reason: "y", payload: {} });
+
+    const bookingOnly = await getClientsWithPendingRecovery("booking");
+    expect(bookingOnly.map((c) => c.id)).toEqual([clientA.data.id]);
+
+    const everything = await getClientsWithPendingRecovery();
+    expect(everything.map((c) => c.id).sort()).toEqual([clientA.data.id, clientB.data.id].sort());
+
+    await resolveClientRecoveryPending(clientA.data.id);
+    const afterResolve = await getClientsWithPendingRecovery("booking");
+    expect(afterResolve.some((c) => c.id === clientA.data.id)).toBe(false);
   });
 });

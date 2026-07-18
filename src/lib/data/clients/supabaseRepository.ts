@@ -1,5 +1,7 @@
 import type { Client } from "@/types/client";
+import type { Json } from "@/types/database.types";
 import type { Note } from "@/types/note";
+import type { PendingRecovery } from "@/types/pendingRecovery";
 import type { TimelineActivity } from "@/types/timelineActivity";
 import type { TimelineActivityType } from "@/core/enums/timelineActivityType";
 import { NotFoundError, UnauthorizedError, ForbiddenError } from "@/core/errors";
@@ -13,7 +15,11 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import { normalizeSupabaseError } from "@/lib/supabase/errors";
 import { mapClientRow, mapNoteRow, mapTimelineActivityRow } from "@/lib/supabase/mappers";
 import { getClientWorkspaceSession, type WorkspaceSession } from "@/lib/auth/workspaceSessionClient";
-import type { ClientFilters, ClientsRepository } from "@/lib/data/clients/repository";
+import type {
+  ClientFilters,
+  ClientsRepository,
+  MarkClientRecoveryPendingInput,
+} from "@/lib/data/clients/repository";
 
 type SupabaseClient = ReturnType<typeof createSupabaseClient>;
 
@@ -461,6 +467,104 @@ async function getClientNextAction(clientId: string): Promise<string | null> {
   return getClientNextRecommendedAction(client, { hasNotes: notes.length > 0, hasRelatedEvent: false });
 }
 
+async function markClientRecoveryPending(
+  id: string,
+  input: MarkClientRecoveryPendingInput,
+): Promise<DataResult<Client>> {
+  const existing = await fetchClientRow(id);
+  if (!existing) {
+    return fail("Client not found.");
+  }
+
+  const session = await requireWorkspaceSession();
+  const supabase = createSupabaseClient();
+  const timestamp = new Date().toISOString();
+  const previous = existing.pending_recovery;
+  const pending: PendingRecovery = {
+    version: 1,
+    workflow: input.workflow,
+    status: "pending",
+    reason: input.reason,
+    payload: input.payload,
+    attempts: previous && previous.workflow === input.workflow ? previous.attempts + 1 : 1,
+    first_attempt_at: previous && previous.workflow === input.workflow ? previous.first_attempt_at : timestamp,
+    last_attempt_at: timestamp,
+  };
+
+  const { data, error } = await supabase
+    .from("clients")
+    .update({ pending_recovery: pending as unknown as Json })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw normalizeSupabaseError(error);
+
+  const updated = mapClientRow(data);
+  await insertTimelineActivity(
+    supabase,
+    resolveActorName(session),
+    updated.workspace_id,
+    id,
+    "client_recovery_pending",
+    `Recovery pending: ${input.reason}`,
+    { workflow: input.workflow, severity: "critical", attempts: pending.attempts },
+  );
+
+  return ok(updated);
+}
+
+async function resolveClientRecoveryPending(id: string): Promise<DataResult<Client>> {
+  const existing = await fetchClientRow(id);
+  if (!existing) {
+    return fail("Client not found.");
+  }
+  if (!existing.pending_recovery) {
+    return fail("This client has no pending recovery to resolve.");
+  }
+  const { workflow, attempts } = existing.pending_recovery;
+
+  const session = await requireWorkspaceSession();
+  const supabase = createSupabaseClient();
+  const { data, error } = await supabase
+    .from("clients")
+    .update({ pending_recovery: null })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw normalizeSupabaseError(error);
+
+  const updated = mapClientRow(data);
+  await insertTimelineActivity(
+    supabase,
+    resolveActorName(session),
+    updated.workspace_id,
+    id,
+    "client_recovery_resolved",
+    "Recovery resolved",
+    { workflow, attempts },
+  );
+
+  return ok(updated);
+}
+
+async function getClientsWithPendingRecovery(workflow?: string): Promise<Client[]> {
+  const session = await requireWorkspaceSession();
+  const supabase = createSupabaseClient();
+  let query = supabase
+    .from("clients")
+    .select("*")
+    .eq("workspace_id", session.workspace.id)
+    .not("pending_recovery", "is", null);
+  if (workflow) {
+    query = query.eq("pending_recovery->>workflow", workflow);
+  }
+
+  const { data, error } = await query;
+  if (error) throw normalizeSupabaseError(error);
+
+  return (data ?? []).map(mapClientRow);
+}
+
 export const supabaseClientsRepository: ClientsRepository = {
   getClients,
   getClientById,
@@ -477,4 +581,7 @@ export const supabaseClientsRepository: ClientsRepository = {
   createClientNote,
   togglePinClientNote,
   getTimelineByClientId,
+  markClientRecoveryPending,
+  resolveClientRecoveryPending,
+  getClientsWithPendingRecovery,
 };

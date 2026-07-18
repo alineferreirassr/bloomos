@@ -1,5 +1,6 @@
 import type { ClientStatus } from "@/core/enums/clientStatus";
 import type { ContactMethod } from "@/core/enums/contactMethod";
+import type { PendingRecovery } from "@/types/pendingRecovery";
 
 /** A custom or milestone date the team wants to track for a Client. */
 export interface ClientImportantDate {
@@ -66,4 +67,7 @@ export interface Client {
   created_at: string;
   updated_at: string;
   archived_at: string | null;
+
+  /** Set only while a multi-step workflow involving this Client is stuck partway through — see types/pendingRecovery.ts. */
+  pending_recovery: PendingRecovery | null;
 }

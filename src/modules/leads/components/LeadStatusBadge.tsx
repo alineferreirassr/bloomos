@@ -11,6 +11,7 @@ const STATUS_TONES: Record<LeadStatus, BadgeTone> = {
   consultation_scheduled: "outline",
   qualified: "outline",
   proposal_sent: "outline",
+  waiting_decision: "outline",
   converted: "accent",
   lost: "neutral",
   archived: "neutral",

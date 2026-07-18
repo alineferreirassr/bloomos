@@ -174,3 +174,74 @@ describe("convertLeadToClient — expanded Client model validation", () => {
     expect(clientTimeline.some((activity) => activity.type === "client_created")).toBe(true);
   });
 });
+
+describe("convertLeadToClient — duplicate-Client prevention (Booking Workflow, Phase 2)", () => {
+  it("reuses an existing Client sharing the same email instead of creating a duplicate", async () => {
+    const firstLead = await createLead(validInput);
+    if (!firstLead.success) throw new Error("setup failed");
+    const firstConversion = await convertLeadToClient(firstLead.data.id);
+    expect(firstConversion.success).toBe(true);
+    if (!firstConversion.success) return;
+
+    const secondLead = await createLead({ ...validInput, first_name: "Priya", last_name: "Returning" });
+    if (!secondLead.success) throw new Error("setup failed");
+    const secondConversion = await convertLeadToClient(secondLead.data.id);
+    expect(secondConversion.success).toBe(true);
+    if (!secondConversion.success) return;
+
+    expect(secondConversion.data.client.id).toBe(firstConversion.data.client.id);
+    expect(secondConversion.data.lead.converted_client_id).toBe(firstConversion.data.client.id);
+  });
+
+  it("matches by email case- and whitespace-insensitively", async () => {
+    const firstLead = await createLead(validInput);
+    if (!firstLead.success) throw new Error("setup failed");
+    const firstConversion = await convertLeadToClient(firstLead.data.id);
+    expect(firstConversion.success).toBe(true);
+    if (!firstConversion.success) return;
+
+    const secondLead = await createLead({ ...validInput, email: "  PRIYA@EXAMPLE.COM  " });
+    if (!secondLead.success) throw new Error("setup failed");
+    const secondConversion = await convertLeadToClient(secondLead.data.id);
+    expect(secondConversion.success).toBe(true);
+    if (!secondConversion.success) return;
+
+    expect(secondConversion.data.client.id).toBe(firstConversion.data.client.id);
+  });
+
+  it("only backfills originating_lead_id on the reused Client when it was previously null — never overwrites an existing one", async () => {
+    const firstLead = await createLead(validInput);
+    if (!firstLead.success) throw new Error("setup failed");
+    const firstConversion = await convertLeadToClient(firstLead.data.id);
+    expect(firstConversion.success).toBe(true);
+    if (!firstConversion.success) return;
+    expect(firstConversion.data.client.originating_lead_id).toBe(firstLead.data.id);
+
+    const secondLead = await createLead(validInput);
+    if (!secondLead.success) throw new Error("setup failed");
+    const secondConversion = await convertLeadToClient(secondLead.data.id);
+    expect(secondConversion.success).toBe(true);
+    if (!secondConversion.success) return;
+
+    // Reused the same Client, but its original originating_lead_id (the first Lead) is untouched.
+    expect(secondConversion.data.client.originating_lead_id).toBe(firstLead.data.id);
+    const stored = await getClientById(secondConversion.data.client.id);
+    expect(stored.originating_lead_id).toBe(firstLead.data.id);
+  });
+
+  it("records a distinct timeline entry when a Lead is linked to an existing Client rather than creating one", async () => {
+    const firstLead = await createLead(validInput);
+    if (!firstLead.success) throw new Error("setup failed");
+    const firstConversion = await convertLeadToClient(firstLead.data.id);
+    expect(firstConversion.success).toBe(true);
+
+    const secondLead = await createLead(validInput);
+    if (!secondLead.success) throw new Error("setup failed");
+    const secondConversion = await convertLeadToClient(secondLead.data.id);
+    expect(secondConversion.success).toBe(true);
+    if (!secondConversion.success) return;
+
+    const clientTimeline = await getTimelineByClientId(secondConversion.data.client.id);
+    expect(clientTimeline.some((activity) => activity.type === "client_updated")).toBe(true);
+  });
+});

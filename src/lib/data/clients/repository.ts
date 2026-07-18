@@ -7,6 +7,12 @@ import type { ClientFormInput } from "@/modules/clients/schema";
 import type { NoteFormInput } from "@/modules/notes/schema";
 import type { DataResult } from "@/lib/data/result";
 
+export interface MarkClientRecoveryPendingInput {
+  workflow: string;
+  reason: string;
+  payload: Record<string, unknown>;
+}
+
 export interface ClientFilters {
   search?: string;
   status?: ClientStatus | "all";
@@ -52,4 +58,19 @@ export interface ClientsRepository {
    */
   togglePinClientNote(noteId: string): Promise<DataResult<Note> | null>;
   getTimelineByClientId(clientId: string): Promise<TimelineActivity[]>;
+
+  /**
+   * Generic, workflow-agnostic recovery marker (Booking Workflow, Phase 2) —
+   * see types/pendingRecovery.ts. Called whenever a multi-step operation
+   * involving this Client gets stuck partway through; `workflow` identifies
+   * which one (today only "booking") so future recoverable workflows reuse
+   * this same mechanism instead of inventing their own column/Timeline type.
+   * Increments `attempts` and preserves `first_attempt_at` if a pending
+   * recovery already exists for this Client; otherwise starts a fresh one.
+   */
+  markClientRecoveryPending(clientId: string, input: MarkClientRecoveryPendingInput): Promise<DataResult<Client>>;
+  /** Clears pending_recovery back to null and records client_recovery_resolved. */
+  resolveClientRecoveryPending(clientId: string): Promise<DataResult<Client>>;
+  /** Workspace-scoped; `workflow` narrows to one recoverable workflow type when provided. */
+  getClientsWithPendingRecovery(workflow?: string): Promise<Client[]>;
 }

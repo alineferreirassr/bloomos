@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getEventHealthDetails, getEventHealthScore } from "@/core/workflows/eventHealth";
+import { getEventHealthDetails, getEventHealthScore, getEventHealthStatus } from "@/core/workflows/eventHealth";
 
 const perfectEvent = {
   status: "confirmed" as const,
@@ -198,5 +198,42 @@ describe("getEventHealthDetails", () => {
     expect(details.factors[0].deduction).toBeGreaterThanOrEqual(details.factors[1].deduction);
     expect(details.factors[1].deduction).toBeGreaterThanOrEqual(details.factors[2].deduction);
     expect(details.factors.map((f) => f.deduction)).toEqual([15, 15, 10]);
+  });
+});
+
+describe("getEventHealthStatus (Booking Workflow, Phase 2 — condition-based, not score-based)", () => {
+  it("returns 'ready' when nothing is triggered, regardless of score being exactly 100", () => {
+    expect(getEventHealthStatus(perfectEvent, healthyContext)).toBe("ready");
+  });
+
+  it("returns 'waiting' for a non-blocking gap even though it lowers the score", () => {
+    const status = getEventHealthStatus(
+      { ...perfectEvent, location_name: null, address: null },
+      healthyContext,
+    );
+    expect(status).toBe("waiting");
+  });
+
+  it("returns 'blocked' when the event is awaiting a contract, even with an otherwise-high score", () => {
+    const status = getEventHealthStatus({ ...perfectEvent, status: "awaiting_contract" }, healthyContext);
+    expect(status).toBe("blocked");
+  });
+
+  it("returns 'blocked' when the event is awaiting a deposit", () => {
+    const status = getEventHealthStatus({ ...perfectEvent, status: "awaiting_deposit" }, healthyContext);
+    expect(status).toBe("blocked");
+  });
+
+  it("returns 'blocked' when a checklist item is overdue, even if every other signal is healthy", () => {
+    const status = getEventHealthStatus(perfectEvent, { ...healthyContext, hasOverdueChecklistItems: true });
+    expect(status).toBe("blocked");
+  });
+
+  it("prioritizes 'blocked' over 'waiting' when both a blocking condition and a non-blocking gap are present", () => {
+    const status = getEventHealthStatus(
+      { ...perfectEvent, status: "awaiting_deposit", location_name: null, address: null },
+      healthyContext,
+    );
+    expect(status).toBe("blocked");
   });
 });

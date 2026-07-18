@@ -60,7 +60,9 @@ export function getNextRecommendedAction(lead: LeadForNextAction): string | null
     case "qualified":
       return "Send a proposal";
     case "proposal_sent":
-      return "Follow up on the proposal, or convert to Client";
+      return "Mark as waiting on the client's decision";
+    case "waiting_decision":
+      return "Follow up on the decision, or convert to Client";
     case "converted":
     case "lost":
     case "archived":

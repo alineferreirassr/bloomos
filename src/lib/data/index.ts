@@ -83,11 +83,13 @@ import { selectRepository } from "@/lib/data/provider";
 import type { LeadFilters } from "@/lib/data/leads/repository";
 import { mockLeadsRepository } from "@/lib/data/leads/mockRepository";
 import { supabaseLeadsRepository } from "@/lib/data/leads/supabaseRepository";
-import type { ClientFilters } from "@/lib/data/clients/repository";
+import type { ClientFilters, MarkClientRecoveryPendingInput } from "@/lib/data/clients/repository";
 import { mockClientsRepository } from "@/lib/data/clients/mockRepository";
 import { supabaseClientsRepository } from "@/lib/data/clients/supabaseRepository";
 import { mockConversionRepository } from "@/lib/data/conversion/mockConversionRepository";
 import { supabaseConversionRepository } from "@/lib/data/conversion/supabaseConversionRepository";
+import { mockActivityRepository } from "@/lib/data/activity/mockRepository";
+import { supabaseActivityRepository } from "@/lib/data/activity/supabaseRepository";
 import type { EventFilters } from "@/lib/data/events/repository";
 import {
   mockEventsRepository,
@@ -218,6 +220,162 @@ export async function convertLeadToClient(leadId: string) {
   return conversionRepository().convertLeadToClient(leadId);
 }
 
+export type BookLeadInput = Omit<EventFormInput, "client_id" | "originating_lead_id">;
+
+export interface BookLeadResult {
+  lead: Lead;
+  client: Client;
+  event: Event;
+}
+
+const BOOKING_WORKFLOW = "booking";
+
+/**
+ * The payload stored on a pending Booking recovery: the exact Event draft the
+ * caller submitted, plus (only once an Event has actually been created)
+ * `event_id` — so a later resumeBooking() that's only missing the
+ * lifecycle-stage advance retries against that same Event instead of calling
+ * createEvent again and leaving a duplicate behind.
+ */
+type BookingRecoveryPayload = BookLeadInput & { event_id?: string };
+
+/**
+ * Shared tail of bookLead/resumeBooking: ensures the Event exists (creating
+ * it only if `existingEventId` isn't already known — see
+ * BookingRecoveryPayload above) and advances it to "planning". On failure at
+ * either step, the partial state is never silently left behind and never
+ * rolled back across domains either — instead it's marked as a generic,
+ * durable, auditable pending recovery on the Client (markClientRecoveryPending
+ * + an internal_alert/critical Note), so the Booking Dashboard's Needs
+ * Attention section can surface it and a caller can resumeBooking() later
+ * instead of restarting the whole Lead conversion.
+ */
+async function finishBooking(
+  lead: Lead,
+  client: Client,
+  eventInput: BookLeadInput,
+  existingEventId?: string,
+): Promise<DataResult<BookLeadResult>> {
+  let eventId = existingEventId;
+
+  if (!eventId) {
+    const created = await createEvent({
+      ...eventInput,
+      client_id: client.id,
+      originating_lead_id: lead.id,
+    });
+    if (!created.success) {
+      const reason = `Creating the Event failed: ${created.error}`;
+      const payload: BookingRecoveryPayload = { ...eventInput };
+      await markClientRecoveryPending(client.id, { workflow: BOOKING_WORKFLOW, reason, payload });
+      await createClientNote(client.id, {
+        title: "Booking Incomplete",
+        content: `Converting Lead "${lead.first_name} ${lead.last_name}" to Client succeeded, but ${reason.toLowerCase()}. Resume booking from this Client instead of starting over.`,
+        category: "internal_alert",
+        priority: "critical",
+      });
+      return fail(
+        `The Lead was converted to Client "${client.first_name} ${client.last_name}", but ${reason.toLowerCase()}. This is recorded as a pending recovery on the Client (see Needs Attention) — resume booking from there instead of starting over.`,
+      );
+    }
+    eventId = created.data.id;
+  }
+
+  const planned = await updateEventLifecycleStage(eventId, "planning");
+  if (!planned.success) {
+    const reason = `Moving the Event to "Planning" failed: ${planned.error}`;
+    const payload: BookingRecoveryPayload = { ...eventInput, event_id: eventId };
+    await markClientRecoveryPending(client.id, { workflow: BOOKING_WORKFLOW, reason, payload });
+    await createClientNote(client.id, {
+      title: "Booking Incomplete",
+      content: `The Event was created, but ${reason.toLowerCase()}. Resume booking from this Client instead of starting over.`,
+      category: "internal_alert",
+      priority: "critical",
+    });
+    return fail(
+      `The Event was created, but ${reason.toLowerCase()}. This is recorded as a pending recovery on the Client (see Needs Attention) — resume booking from there instead of starting over.`,
+    );
+  }
+
+  return ok({ lead, client, event: planned.data });
+}
+
+/**
+ * Orchestrates the Commercial Pipeline's "Booked" transition (Booking
+ * Workflow, Phase 2): converts the Lead to a Client (reusing an existing
+ * Client by email match within the Workspace, per convertLeadToClient's own
+ * dedup logic — never a duplicate), creates the linked Event, then advances
+ * it straight to lifecycle_stage "planning" — the Operational Pipeline's own
+ * starting column — so a newly-Booked Event never sits in the now-redundant
+ * intake/proposal/booking stages the Commercial Pipeline already covered.
+ *
+ * Deliberately NOT a new database function — composes already-existing,
+ * already-tested, already-permission-checked operations (convertLeadToClient,
+ * createEvent, updateEventLifecycleStage), per "keep RPCs focused and
+ * reusable." See finishBooking's own comment for what happens if Event
+ * creation fails after a successful conversion.
+ */
+export async function bookLead(leadId: string, eventInput: BookLeadInput): Promise<DataResult<BookLeadResult>> {
+  const conversion = await convertLeadToClient(leadId);
+  if (!conversion.success) return conversion;
+
+  return finishBooking(conversion.data.lead, conversion.data.client, eventInput);
+}
+
+/**
+ * Resumes a booking that finishBooking previously marked as a pending
+ * recovery — re-attempts the same createEvent -> "planning" tail (using
+ * whatever eventInput the caller now provides, typically prefilled from the
+ * Client's own pending_recovery.payload) without re-running Lead conversion.
+ * On success, clears the pending recovery; on repeated failure, re-marks it
+ * with a fresh Timeline entry so every attempt stays in the audit trail.
+ */
+export async function resumeBooking(
+  clientId: string,
+  eventInput: BookLeadInput,
+): Promise<DataResult<BookLeadResult>> {
+  let client: Client;
+  try {
+    client = await getClientById(clientId);
+  } catch {
+    return fail("Client not found.");
+  }
+
+  if (!client.pending_recovery || client.pending_recovery.workflow !== BOOKING_WORKFLOW) {
+    return fail("This client has no pending Booking recovery to resume.");
+  }
+  if (!client.originating_lead_id) {
+    return fail("This client has no originating Lead to resume booking for.");
+  }
+
+  const existingEventId = client.pending_recovery.payload.event_id;
+  const lead = await getLeadById(client.originating_lead_id);
+  const result = await finishBooking(
+    lead,
+    client,
+    eventInput,
+    typeof existingEventId === "string" ? existingEventId : undefined,
+  );
+  if (result.success) {
+    await resolveClientRecoveryPending(clientId);
+  }
+  return result;
+}
+
+function activityRepository() {
+  return selectRepository({ mock: mockActivityRepository, supabase: supabaseActivityRepository });
+}
+
+/**
+ * Workspace-wide recent-activity feed (Booking Dashboard's "Recent Activity"
+ * card, Booking Workflow Phase 2) — reads across every owner_type already
+ * writing to the shared `timeline_activities` table, rather than one query
+ * per Lead/Client/Event/Contract/Invoice/etc. No new writes; RLS unchanged.
+ */
+export async function getRecentActivity(limit?: number): Promise<TimelineActivity[]> {
+  return activityRepository().getRecentActivity(limit);
+}
+
 // ---------------------------------------------------------------------------
 // Notes (shared by Leads and Clients — one Note shape, keyed by owner_type/owner_id)
 //
@@ -342,7 +500,7 @@ export async function getTimelineByClientId(clientId: string): Promise<TimelineA
 // Leads. Every function below is a thin, backend-agnostic wrapper.
 // ---------------------------------------------------------------------------
 
-export type { ClientFilters } from "@/lib/data/clients/repository";
+export type { ClientFilters, MarkClientRecoveryPendingInput } from "@/lib/data/clients/repository";
 
 function clientsRepository() {
   return selectRepository({ mock: mockClientsRepository, supabase: supabaseClientsRepository });
@@ -398,6 +556,21 @@ export async function archiveClient(id: string): Promise<DataResult<Client>> {
 
 export async function restoreClient(id: string): Promise<DataResult<Client>> {
   return clientsRepository().restoreClient(id);
+}
+
+export async function markClientRecoveryPending(
+  id: string,
+  input: MarkClientRecoveryPendingInput,
+): Promise<DataResult<Client>> {
+  return clientsRepository().markClientRecoveryPending(id, input);
+}
+
+export async function resolveClientRecoveryPending(id: string): Promise<DataResult<Client>> {
+  return clientsRepository().resolveClientRecoveryPending(id);
+}
+
+export async function getClientsWithPendingRecovery(workflow?: string): Promise<Client[]> {
+  return clientsRepository().getClientsWithPendingRecovery(workflow);
 }
 
 export async function getClientNextAction(clientId: string): Promise<string | null> {
