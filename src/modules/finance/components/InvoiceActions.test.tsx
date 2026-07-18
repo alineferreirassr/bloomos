@@ -3,6 +3,26 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { InvoiceActions } from "@/modules/finance/components/InvoiceActions";
 import { makeInvoice } from "@/modules/finance/testUtils";
+import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
+import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+
+const fullPermissionSnapshot: Extract<MemberSessionSnapshot, { kind: "active" }> = {
+  kind: "active",
+  user: { id: "user_1", email: "owner@amorebloom.com" },
+  profile: { full_name: "Amoré Bloom Owner", avatar_url: null },
+  workspace: { id: "ws_amore_bloom", name: "Amoré Bloom" },
+  membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
+  permissions: ["finance.view", "finance.create", "finance.update", "finance.refund"],
+  workspaceDisplayName: "Amoré Bloom",
+};
+
+function renderInvoiceActions(props: Parameters<typeof InvoiceActions>[0], permissions = fullPermissionSnapshot.permissions) {
+  return render(
+    <MemberSessionProvider snapshot={{ ...fullPermissionSnapshot, permissions }}>
+      <InvoiceActions {...props} />
+    </MemberSessionProvider>,
+  );
+}
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -27,7 +47,7 @@ describe("InvoiceActions", () => {
   });
 
   it("shows Issue, Void, Archive, and Duplicate for a draft invoice", () => {
-    render(<InvoiceActions invoice={makeInvoice({ status: "draft" })} onChanged={vi.fn()} />);
+    renderInvoiceActions({ invoice: makeInvoice({ status: "draft" }), onChanged: vi.fn() });
     expect(screen.getByRole("button", { name: /^issue$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^void$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^archive$/i })).toBeInTheDocument();
@@ -36,12 +56,10 @@ describe("InvoiceActions", () => {
   });
 
   it("shows Send and Record Payment for an issued invoice", () => {
-    render(
-      <InvoiceActions
-        invoice={makeInvoice({ status: "issued", due_date: "2026-01-01", client_id: "client_1" })}
-        onChanged={vi.fn()}
-      />,
-    );
+    renderInvoiceActions({
+      invoice: makeInvoice({ status: "issued", due_date: "2026-01-01", client_id: "client_1" }),
+      onChanged: vi.fn(),
+    });
     expect(screen.getByRole("button", { name: /^send$/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /record payment/i })).toHaveAttribute(
       "href",
@@ -50,20 +68,18 @@ describe("InvoiceActions", () => {
   });
 
   it("shows Mark Viewed and Mark Overdue for a sent invoice with a due date", () => {
-    render(
-      <InvoiceActions invoice={makeInvoice({ status: "sent", due_date: "2026-01-01" })} onChanged={vi.fn()} />,
-    );
+    renderInvoiceActions({ invoice: makeInvoice({ status: "sent", due_date: "2026-01-01" }), onChanged: vi.fn() });
     expect(screen.getByRole("button", { name: /mark viewed/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /mark overdue/i })).toBeInTheDocument();
   });
 
   it("hides Record Payment for a paid invoice", () => {
-    render(<InvoiceActions invoice={makeInvoice({ status: "paid" })} onChanged={vi.fn()} />);
+    renderInvoiceActions({ invoice: makeInvoice({ status: "paid" }), onChanged: vi.fn() });
     expect(screen.queryByRole("link", { name: /record payment/i })).not.toBeInTheDocument();
   });
 
   it("shows only Restore and Duplicate for an archived invoice", () => {
-    render(<InvoiceActions invoice={makeInvoice({ status: "archived" })} onChanged={vi.fn()} />);
+    renderInvoiceActions({ invoice: makeInvoice({ status: "archived" }), onChanged: vi.fn() });
     expect(screen.getByRole("button", { name: /restore/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^duplicate$/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /edit/i })).not.toBeInTheDocument();
@@ -73,7 +89,7 @@ describe("InvoiceActions", () => {
     const user = userEvent.setup();
     vi.mocked(dataLayer.issueInvoice).mockResolvedValue({ success: true, data: makeInvoice({ status: "issued" }) });
     const onChanged = vi.fn();
-    render(<InvoiceActions invoice={makeInvoice({ id: "invoice_1", status: "draft" })} onChanged={onChanged} />);
+    renderInvoiceActions({ invoice: makeInvoice({ id: "invoice_1", status: "draft" }), onChanged: onChanged });
 
     await user.click(screen.getByRole("button", { name: /^issue$/i }));
 
@@ -86,7 +102,7 @@ describe("InvoiceActions", () => {
     const user = userEvent.setup();
     vi.mocked(dataLayer.voidInvoice).mockResolvedValue({ success: true, data: makeInvoice({ status: "voided" }) });
     const onChanged = vi.fn();
-    render(<InvoiceActions invoice={makeInvoice({ id: "invoice_1", status: "draft" })} onChanged={onChanged} />);
+    renderInvoiceActions({ invoice: makeInvoice({ id: "invoice_1", status: "draft" }), onChanged: onChanged });
 
     await user.click(screen.getByRole("button", { name: /^void$/i }));
     const dialog = screen.getByRole("dialog", { name: /void invoice/i });
@@ -103,7 +119,7 @@ describe("InvoiceActions", () => {
       data: makeInvoice({ status: "archived" }),
     });
     const onChanged = vi.fn();
-    render(<InvoiceActions invoice={makeInvoice({ id: "invoice_1", status: "draft" })} onChanged={onChanged} />);
+    renderInvoiceActions({ invoice: makeInvoice({ id: "invoice_1", status: "draft" }), onChanged: onChanged });
 
     await user.click(screen.getByRole("button", { name: /^archive$/i }));
     const dialog = screen.getByRole("dialog", { name: /archive invoice/i });
@@ -119,7 +135,7 @@ describe("InvoiceActions", () => {
       success: true,
       data: makeInvoice({ id: "invoice_2" }),
     });
-    render(<InvoiceActions invoice={makeInvoice({ id: "invoice_1", status: "draft" })} onChanged={vi.fn()} />);
+    renderInvoiceActions({ invoice: makeInvoice({ id: "invoice_1", status: "draft" }), onChanged: vi.fn() });
 
     await user.click(screen.getByRole("button", { name: /^duplicate$/i }));
 
@@ -130,7 +146,7 @@ describe("InvoiceActions", () => {
     const user = userEvent.setup();
     vi.mocked(dataLayer.archiveInvoice).mockResolvedValue({ success: false, error: "This invoice is voided." });
     const onChanged = vi.fn();
-    render(<InvoiceActions invoice={makeInvoice({ id: "invoice_1", status: "draft" })} onChanged={onChanged} />);
+    renderInvoiceActions({ invoice: makeInvoice({ id: "invoice_1", status: "draft" }), onChanged: onChanged });
 
     await user.click(screen.getByRole("button", { name: /^archive$/i }));
     const dialog = screen.getByRole("dialog", { name: /archive invoice/i });

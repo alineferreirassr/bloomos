@@ -4,6 +4,26 @@ import { ContractDetailView } from "@/modules/contracts/components/ContractDetai
 import { makeContract, makeContractExhibit, makeContractTemplate } from "@/modules/contracts/testUtils";
 import { makeClient } from "@/modules/clients/testUtils";
 import { makeEvent } from "@/modules/events/testUtils";
+import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
+import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+
+const fullPermissionSnapshot: MemberSessionSnapshot = {
+  kind: "active",
+  user: { id: "user_1", email: "owner@amorebloom.com" },
+  profile: { full_name: "Amoré Bloom Owner", avatar_url: null },
+  workspace: { id: "ws_amore_bloom", name: "Amoré Bloom" },
+  membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
+  permissions: ["contracts.view", "contracts.create", "contracts.update", "contracts.lifecycle"],
+  workspaceDisplayName: "Amoré Bloom",
+};
+
+function renderContractDetail(contractId: string) {
+  return render(
+    <MemberSessionProvider snapshot={fullPermissionSnapshot}>
+      <ContractDetailView contractId={contractId} />
+    </MemberSessionProvider>,
+  );
+}
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -86,7 +106,7 @@ function mockReady(overrides: Partial<ReturnType<typeof makeContract>> = {}) {
 describe("ContractDetailView", () => {
   it("renders the header, client/event links, badges, and every overview section once loaded", async () => {
     mockReady();
-    render(<ContractDetailView contractId="contract_1" />);
+    renderContractDetail("contract_1");
 
     expect(await screen.findByText("Malibu Sunset Proposal — Event Services Agreement")).toBeInTheDocument();
     expect(screen.getByText("CT-2026-0001")).toBeInTheDocument();
@@ -117,7 +137,7 @@ describe("ContractDetailView", () => {
 
   it("shows 'no linked event' when event_id is null", async () => {
     mockReady({ event_id: null, template_id: null });
-    render(<ContractDetailView contractId="contract_1" />);
+    renderContractDetail("contract_1");
 
     expect(await screen.findByText(/no linked event/i)).toBeInTheDocument();
     expect(screen.getByText(/no template selected/i)).toBeInTheDocument();
@@ -125,7 +145,7 @@ describe("ContractDetailView", () => {
 
   it("keeps Notes editable for a signed contract (commercial-term lock doesn't restrict notes)", async () => {
     mockReady({ status: "signed" });
-    render(<ContractDetailView contractId="contract_1" />);
+    renderContractDetail("contract_1");
 
     await screen.findByText("Malibu Sunset Proposal — Event Services Agreement");
     // NotesSection renders an "Add note" affordance when not read-only.
@@ -134,7 +154,7 @@ describe("ContractDetailView", () => {
 
   it("makes Notes read-only for an archived contract", async () => {
     mockReady({ status: "archived", archived_at: "2026-01-01T00:00:00.000Z" });
-    render(<ContractDetailView contractId="contract_1" />);
+    renderContractDetail("contract_1");
 
     await screen.findByText("Malibu Sunset Proposal — Event Services Agreement");
     expect(screen.queryByRole("button", { name: /add note/i })).not.toBeInTheDocument();
@@ -142,7 +162,7 @@ describe("ContractDetailView", () => {
 
   it("hides Add Exhibit for a signed contract (exhibits are commercial-term locked)", async () => {
     mockReady({ status: "signed" });
-    render(<ContractDetailView contractId="contract_1" />);
+    renderContractDetail("contract_1");
 
     await screen.findByText("Malibu Sunset Proposal — Event Services Agreement");
     expect(screen.queryByRole("button", { name: /add exhibit/i })).not.toBeInTheDocument();
@@ -150,7 +170,7 @@ describe("ContractDetailView", () => {
 
   it("shows Add Exhibit for a draft contract", async () => {
     mockReady({ status: "draft", signature_status: "unsigned" });
-    render(<ContractDetailView contractId="contract_1" />);
+    renderContractDetail("contract_1");
 
     await screen.findByText("Malibu Sunset Proposal — Event Services Agreement");
     expect(screen.getByRole("button", { name: /add exhibit/i })).toBeInTheDocument();
@@ -158,7 +178,7 @@ describe("ContractDetailView", () => {
 
   it("shows an error state when the contract can't be found", async () => {
     vi.mocked(dataLayer.getContract).mockRejectedValue(new Error("not found"));
-    render(<ContractDetailView contractId="does_not_exist" />);
+    renderContractDetail("does_not_exist");
 
     expect(await screen.findByText(/could not (be found|load this contract)/i)).toBeInTheDocument();
   });

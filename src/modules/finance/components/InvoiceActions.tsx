@@ -17,6 +17,7 @@ import {
 import type { Invoice } from "@/types/invoice";
 import { canTransitionInvoiceStatus, isInvoiceTerminal } from "@/core/workflows/invoiceWorkflow";
 import { ConfirmInvoiceActionModal } from "@/modules/finance/components/ConfirmInvoiceActionModal";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 interface InvoiceActionsProps {
   invoice: Invoice;
@@ -36,6 +37,9 @@ type ModalKind = "void" | "archive" | null;
  * additive — same reasoning as ContractActions.
  */
 export function InvoiceActions({ invoice, onChanged }: InvoiceActionsProps) {
+  const { can } = useMemberSession();
+  const canUpdate = can("finance.update");
+  const canCreate = can("finance.create");
   const router = useRouter();
   const [modal, setModal] = useState<ModalKind>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -80,7 +84,7 @@ export function InvoiceActions({ invoice, onChanged }: InvoiceActionsProps) {
     invoice.event_id ? `&eventId=${invoice.event_id}` : ""
   }${invoice.contract_id ? `&contractId=${invoice.contract_id}` : ""}`;
 
-  const duplicateButton = (
+  const duplicateButton = canCreate ? (
     <div>
       <Button variant="secondary" onClick={handleDuplicate} disabled={duplicating}>
         {duplicating ? "Duplicating…" : "Duplicate"}
@@ -91,21 +95,23 @@ export function InvoiceActions({ invoice, onChanged }: InvoiceActionsProps) {
         </p>
       ) : null}
     </div>
-  );
+  ) : null;
 
   if (isArchived) {
     return (
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
-          <div>
-            <Button
-              variant="secondary"
-              onClick={() => runAction("restore", () => restoreInvoice(invoice.id))}
-              disabled={busyAction === "restore"}
-            >
-              {busyAction === "restore" ? "Restoring…" : "Restore"}
-            </Button>
-          </div>
+          {canUpdate ? (
+            <div>
+              <Button
+                variant="secondary"
+                onClick={() => runAction("restore", () => restoreInvoice(invoice.id))}
+                disabled={busyAction === "restore"}
+              >
+                {busyAction === "restore" ? "Restoring…" : "Restore"}
+              </Button>
+            </div>
+          ) : null}
           {duplicateButton}
         </div>
         {actionError ? (
@@ -120,12 +126,12 @@ export function InvoiceActions({ invoice, onChanged }: InvoiceActionsProps) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        {!isInvoiceTerminal(invoice.status) ? (
+        {!isInvoiceTerminal(invoice.status) && canUpdate ? (
           <Link href={`/finance/invoices/${invoice.id}/edit`}>
             <Button variant="secondary">Edit</Button>
           </Link>
         ) : null}
-        {canIssue ? (
+        {canIssue && canUpdate ? (
           <Button
             variant="secondary"
             onClick={() => runAction("issue", () => issueInvoice(invoice.id))}
@@ -134,7 +140,7 @@ export function InvoiceActions({ invoice, onChanged }: InvoiceActionsProps) {
             {busyAction === "issue" ? "Issuing…" : "Issue"}
           </Button>
         ) : null}
-        {canSend ? (
+        {canSend && canUpdate ? (
           <Button
             variant="secondary"
             onClick={() => runAction("send", () => sendInvoice(invoice.id))}
@@ -143,7 +149,7 @@ export function InvoiceActions({ invoice, onChanged }: InvoiceActionsProps) {
             {busyAction === "send" ? "Sending…" : "Send"}
           </Button>
         ) : null}
-        {canMarkViewed ? (
+        {canMarkViewed && canUpdate ? (
           <Button
             variant="secondary"
             onClick={() => runAction("viewed", () => markInvoiceViewed(invoice.id))}
@@ -152,7 +158,7 @@ export function InvoiceActions({ invoice, onChanged }: InvoiceActionsProps) {
             {busyAction === "viewed" ? "Marking…" : "Mark Viewed"}
           </Button>
         ) : null}
-        {canMarkOverdue ? (
+        {canMarkOverdue && canUpdate ? (
           <Button
             variant="secondary"
             onClick={() => runAction("overdue", () => markInvoiceOverdue(invoice.id))}
@@ -161,17 +167,17 @@ export function InvoiceActions({ invoice, onChanged }: InvoiceActionsProps) {
             {busyAction === "overdue" ? "Marking…" : "Mark Overdue"}
           </Button>
         ) : null}
-        {canRecordPayment ? (
+        {canRecordPayment && canCreate ? (
           <Link href={recordPaymentHref}>
             <Button>Record Payment</Button>
           </Link>
         ) : null}
-        {canVoid ? (
+        {canVoid && canUpdate ? (
           <Button variant="secondary" onClick={() => setModal("void")}>
             Void
           </Button>
         ) : null}
-        {canArchive ? (
+        {canArchive && canUpdate ? (
           <Button variant="secondary" onClick={() => setModal("archive")}>
             Archive
           </Button>

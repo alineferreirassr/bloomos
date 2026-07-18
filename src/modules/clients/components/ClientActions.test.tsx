@@ -3,6 +3,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ClientActions } from "@/modules/clients/components/ClientActions";
 import { makeClient } from "@/modules/clients/testUtils";
+import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
+import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 
 vi.mock("@/lib/data", () => ({
   archiveClient: vi.fn(),
@@ -13,6 +15,24 @@ vi.mock("@/lib/data", () => ({
 }));
 
 import * as dataLayer from "@/lib/data";
+
+const fullPermissionSnapshot: Extract<MemberSessionSnapshot, { kind: "active" }> = {
+  kind: "active",
+  user: { id: "user_1", email: "owner@amorebloom.com" },
+  profile: { full_name: "Amoré Bloom Owner", avatar_url: null },
+  workspace: { id: "ws_amore_bloom", name: "Amoré Bloom" },
+  membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
+  permissions: ["clients.view", "clients.create", "clients.update", "clients.archive"],
+  workspaceDisplayName: "Amoré Bloom",
+};
+
+function renderClientActions(props: Parameters<typeof ClientActions>[0], permissions = fullPermissionSnapshot.permissions) {
+  return render(
+    <MemberSessionProvider snapshot={{ ...fullPermissionSnapshot, permissions }}>
+      <ClientActions {...props} />
+    </MemberSessionProvider>,
+  );
+}
 
 describe("ClientActions — VIP toggle", () => {
   beforeEach(() => {
@@ -27,7 +47,7 @@ describe("ClientActions — VIP toggle", () => {
     });
     const onChanged = vi.fn();
 
-    render(<ClientActions client={makeClient({ id: "client_1", is_vip: false })} onChanged={onChanged} />);
+    renderClientActions({ client: makeClient({ id: "client_1", is_vip: false }), onChanged });
 
     await user.click(screen.getByRole("button", { name: /mark as vip/i }));
 
@@ -44,7 +64,7 @@ describe("ClientActions — VIP toggle", () => {
     });
     const onChanged = vi.fn();
 
-    render(<ClientActions client={makeClient({ id: "client_1", is_vip: false })} onChanged={onChanged} />);
+    renderClientActions({ client: makeClient({ id: "client_1", is_vip: false }), onChanged });
 
     await user.click(screen.getByRole("button", { name: /mark as vip/i }));
 
@@ -67,7 +87,7 @@ describe("ClientActions — archive", () => {
     });
     const onChanged = vi.fn();
 
-    render(<ClientActions client={makeClient({ id: "client_1" })} onChanged={onChanged} />);
+    renderClientActions({ client: makeClient({ id: "client_1" }), onChanged });
 
     await user.click(screen.getByRole("button", { name: /^archive$/i }));
 
@@ -89,12 +109,10 @@ describe("ClientActions — restore", () => {
     });
     const onChanged = vi.fn();
 
-    render(
-      <ClientActions
-        client={makeClient({ id: "client_1", internal_status: "archived", archived_at: "2026-01-01T00:00:00.000Z" })}
-        onChanged={onChanged}
-      />,
-    );
+    renderClientActions({
+      client: makeClient({ id: "client_1", internal_status: "archived", archived_at: "2026-01-01T00:00:00.000Z" }),
+      onChanged,
+    });
 
     await user.click(screen.getByRole("button", { name: /restore/i }));
 
@@ -103,14 +121,27 @@ describe("ClientActions — restore", () => {
   });
 
   it("does not show Edit or VIP toggle for an archived client", () => {
-    render(
-      <ClientActions
-        client={makeClient({ internal_status: "archived", archived_at: "2026-01-01T00:00:00.000Z" })}
-        onChanged={vi.fn()}
-      />,
-    );
+    renderClientActions({
+      client: makeClient({ internal_status: "archived", archived_at: "2026-01-01T00:00:00.000Z" }),
+      onChanged: vi.fn(),
+    });
 
     expect(screen.queryByRole("button", { name: /edit/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /mark as vip/i })).not.toBeInTheDocument();
+  });
+
+  it("hides Edit, VIP, and the status/contact selects for a member without clients.update, while still allowing archive", () => {
+    renderClientActions({ client: makeClient({ id: "client_1" }), onChanged: vi.fn() }, ["clients.view", "clients.archive"]);
+
+    expect(screen.queryByRole("link", { name: /edit/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /mark as vip/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^archive$/i })).toBeInTheDocument();
+  });
+
+  it("hides Archive for a member without clients.archive, while still allowing Edit", () => {
+    renderClientActions({ client: makeClient({ id: "client_1" }), onChanged: vi.fn() }, ["clients.view", "clients.update"]);
+
+    expect(screen.getByRole("link", { name: /edit/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^archive$/i })).not.toBeInTheDocument();
   });
 });

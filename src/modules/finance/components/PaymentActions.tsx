@@ -8,6 +8,7 @@ import { canTransitionPaymentStatus, isPaymentFinal, isPaymentRefundable } from 
 import { ConfirmPaymentActionModal } from "@/modules/finance/components/ConfirmPaymentActionModal";
 import { RefundPaymentModal } from "@/modules/finance/components/RefundPaymentModal";
 import { PaymentEditModal } from "@/modules/finance/components/PaymentEditModal";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 interface PaymentActionsProps {
   payment: Payment;
@@ -26,6 +27,11 @@ type ModalKind = "edit" | "failed" | "cancel" | "refund" | null;
  * plain yes/no confirmation).
  */
 export function PaymentActions({ payment, onChanged }: PaymentActionsProps) {
+  const { can } = useMemberSession();
+  const canUpdate = can("finance.update");
+  // finance.view/finance.update alone never imply finance.refund — a
+  // refund is the one Finance action gated by its own dedicated permission.
+  const canRefundPermission = can("finance.refund");
   const [modal, setModal] = useState<ModalKind>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -52,12 +58,12 @@ export function PaymentActions({ payment, onChanged }: PaymentActionsProps) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        {canEdit ? (
+        {canEdit && canUpdate ? (
           <Button variant="secondary" onClick={() => setModal("edit")}>
             Edit
           </Button>
         ) : null}
-        {canMarkProcessing ? (
+        {canMarkProcessing && canUpdate ? (
           <Button
             variant="secondary"
             onClick={() => runAction("processing", () => markPaymentProcessing(payment.id))}
@@ -66,7 +72,7 @@ export function PaymentActions({ payment, onChanged }: PaymentActionsProps) {
             {busyAction === "processing" ? "Marking…" : "Mark Processing"}
           </Button>
         ) : null}
-        {canMarkSucceeded ? (
+        {canMarkSucceeded && canUpdate ? (
           <Button
             variant="secondary"
             onClick={() => runAction("succeeded", () => markPaymentSucceeded(payment.id))}
@@ -75,17 +81,17 @@ export function PaymentActions({ payment, onChanged }: PaymentActionsProps) {
             {busyAction === "succeeded" ? "Marking…" : "Mark Succeeded"}
           </Button>
         ) : null}
-        {canMarkFailed ? (
+        {canMarkFailed && canUpdate ? (
           <Button variant="secondary" onClick={() => setModal("failed")}>
             Mark Failed
           </Button>
         ) : null}
-        {canRefund ? (
+        {canRefund && canRefundPermission ? (
           <Button variant="secondary" onClick={() => setModal("refund")}>
             Refund
           </Button>
         ) : null}
-        {canCancel ? (
+        {canCancel && canUpdate ? (
           <Button variant="secondary" onClick={() => setModal("cancel")}>
             Cancel
           </Button>

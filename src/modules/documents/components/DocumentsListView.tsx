@@ -40,6 +40,7 @@ import {
 import { DocumentListTable } from "@/modules/documents/components/DocumentListTable";
 import { DocumentListCards } from "@/modules/documents/components/DocumentListCards";
 import { NewFolderModal } from "@/modules/documents/components/NewFolderModal";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 export interface DocumentListRow {
   document: Document;
@@ -198,6 +199,8 @@ interface DocumentsListViewProps {
 }
 
 export function DocumentsListView({ initialOwnerType, initialOwnerId, initialFolderId }: DocumentsListViewProps = {}) {
+  const { can } = useMemberSession();
+  const canCreate = can("documents.create");
   const initialFilters: DocumentFiltersValue = {
     ...DEFAULT_DOCUMENT_FILTERS,
     ownerType: initialOwnerType ?? DEFAULT_DOCUMENT_FILTERS.ownerType,
@@ -241,14 +244,16 @@ export function DocumentsListView({ initialOwnerType, initialOwnerId, initialFol
             The shared file system for BloomOS. {getDataPersistenceMessage()}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={() => setNewFolderOpen(true)}>
-            New Folder
-          </Button>
-          <Link href="/documents/new">
-            <Button>Add Document</Button>
-          </Link>
-        </div>
+        {canCreate ? (
+          <div className="flex items-center gap-3">
+            <Button variant="secondary" onClick={() => setNewFolderOpen(true)}>
+              New Folder
+            </Button>
+            <Link href="/documents/new">
+              <Button>Add Document</Button>
+            </Link>
+          </div>
+        ) : null}
       </div>
 
       {state.status === "ready" ? (
@@ -305,7 +310,7 @@ export function DocumentsListView({ initialOwnerType, initialOwnerId, initialFol
                 : "New documents you add will show up here."
             }
             action={
-              !hasActiveFilters ? (
+              !hasActiveFilters && canCreate ? (
                 <Link href="/documents/new">
                   <Button>Add Document</Button>
                 </Link>

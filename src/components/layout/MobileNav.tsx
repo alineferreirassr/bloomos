@@ -3,9 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { navigationItems } from "@/config/navigation";
+import { getVisibleNavigationItems } from "@/config/navigation";
 import { CloseIcon } from "@/components/ui/icons";
 import { WorkspaceAvatar } from "@/components/layout/WorkspaceAvatar";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 interface MobileNavProps {
   open: boolean;
@@ -15,6 +16,8 @@ interface MobileNavProps {
 
 export function MobileNav({ open, onClose, workspaceDisplayName }: MobileNavProps) {
   const pathname = usePathname();
+  const { can } = useMemberSession();
+  const navigationItems = getVisibleNavigationItems(can);
 
   return (
     <div
@@ -80,13 +83,17 @@ export function MobileNav({ open, onClose, workspaceDisplayName }: MobileNavProp
             );
           })}
         </nav>
-        <div className="mt-3 flex items-center gap-2.5 border-t border-border px-[23px] pt-4">
+        <Link
+          href="/account"
+          onClick={onClose}
+          className="mt-3 flex items-center gap-2.5 border-t border-border px-[23px] pt-4 transition-colors duration-150 hover:bg-accent/7"
+        >
           <WorkspaceAvatar />
           <div className="leading-tight">
             <div className="text-[13px] text-text">{workspaceDisplayName}</div>
             <div className="text-[11.5px] text-text/55">Amoré Bloom</div>
           </div>
-        </div>
+        </Link>
       </div>
     </div>
   );

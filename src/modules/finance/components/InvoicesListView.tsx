@@ -18,6 +18,7 @@ import {
 } from "@/modules/finance/components/InvoiceFilters";
 import { InvoiceListTable } from "@/modules/finance/components/InvoiceListTable";
 import { InvoiceListCards } from "@/modules/finance/components/InvoiceListCards";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 export interface InvoiceListRow {
   invoice: Invoice;
@@ -99,6 +100,8 @@ async function loadInvoicesFor(filters: InvoiceFiltersValue): Promise<LoadState>
 }
 
 export function InvoicesListView() {
+  const { can } = useMemberSession();
+  const canCreate = can("finance.create");
   const [filters, setFilters] = useState<InvoiceFiltersValue>(DEFAULT_INVOICE_FILTERS);
   const [state, setState] = useState<LoadState>({ status: "loading" });
 
@@ -142,9 +145,11 @@ export function InvoicesListView() {
             Data resets on page reload — there&apos;s no database behind this yet.
           </p>
         </div>
-        <Link href="/finance/invoices/new">
-          <Button>New Invoice</Button>
-        </Link>
+        {canCreate ? (
+          <Link href="/finance/invoices/new">
+            <Button>New Invoice</Button>
+          </Link>
+        ) : null}
       </div>
 
       <div className="mt-6">
@@ -169,7 +174,7 @@ export function InvoicesListView() {
                 : "New invoices you create will show up here."
             }
             action={
-              !hasActiveFilters ? (
+              !hasActiveFilters && canCreate ? (
                 <Link href="/finance/invoices/new">
                   <Button>New Invoice</Button>
                 </Link>

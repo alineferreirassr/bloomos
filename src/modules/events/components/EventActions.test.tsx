@@ -3,6 +3,8 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EventActions } from "@/modules/events/components/EventActions";
 import { makeEvent } from "@/modules/events/testUtils";
+import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
+import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 
 vi.mock("@/lib/data", () => ({
   archiveEvent: vi.fn(),
@@ -16,13 +18,31 @@ vi.mock("@/lib/data", () => ({
 
 import * as dataLayer from "@/lib/data";
 
+const fullPermissionSnapshot: Extract<MemberSessionSnapshot, { kind: "active" }> = {
+  kind: "active",
+  user: { id: "user_1", email: "owner@amorebloom.com" },
+  profile: { full_name: "Amoré Bloom Owner", avatar_url: null },
+  workspace: { id: "ws_amore_bloom", name: "Amoré Bloom" },
+  membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
+  permissions: ["events.view", "events.create", "events.update", "events.archive"],
+  workspaceDisplayName: "Amoré Bloom",
+};
+
+function renderEventActions(props: Parameters<typeof EventActions>[0], permissions = fullPermissionSnapshot.permissions) {
+  return render(
+    <MemberSessionProvider snapshot={{ ...fullPermissionSnapshot, permissions }}>
+      <EventActions {...props} />
+    </MemberSessionProvider>,
+  );
+}
+
 describe("EventActions — working event", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it("shows Edit, Complete, Cancel, Archive, and the three transition selects", () => {
-    render(<EventActions event={makeEvent({ status: "confirmed" })} onChanged={vi.fn()} />);
+    renderEventActions({ event: makeEvent({ status: "confirmed" }), onChanged: vi.fn() });
 
     expect(screen.getByRole("link", { name: /edit/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /complete event/i })).toBeInTheDocument();
@@ -34,7 +54,7 @@ describe("EventActions — working event", () => {
   });
 
   it("only offers allowed next statuses in the Status select", () => {
-    render(<EventActions event={makeEvent({ status: "draft" })} onChanged={vi.fn()} />);
+    renderEventActions({ event: makeEvent({ status: "draft" }), onChanged: vi.fn() });
 
     const select = screen.getByLabelText(/event status/i) as HTMLSelectElement;
     const options = Array.from(select.options).map((option) => option.value);
@@ -52,7 +72,7 @@ describe("EventActions — working event", () => {
     });
     const onChanged = vi.fn();
 
-    render(<EventActions event={makeEvent({ id: "event_1", priority: "normal" })} onChanged={onChanged} />);
+    renderEventActions({ event: makeEvent({ id: "event_1", priority: "normal" }), onChanged: onChanged });
 
     await user.selectOptions(screen.getByLabelText(/event priority/i), "urgent");
 
@@ -68,7 +88,7 @@ describe("EventActions — working event", () => {
     });
     const onChanged = vi.fn();
 
-    render(<EventActions event={makeEvent({ id: "event_1", status: "draft" })} onChanged={onChanged} />);
+    renderEventActions({ event: makeEvent({ id: "event_1", status: "draft" }), onChanged: onChanged });
 
     await user.selectOptions(screen.getByLabelText(/event status/i), "planning");
 
@@ -84,9 +104,7 @@ describe("EventActions — working event", () => {
     });
     const onChanged = vi.fn();
 
-    render(
-      <EventActions event={makeEvent({ id: "event_1", lifecycle_stage: "intake" })} onChanged={onChanged} />,
-    );
+    renderEventActions({ event: makeEvent({ id: "event_1", lifecycle_stage: "intake" }), onChanged });
 
     await user.selectOptions(screen.getByLabelText(/event lifecycle stage/i), "planning");
 
@@ -104,7 +122,7 @@ describe("EventActions — working event", () => {
     });
     const onChanged = vi.fn();
 
-    render(<EventActions event={makeEvent({ id: "event_1" })} onChanged={onChanged} />);
+    renderEventActions({ event: makeEvent({ id: "event_1" }), onChanged: onChanged });
     await user.click(screen.getByRole("button", { name: /^archive$/i }));
     const dialog = screen.getByRole("dialog", { name: /archive event/i });
     await user.click(within(dialog).getByRole("button", { name: /^archive$/i }));
@@ -121,7 +139,7 @@ describe("EventActions — working event", () => {
     });
     const onChanged = vi.fn();
 
-    render(<EventActions event={makeEvent({ id: "event_1" })} onChanged={onChanged} />);
+    renderEventActions({ event: makeEvent({ id: "event_1" }), onChanged: onChanged });
     await user.click(screen.getByRole("button", { name: /cancel event/i }));
     const dialog = screen.getByRole("dialog", { name: /cancel event/i });
     await user.click(within(dialog).getByRole("button", { name: /^cancel event$/i }));
@@ -138,7 +156,7 @@ describe("EventActions — working event", () => {
     });
     const onChanged = vi.fn();
 
-    render(<EventActions event={makeEvent({ id: "event_1" })} onChanged={onChanged} />);
+    renderEventActions({ event: makeEvent({ id: "event_1" }), onChanged: onChanged });
     await user.click(screen.getByRole("button", { name: /complete event/i }));
     const dialog = screen.getByRole("dialog", { name: /complete event/i });
     await user.click(within(dialog).getByRole("button", { name: /^complete event$/i }));
@@ -150,12 +168,10 @@ describe("EventActions — working event", () => {
 
 describe("EventActions — archived event", () => {
   it("shows only Restore", () => {
-    render(
-      <EventActions
-        event={makeEvent({ status: "archived", archived_at: "2026-01-01T00:00:00.000Z" })}
-        onChanged={vi.fn()}
-      />,
-    );
+    renderEventActions({
+      event: makeEvent({ status: "archived", archived_at: "2026-01-01T00:00:00.000Z" }),
+      onChanged: vi.fn(),
+    });
 
     expect(screen.getByRole("button", { name: /restore/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /edit/i })).not.toBeInTheDocument();
@@ -171,12 +187,10 @@ describe("EventActions — archived event", () => {
     });
     const onChanged = vi.fn();
 
-    render(
-      <EventActions
-        event={makeEvent({ id: "event_1", status: "archived", archived_at: "2026-01-01T00:00:00.000Z" })}
-        onChanged={onChanged}
-      />,
-    );
+    renderEventActions({
+      event: makeEvent({ id: "event_1", status: "archived", archived_at: "2026-01-01T00:00:00.000Z" }),
+      onChanged,
+    });
     await user.click(screen.getByRole("button", { name: /restore/i }));
 
     await waitFor(() => expect(dataLayer.restoreEvent).toHaveBeenCalledWith("event_1"));
@@ -186,7 +200,7 @@ describe("EventActions — archived event", () => {
 
 describe("EventActions — terminal, non-archived event (completed/cancelled)", () => {
   it("hides Edit, Complete, Cancel, and the transition selects for a completed event, but keeps Archive", () => {
-    render(<EventActions event={makeEvent({ status: "completed" })} onChanged={vi.fn()} />);
+    renderEventActions({ event: makeEvent({ status: "completed" }), onChanged: vi.fn() });
 
     expect(screen.queryByRole("link", { name: /edit/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /complete event/i })).not.toBeInTheDocument();
@@ -196,10 +210,28 @@ describe("EventActions — terminal, non-archived event (completed/cancelled)", 
   });
 
   it("hides the same controls for a cancelled event", () => {
-    render(<EventActions event={makeEvent({ status: "cancelled" })} onChanged={vi.fn()} />);
+    renderEventActions({ event: makeEvent({ status: "cancelled" }), onChanged: vi.fn() });
 
     expect(screen.queryByRole("link", { name: /edit/i })).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/event lifecycle stage/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^archive$/i })).toBeInTheDocument();
+  });
+});
+
+describe("EventActions — permission gating", () => {
+  it("hides Edit/Complete/Cancel/status selects for a member without events.update, while keeping Archive", () => {
+    renderEventActions({ event: makeEvent({ status: "confirmed" }), onChanged: vi.fn() }, ["events.view", "events.archive"]);
+
+    expect(screen.queryByRole("link", { name: /edit/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /complete event/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/event status/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^archive$/i })).toBeInTheDocument();
+  });
+
+  it("hides Archive for a member without events.archive, while keeping Edit", () => {
+    renderEventActions({ event: makeEvent({ status: "confirmed" }), onChanged: vi.fn() }, ["events.view", "events.update"]);
+
+    expect(screen.getByRole("link", { name: /edit/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^archive$/i })).not.toBeInTheDocument();
   });
 });

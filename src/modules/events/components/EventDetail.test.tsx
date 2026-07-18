@@ -3,6 +3,26 @@ import { render, screen } from "@testing-library/react";
 import { EventDetailView } from "@/modules/events/components/EventDetailView";
 import { makeEvent } from "@/modules/events/testUtils";
 import { makeClient } from "@/modules/clients/testUtils";
+import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
+import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+
+const fullPermissionSnapshot: MemberSessionSnapshot = {
+  kind: "active",
+  user: { id: "user_1", email: "owner@amorebloom.com" },
+  profile: { full_name: "Amoré Bloom Owner", avatar_url: null },
+  workspace: { id: "ws_amore_bloom", name: "Amoré Bloom" },
+  membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
+  permissions: ["events.view", "events.create", "events.update", "events.archive"],
+  workspaceDisplayName: "Amoré Bloom",
+};
+
+function renderEventDetail(eventId: string) {
+  return render(
+    <MemberSessionProvider snapshot={fullPermissionSnapshot}>
+      <EventDetailView eventId={eventId} />
+    </MemberSessionProvider>,
+  );
+}
 
 vi.mock("@/lib/data", () => ({
   getEventById: vi.fn(),
@@ -77,7 +97,7 @@ describe("EventDetailView", () => {
   it("renders the header, client link, and every overview section once the event loads", async () => {
     mockReady();
 
-    render(<EventDetailView eventId="event_1" />);
+    renderEventDetail("event_1");
 
     expect(await screen.findByText("Malibu Sunset Proposal")).toBeInTheDocument();
     // Badge text and Status/Lifecycle/Priority select option text legitimately
@@ -153,7 +173,7 @@ describe("EventDetailView", () => {
       },
     ]);
 
-    render(<EventDetailView eventId="event_1" />);
+    renderEventDetail("event_1");
 
     await screen.findByText("Event Health");
     // Missing location (15) + missing budget (10) = 100 - 25 = 75.
@@ -186,7 +206,7 @@ describe("EventDetailView", () => {
       },
     ]);
 
-    render(<EventDetailView eventId="event_1" />);
+    renderEventDetail("event_1");
 
     await screen.findByText("Checklist Summary");
     expect(screen.getByText("100%")).toBeInTheDocument();
@@ -195,21 +215,21 @@ describe("EventDetailView", () => {
   it("shows an error state when the event can't be found", async () => {
     vi.mocked(dataLayer.getEventById).mockRejectedValue(new Error("not found"));
 
-    render(<EventDetailView eventId="does_not_exist" />);
+    renderEventDetail("does_not_exist");
 
     expect(await screen.findByText(/could not load this event/i)).toBeInTheDocument();
   });
 
   it("renders Notes read-only for a cancelled event but not for a completed one", async () => {
     mockReady({ status: "cancelled" });
-    render(<EventDetailView eventId="event_1" />);
+    renderEventDetail("event_1");
     await screen.findByText("Notes");
     expect(screen.queryByRole("button", { name: /add note/i })).not.toBeInTheDocument();
   });
 
   it("keeps Notes editable for a completed event", async () => {
     mockReady({ status: "completed" });
-    render(<EventDetailView eventId="event_1" />);
+    renderEventDetail("event_1");
     await screen.findByText("Notes");
     expect(screen.getByRole("button", { name: /add note/i })).toBeInTheDocument();
   });

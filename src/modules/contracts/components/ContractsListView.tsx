@@ -18,6 +18,7 @@ import {
 } from "@/modules/contracts/components/ContractFilters";
 import { ContractListTable } from "@/modules/contracts/components/ContractListTable";
 import { ContractListCards } from "@/modules/contracts/components/ContractListCards";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 export interface ContractListRow {
   contract: Contract;
@@ -106,6 +107,8 @@ async function loadContractsFor(filters: ContractFiltersValue): Promise<LoadStat
 }
 
 export function ContractsListView() {
+  const { can } = useMemberSession();
+  const canCreate = can("contracts.create");
   const [filters, setFilters] = useState<ContractFiltersValue>(DEFAULT_CONTRACT_FILTERS);
   const [state, setState] = useState<LoadState>({ status: "loading" });
 
@@ -148,9 +151,11 @@ export function ContractsListView() {
             Data resets on page reload — there&apos;s no database behind this yet.
           </p>
         </div>
-        <Link href="/contracts/new">
-          <Button>New Contract</Button>
-        </Link>
+        {canCreate ? (
+          <Link href="/contracts/new">
+            <Button>New Contract</Button>
+          </Link>
+        ) : null}
       </div>
 
       <div className="mt-6">
@@ -175,7 +180,7 @@ export function ContractsListView() {
                 : "New contracts you create will show up here."
             }
             action={
-              !hasActiveFilters ? (
+              !hasActiveFilters && canCreate ? (
                 <Link href="/contracts/new">
                   <Button>New Contract</Button>
                 </Link>

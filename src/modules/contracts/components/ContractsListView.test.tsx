@@ -4,6 +4,26 @@ import userEvent from "@testing-library/user-event";
 import { ContractsListView } from "@/modules/contracts/components/ContractsListView";
 import { makeContract, makeContractTemplate } from "@/modules/contracts/testUtils";
 import { makeClient } from "@/modules/clients/testUtils";
+import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
+import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+
+const fullPermissionSnapshot: MemberSessionSnapshot = {
+  kind: "active",
+  user: { id: "user_1", email: "owner@amorebloom.com" },
+  profile: { full_name: "Amoré Bloom Owner", avatar_url: null },
+  workspace: { id: "ws_amore_bloom", name: "Amoré Bloom" },
+  membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
+  permissions: ["contracts.view", "contracts.create", "contracts.update", "contracts.lifecycle"],
+  workspaceDisplayName: "Amoré Bloom",
+};
+
+function renderContractsListView() {
+  return render(
+    <MemberSessionProvider snapshot={fullPermissionSnapshot}>
+      <ContractsListView />
+    </MemberSessionProvider>,
+  );
+}
 
 vi.mock("@/lib/data", () => ({
   getContracts: vi.fn(),
@@ -32,7 +52,7 @@ describe("ContractsListView", () => {
       makeContract({ id: "c_new", title: "Newer Contract", client_id: "client_1", updated_at: "2026-06-01T00:00:00.000Z" }),
     ]);
 
-    render(<ContractsListView />);
+    renderContractsListView();
 
     const titles = await screen.findAllByText(/^(Newer|Older) Contract$/);
     expect(titles[0]).toHaveTextContent("Newer Contract");
@@ -43,7 +63,7 @@ describe("ContractsListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getContracts).mockResolvedValue([]);
 
-    render(<ContractsListView />);
+    renderContractsListView();
     await waitFor(() => expect(dataLayer.getContracts).toHaveBeenCalled());
 
     await user.type(screen.getByLabelText(/search contracts/i), "malibu");
@@ -58,7 +78,7 @@ describe("ContractsListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getContracts).mockResolvedValue([]);
 
-    render(<ContractsListView />);
+    renderContractsListView();
     await waitFor(() => expect(dataLayer.getContracts).toHaveBeenCalled());
 
     await user.selectOptions(screen.getByLabelText(/filter by status/i), "signed");
@@ -72,7 +92,7 @@ describe("ContractsListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getContracts).mockResolvedValue([]);
 
-    render(<ContractsListView />);
+    renderContractsListView();
 
     expect(await screen.findByText(/no contracts yet/i)).toBeInTheDocument();
   });
@@ -81,7 +101,7 @@ describe("ContractsListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getContracts).mockRejectedValue(new Error("boom"));
 
-    render(<ContractsListView />);
+    renderContractsListView();
 
     expect(await screen.findByText(/could not load contracts/i)).toBeInTheDocument();
   });

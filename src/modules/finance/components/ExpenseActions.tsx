@@ -17,6 +17,7 @@ import {
 import type { Expense } from "@/types/expense";
 import { canTransitionExpenseStatus, isExpenseTerminal } from "@/core/workflows/expenseWorkflow";
 import { ConfirmExpenseActionModal } from "@/modules/finance/components/ConfirmExpenseActionModal";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 interface ExpenseActionsProps {
   expense: Expense;
@@ -35,6 +36,9 @@ type ModalKind = "cancel" | "archive" | null;
  * and Duplicate is purely additive — same reasoning as InvoiceActions.
  */
 export function ExpenseActions({ expense, onChanged }: ExpenseActionsProps) {
+  const { can } = useMemberSession();
+  const canUpdate = can("finance.update");
+  const canCreate = can("finance.create");
   const router = useRouter();
   const [modal, setModal] = useState<ModalKind>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -74,7 +78,7 @@ export function ExpenseActions({ expense, onChanged }: ExpenseActionsProps) {
     router.push(`/finance/expenses/${result.data.id}`);
   };
 
-  const duplicateButton = (
+  const duplicateButton = canCreate ? (
     <div>
       <Button variant="secondary" onClick={handleDuplicate} disabled={duplicating}>
         {duplicating ? "Duplicating…" : "Duplicate"}
@@ -85,21 +89,23 @@ export function ExpenseActions({ expense, onChanged }: ExpenseActionsProps) {
         </p>
       ) : null}
     </div>
-  );
+  ) : null;
 
   if (isArchived) {
     return (
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
-          <div>
-            <Button
-              variant="secondary"
-              onClick={() => runAction("restore", () => restoreExpense(expense.id))}
-              disabled={busyAction === "restore"}
-            >
-              {busyAction === "restore" ? "Restoring…" : "Restore"}
-            </Button>
-          </div>
+          {canUpdate ? (
+            <div>
+              <Button
+                variant="secondary"
+                onClick={() => runAction("restore", () => restoreExpense(expense.id))}
+                disabled={busyAction === "restore"}
+              >
+                {busyAction === "restore" ? "Restoring…" : "Restore"}
+              </Button>
+            </div>
+          ) : null}
           {duplicateButton}
         </div>
         {actionError ? (
@@ -114,12 +120,12 @@ export function ExpenseActions({ expense, onChanged }: ExpenseActionsProps) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        {!isExpenseTerminal(expense.status) ? (
+        {!isExpenseTerminal(expense.status) && canUpdate ? (
           <Link href={`/finance/expenses/${expense.id}/edit`}>
             <Button variant="secondary">Edit</Button>
           </Link>
         ) : null}
-        {canApprove ? (
+        {canApprove && canUpdate ? (
           <Button
             variant="secondary"
             onClick={() => runAction("approve", () => approveExpense(expense.id))}
@@ -128,7 +134,7 @@ export function ExpenseActions({ expense, onChanged }: ExpenseActionsProps) {
             {busyAction === "approve" ? "Approving…" : "Approve"}
           </Button>
         ) : null}
-        {canMarkDue ? (
+        {canMarkDue && canUpdate ? (
           <Button
             variant="secondary"
             onClick={() => runAction("due", () => markExpenseDue(expense.id))}
@@ -137,7 +143,7 @@ export function ExpenseActions({ expense, onChanged }: ExpenseActionsProps) {
             {busyAction === "due" ? "Marking…" : "Mark Due"}
           </Button>
         ) : null}
-        {canMarkPaid ? (
+        {canMarkPaid && canUpdate ? (
           <Button
             onClick={() => runAction("paid", () => markExpensePaid(expense.id))}
             disabled={busyAction === "paid"}
@@ -145,7 +151,7 @@ export function ExpenseActions({ expense, onChanged }: ExpenseActionsProps) {
             {busyAction === "paid" ? "Marking…" : "Mark Paid"}
           </Button>
         ) : null}
-        {canMarkReimbursed ? (
+        {canMarkReimbursed && canUpdate ? (
           <Button
             variant="secondary"
             onClick={() => runAction("reimbursed", () => markExpenseReimbursed(expense.id))}
@@ -154,12 +160,12 @@ export function ExpenseActions({ expense, onChanged }: ExpenseActionsProps) {
             {busyAction === "reimbursed" ? "Marking…" : "Mark Reimbursed"}
           </Button>
         ) : null}
-        {canCancel ? (
+        {canCancel && canUpdate ? (
           <Button variant="secondary" onClick={() => setModal("cancel")}>
             Cancel
           </Button>
         ) : null}
-        {canArchive ? (
+        {canArchive && canUpdate ? (
           <Button variant="secondary" onClick={() => setModal("archive")}>
             Archive
           </Button>

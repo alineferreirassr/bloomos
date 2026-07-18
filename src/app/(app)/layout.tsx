@@ -1,26 +1,42 @@
 import type { ReactNode } from "react";
+import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
-import { getDataMode } from "@/lib/env";
-import { getWorkspaceSession } from "@/lib/auth/workspaceSession";
-import { getWorkspaceDisplayName } from "@/lib/workspaceDisplayName";
-
-const DEFAULT_WORKSPACE_NAME = "Amoré Bloom";
+import { AccessBlockedPage } from "@/components/layout/AccessBlockedPage";
+import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
+import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
-  let workspaceDisplayName = getWorkspaceDisplayName(null, DEFAULT_WORKSPACE_NAME);
+  const snapshot = await resolveMemberSessionSnapshot();
 
-  // Mirrors WorkspaceSessionPanel's guard — getWorkspaceSession() talks to a
-  // real Supabase project, so it's only called in supabase mode. Mock mode
-  // (the default, needs zero configuration) keeps the prior static label.
-  if (getDataMode() === "supabase") {
-    const result = await getWorkspaceSession();
-    if (result.status === "ok") {
-      workspaceDisplayName = getWorkspaceDisplayName(
-        result.session.membership.role,
-        result.session.workspace.name,
-      );
-    }
+  if (snapshot.kind === "unauthenticated") {
+    // Defensive only — `src/middleware.ts` already redirects an unauthenticated
+    // visitor away from every route under `(app)` in supabase mode. This
+    // covers the same route being reached anyway (e.g. a session that expired
+    // mid-navigation), without ever falling through to render page content.
+    redirect("/sign-in");
   }
 
-  return <AppShell workspaceDisplayName={workspaceDisplayName}>{children}</AppShell>;
+  if (snapshot.kind === "no-workspace") {
+    return (
+      <AccessBlockedPage
+        title="No Workspace access"
+        message="Your account isn't a member of any Workspace yet. If you were expecting access, ask a Workspace owner to send you an invitation."
+      />
+    );
+  }
+
+  if (snapshot.kind === "inactive") {
+    return (
+      <AccessBlockedPage
+        title="Account inactive"
+        message={`Your access to ${snapshot.workspace.name} has been deactivated. Contact a Workspace owner or admin if you believe this is a mistake.`}
+      />
+    );
+  }
+
+  return (
+    <MemberSessionProvider snapshot={snapshot}>
+      <AppShell workspaceDisplayName={snapshot.workspaceDisplayName}>{children}</AppShell>
+    </MemberSessionProvider>
+  );
 }

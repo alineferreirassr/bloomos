@@ -12,6 +12,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { EventFilters, type EventFiltersValue } from "@/modules/events/components/EventFilters";
 import { EventListTable } from "@/modules/events/components/EventListTable";
 import { EventListCards } from "@/modules/events/components/EventListCards";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 export interface EventListRow {
   event: Event;
@@ -84,6 +85,8 @@ async function loadEventsFor(filters: EventFiltersValue): Promise<LoadState> {
 }
 
 export function EventsListView() {
+  const { can } = useMemberSession();
+  const canCreate = can("events.create");
   const [filters, setFilters] = useState<EventFiltersValue>(defaultFilters);
   const [state, setState] = useState<LoadState>({ status: "loading" });
 
@@ -131,9 +134,11 @@ export function EventsListView() {
             Data resets on page reload — there&apos;s no database behind this yet.
           </p>
         </div>
-        <Link href="/events/new">
-          <Button>New Event</Button>
-        </Link>
+        {canCreate ? (
+          <Link href="/events/new">
+            <Button>New Event</Button>
+          </Link>
+        ) : null}
       </div>
 
       <div className="mt-6">
@@ -158,7 +163,7 @@ export function EventsListView() {
                 : "New events you create will show up here."
             }
             action={
-              !hasActiveFilters ? (
+              !hasActiveFilters && canCreate ? (
                 <Link href="/events/new">
                   <Button>New Event</Button>
                 </Link>

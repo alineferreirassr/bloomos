@@ -3,6 +3,26 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ExpensesListView } from "@/modules/finance/components/ExpensesListView";
 import { makeExpense } from "@/modules/finance/testUtils";
+import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
+import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+
+const fullPermissionSnapshot: MemberSessionSnapshot = {
+  kind: "active",
+  user: { id: "user_1", email: "owner@amorebloom.com" },
+  profile: { full_name: "Amoré Bloom Owner", avatar_url: null },
+  workspace: { id: "ws_amore_bloom", name: "Amoré Bloom" },
+  membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
+  permissions: ["finance.view", "finance.create", "finance.update", "finance.refund"],
+  workspaceDisplayName: "Amoré Bloom",
+};
+
+function renderExpensesListView() {
+  return render(
+    <MemberSessionProvider snapshot={fullPermissionSnapshot}>
+      <ExpensesListView />
+    </MemberSessionProvider>,
+  );
+}
 
 vi.mock("@/lib/data", () => ({
   getExpenses: vi.fn(),
@@ -25,7 +45,7 @@ describe("ExpensesListView", () => {
       makeExpense({ id: "e_new", description: "Newer Expense", transaction_date: "2026-06-01" }),
     ]);
 
-    render(<ExpensesListView />);
+    renderExpensesListView();
 
     const rows = await screen.findAllByText(/^(Newer|Older) Expense$/);
     expect(rows[0]).toHaveTextContent("Newer Expense");
@@ -36,7 +56,7 @@ describe("ExpensesListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getExpenses).mockResolvedValue([]);
 
-    render(<ExpensesListView />);
+    renderExpensesListView();
     await waitFor(() => expect(dataLayer.getExpenses).toHaveBeenCalled());
 
     await user.type(screen.getByLabelText(/search expenses/i), "florist");
@@ -51,7 +71,7 @@ describe("ExpensesListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getExpenses).mockResolvedValue([]);
 
-    render(<ExpensesListView />);
+    renderExpensesListView();
     await waitFor(() => expect(dataLayer.getExpenses).toHaveBeenCalled());
 
     await user.selectOptions(screen.getByLabelText(/filter by category/i), "food_beverage");
@@ -68,7 +88,7 @@ describe("ExpensesListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getExpenses).mockResolvedValue([]);
 
-    render(<ExpensesListView />);
+    renderExpensesListView();
     await waitFor(() => expect(dataLayer.getExpenses).toHaveBeenCalled());
 
     await user.click(screen.getByRole("checkbox", { name: /unpaid only/i }));
@@ -83,7 +103,7 @@ describe("ExpensesListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getExpenses).mockResolvedValue([]);
 
-    render(<ExpensesListView />);
+    renderExpensesListView();
     await waitFor(() => expect(dataLayer.getExpenses).toHaveBeenCalled());
 
     await user.click(screen.getByRole("checkbox", { name: /reimbursable only/i }));
@@ -97,7 +117,7 @@ describe("ExpensesListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getExpenses).mockResolvedValue([]);
 
-    render(<ExpensesListView />);
+    renderExpensesListView();
 
     expect(await screen.findByText(/no expenses yet/i)).toBeInTheDocument();
   });
@@ -106,7 +126,7 @@ describe("ExpensesListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getExpenses).mockRejectedValue(new Error("boom"));
 
-    render(<ExpensesListView />);
+    renderExpensesListView();
 
     expect(await screen.findByText(/could not load expenses/i)).toBeInTheDocument();
   });

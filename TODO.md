@@ -75,10 +75,30 @@ Current, actionable tasks. Keep this in sync with reality — check items off as
 - [x] Build minimal Team Members + Invitations UI (`/team`) and the invitation acceptance page (`/invitations/[token]`) — no full Team Portal navigation/dashboard
 - [x] Write tests for role/permission seeds, the permission matrix, invitation lifecycle (create/resend/revoke/accept/expire, duplicate-pending rejection, email-mismatch rejection), last-owner protection, role-escalation prevention, and owner-only branding (89 new tests, 1555 → 1644)
 - [x] Run sequential lint/typecheck/test/build — all clean
-- [ ] Ask approval, apply the 11 migrations to the live Supabase project, verify schema via read-only SQL
-- [ ] Live browser verification (23 steps) against the real authenticated Workspace + RLS verification via read-only SQL
-- [ ] Update documentation (`docs/database.md`, `docs/workflows.md`, `docs/permissions.md`, `docs/integrations.md`, `ROADMAP.md`, `CHANGELOG.md`, `TODO.md`) — in progress
-- [ ] Final sequential verification, one commit ("Build team membership and invitations foundation"), push to `origin/feature/team-foundation`, report
+- [x] Ask approval, apply the 11 migrations to the live Supabase project, verify schema via read-only SQL
+- [x] Live browser verification (23 steps) against the real authenticated Workspace + RLS verification via read-only SQL
+- [x] Update documentation (`docs/database.md`, `docs/workflows.md`, `docs/permissions.md`, `docs/integrations.md`, `ROADMAP.md`, `CHANGELOG.md`, `TODO.md`)
+- [x] Final sequential verification, one commit ("Build team membership and invitations foundation"), push to `origin/feature/team-foundation`, report
+
+## Phase 2 — Team Portal MVP (in progress, `feature/team-foundation`)
+
+The authenticated internal app shell made permission-aware, consuming the Team foundation above rather than a second identity/authorization system. Excludes Client Accounts, Client Portal, Team Knowledge Base, Client Knowledge Base, Notification Center, Automation Center — see "Post-MVP modules" below.
+
+- [x] Pre-implementation audit of app shell, sidebar, route protection, auth loading states, workspace bootstrap, member loading, permission helpers, owner/non-owner branding, dashboard, module/mobile navigation, logout, and unauthorized/inactive/invitation-pending handling
+- [x] Extend `workspaceSession`/`workspaceSessionClient` to distinguish inactive membership from no membership at all, and to resolve the member's granular permissions
+- [x] Build the central route-access map (`core/permissions/routeAccess.ts`) and the pure member-access decision function (`core/guards/memberAccess.ts`)
+- [x] Build `MemberSessionProvider`/`useMemberSession()` — the one canonical member-session context every `(app)` page consumes
+- [x] Make Sidebar/MobileNav permission-aware (`getVisibleNavigationItems`), preserving owner ("Amoré Bloom") vs. non-owner ("Amoré Bloom Team") branding
+- [x] Add page-level route guards (`RouteGuard` + one `layout.tsx` per business module) enforcing the route-access map
+- [x] Build inactive-member / no-workspace (`AccessBlockedPage`) and forbidden-route (`ForbiddenState`) states — no auto-created Workspace, no leaked business data, working sign-out
+- [x] Build permission-gated Team Portal dashboard cards, reusing existing `getDashboardMetrics()` (no duplicated Dashboard logic) plus one new Pending Team Invitations card
+- [x] Build the `/account` profile page (name/email/role/status/Workspace, link to existing `/update-password`, sign-out)
+- [x] Gate create/edit/archive/lifecycle UI actions across Leads/Clients/Events/Contracts/Finance/Documents by granular permission — UI-level only, RLS remains the real enforcement boundary
+- [x] Write tests for the route-access map, the access decision function, the session snapshot/provider, both blocked-access components, the route guard, Sidebar/MobileNav visibility, the Account page, dashboard permission-aware rendering, and permission-gated action rendering across every business module
+- [ ] Run sequential lint/typecheck/test/build
+- [ ] Live browser verification (12 steps) using the real, already-authenticated Owner Workspace — no second workspace, no signing out of the real Owner session
+- [ ] Update documentation (`docs/workflows.md`, `docs/permissions.md`, `docs/integrations.md`, `ROADMAP.md`, `CHANGELOG.md`, `TODO.md`) — in progress
+- [ ] Final sequential verification, one commit ("Build Team Portal MVP"), push to `origin/feature/team-foundation`, report
 
 ## Phase 2 — Post-MVP modules (not started, reserved in the architecture only)
 

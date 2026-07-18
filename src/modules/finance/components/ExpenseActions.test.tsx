@@ -3,6 +3,26 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ExpenseActions } from "@/modules/finance/components/ExpenseActions";
 import { makeExpense } from "@/modules/finance/testUtils";
+import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
+import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+
+const fullPermissionSnapshot: Extract<MemberSessionSnapshot, { kind: "active" }> = {
+  kind: "active",
+  user: { id: "user_1", email: "owner@amorebloom.com" },
+  profile: { full_name: "Amoré Bloom Owner", avatar_url: null },
+  workspace: { id: "ws_amore_bloom", name: "Amoré Bloom" },
+  membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
+  permissions: ["finance.view", "finance.create", "finance.update", "finance.refund"],
+  workspaceDisplayName: "Amoré Bloom",
+};
+
+function renderExpenseActions(props: Parameters<typeof ExpenseActions>[0], permissions = fullPermissionSnapshot.permissions) {
+  return render(
+    <MemberSessionProvider snapshot={{ ...fullPermissionSnapshot, permissions }}>
+      <ExpenseActions {...props} />
+    </MemberSessionProvider>,
+  );
+}
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -27,7 +47,7 @@ describe("ExpenseActions", () => {
   });
 
   it("shows Edit, Approve, Cancel, Archive, and Duplicate for a planned expense", () => {
-    render(<ExpenseActions expense={makeExpense({ status: "planned" })} onChanged={vi.fn()} />);
+    renderExpenseActions({ expense: makeExpense({ status: "planned" }), onChanged: vi.fn() });
     expect(screen.getByRole("link", { name: /edit/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^approve$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^cancel$/i })).toBeInTheDocument();
@@ -36,27 +56,23 @@ describe("ExpenseActions", () => {
   });
 
   it("shows Mark Due and Mark Paid for an approved expense", () => {
-    render(<ExpenseActions expense={makeExpense({ status: "approved" })} onChanged={vi.fn()} />);
+    renderExpenseActions({ expense: makeExpense({ status: "approved" }), onChanged: vi.fn() });
     expect(screen.getByRole("button", { name: /mark due/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /mark paid/i })).toBeInTheDocument();
   });
 
   it("shows Mark Reimbursed only for a paid, reimbursable expense", () => {
-    render(
-      <ExpenseActions expense={makeExpense({ status: "paid", reimbursable: true })} onChanged={vi.fn()} />,
-    );
+    renderExpenseActions({ expense: makeExpense({ status: "paid", reimbursable: true }), onChanged: vi.fn() });
     expect(screen.getByRole("button", { name: /mark reimbursed/i })).toBeInTheDocument();
   });
 
   it("hides Mark Reimbursed for a paid, non-reimbursable expense", () => {
-    render(
-      <ExpenseActions expense={makeExpense({ status: "paid", reimbursable: false })} onChanged={vi.fn()} />,
-    );
+    renderExpenseActions({ expense: makeExpense({ status: "paid", reimbursable: false }), onChanged: vi.fn() });
     expect(screen.queryByRole("button", { name: /mark reimbursed/i })).not.toBeInTheDocument();
   });
 
   it("shows only Restore and Duplicate for an archived expense", () => {
-    render(<ExpenseActions expense={makeExpense({ status: "archived" })} onChanged={vi.fn()} />);
+    renderExpenseActions({ expense: makeExpense({ status: "archived" }), onChanged: vi.fn() });
     expect(screen.getByRole("button", { name: /restore/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^duplicate$/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /edit/i })).not.toBeInTheDocument();
@@ -69,7 +85,7 @@ describe("ExpenseActions", () => {
       data: makeExpense({ status: "approved" }),
     });
     const onChanged = vi.fn();
-    render(<ExpenseActions expense={makeExpense({ id: "expense_1", status: "planned" })} onChanged={onChanged} />);
+    renderExpenseActions({ expense: makeExpense({ id: "expense_1", status: "planned" }), onChanged: onChanged });
 
     await user.click(screen.getByRole("button", { name: /^approve$/i }));
 
@@ -85,7 +101,7 @@ describe("ExpenseActions", () => {
       data: makeExpense({ status: "paid" }),
     });
     const onChanged = vi.fn();
-    render(<ExpenseActions expense={makeExpense({ id: "expense_1", status: "due" })} onChanged={onChanged} />);
+    renderExpenseActions({ expense: makeExpense({ id: "expense_1", status: "due" }), onChanged: onChanged });
 
     await user.click(screen.getByRole("button", { name: /mark paid/i }));
 
@@ -100,12 +116,10 @@ describe("ExpenseActions", () => {
       data: makeExpense({ status: "reimbursed" }),
     });
     const onChanged = vi.fn();
-    render(
-      <ExpenseActions
-        expense={makeExpense({ id: "expense_1", status: "paid", reimbursable: true })}
-        onChanged={onChanged}
-      />,
-    );
+    renderExpenseActions({
+      expense: makeExpense({ id: "expense_1", status: "paid", reimbursable: true }),
+      onChanged,
+    });
 
     await user.click(screen.getByRole("button", { name: /mark reimbursed/i }));
 
@@ -120,7 +134,7 @@ describe("ExpenseActions", () => {
       data: makeExpense({ status: "cancelled" }),
     });
     const onChanged = vi.fn();
-    render(<ExpenseActions expense={makeExpense({ id: "expense_1", status: "planned" })} onChanged={onChanged} />);
+    renderExpenseActions({ expense: makeExpense({ id: "expense_1", status: "planned" }), onChanged: onChanged });
 
     await user.click(screen.getByRole("button", { name: /^cancel$/i }));
     const dialog = screen.getByRole("dialog", { name: /cancel expense/i });
@@ -137,7 +151,7 @@ describe("ExpenseActions", () => {
       data: makeExpense({ status: "archived" }),
     });
     const onChanged = vi.fn();
-    render(<ExpenseActions expense={makeExpense({ id: "expense_1", status: "planned" })} onChanged={onChanged} />);
+    renderExpenseActions({ expense: makeExpense({ id: "expense_1", status: "planned" }), onChanged: onChanged });
 
     await user.click(screen.getByRole("button", { name: /^archive$/i }));
     const dialog = screen.getByRole("dialog", { name: /archive expense/i });
@@ -153,7 +167,7 @@ describe("ExpenseActions", () => {
       success: true,
       data: makeExpense({ id: "expense_2" }),
     });
-    render(<ExpenseActions expense={makeExpense({ id: "expense_1", status: "planned" })} onChanged={vi.fn()} />);
+    renderExpenseActions({ expense: makeExpense({ id: "expense_1", status: "planned" }), onChanged: vi.fn() });
 
     await user.click(screen.getByRole("button", { name: /^duplicate$/i }));
 
@@ -167,7 +181,7 @@ describe("ExpenseActions", () => {
       error: "Cannot approve an expense that is already cancelled.",
     });
     const onChanged = vi.fn();
-    render(<ExpenseActions expense={makeExpense({ id: "expense_1", status: "planned" })} onChanged={onChanged} />);
+    renderExpenseActions({ expense: makeExpense({ id: "expense_1", status: "planned" }), onChanged: onChanged });
 
     await user.click(screen.getByRole("button", { name: /^approve$/i }));
 

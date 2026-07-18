@@ -18,6 +18,7 @@ import {
 } from "@/modules/finance/components/PaymentFilters";
 import { PaymentListTable } from "@/modules/finance/components/PaymentListTable";
 import { PaymentListCards } from "@/modules/finance/components/PaymentListCards";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 export interface PaymentListRow {
   payment: Payment;
@@ -64,6 +65,8 @@ async function loadPaymentsFor(filters: PaymentFiltersValue): Promise<LoadState>
 }
 
 export function PaymentsListView() {
+  const { can } = useMemberSession();
+  const canCreate = can("finance.create");
   const [filters, setFilters] = useState<PaymentFiltersValue>(DEFAULT_PAYMENT_FILTERS);
   const [state, setState] = useState<LoadState>({ status: "loading" });
 
@@ -107,9 +110,11 @@ export function PaymentsListView() {
             Data resets on page reload — there&apos;s no database behind this yet.
           </p>
         </div>
-        <Link href="/finance/payments/new">
-          <Button>Record Payment</Button>
-        </Link>
+        {canCreate ? (
+          <Link href="/finance/payments/new">
+            <Button>Record Payment</Button>
+          </Link>
+        ) : null}
       </div>
 
       <div className="mt-6">
@@ -134,7 +139,7 @@ export function PaymentsListView() {
                 : "New payments you record will show up here."
             }
             action={
-              !hasActiveFilters ? (
+              !hasActiveFilters && canCreate ? (
                 <Link href="/finance/payments/new">
                   <Button>Record Payment</Button>
                 </Link>

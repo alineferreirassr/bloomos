@@ -7,6 +7,7 @@ import type { DocumentFolder } from "@/types/documentFolder";
 import { FolderFormModal } from "@/modules/documents/components/FolderFormModal";
 import { MoveFolderModal } from "@/modules/documents/components/MoveFolderModal";
 import { ApplyFolderTemplateModal } from "@/modules/documents/components/ApplyFolderTemplateModal";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 interface FolderActionsProps {
   folder: DocumentFolder;
@@ -17,6 +18,10 @@ interface FolderActionsProps {
 type ModalKind = "rename" | "addSubfolder" | "move" | "applyTemplate" | null;
 
 export function FolderActions({ folder, childCount, onChanged }: FolderActionsProps) {
+  const { can } = useMemberSession();
+  const canCreate = can("documents.create");
+  const canUpdate = can("documents.update");
+  const canArchive = can("documents.archive");
   const [modal, setModal] = useState<ModalKind>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -36,6 +41,7 @@ export function FolderActions({ folder, childCount, onChanged }: FolderActionsPr
   };
 
   if (isArchived) {
+    if (!canArchive) return null;
     return (
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
@@ -59,25 +65,35 @@ export function FolderActions({ folder, childCount, onChanged }: FolderActionsPr
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="secondary" onClick={() => setModal("addSubfolder")}>
-          Add Subfolder
-        </Button>
-        <Button variant="secondary" onClick={() => setModal("rename")}>
-          Rename
-        </Button>
-        <Button variant="secondary" onClick={() => setModal("move")}>
-          Move
-        </Button>
-        <Button variant="secondary" onClick={() => setModal("applyTemplate")}>
-          Apply Default Template
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={() => runAction("archive", () => archiveDocumentFolder(folder.id))}
-          disabled={busyAction === "archive"}
-        >
-          {busyAction === "archive" ? "Archiving…" : "Archive"}
-        </Button>
+        {canCreate ? (
+          <Button variant="secondary" onClick={() => setModal("addSubfolder")}>
+            Add Subfolder
+          </Button>
+        ) : null}
+        {canUpdate ? (
+          <Button variant="secondary" onClick={() => setModal("rename")}>
+            Rename
+          </Button>
+        ) : null}
+        {canUpdate ? (
+          <Button variant="secondary" onClick={() => setModal("move")}>
+            Move
+          </Button>
+        ) : null}
+        {canCreate ? (
+          <Button variant="secondary" onClick={() => setModal("applyTemplate")}>
+            Apply Default Template
+          </Button>
+        ) : null}
+        {canArchive ? (
+          <Button
+            variant="secondary"
+            onClick={() => runAction("archive", () => archiveDocumentFolder(folder.id))}
+            disabled={busyAction === "archive"}
+          >
+            {busyAction === "archive" ? "Archiving…" : "Archive"}
+          </Button>
+        ) : null}
       </div>
 
       {actionError ? (

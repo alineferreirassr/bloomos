@@ -3,6 +3,26 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DocumentActions } from "@/modules/documents/components/DocumentActions";
 import { makeDocument } from "@/modules/documents/testUtils";
+import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
+import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+
+const fullPermissionSnapshot: Extract<MemberSessionSnapshot, { kind: "active" }> = {
+  kind: "active",
+  user: { id: "user_1", email: "owner@amorebloom.com" },
+  profile: { full_name: "Amoré Bloom Owner", avatar_url: null },
+  workspace: { id: "ws_amore_bloom", name: "Amoré Bloom" },
+  membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
+  permissions: ["documents.view", "documents.create", "documents.update", "documents.archive"],
+  workspaceDisplayName: "Amoré Bloom",
+};
+
+function renderDocumentActions(props: Parameters<typeof DocumentActions>[0], permissions = fullPermissionSnapshot.permissions) {
+  return render(
+    <MemberSessionProvider snapshot={{ ...fullPermissionSnapshot, permissions }}>
+      <DocumentActions {...props} />
+    </MemberSessionProvider>,
+  );
+}
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -29,27 +49,27 @@ describe("DocumentActions", () => {
   });
 
   it("shows Activate for a draft document, but not Expire", () => {
-    render(<DocumentActions document={makeDocument({ status: "draft" })} onChanged={vi.fn()} />);
+    renderDocumentActions({ document: makeDocument({ status: "draft" }), onChanged: vi.fn() });
     expect(screen.getByRole("button", { name: /^activate$/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^expire$/i })).not.toBeInTheDocument();
   });
 
   it("shows Expire and Archive for an active document, but not Activate", () => {
-    render(<DocumentActions document={makeDocument({ status: "active" })} onChanged={vi.fn()} />);
+    renderDocumentActions({ document: makeDocument({ status: "active" }), onChanged: vi.fn() });
     expect(screen.getByRole("button", { name: /^expire$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^archive$/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^activate$/i })).not.toBeInTheDocument();
   });
 
   it("shows only Restore for an archived document", () => {
-    render(<DocumentActions document={makeDocument({ status: "archived" })} onChanged={vi.fn()} />);
+    renderDocumentActions({ document: makeDocument({ status: "archived" }), onChanged: vi.fn() });
     expect(screen.getByRole("button", { name: /restore/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /edit metadata/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /soft delete/i })).not.toBeInTheDocument();
   });
 
   it("shows only Restore for a soft-deleted document", () => {
-    render(<DocumentActions document={makeDocument({ status: "deleted" })} onChanged={vi.fn()} />);
+    renderDocumentActions({ document: makeDocument({ status: "deleted" }), onChanged: vi.fn() });
     expect(screen.getByRole("button", { name: /restore/i })).toBeInTheDocument();
   });
 
@@ -57,7 +77,7 @@ describe("DocumentActions", () => {
     const user = userEvent.setup();
     vi.mocked(dataLayer.activateDocument).mockResolvedValue({ success: true, data: makeDocument({ status: "active" }) });
     const onChanged = vi.fn();
-    render(<DocumentActions document={makeDocument({ id: "document_1", status: "draft" })} onChanged={onChanged} />);
+    renderDocumentActions({ document: makeDocument({ id: "document_1", status: "draft" }), onChanged: onChanged });
 
     await user.click(screen.getByRole("button", { name: /^activate$/i }));
 
@@ -70,7 +90,7 @@ describe("DocumentActions", () => {
     const user = userEvent.setup();
     vi.mocked(dataLayer.archiveDocument).mockResolvedValue({ success: true, data: makeDocument({ status: "archived" }) });
     const onChanged = vi.fn();
-    render(<DocumentActions document={makeDocument({ id: "document_1", status: "active" })} onChanged={onChanged} />);
+    renderDocumentActions({ document: makeDocument({ id: "document_1", status: "active" }), onChanged: onChanged });
 
     await user.click(screen.getByRole("button", { name: /^archive$/i }));
     const dialog = screen.getByRole("dialog", { name: /archive document/i });
@@ -84,7 +104,7 @@ describe("DocumentActions", () => {
     const user = userEvent.setup();
     vi.mocked(dataLayer.softDeleteDocument).mockResolvedValue({ success: true, data: makeDocument({ status: "deleted" }) });
     const onChanged = vi.fn();
-    render(<DocumentActions document={makeDocument({ id: "document_1", status: "active" })} onChanged={onChanged} />);
+    renderDocumentActions({ document: makeDocument({ id: "document_1", status: "active" }), onChanged: onChanged });
 
     await user.click(screen.getByRole("button", { name: /soft delete/i }));
     const dialog = screen.getByRole("dialog", { name: /soft delete document/i });
@@ -101,7 +121,7 @@ describe("DocumentActions", () => {
       data: makeDocument({ visibility: "client" }),
     });
     const onChanged = vi.fn();
-    render(<DocumentActions document={makeDocument({ id: "document_1", visibility: "internal" })} onChanged={onChanged} />);
+    renderDocumentActions({ document: makeDocument({ id: "document_1", visibility: "internal" }), onChanged: onChanged });
 
     await user.click(screen.getByRole("button", { name: /change visibility/i }));
     const dialog = screen.getByRole("dialog", { name: /change visibility/i });
@@ -116,7 +136,7 @@ describe("DocumentActions", () => {
     const user = userEvent.setup();
     vi.mocked(dataLayer.archiveDocument).mockResolvedValue({ success: false, error: "This document is already archived." });
     const onChanged = vi.fn();
-    render(<DocumentActions document={makeDocument({ id: "document_1", status: "active" })} onChanged={onChanged} />);
+    renderDocumentActions({ document: makeDocument({ id: "document_1", status: "active" }), onChanged: onChanged });
 
     await user.click(screen.getByRole("button", { name: /^archive$/i }));
     const dialog = screen.getByRole("dialog", { name: /archive document/i });
@@ -132,7 +152,7 @@ describe("DocumentActions", () => {
       success: true,
       data: makeDocument({ id: "document_2", version: 2 }),
     });
-    render(<DocumentActions document={makeDocument({ id: "document_1", status: "active", version: 1 })} onChanged={vi.fn()} />);
+    renderDocumentActions({ document: makeDocument({ id: "document_1", status: "active", version: 1 }), onChanged: vi.fn() });
 
     await user.click(screen.getByRole("button", { name: /add new version/i }));
     const dialog = screen.getByRole("dialog", { name: /add new version/i });
@@ -152,7 +172,7 @@ describe("DocumentActions", () => {
       success: true,
       data: makeDocument({ id: "document_2", version: 2 }),
     });
-    render(<DocumentActions document={makeDocument({ id: "document_1", status: "active", version: 1 })} onChanged={vi.fn()} />);
+    renderDocumentActions({ document: makeDocument({ id: "document_1", status: "active", version: 1 }), onChanged: vi.fn() });
 
     await user.click(screen.getByRole("button", { name: /add new version/i }));
     const dialog = screen.getByRole("dialog", { name: /add new version/i });

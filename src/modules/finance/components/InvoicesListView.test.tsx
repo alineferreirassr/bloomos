@@ -4,6 +4,26 @@ import userEvent from "@testing-library/user-event";
 import { InvoicesListView } from "@/modules/finance/components/InvoicesListView";
 import { makeInvoice } from "@/modules/finance/testUtils";
 import { makeClient } from "@/modules/clients/testUtils";
+import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
+import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+
+const fullPermissionSnapshot: MemberSessionSnapshot = {
+  kind: "active",
+  user: { id: "user_1", email: "owner@amorebloom.com" },
+  profile: { full_name: "Amoré Bloom Owner", avatar_url: null },
+  workspace: { id: "ws_amore_bloom", name: "Amoré Bloom" },
+  membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
+  permissions: ["finance.view", "finance.create", "finance.update", "finance.refund"],
+  workspaceDisplayName: "Amoré Bloom",
+};
+
+function renderInvoicesListView() {
+  return render(
+    <MemberSessionProvider snapshot={fullPermissionSnapshot}>
+      <InvoicesListView />
+    </MemberSessionProvider>,
+  );
+}
 
 vi.mock("@/lib/data", () => ({
   getInvoices: vi.fn(),
@@ -32,7 +52,7 @@ describe("InvoicesListView", () => {
       makeInvoice({ id: "i_new", title: "Newer Invoice", client_id: "client_1", updated_at: "2026-06-01T00:00:00.000Z" }),
     ]);
 
-    render(<InvoicesListView />);
+    renderInvoicesListView();
 
     const titles = await screen.findAllByText(/^(Newer|Older) Invoice$/);
     expect(titles[0]).toHaveTextContent("Newer Invoice");
@@ -43,7 +63,7 @@ describe("InvoicesListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getInvoices).mockResolvedValue([]);
 
-    render(<InvoicesListView />);
+    renderInvoicesListView();
     await waitFor(() => expect(dataLayer.getInvoices).toHaveBeenCalled());
 
     await user.type(screen.getByLabelText(/search invoices/i), "malibu");
@@ -58,7 +78,7 @@ describe("InvoicesListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getInvoices).mockResolvedValue([]);
 
-    render(<InvoicesListView />);
+    renderInvoicesListView();
     await waitFor(() => expect(dataLayer.getInvoices).toHaveBeenCalled());
 
     await user.selectOptions(screen.getByLabelText(/filter by status/i), "overdue");
@@ -73,7 +93,7 @@ describe("InvoicesListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getInvoices).mockResolvedValue([]);
 
-    render(<InvoicesListView />);
+    renderInvoicesListView();
     await waitFor(() => expect(dataLayer.getInvoices).toHaveBeenCalled());
 
     await user.click(screen.getByRole("checkbox", { name: /overdue only/i }));
@@ -91,7 +111,7 @@ describe("InvoicesListView", () => {
       makeInvoice({ id: "i_big", title: "Big Balance", client_id: "client_1", balance_minor: 90000 }),
     ]);
 
-    render(<InvoicesListView />);
+    renderInvoicesListView();
     await screen.findAllByText("Small Balance");
 
     await user.selectOptions(screen.getByLabelText(/sort by/i), "balance:desc");
@@ -107,7 +127,7 @@ describe("InvoicesListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getInvoices).mockResolvedValue([]);
 
-    render(<InvoicesListView />);
+    renderInvoicesListView();
 
     expect(await screen.findByText(/no invoices yet/i)).toBeInTheDocument();
   });
@@ -116,7 +136,7 @@ describe("InvoicesListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getInvoices).mockRejectedValue(new Error("boom"));
 
-    render(<InvoicesListView />);
+    renderInvoicesListView();
 
     expect(await screen.findByText(/could not load invoices/i)).toBeInTheDocument();
   });

@@ -16,6 +16,7 @@ import {
 } from "@/modules/finance/components/ExpenseFilters";
 import { ExpenseListTable } from "@/modules/finance/components/ExpenseListTable";
 import { ExpenseListCards } from "@/modules/finance/components/ExpenseListCards";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 export interface ExpenseListRow {
   expense: Expense;
@@ -63,6 +64,8 @@ async function loadExpensesFor(filters: ExpenseFiltersValue): Promise<LoadState>
 }
 
 export function ExpensesListView() {
+  const { can } = useMemberSession();
+  const canCreate = can("finance.create");
   const [filters, setFilters] = useState<ExpenseFiltersValue>(DEFAULT_EXPENSE_FILTERS);
   const [state, setState] = useState<LoadState>({ status: "loading" });
 
@@ -105,9 +108,11 @@ export function ExpensesListView() {
             Data resets on page reload — there&apos;s no database behind this yet.
           </p>
         </div>
-        <Link href="/finance/expenses/new">
-          <Button>New Expense</Button>
-        </Link>
+        {canCreate ? (
+          <Link href="/finance/expenses/new">
+            <Button>New Expense</Button>
+          </Link>
+        ) : null}
       </div>
 
       <div className="mt-6">
@@ -132,7 +137,7 @@ export function ExpensesListView() {
                 : "New expenses you create will show up here."
             }
             action={
-              !hasActiveFilters ? (
+              !hasActiveFilters && canCreate ? (
                 <Link href="/finance/expenses/new">
                   <Button>New Expense</Button>
                 </Link>

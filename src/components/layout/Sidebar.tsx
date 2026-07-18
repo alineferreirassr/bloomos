@@ -3,8 +3,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { navigationItems } from "@/config/navigation";
+import { getVisibleNavigationItems } from "@/config/navigation";
 import { WorkspaceAvatar } from "@/components/layout/WorkspaceAvatar";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 interface SidebarProps {
   workspaceDisplayName: string;
@@ -12,6 +13,8 @@ interface SidebarProps {
 
 export function Sidebar({ workspaceDisplayName }: SidebarProps) {
   const pathname = usePathname();
+  const { can } = useMemberSession();
+  const navigationItems = getVisibleNavigationItems(can);
 
   return (
     <aside className="hidden md:flex md:w-56 md:flex-col md:bg-sidebar md:border-r md:border-border md:py-6">
@@ -53,13 +56,16 @@ export function Sidebar({ workspaceDisplayName }: SidebarProps) {
         })}
       </nav>
 
-      <div className="mt-3 flex items-center gap-2.5 border-t border-border px-[23px] pt-4">
+      <Link
+        href="/account"
+        className="mt-3 flex items-center gap-2.5 border-t border-border px-[23px] pt-4 transition-colors duration-150 hover:bg-accent/7"
+      >
         <WorkspaceAvatar />
         <div className="leading-tight">
           <div className="text-[13px] text-text">{workspaceDisplayName}</div>
           <div className="text-[11.5px] text-text/55">Amoré Bloom</div>
         </div>
-      </div>
+      </Link>
     </aside>
   );
 }

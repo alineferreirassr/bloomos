@@ -25,11 +25,13 @@ function mockSupabaseClient(input: {
   profile?: QueryResult;
   members?: QueryResult;
   workspace?: QueryResult;
+  rolePermissions?: QueryResult;
 }) {
   const tables: Record<string, ReturnType<typeof makeQueryBuilder>> = {
     profiles: makeQueryBuilder(input.profile ?? { data: null, error: null }),
     workspace_members: makeQueryBuilder(input.members ?? { data: [], error: null }),
     workspaces: makeQueryBuilder(input.workspace ?? { data: null, error: null }),
+    role_permissions: makeQueryBuilder(input.rolePermissions ?? { data: [], error: null }),
   };
 
   return {
@@ -60,6 +62,61 @@ describe("getWorkspaceSession", () => {
     );
 
     await expect(getWorkspaceSession()).resolves.toEqual({ status: "no-workspace" });
+  });
+
+  it("prefers an active membership over an inactive one when the caller has both", async () => {
+    const inactiveRow = {
+      id: "member_old",
+      workspace_id: "workspace_old",
+      user_id: "user_1",
+      role: "staff",
+      status: "suspended",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    };
+    const activeRow = {
+      id: "member_1",
+      workspace_id: "workspace_1",
+      user_id: "user_1",
+      role: "owner",
+      status: "active",
+      created_at: "2026-07-16T00:00:00Z",
+      updated_at: "2026-07-16T00:00:00Z",
+    };
+    const workspaceRow = {
+      id: "workspace_1",
+      name: "Amoré Bloom",
+      slug: "amore-bloom",
+      created_by: "user_1",
+      created_at: "2026-07-16T00:00:00Z",
+      updated_at: "2026-07-16T00:00:00Z",
+      archived_at: null,
+    };
+
+    vi.mocked(createClient).mockResolvedValue(
+      mockSupabaseClient({
+        user: { id: "user_1", email: "owner@example.com" },
+        profile: {
+          data: {
+            id: "user_1",
+            full_name: null,
+            email: "owner@example.com",
+            avatar_url: null,
+            created_at: "2026-07-16T00:00:00Z",
+            updated_at: "2026-07-16T00:00:00Z",
+          },
+          error: null,
+        },
+        members: { data: [inactiveRow, activeRow], error: null },
+        workspace: { data: workspaceRow, error: null },
+      }) as never,
+    );
+
+    const result = await getWorkspaceSession();
+
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") throw new Error("expected ok result");
+    expect(result.session.membership.id).toBe("member_1");
   });
 
   it("returns no-workspace when there is no active membership", async () => {
@@ -119,6 +176,7 @@ describe("getWorkspaceSession", () => {
         profile: { data: profileRow, error: null },
         members: { data: [memberRow], error: null },
         workspace: { data: workspaceRow, error: null },
+        rolePermissions: { data: [{ permission_id: "workspace.view" }, { permission_id: "team.view" }], error: null },
       }) as never,
     );
 
@@ -129,13 +187,29 @@ describe("getWorkspaceSession", () => {
     expect(result.session.user).toBe(user);
     expect(result.session.workspace).toEqual(workspaceRow);
     expect(result.session.membership).toEqual(memberRow);
+    expect(result.session.permissions).toEqual(["workspace.view", "team.view"]);
   });
 
-  it("returns no-workspace when the caller's only membership is suspended", async () => {
-    // A suspended membership never comes back from the active-status query
-    // (nor would RLS return it), so it resolves identically to "no active
-    // membership" — callers can't distinguish "suspended" from "never
-    // assigned" from this result, which is the intended safe behavior.
+  it("resolves to ok with the real 'suspended' status (and no permissions) when the caller's only membership is inactive — distinct from having no membership at all", async () => {
+    const suspendedMemberRow = {
+      id: "member_4",
+      workspace_id: "workspace_1",
+      user_id: "user_1",
+      role: "staff",
+      status: "suspended",
+      created_at: "2026-04-01T00:00:00Z",
+      updated_at: "2026-06-01T00:00:00Z",
+    };
+    const workspaceRow = {
+      id: "workspace_1",
+      name: "Amoré Bloom",
+      slug: "amore-bloom",
+      created_by: "user_1",
+      created_at: "2026-07-16T00:00:00Z",
+      updated_at: "2026-07-16T00:00:00Z",
+      archived_at: null,
+    };
+
     vi.mocked(createClient).mockResolvedValue(
       mockSupabaseClient({
         user: { id: "user_1", email: "owner@example.com" },
@@ -150,11 +224,17 @@ describe("getWorkspaceSession", () => {
           },
           error: null,
         },
-        members: { data: [], error: null },
+        members: { data: [suspendedMemberRow], error: null },
+        workspace: { data: workspaceRow, error: null },
       }) as never,
     );
 
-    await expect(getWorkspaceSession()).resolves.toEqual({ status: "no-workspace" });
+    const result = await getWorkspaceSession();
+
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") throw new Error("expected ok result");
+    expect(result.session.membership.status).toBe("suspended");
+    expect(result.session.permissions).toEqual([]);
   });
 
   it("returns no-workspace when the membership's Workspace does not resolve", async () => {

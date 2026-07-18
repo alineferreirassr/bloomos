@@ -3,6 +3,26 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FolderActions } from "@/modules/documents/components/FolderActions";
 import { makeDocumentFolder } from "@/modules/documents/testUtils";
+import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
+import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+
+const fullPermissionSnapshot: MemberSessionSnapshot = {
+  kind: "active",
+  user: { id: "user_1", email: "owner@amorebloom.com" },
+  profile: { full_name: "Amoré Bloom Owner", avatar_url: null },
+  workspace: { id: "ws_amore_bloom", name: "Amoré Bloom" },
+  membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
+  permissions: ["documents.view", "documents.create", "documents.update", "documents.archive"],
+  workspaceDisplayName: "Amoré Bloom",
+};
+
+function renderFolderActions(props: Parameters<typeof FolderActions>[0]) {
+  return render(
+    <MemberSessionProvider snapshot={fullPermissionSnapshot}>
+      <FolderActions {...props} />
+    </MemberSessionProvider>,
+  );
+}
 
 vi.mock("@/lib/data", () => ({
   archiveDocumentFolder: vi.fn(),
@@ -22,7 +42,7 @@ describe("FolderActions", () => {
   });
 
   it("shows Add Subfolder, Rename, Move, Apply Default Template, and Archive for an active folder", () => {
-    render(<FolderActions folder={makeDocumentFolder()} childCount={0} onChanged={vi.fn()} />);
+    renderFolderActions({ folder: makeDocumentFolder(), childCount: 0, onChanged: vi.fn() });
     expect(screen.getByRole("button", { name: /add subfolder/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^rename$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^move$/i })).toBeInTheDocument();
@@ -31,13 +51,11 @@ describe("FolderActions", () => {
   });
 
   it("shows only Restore for an archived folder", () => {
-    render(
-      <FolderActions
-        folder={makeDocumentFolder({ archived_at: "2026-01-01T00:00:00.000Z" })}
-        childCount={0}
-        onChanged={vi.fn()}
-      />,
-    );
+    renderFolderActions({
+      folder: makeDocumentFolder({ archived_at: "2026-01-01T00:00:00.000Z" }),
+      childCount: 0,
+      onChanged: vi.fn(),
+    });
     expect(screen.getByRole("button", { name: /restore/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^rename$/i })).not.toBeInTheDocument();
   });
@@ -49,7 +67,7 @@ describe("FolderActions", () => {
       data: makeDocumentFolder({ archived_at: "2026-01-01T00:00:00.000Z" }),
     });
     const onChanged = vi.fn();
-    render(<FolderActions folder={makeDocumentFolder({ id: "docfolder_1" })} childCount={0} onChanged={onChanged} />);
+    renderFolderActions({ folder: makeDocumentFolder({ id: "docfolder_1" }), childCount: 0, onChanged });
 
     await user.click(screen.getByRole("button", { name: /^archive$/i }));
 
@@ -61,13 +79,11 @@ describe("FolderActions", () => {
     const user = userEvent.setup();
     vi.mocked(dataLayer.restoreDocumentFolder).mockResolvedValue({ success: true, data: makeDocumentFolder() });
     const onChanged = vi.fn();
-    render(
-      <FolderActions
-        folder={makeDocumentFolder({ id: "docfolder_1", archived_at: "2026-01-01T00:00:00.000Z" })}
-        childCount={0}
-        onChanged={onChanged}
-      />,
-    );
+    renderFolderActions({
+      folder: makeDocumentFolder({ id: "docfolder_1", archived_at: "2026-01-01T00:00:00.000Z" }),
+      childCount: 0,
+      onChanged,
+    });
 
     await user.click(screen.getByRole("button", { name: /restore/i }));
 
@@ -79,7 +95,7 @@ describe("FolderActions", () => {
     const user = userEvent.setup();
     vi.mocked(dataLayer.updateDocumentFolder).mockResolvedValue({ success: true, data: makeDocumentFolder({ name: "Renamed" }) });
     const onChanged = vi.fn();
-    render(<FolderActions folder={makeDocumentFolder({ id: "docfolder_1", name: "Old Name" })} childCount={0} onChanged={onChanged} />);
+    renderFolderActions({ folder: makeDocumentFolder({ id: "docfolder_1", name: "Old Name" }), childCount: 0, onChanged });
 
     await user.click(screen.getByRole("button", { name: /^rename$/i }));
     const dialog = await screen.findByRole("dialog", { name: /rename folder/i });

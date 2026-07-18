@@ -11,6 +11,7 @@ import { ConfirmDocumentActionModal } from "@/modules/documents/components/Confi
 import { ChangeVisibilityModal } from "@/modules/documents/components/ChangeVisibilityModal";
 import { MoveToFolderModal } from "@/modules/documents/components/MoveToFolderModal";
 import { NewVersionModal } from "@/modules/documents/components/NewVersionModal";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 interface DocumentActionsProps {
   document: Document;
@@ -29,6 +30,10 @@ type ModalKind = "expire" | "archive" | "softDelete" | "visibility" | "moveToFol
  * forward-motion steps, the same reasoning as InvoiceActions/ExpenseActions.
  */
 export function DocumentActions({ document, onChanged }: DocumentActionsProps) {
+  const { can } = useMemberSession();
+  const canUpdate = can("documents.update");
+  const canCreate = can("documents.create");
+  const canArchivePermission = can("documents.archive");
   const router = useRouter();
   const [modal, setModal] = useState<ModalKind>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -59,7 +64,7 @@ export function DocumentActions({ document, onChanged }: DocumentActionsProps) {
     return (
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
-          {canRestore ? (
+          {canRestore && canArchivePermission ? (
             <Button
               variant="secondary"
               onClick={() => runAction("restore", () => restoreDocument(document.id))}
@@ -81,12 +86,12 @@ export function DocumentActions({ document, onChanged }: DocumentActionsProps) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        {canEdit ? (
+        {canEdit && canUpdate ? (
           <Link href={`/documents/${document.id}/edit`}>
             <Button variant="secondary">Edit Metadata</Button>
           </Link>
         ) : null}
-        {canActivate ? (
+        {canActivate && canUpdate ? (
           <Button
             variant="secondary"
             onClick={() => runAction("activate", () => activateDocument(document.id))}
@@ -95,32 +100,32 @@ export function DocumentActions({ document, onChanged }: DocumentActionsProps) {
             {busyAction === "activate" ? "Activating…" : "Activate"}
           </Button>
         ) : null}
-        {canAddVersion ? (
+        {canAddVersion && canCreate ? (
           <Button variant="secondary" onClick={() => setModal("newVersion")}>
             Add New Version
           </Button>
         ) : null}
-        {canEdit ? (
+        {canEdit && canUpdate ? (
           <Button variant="secondary" onClick={() => setModal("visibility")}>
             Change Visibility
           </Button>
         ) : null}
-        {canEdit ? (
+        {canEdit && canUpdate ? (
           <Button variant="secondary" onClick={() => setModal("moveToFolder")}>
             Move to Folder
           </Button>
         ) : null}
-        {canExpire ? (
+        {canExpire && canArchivePermission ? (
           <Button variant="secondary" onClick={() => setModal("expire")}>
             Expire
           </Button>
         ) : null}
-        {canArchive ? (
+        {canArchive && canArchivePermission ? (
           <Button variant="secondary" onClick={() => setModal("archive")}>
             Archive
           </Button>
         ) : null}
-        {canSoftDelete ? (
+        {canSoftDelete && canArchivePermission ? (
           <Button variant="secondary" onClick={() => setModal("softDelete")}>
             Soft Delete
           </Button>

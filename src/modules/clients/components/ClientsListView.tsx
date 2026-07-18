@@ -11,6 +11,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { ClientFilters, type ClientFiltersValue } from "@/modules/clients/components/ClientFilters";
 import { ClientListTable } from "@/modules/clients/components/ClientListTable";
 import { ClientListCards } from "@/modules/clients/components/ClientListCards";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 const defaultFilters: ClientFiltersValue = {
   search: "",
@@ -48,6 +49,8 @@ async function loadClientsFor(filters: ClientFiltersValue): Promise<LoadState> {
 }
 
 export function ClientsListView() {
+  const { can } = useMemberSession();
+  const canCreate = can("clients.create");
   const [filters, setFilters] = useState<ClientFiltersValue>(defaultFilters);
   const [state, setState] = useState<LoadState>({ status: "loading" });
 
@@ -92,9 +95,11 @@ export function ClientsListView() {
             behind this yet.
           </p>
         </div>
-        <Link href="/clients/new">
-          <Button>New Client</Button>
-        </Link>
+        {canCreate ? (
+          <Link href="/clients/new">
+            <Button>New Client</Button>
+          </Link>
+        ) : null}
       </div>
 
       <div className="mt-6">
@@ -119,7 +124,7 @@ export function ClientsListView() {
                 : "Clients converted from Leads, or added directly, will show up here."
             }
             action={
-              !hasActiveFilters ? (
+              !hasActiveFilters && canCreate ? (
                 <Link href="/clients/new">
                   <Button>New Client</Button>
                 </Link>

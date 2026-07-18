@@ -12,6 +12,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { LeadFilters, type LeadFiltersValue } from "@/modules/leads/components/LeadFilters";
 import { LeadListTable } from "@/modules/leads/components/LeadListTable";
 import { LeadListCards } from "@/modules/leads/components/LeadListCards";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 const defaultFilters: LeadFiltersValue = {
   search: "",
@@ -42,6 +43,8 @@ async function loadLeadsFor(filters: LeadFiltersValue): Promise<LoadState> {
 }
 
 export function LeadsListView() {
+  const { can } = useMemberSession();
+  const canCreate = can("leads.create");
   const [filters, setFilters] = useState<LeadFiltersValue>(defaultFilters);
   const [state, setState] = useState<LoadState>({ status: "loading" });
 
@@ -86,9 +89,11 @@ export function LeadsListView() {
             Prospective clients moving through the Amoré Bloom pipeline. {getDataPersistenceMessage()}
           </p>
         </div>
-        <Link href="/leads/new">
-          <Button>New Lead</Button>
-        </Link>
+        {canCreate ? (
+          <Link href="/leads/new">
+            <Button>New Lead</Button>
+          </Link>
+        ) : null}
       </div>
 
       <div className="mt-6">
@@ -113,7 +118,7 @@ export function LeadsListView() {
                 : "New leads you add will show up here."
             }
             action={
-              !hasActiveFilters ? (
+              !hasActiveFilters && canCreate ? (
                 <Link href="/leads/new">
                   <Button>New Lead</Button>
                 </Link>

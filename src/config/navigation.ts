@@ -8,6 +8,8 @@ import {
   LeadsIcon,
   TeamIcon,
 } from "@/components/ui/icons";
+import { getRouteAccessRequirement } from "@/core/permissions/routeAccess";
+import type { Permission } from "@/core/enums/permission";
 import type { ComponentType, SVGProps } from "react";
 
 export interface NavItem {
@@ -26,3 +28,21 @@ export const navigationItems: NavItem[] = [
   { label: "Documents", href: "/documents", icon: DocumentsIcon },
   { label: "Team", href: "/team", icon: TeamIcon },
 ];
+
+/**
+ * Sidebar/MobileNav share this one filter instead of each re-deriving
+ * visibility — the requirement itself always comes from
+ * `core/permissions/routeAccess.ts` (the single route-access map), never a
+ * second, nav-specific permission field on `NavItem`. An item whose route
+ * only requires active membership (or isn't listed at all) is always shown;
+ * `Sidebar`/`MobileNav` only ever render once the member is already known to
+ * be active (see `(app)/layout.tsx`), so the only real filtering that
+ * happens here is by specific permission.
+ */
+export function getVisibleNavigationItems(can: (permission: Permission) => boolean): NavItem[] {
+  return navigationItems.filter((item) => {
+    const requirement = getRouteAccessRequirement(item.href);
+    if (!requirement || requirement.kind === "active-membership") return true;
+    return can(requirement.permission);
+  });
+}

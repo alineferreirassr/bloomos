@@ -3,6 +3,26 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DocumentsListView } from "@/modules/documents/components/DocumentsListView";
 import { makeDocument } from "@/modules/documents/testUtils";
+import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
+import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+
+const fullPermissionSnapshot: MemberSessionSnapshot = {
+  kind: "active",
+  user: { id: "user_1", email: "owner@amorebloom.com" },
+  profile: { full_name: "Amoré Bloom Owner", avatar_url: null },
+  workspace: { id: "ws_amore_bloom", name: "Amoré Bloom" },
+  membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
+  permissions: ["documents.view", "documents.create", "documents.update", "documents.archive"],
+  workspaceDisplayName: "Amoré Bloom",
+};
+
+function renderDocumentsListView(props?: Parameters<typeof DocumentsListView>[0]) {
+  return render(
+    <MemberSessionProvider snapshot={fullPermissionSnapshot}>
+      <DocumentsListView {...props} />
+    </MemberSessionProvider>,
+  );
+}
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -53,7 +73,7 @@ describe("DocumentsListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getDocuments).mockResolvedValue([]);
 
-    render(<DocumentsListView />);
+    renderDocumentsListView();
 
     expect(await screen.findByText("Total Documents")).toBeInTheDocument();
     expect(screen.getByText("Documents Missing Folder")).toBeInTheDocument();
@@ -65,7 +85,7 @@ describe("DocumentsListView", () => {
       makeDocument({ id: "document_1", title: "Insurance Cert", file_name: "insurance.pdf" }),
     ]);
 
-    render(<DocumentsListView />);
+    renderDocumentsListView();
 
     expect((await screen.findAllByText("Insurance Cert")).length).toBeGreaterThan(0);
   });
@@ -75,7 +95,7 @@ describe("DocumentsListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getDocuments).mockResolvedValue([]);
 
-    render(<DocumentsListView />);
+    renderDocumentsListView();
     await waitFor(() => expect(dataLayer.getDocuments).toHaveBeenCalled());
 
     await user.type(screen.getByLabelText(/search documents/i), "insurance");
@@ -90,7 +110,7 @@ describe("DocumentsListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getDocuments).mockResolvedValue([]);
 
-    render(<DocumentsListView />);
+    renderDocumentsListView();
     await waitFor(() => expect(dataLayer.getDocuments).toHaveBeenCalled());
 
     await user.selectOptions(screen.getByLabelText(/filter by category/i), "insurance");
@@ -105,7 +125,7 @@ describe("DocumentsListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getDocuments).mockResolvedValue([]);
 
-    render(<DocumentsListView />);
+    renderDocumentsListView();
     await waitFor(() => expect(dataLayer.getDocuments).toHaveBeenCalled());
 
     await user.click(screen.getByRole("checkbox", { name: /show archived/i }));
@@ -120,7 +140,7 @@ describe("DocumentsListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getDocuments).mockResolvedValue([]);
 
-    render(<DocumentsListView />);
+    renderDocumentsListView();
     await waitFor(() => expect(dataLayer.getDocuments).toHaveBeenCalled());
 
     await user.click(screen.getByRole("checkbox", { name: /latest version only/i }));
@@ -134,7 +154,7 @@ describe("DocumentsListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getDocuments).mockResolvedValue([]);
 
-    render(<DocumentsListView initialOwnerType="client" initialOwnerId="client_2" />);
+    renderDocumentsListView({ initialOwnerType: "client", initialOwnerId: "client_2" });
 
     await waitFor(() =>
       expect(dataLayer.getDocuments).toHaveBeenCalledWith(
@@ -147,7 +167,7 @@ describe("DocumentsListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getDocuments).mockResolvedValue([]);
 
-    render(<DocumentsListView />);
+    renderDocumentsListView();
 
     expect(await screen.findByText(/no documents yet/i)).toBeInTheDocument();
   });
@@ -156,7 +176,7 @@ describe("DocumentsListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getDocuments).mockRejectedValue(new Error("boom"));
 
-    render(<DocumentsListView />);
+    renderDocumentsListView();
 
     expect(await screen.findByText(/could not load documents/i)).toBeInTheDocument();
   });
@@ -166,7 +186,7 @@ describe("DocumentsListView", () => {
     mockCommon();
     vi.mocked(dataLayer.getDocuments).mockResolvedValue([]);
 
-    render(<DocumentsListView />);
+    renderDocumentsListView();
     await waitFor(() => expect(dataLayer.getDocuments).toHaveBeenCalled());
 
     await user.click(screen.getByRole("button", { name: /new folder/i }));

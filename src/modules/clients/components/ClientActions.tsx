@@ -8,6 +8,7 @@ import type { Client } from "@/types/client";
 import { ClientStatusSelect } from "@/modules/clients/components/ClientStatusSelect";
 import { VipToggle } from "@/modules/clients/components/VipToggle";
 import { ContactMethodSelect } from "@/modules/clients/components/ContactMethodSelect";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 interface ClientActionsProps {
   client: Client;
@@ -15,6 +16,9 @@ interface ClientActionsProps {
 }
 
 export function ClientActions({ client, onChanged }: ClientActionsProps) {
+  const { can } = useMemberSession();
+  const canUpdate = can("clients.update");
+  const canArchive = can("clients.archive");
   const [pendingAction, setPendingAction] = useState<"archive" | "restore" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,26 +51,30 @@ export function ClientActions({ client, onChanged }: ClientActionsProps) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        {!isArchived ? (
+        {!isArchived && canUpdate ? (
           <Link href={`/clients/${client.id}/edit`}>
             <Button variant="secondary">Edit</Button>
           </Link>
         ) : null}
 
-        {!isArchived ? <VipToggle clientId={client.id} isVip={client.is_vip} onChanged={onChanged} /> : null}
+        {!isArchived && canUpdate ? (
+          <VipToggle clientId={client.id} isVip={client.is_vip} onChanged={onChanged} />
+        ) : null}
 
         {isArchived ? (
-          <Button variant="secondary" onClick={handleRestore} disabled={pendingAction === "restore"}>
-            {pendingAction === "restore" ? "Restoring…" : "Restore"}
-          </Button>
-        ) : (
+          canArchive ? (
+            <Button variant="secondary" onClick={handleRestore} disabled={pendingAction === "restore"}>
+              {pendingAction === "restore" ? "Restoring…" : "Restore"}
+            </Button>
+          ) : null
+        ) : canArchive ? (
           <Button variant="secondary" onClick={handleArchive} disabled={pendingAction === "archive"}>
             {pendingAction === "archive" ? "Archiving…" : "Archive"}
           </Button>
-        )}
+        ) : null}
       </div>
 
-      {!isArchived ? (
+      {!isArchived && canUpdate ? (
         <div className="flex flex-wrap items-end gap-4">
           <div>
             <span className="mb-1.5 block text-xs font-medium text-text-muted">Status</span>

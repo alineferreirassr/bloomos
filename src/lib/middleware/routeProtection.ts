@@ -3,6 +3,7 @@ import type { DataMode } from "@/lib/env";
 /** Every business-module route this phase — kept in sync manually with `src/app/(app)`. */
 export const PROTECTED_ROUTE_PREFIXES = [
   "/dashboard",
+  "/account",
   "/leads",
   "/clients",
   "/events",

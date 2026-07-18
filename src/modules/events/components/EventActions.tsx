@@ -10,6 +10,7 @@ import { EventStatusSelect } from "@/modules/events/components/EventStatusSelect
 import { EventLifecycleSelect } from "@/modules/events/components/EventLifecycleSelect";
 import { EventPrioritySelect } from "@/modules/events/components/EventPrioritySelect";
 import { ConfirmEventActionModal } from "@/modules/events/components/ConfirmEventActionModal";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 interface EventActionsProps {
   event: Event;
@@ -28,6 +29,9 @@ type ModalKind = "archive" | "cancel" | "complete" | null;
  * reversible, so it's the only action here without a confirmation modal.
  */
 export function EventActions({ event, onChanged }: EventActionsProps) {
+  const { can } = useMemberSession();
+  const canUpdate = can("events.update");
+  const canArchive = can("events.archive");
   const [modal, setModal] = useState<ModalKind>(null);
   const [restoring, setRestoring] = useState(false);
   const [restoreError, setRestoreError] = useState<string | null>(null);
@@ -48,6 +52,7 @@ export function EventActions({ event, onChanged }: EventActionsProps) {
   };
 
   if (isArchived) {
+    if (!canArchive) return null;
     return (
       <div className="space-y-3">
         <Button variant="secondary" onClick={handleRestore} disabled={restoring}>
@@ -65,27 +70,29 @@ export function EventActions({ event, onChanged }: EventActionsProps) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        {!isLocked ? (
+        {!isLocked && canUpdate ? (
           <Link href={`/events/${event.id}/edit`}>
             <Button variant="secondary">Edit</Button>
           </Link>
         ) : null}
-        {!isLocked ? (
+        {!isLocked && canUpdate ? (
           <Button variant="secondary" onClick={() => setModal("complete")}>
             Complete Event
           </Button>
         ) : null}
-        {!isLocked ? (
+        {!isLocked && canUpdate ? (
           <Button variant="secondary" onClick={() => setModal("cancel")}>
             Cancel Event
           </Button>
         ) : null}
-        <Button variant="secondary" onClick={() => setModal("archive")}>
-          Archive
-        </Button>
+        {canArchive ? (
+          <Button variant="secondary" onClick={() => setModal("archive")}>
+            Archive
+          </Button>
+        ) : null}
       </div>
 
-      {!isLocked ? (
+      {!isLocked && canUpdate ? (
         <div className="flex flex-wrap items-end gap-4">
           <div>
             <span className="mb-1.5 block text-xs font-medium text-text-muted">Status</span>

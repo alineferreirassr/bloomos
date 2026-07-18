@@ -3,8 +3,6 @@
 import { useEffect, useState } from "react";
 import {
   getWorkspaceMembers,
-  getCurrentWorkspaceMember,
-  getRolePermissions,
   updateWorkspaceMemberRole,
   deactivateWorkspaceMember,
   reactivateWorkspaceMember,
@@ -20,7 +18,6 @@ import type { TeamMember } from "@/types/teamMember";
 import type { WorkspaceInvitation } from "@/types/workspaceInvitation";
 import { WORKSPACE_MEMBER_ROLES, WORKSPACE_MEMBER_ROLE_LABELS, type WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 import { INVITATION_STATUS_LABELS } from "@/core/enums/invitationStatus";
-import type { Permission } from "@/core/enums/permission";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -28,6 +25,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { NewInvitationModal } from "@/modules/team/components/NewInvitationModal";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 type LoadState =
   | { status: "loading" }
@@ -36,8 +34,6 @@ type LoadState =
       status: "ready";
       members: TeamMember[];
       invitations: WorkspaceInvitation[];
-      currentMember: TeamMember | null;
-      permissions: Set<Permission>;
     };
 
 function formatDate(iso: string): string {
@@ -45,18 +41,20 @@ function formatDate(iso: string): string {
 }
 
 export function TeamView() {
+  const { can } = useMemberSession();
+  const canManageRoles = can("team.manage_roles");
+  const canInvite = can("team.invite");
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [newInvitationOpen, setNewInvitationOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState<{ email: string; url: string } | null>(null);
 
-const fetchTeamData = (): Promise<LoadState> =>
-    Promise.all([expireWorkspaceInvitations().catch(() => undefined), getWorkspaceMembers(), getWorkspaceInvitations(), getCurrentWorkspaceMember()])
-      .then(async ([, members, invitations, currentMember]) => {
-        const permissions = new Set(currentMember ? await getRolePermissions(currentMember.role) : []);
-        return { status: "ready" as const, members, invitations, currentMember, permissions };
-      })
+  // The member's own role/permissions come from MemberSessionProvider (server-seeded,
+  // see (app)/layout.tsx) — this only fetches the roster/invitations themselves.
+  const fetchTeamData = (): Promise<LoadState> =>
+    Promise.all([expireWorkspaceInvitations().catch(() => undefined), getWorkspaceMembers(), getWorkspaceInvitations()])
+      .then(([, members, invitations]) => ({ status: "ready" as const, members, invitations }))
       .catch(() => ({ status: "error" as const }));
 
   useEffect(() => {
@@ -87,9 +85,7 @@ const fetchTeamData = (): Promise<LoadState> =>
     return <ErrorState onRetry={load} />;
   }
 
-  const { members, invitations, permissions } = state;
-  const canManageRoles = permissions.has("team.manage_roles");
-  const canInvite = permissions.has("team.invite");
+  const { members, invitations } = state;
 
   const runAction = async (id: string, action: () => Promise<{ success: boolean; error?: string }>) => {
     setBusyId(id);

@@ -2,6 +2,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ClientDetailView } from "@/modules/clients/components/ClientDetailView";
 import { makeClient } from "@/modules/clients/testUtils";
+import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
+import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+
+const fullPermissionSnapshot: MemberSessionSnapshot = {
+  kind: "active",
+  user: { id: "user_1", email: "owner@amorebloom.com" },
+  profile: { full_name: "Amoré Bloom Owner", avatar_url: null },
+  workspace: { id: "ws_amore_bloom", name: "Amoré Bloom" },
+  membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
+  permissions: ["clients.view", "clients.create", "clients.update", "clients.archive"],
+  workspaceDisplayName: "Amoré Bloom",
+};
+
+function renderClientDetail(clientId: string) {
+  return render(
+    <MemberSessionProvider snapshot={fullPermissionSnapshot}>
+      <ClientDetailView clientId={clientId} />
+    </MemberSessionProvider>,
+  );
+}
 
 vi.mock("@/lib/data", () => ({
   getClientById: vi.fn(),
@@ -54,7 +74,7 @@ describe("ClientDetailView", () => {
     vi.mocked(dataLayer.getTimelineByClientId).mockResolvedValue([]);
     vi.mocked(dataLayer.getClientNextAction).mockResolvedValue(null);
 
-    render(<ClientDetailView clientId="client_1" />);
+    renderClientDetail("client_1");
 
     expect(await screen.findByText(/Naomi Whitfield & James Whitfield/)).toBeInTheDocument();
     expect(screen.getByText("VIP")).toBeInTheDocument();
@@ -71,7 +91,7 @@ describe("ClientDetailView", () => {
     vi.mocked(dataLayer.getTimelineByClientId).mockResolvedValue([]);
     vi.mocked(dataLayer.getClientNextAction).mockResolvedValue(null);
 
-    render(<ClientDetailView clientId="does_not_exist" />);
+    renderClientDetail("does_not_exist");
 
     expect(await screen.findByText(/could not load this client/i)).toBeInTheDocument();
   });

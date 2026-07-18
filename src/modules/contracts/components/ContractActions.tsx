@@ -20,6 +20,7 @@ import type { Contract } from "@/types/contract";
 import { isContractClosed, isContractFullyLocked } from "@/core/workflows/contractWorkflow";
 import { ContractStatusSelect } from "@/modules/contracts/components/ContractStatusSelect";
 import { ConfirmContractActionModal } from "@/modules/contracts/components/ConfirmContractActionModal";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 interface ContractActionsProps {
   contract: Contract;
@@ -40,6 +41,10 @@ type ModalKind = "send" | "signed" | "declined" | "expire" | "cancel" | "complet
  * EventActions' Restore.
  */
 export function ContractActions({ contract, onChanged }: ContractActionsProps) {
+  const { can } = useMemberSession();
+  const canUpdate = can("contracts.update");
+  const canLifecycle = can("contracts.lifecycle");
+  const canDuplicate = can("contracts.create");
   const router = useRouter();
   const [modal, setModal] = useState<ModalKind>(null);
   const [restoring, setRestoring] = useState(false);
@@ -94,7 +99,7 @@ export function ContractActions({ contract, onChanged }: ContractActionsProps) {
     router.push(`/contracts/${result.data.id}`);
   };
 
-  const duplicateButton = (
+  const duplicateButton = canDuplicate ? (
     <div>
       <Button variant="secondary" onClick={handleDuplicate} disabled={duplicating}>
         {duplicating ? "Duplicating…" : "Duplicate"}
@@ -105,22 +110,24 @@ export function ContractActions({ contract, onChanged }: ContractActionsProps) {
         </p>
       ) : null}
     </div>
-  );
+  ) : null;
 
   if (isArchived) {
     return (
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
-          <div>
-            <Button variant="secondary" onClick={handleRestore} disabled={restoring}>
-              {restoring ? "Restoring…" : "Restore"}
-            </Button>
-            {restoreError ? (
-              <p role="alert" className="mt-1.5 text-xs text-rose-600 dark:text-rose-400">
-                {restoreError}
-              </p>
-            ) : null}
-          </div>
+          {canLifecycle ? (
+            <div>
+              <Button variant="secondary" onClick={handleRestore} disabled={restoring}>
+                {restoring ? "Restoring…" : "Restore"}
+              </Button>
+              {restoreError ? (
+                <p role="alert" className="mt-1.5 text-xs text-rose-600 dark:text-rose-400">
+                  {restoreError}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           {duplicateButton}
         </div>
       </div>
@@ -130,17 +137,17 @@ export function ContractActions({ contract, onChanged }: ContractActionsProps) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        {!isContractFullyLocked(contract.status) ? (
+        {!isContractFullyLocked(contract.status) && canUpdate ? (
           <Link href={`/contracts/${contract.id}/edit`}>
             <Button variant="secondary">Edit</Button>
           </Link>
         ) : null}
-        {canSend ? (
+        {canSend && canLifecycle ? (
           <Button variant="secondary" onClick={() => setModal("send")}>
             Send Contract
           </Button>
         ) : null}
-        {canMarkViewed ? (
+        {canMarkViewed && canLifecycle ? (
           <div>
             <Button variant="secondary" onClick={handleMarkViewed} disabled={viewing}>
               {viewing ? "Marking…" : "Mark Viewed"}
@@ -152,38 +159,40 @@ export function ContractActions({ contract, onChanged }: ContractActionsProps) {
             ) : null}
           </div>
         ) : null}
-        {canMarkSigned ? (
+        {canMarkSigned && canLifecycle ? (
           <Button variant="secondary" onClick={() => setModal("signed")}>
             Mark Signed
           </Button>
         ) : null}
-        {canMarkDeclined ? (
+        {canMarkDeclined && canLifecycle ? (
           <Button variant="secondary" onClick={() => setModal("declined")}>
             Mark Declined
           </Button>
         ) : null}
-        {canExpire ? (
+        {canExpire && canLifecycle ? (
           <Button variant="secondary" onClick={() => setModal("expire")}>
             Expire
           </Button>
         ) : null}
-        {canComplete ? (
+        {canComplete && canLifecycle ? (
           <Button variant="secondary" onClick={() => setModal("complete")}>
             Complete
           </Button>
         ) : null}
-        {canCancel ? (
+        {canCancel && canLifecycle ? (
           <Button variant="secondary" onClick={() => setModal("cancel")}>
             Cancel Contract
           </Button>
         ) : null}
-        <Button variant="secondary" onClick={() => setModal("archive")}>
-          Archive
-        </Button>
+        {canLifecycle ? (
+          <Button variant="secondary" onClick={() => setModal("archive")}>
+            Archive
+          </Button>
+        ) : null}
         {duplicateButton}
       </div>
 
-      {!isContractFullyLocked(contract.status) ? (
+      {!isContractFullyLocked(contract.status) && canUpdate ? (
         <div>
           <span className="mb-1.5 block text-xs font-medium text-text-muted">Status</span>
           <ContractStatusSelect contractId={contract.id} status={contract.status} onChanged={onChanged} />

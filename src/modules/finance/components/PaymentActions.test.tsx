@@ -3,6 +3,26 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PaymentActions } from "@/modules/finance/components/PaymentActions";
 import { makePayment } from "@/modules/finance/testUtils";
+import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
+import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+
+const fullPermissionSnapshot: Extract<MemberSessionSnapshot, { kind: "active" }> = {
+  kind: "active",
+  user: { id: "user_1", email: "owner@amorebloom.com" },
+  profile: { full_name: "Amoré Bloom Owner", avatar_url: null },
+  workspace: { id: "ws_amore_bloom", name: "Amoré Bloom" },
+  membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
+  permissions: ["finance.view", "finance.create", "finance.update", "finance.refund"],
+  workspaceDisplayName: "Amoré Bloom",
+};
+
+function renderPaymentActions(props: Parameters<typeof PaymentActions>[0], permissions = fullPermissionSnapshot.permissions) {
+  return render(
+    <MemberSessionProvider snapshot={{ ...fullPermissionSnapshot, permissions }}>
+      <PaymentActions {...props} />
+    </MemberSessionProvider>,
+  );
+}
 
 vi.mock("@/lib/data", () => ({
   cancelPayment: vi.fn(),
@@ -30,7 +50,7 @@ describe("PaymentActions", () => {
   });
 
   it("shows Edit, Mark Processing, and Mark Failed for a pending payment", () => {
-    render(<PaymentActions payment={makePayment({ status: "pending" })} onChanged={vi.fn()} />);
+    renderPaymentActions({ payment: makePayment({ status: "pending" }), onChanged: vi.fn() });
     expect(screen.getByRole("button", { name: /^edit$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /mark processing/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /mark failed/i })).toBeInTheDocument();
@@ -38,12 +58,12 @@ describe("PaymentActions", () => {
   });
 
   it("shows Refund for a succeeded payment", () => {
-    render(<PaymentActions payment={makePayment({ status: "succeeded" })} onChanged={vi.fn()} />);
+    renderPaymentActions({ payment: makePayment({ status: "succeeded" }), onChanged: vi.fn() });
     expect(screen.getByRole("button", { name: /^refund$/i })).toBeInTheDocument();
   });
 
   it("hides Edit for a refunded (final) payment", () => {
-    render(<PaymentActions payment={makePayment({ status: "refunded" })} onChanged={vi.fn()} />);
+    renderPaymentActions({ payment: makePayment({ status: "refunded" }), onChanged: vi.fn() });
     expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
   });
 
@@ -54,7 +74,7 @@ describe("PaymentActions", () => {
       data: makePayment({ status: "processing" }),
     });
     const onChanged = vi.fn();
-    render(<PaymentActions payment={makePayment({ id: "payment_1", status: "pending" })} onChanged={onChanged} />);
+    renderPaymentActions({ payment: makePayment({ id: "payment_1", status: "pending" }), onChanged: onChanged });
 
     await user.click(screen.getByRole("button", { name: /mark processing/i }));
 
@@ -70,7 +90,7 @@ describe("PaymentActions", () => {
       data: makePayment({ status: "failed" }),
     });
     const onChanged = vi.fn();
-    render(<PaymentActions payment={makePayment({ id: "payment_1", status: "pending" })} onChanged={onChanged} />);
+    renderPaymentActions({ payment: makePayment({ id: "payment_1", status: "pending" }), onChanged: onChanged });
 
     await user.click(screen.getByRole("button", { name: /mark failed/i }));
     const dialog = screen.getByRole("dialog", { name: /mark payment failed/i });
@@ -87,7 +107,7 @@ describe("PaymentActions", () => {
       data: makePayment({ status: "cancelled" }),
     });
     const onChanged = vi.fn();
-    render(<PaymentActions payment={makePayment({ id: "payment_1", status: "pending" })} onChanged={onChanged} />);
+    renderPaymentActions({ payment: makePayment({ id: "payment_1", status: "pending" }), onChanged: onChanged });
 
     await user.click(screen.getByRole("button", { name: /^cancel$/i }));
     const dialog = screen.getByRole("dialog", { name: /cancel payment/i });
@@ -100,7 +120,7 @@ describe("PaymentActions", () => {
   it("opens the Refund modal showing the refundable amount", async () => {
     const user = userEvent.setup();
     vi.mocked(dataLayer.getPaymentRefundableAmount).mockResolvedValue(10000);
-    render(<PaymentActions payment={makePayment({ id: "payment_1", status: "succeeded", amount_minor: 10000 })} onChanged={vi.fn()} />);
+    renderPaymentActions({ payment: makePayment({ id: "payment_1", status: "succeeded", amount_minor: 10000 }), onChanged: vi.fn() });
 
     await user.click(screen.getByRole("button", { name: /^refund$/i }));
 
@@ -115,11 +135,32 @@ describe("PaymentActions", () => {
       error: "Cannot mark this payment processing.",
     });
     const onChanged = vi.fn();
-    render(<PaymentActions payment={makePayment({ id: "payment_1", status: "pending" })} onChanged={onChanged} />);
+    renderPaymentActions({ payment: makePayment({ id: "payment_1", status: "pending" }), onChanged: onChanged });
 
     await user.click(screen.getByRole("button", { name: /mark processing/i }));
 
     expect(await screen.findByText(/cannot mark this payment processing/i)).toBeInTheDocument();
     expect(onChanged).not.toHaveBeenCalled();
+  });
+});
+
+describe("PaymentActions — permission gating", () => {
+  it("hides Refund for a succeeded payment when the member lacks finance.refund, even with finance.update", () => {
+    renderPaymentActions(
+      { payment: makePayment({ status: "succeeded" }), onChanged: vi.fn() },
+      ["finance.view", "finance.update"],
+    );
+
+    expect(screen.queryByRole("button", { name: /^refund$/i })).not.toBeInTheDocument();
+  });
+
+  it("shows Refund for a succeeded payment when the member holds finance.refund, even without finance.update", () => {
+    renderPaymentActions(
+      { payment: makePayment({ status: "succeeded" }), onChanged: vi.fn() },
+      ["finance.view", "finance.refund"],
+    );
+
+    expect(screen.getByRole("button", { name: /^refund$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
   });
 });

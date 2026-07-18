@@ -26,11 +26,13 @@ function mockSupabaseClient(input: {
   profile?: QueryResult;
   members?: QueryResult;
   workspace?: QueryResult;
+  rolePermissions?: QueryResult;
 }) {
   const tables: Record<string, ReturnType<typeof makeQueryBuilder>> = {
     profiles: makeQueryBuilder(input.profile ?? { data: null, error: null }),
     workspace_members: makeQueryBuilder(input.members ?? { data: [], error: null }),
     workspaces: makeQueryBuilder(input.workspace ?? { data: null, error: null }),
+    role_permissions: makeQueryBuilder(input.rolePermissions ?? { data: [], error: null }),
   };
 
   return {
@@ -128,6 +130,7 @@ describe("getClientWorkspaceSession", () => {
         profile: { data: profileRow, error: null },
         members: { data: [memberRow], error: null },
         workspace: { data: workspaceRow, error: null },
+        rolePermissions: { data: [{ permission_id: "workspace.view" }], error: null },
       }) as never,
     );
 
@@ -138,6 +141,54 @@ describe("getClientWorkspaceSession", () => {
     expect(result.session.user).toBe(user);
     expect(result.session.workspace).toEqual(workspaceRow);
     expect(result.session.membership).toEqual(memberRow);
+    expect(result.session.permissions).toEqual(["workspace.view"]);
+  });
+
+  it("resolves to ok with the real 'suspended' status (and no permissions) when the caller's only membership is inactive", async () => {
+    const suspendedMemberRow = {
+      id: "member_4",
+      workspace_id: "workspace_1",
+      user_id: "user_1",
+      role: "staff",
+      status: "suspended",
+      created_at: "2026-04-01T00:00:00Z",
+      updated_at: "2026-06-01T00:00:00Z",
+    };
+    const workspaceRow = {
+      id: "workspace_1",
+      name: "Amoré Bloom",
+      slug: "amore-bloom",
+      created_by: "user_1",
+      created_at: "2026-07-16T00:00:00Z",
+      updated_at: "2026-07-16T00:00:00Z",
+      archived_at: null,
+    };
+
+    vi.mocked(createClient).mockReturnValue(
+      mockSupabaseClient({
+        user: { id: "user_1", email: "owner@example.com" },
+        profile: {
+          data: {
+            id: "user_1",
+            full_name: null,
+            email: "owner@example.com",
+            avatar_url: null,
+            created_at: "2026-07-16T00:00:00Z",
+            updated_at: "2026-07-16T00:00:00Z",
+          },
+          error: null,
+        },
+        members: { data: [suspendedMemberRow], error: null },
+        workspace: { data: workspaceRow, error: null },
+      }) as never,
+    );
+
+    const result = await getClientWorkspaceSession();
+
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") throw new Error("expected ok result");
+    expect(result.session.membership.status).toBe("suspended");
+    expect(result.session.permissions).toEqual([]);
   });
 
   it("throws a normalized error when the profile query fails", () => {

@@ -31,7 +31,7 @@ Scope, and only scope: **Dashboard, Leads, Clients, Events, Contracts, Finance.*
 
 ## Phase 2 — Operational depth
 
-- Team Management — **Team Members + Invitations foundation complete** (internal `owner`/`admin`/`manager`/`staff` roles, granular permissions, Supabase Auth-backed invitation flow; see `docs/permissions.md`, `docs/workflows.md`). Team Portal (a scoped-down internal tier for non-full members) remains unstarted.
+- Team Management — **Team Members + Invitations foundation complete**, and **Team Portal MVP complete**: the authenticated internal app shell — permission-aware sidebar/navigation, a central route-access map, role-aware dashboard, member session context, inactive-member/unauthorized states, and granular action-level gating across every business module (internal `owner`/`admin`/`manager`/`staff` roles, granular permissions, Supabase Auth-backed invitation flow; see `docs/permissions.md`, `docs/workflows.md`). Client Accounts and a Client Portal remain unstarted (Phase 3, below).
 - Inventory
 - Suppliers
 - Calendar
