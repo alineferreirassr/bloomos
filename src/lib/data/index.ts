@@ -18,6 +18,14 @@ import type { TeamMember } from "@/types/teamMember";
 import type { WorkspaceInvitation, WorkspaceInvitationWithToken, InvitationPreview } from "@/types/workspaceInvitation";
 import type { ClientAccount, ClientAccountContext } from "@/types/clientAccount";
 import type { ClientInvitation, ClientInvitationWithToken, ClientInvitationPreview } from "@/types/clientInvitation";
+import type {
+  ClientPortalEvent,
+  ClientPortalContract,
+  ClientPortalInvoice,
+  ClientPortalInvoiceWithPayments,
+  ClientPortalDocument,
+  ClientPortalOverview,
+} from "@/types/clientPortal";
 import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 import type { InvitationStatus } from "@/core/enums/invitationStatus";
 import type { Permission } from "@/core/enums/permission";
@@ -115,6 +123,8 @@ import { mockTeamRepository, resetTeamMembersStore, resetWorkspaceInvitationsSto
 import { supabaseTeamRepository } from "@/lib/data/team/supabaseRepository";
 import { mockClientAccessRepository, resetClientAccountsStore, resetClientInvitationsStore } from "@/lib/data/clientAccess/mockRepository";
 import { supabaseClientAccessRepository } from "@/lib/data/clientAccess/supabaseRepository";
+import { mockClientPortalRepository } from "@/lib/data/clientPortal/mockRepository";
+import { supabaseClientPortalRepository } from "@/lib/data/clientPortal/supabaseRepository";
 import {
   readLeads,
   resetLeadsStore,
@@ -1742,6 +1752,61 @@ export async function getClientInvitationNextAction(id: string): Promise<string 
 }
 
 export type { CreateClientInvitationInput, ClientInvitationFilters } from "@/lib/data/clientAccess/repository";
+
+// ---------------------------------------------------------------------------
+// Client Portal (read-only, client-safe projections)
+//
+// Deliberately separate from every internal repository above — every
+// function here is scoped by the new `*_select_client_account` RLS
+// policies (Client Portal MVP), never by `requireWorkspaceSession()`,
+// since a Client Portal caller never has a Workspace membership. Returns
+// only the client-safe DTOs in types/clientPortal.ts, never an internal
+// Event/Contract/Invoice/Payment/Document record. See docs/permissions.md.
+// ---------------------------------------------------------------------------
+
+function clientPortalRepository() {
+  return selectRepository({ mock: mockClientPortalRepository, supabase: supabaseClientPortalRepository });
+}
+
+export async function getClientPortalOverview(): Promise<ClientPortalOverview> {
+  return clientPortalRepository().getClientPortalOverview();
+}
+
+export async function getClientPortalEvents(): Promise<ClientPortalEvent[]> {
+  return clientPortalRepository().getClientPortalEvents();
+}
+
+export async function getClientPortalEventById(id: string): Promise<ClientPortalEvent> {
+  return clientPortalRepository().getClientPortalEventById(id);
+}
+
+export async function getClientPortalContracts(): Promise<ClientPortalContract[]> {
+  return clientPortalRepository().getClientPortalContracts();
+}
+
+export async function getClientPortalContractById(id: string): Promise<ClientPortalContract> {
+  return clientPortalRepository().getClientPortalContractById(id);
+}
+
+export async function getClientPortalInvoices(): Promise<ClientPortalInvoice[]> {
+  return clientPortalRepository().getClientPortalInvoices();
+}
+
+export async function getClientPortalInvoiceById(id: string): Promise<ClientPortalInvoiceWithPayments> {
+  return clientPortalRepository().getClientPortalInvoiceById(id);
+}
+
+export async function getClientPortalDocuments(): Promise<ClientPortalDocument[]> {
+  return clientPortalRepository().getClientPortalDocuments();
+}
+
+export async function getClientPortalDocumentById(id: string): Promise<ClientPortalDocument> {
+  return clientPortalRepository().getClientPortalDocumentById(id);
+}
+
+export async function getClientPortalDocumentDownloadUrl(id: string): Promise<DataResult<string>> {
+  return clientPortalRepository().getClientPortalDocumentDownloadUrl(id);
+}
 
 // ---------------------------------------------------------------------------
 // Dashboard

@@ -100,9 +100,9 @@ The authenticated internal app shell made permission-aware, consuming the Team f
 - [x] Update documentation (`docs/workflows.md`, `docs/permissions.md`, `docs/integrations.md`, `ROADMAP.md`, `CHANGELOG.md`, `TODO.md`)
 - [x] Final sequential verification, one commit ("Build Team Portal MVP"), push to `origin/feature/team-foundation`, report
 
-## Phase 2 — Client Accounts + Invitations foundation (in progress, `feature/client-access`)
+## Phase 2 — Client Accounts + Invitations foundation (complete, `feature/client-access`)
 
-The authentication, account-linking, and invitation foundation for external Amoré Bloom clients, deliberately separate from internal Team membership — a client account is never a `workspace_members` row, never an internal role. Excludes the full Client Portal (real Events/Contracts/Invoices/Documents views), Team Portal persona invitations, both Knowledge Bases, the Notification Center, and the Automation Center — see "Post-MVP modules" below.
+The authentication, account-linking, and invitation foundation for external Amoré Bloom clients, deliberately separate from internal Team membership — a client account is never a `workspace_members` row, never an internal role. Excludes the full Client Portal (real Events/Contracts/Invoices/Documents views — see "Client Portal MVP" below, now also complete), Team Portal persona invitations, both Knowledge Bases, the Notification Center, and the Automation Center — see "Post-MVP modules" below.
 
 - [x] Pre-migration audit of clients/profiles/Supabase Auth flow/workspace_members/Team invitation flow/route protection/AppShell assumptions/business repositories/document visibility for reusable pieces, required schema additions, and privacy/security gaps
 - [x] Design the `client_accounts`/`client_invitations` schema and access model (invited/active/suspended/revoked account statuses; the reused pending/accepted/expired/revoked invitation lifecycle; the 4 new `clients.portal_*` permissions)
@@ -113,10 +113,29 @@ The authentication, account-linking, and invitation foundation for external Amor
 - [x] Build the minimal Client Portal landing page (`/client-access`) and the auth-separation routing (`(client-portal)` route group, `resolveClientAccountSessionSnapshot()`, `ClientAccountSessionProvider`)
 - [x] Write tests for account creation/uniqueness/status transitions, invitation creation/resend/revoke/acceptance/expiry, no `workspace_members` row is ever created, auth separation, and every Client Portal access state (82 new tests, 1710 → 1792)
 - [x] Run sequential lint/typecheck/test/build — all clean
-- [ ] Ask approval, apply the 8 migrations to the live Supabase project, verify schema via read-only SQL
-- [ ] Live browser verification (24 steps) against the real authenticated Workspace + RLS verification via read-only SQL
+- [x] Ask approval, apply the 8 migrations to the live Supabase project, verify schema via read-only SQL
+- [x] Live browser verification (24 steps) against the real authenticated Workspace + RLS verification via read-only SQL
 - [x] Update documentation (`docs/database.md`, `docs/workflows.md`, `docs/permissions.md`, `docs/integrations.md`, `ROADMAP.md`, `CHANGELOG.md`, `TODO.md`)
-- [ ] Final sequential verification, one commit ("Build client accounts and invitations foundation"), push to `origin/feature/client-access`, report
+- [x] Final sequential verification, one commit ("Build client accounts and invitations foundation"), push to `origin/feature/client-access`, report
+
+## Phase 2 — Client Portal MVP (complete, `feature/client-access`)
+
+The real, business-data-facing external Client Portal, consuming the account/invitation foundation above unchanged — Overview, My Events, My Contracts, My Invoices, My Documents, Account. No new tables, no second authentication system, no reuse of the internal Team Portal shell. Excludes Team Knowledge Base, Client Knowledge Base, Notification Center, Automation Center, payment-provider integration, client document upload, and e-signature infrastructure — see "Post-MVP modules" below.
+
+- [x] Pre-implementation audit of the landing page, route protection, account context, client-visible fields across Clients/Events/Contracts/Invoices/Documents, MediaAsset signed-URL behavior, internal-notes/timeline/expense exposure risk, AppShell assumptions, and existing RLS
+- [x] Design client-safe data projections and RPCs — additive client-facing RLS with an explicit `workspace_id` check on every policy (`is_client_account_holder_in_workspace()`), a documents visibility check, non-recursive folder visibility, and a two-step storage-ref RPC for signed downloads
+- [x] Ask approval, apply the 5 Client Portal RLS migrations to the live Supabase project, verify schema/policies/RPC via read-only SQL and anonymous REST calls
+- [x] Build `ClientPortalRepository` (interface + mock + Supabase) with client-safe DTO types
+- [x] Build the Client Portal shell (branding, desktop + mobile nav, account menu, active-route highlighting)
+- [x] Formalize the canonical `ClientAccountSessionProvider` context (auth user, client account, client record, workspace, status, ids, loading, `logout()`)
+- [x] Build the real Overview page (upcoming event, contracts-in-progress, next-payment-due, recent documents, empty/error states)
+- [x] Build My Events, My Contracts, My Invoices, and My Documents list + detail pages, and the Account page
+- [x] Add explicit route protection verification for every Client Portal sub-route (`/client-access/events|contracts|invoices|documents|account`)
+- [x] Write tests for every new component (list/detail/account views), the repository (mock + Supabase), the shell, and route protection (83 new tests, 1792 → 1875)
+- [x] Run sequential lint/typecheck/test/build — all clean
+- [x] Live verification: owner-side regression check (Client Access management, existing invitations, internal branding, auth separation) against the real Owner session; client-persona behavior verified via the automated/mock test suite (no second real client account created, per instruction)
+- [x] Update documentation (`docs/database.md`, `docs/workflows.md`, `docs/permissions.md`, `docs/integrations.md`, `ROADMAP.md`, `CHANGELOG.md`, `TODO.md`)
+- [ ] Final sequential verification, one commit ("Build Client Portal MVP"), push to `origin/feature/client-access`, report
 
 ## Phase 2 — Post-MVP modules (not started, reserved in the architecture only)
 

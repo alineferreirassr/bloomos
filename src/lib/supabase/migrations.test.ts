@@ -23,9 +23,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation migrations, in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP migrations, in chronological (execution) order", () => {
     const files = migrationFiles();
-    expect(files).toHaveLength(78);
+    expect(files).toHaveLength(83);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -365,5 +365,67 @@ describe("Client Accounts + Invitations foundation migrations", () => {
     expect(sql).toMatch(/auth_user_id = auth\.uid\(\)/);
     expect(sql).not.toMatch(/on public\.client_accounts for insert/i);
     expect(sql).not.toMatch(/on public\.client_accounts for delete/i);
+  });
+});
+
+describe("Client Portal MVP migrations", () => {
+  it("defines is_client_account_holder_in_workspace, security definer, checking both workspace_id and client_id", () => {
+    const sql = readMigration("20260726100000_client_account_workspace_helper_function.sql");
+    expect(sql).toMatch(/create or replace function public\.is_client_account_holder_in_workspace\(p_workspace_id uuid, p_client_id uuid\)/);
+    expect(sql).toMatch(/security definer/i);
+    expect(sql).toMatch(/where workspace_id = p_workspace_id/);
+    expect(sql).toMatch(/and client_id = p_client_id/);
+  });
+
+  it("adds additive client-facing select policies for clients, events, and contracts, never touching existing policies", () => {
+    const sql = readMigration("20260726100100_client_portal_clients_events_contracts_rls.sql");
+    expect(sql).not.toMatch(/drop policy/i);
+    expect(sql).toMatch(/clients_select_client_account/);
+    expect(sql).toMatch(/events_select_client_account/);
+    expect(sql).toMatch(/contracts_select_client_account/);
+    for (const block of sql.split(/create policy/i).slice(1)) {
+      expect(block).toMatch(/is_client_account_holder_in_workspace/);
+    }
+  });
+
+  it("adds additive client-facing select policies for invoices and payments only, never expenses", () => {
+    const sql = readMigration("20260726100200_client_portal_finance_rls.sql");
+    expect(sql).toMatch(/invoices_select_client_account/);
+    expect(sql).toMatch(/payments_select_client_account/);
+    expect(sql).not.toMatch(/on public\.expenses/i);
+  });
+
+  it("gates the documents client-facing policy on both client_id and visibility, and derives folder visibility non-recursively", () => {
+    const sql = readMigration("20260726100300_client_portal_documents_rls.sql");
+    expect(sql).toMatch(/documents_select_client_account/);
+    expect(sql).toMatch(/visibility in \('client', 'client_and_team'\)/);
+    expect(sql).toMatch(/document_folders_select_client_account/);
+    expect(sql).toMatch(/exists\s*\(\s*select 1\s*from public\.documents d/);
+  });
+
+  it("never uses a bare permissive `using (true)` policy across the new Client Portal RLS migrations", () => {
+    for (const file of [
+      "20260726100100_client_portal_clients_events_contracts_rls.sql",
+      "20260726100200_client_portal_finance_rls.sql",
+      "20260726100300_client_portal_documents_rls.sql",
+    ]) {
+      expect(stripSqlComments(readMigration(file))).not.toMatch(/using\s*\(\s*true\s*\)/i);
+    }
+  });
+
+  it("defines get_client_document_storage_ref as security definer, keyed by document id (never a media_asset_id directly), returning only bucket/path", () => {
+    const sql = readMigration("20260726100400_client_portal_document_storage_ref_function.sql");
+    expect(sql).toMatch(/create or replace function public\.get_client_document_storage_ref\(p_document_id uuid\)/);
+    expect(sql).toMatch(/security definer/i);
+    expect(sql).toMatch(/returns table \(\s*storage_bucket text,\s*storage_path text\s*\)/);
+    expect(sql).not.toMatch(/p_media_asset_id/);
+  });
+
+  it("validates client_id, visibility, workspace/client-account match, and a non-null media_asset_id before returning a storage ref", () => {
+    const sql = readMigration("20260726100400_client_portal_document_storage_ref_function.sql");
+    expect(sql).toMatch(/v_document\.client_id is null/);
+    expect(sql).toMatch(/v_document\.visibility not in \('client', 'client_and_team'\)/);
+    expect(sql).toMatch(/is_client_account_holder_in_workspace\(v_document\.workspace_id, v_document\.client_id\)/);
+    expect(sql).toMatch(/v_document\.media_asset_id is null/);
   });
 });

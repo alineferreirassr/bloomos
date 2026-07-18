@@ -1570,6 +1570,17 @@ export interface Database {
         Args: Record<string, never>;
         Returns: undefined;
       };
+      is_client_account_holder_in_workspace: {
+        Args: { p_workspace_id: string; p_client_id: string };
+        Returns: boolean;
+      };
+      get_client_document_storage_ref: {
+        Args: { p_document_id: string };
+        Returns: {
+          storage_bucket: string;
+          storage_path: string;
+        }[];
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

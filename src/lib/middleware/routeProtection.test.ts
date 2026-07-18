@@ -14,6 +14,20 @@ describe("isProtectedRoute", () => {
     expect(isProtectedRoute("/clients/client_1/edit")).toBe(true);
   });
 
+  it.each([
+    "/client-access/events",
+    "/client-access/events/event_1",
+    "/client-access/contracts",
+    "/client-access/contracts/contract_1",
+    "/client-access/invoices",
+    "/client-access/invoices/invoice_1",
+    "/client-access/documents",
+    "/client-access/documents/doc_1",
+    "/client-access/account",
+  ])("treats Client Portal sub-route %s as protected via the /client-access prefix", (pathname) => {
+    expect(isProtectedRoute(pathname)).toBe(true);
+  });
+
   it("does not treat the root or unlisted paths as protected", () => {
     expect(isProtectedRoute("/")).toBe(false);
     expect(isProtectedRoute("/sign-in")).toBe(false);

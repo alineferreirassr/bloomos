@@ -11,6 +11,7 @@ vi.mock("@/lib/auth/actions", () => ({
 const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
+  usePathname: () => "/client-access",
 }));
 
 afterEach(() => {
@@ -63,9 +64,14 @@ describe("ClientPortalLayout", () => {
   it("renders children inside the Client Portal shell for an active account", async () => {
     vi.mocked(resolveClientAccountSessionSnapshot).mockResolvedValue({
       kind: "active",
+      authUserId: "auth_client_1",
       accountId: "client_account_1",
+      clientId: "client_1",
+      workspaceId: "ws_amore_bloom",
+      email: "naomi.whitfield@example.com",
       clientName: "Naomi Whitfield",
       workspaceName: "Amoré Bloom",
+      acceptedAt: "2026-06-01T00:00:00.000Z",
       lastAccessAt: null,
     });
 

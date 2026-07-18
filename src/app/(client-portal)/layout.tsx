@@ -78,9 +78,14 @@ export default function ClientPortalLayout({ children }: { children: ReactNode }
   return (
     <ClientAccountSessionProvider
       value={{
+        authUserId: snapshot.authUserId,
         accountId: snapshot.accountId,
+        clientId: snapshot.clientId,
+        workspaceId: snapshot.workspaceId,
+        email: snapshot.email,
         clientName: snapshot.clientName,
         workspaceName: snapshot.workspaceName,
+        acceptedAt: snapshot.acceptedAt,
         lastAccessAt: snapshot.lastAccessAt,
       }}
     >

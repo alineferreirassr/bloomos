@@ -10,12 +10,29 @@ import type { ClientAccountStatus } from "@/core/enums/clientAccountStatus";
  * a `workspace_members` row, so it's resolved through an entirely
  * different repository (`ClientAccessRepository`), never through
  * `getWorkspaceSession()`.
+ *
+ * The `active` variant carries the raw `clientId`/`workspaceId`/
+ * `authUserId` (not just display strings) — every Client Portal MVP page
+ * (Events/Contracts/Invoices/Documents) scopes its own client-safe query
+ * by these ids, resolved once here and threaded through
+ * `ClientAccountSessionProvider`, never independently re-fetched per page.
  */
 export type ClientAccountSessionSnapshot =
   | { kind: "unauthenticated" }
   | { kind: "no-account" }
   | { kind: "blocked"; status: Exclude<ClientAccountStatus, "active"> }
-  | { kind: "active"; accountId: string; clientName: string; workspaceName: string; lastAccessAt: string | null };
+  | {
+      kind: "active";
+      authUserId: string;
+      accountId: string;
+      clientId: string;
+      workspaceId: string;
+      email: string;
+      clientName: string;
+      workspaceName: string;
+      acceptedAt: string | null;
+      lastAccessAt: string | null;
+    };
 
 /**
  * Deliberately a plain client-callable function, not a `cache()`-wrapped
@@ -46,9 +63,14 @@ export async function resolveClientAccountSessionSnapshot(): Promise<ClientAccou
   }
   return {
     kind: "active",
+    authUserId: context.account.auth_user_id,
     accountId: context.account.id,
+    clientId: context.account.client_id,
+    workspaceId: context.account.workspace_id,
+    email: context.account.email,
     clientName: context.clientName,
     workspaceName: context.workspaceName,
+    acceptedAt: context.account.accepted_at,
     lastAccessAt: context.account.last_access_at,
   };
 }
