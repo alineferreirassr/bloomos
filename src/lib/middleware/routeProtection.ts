@@ -20,6 +20,7 @@ export const PROTECTED_ROUTE_PREFIXES = [
   "/finance",
   "/documents",
   "/team",
+  "/client-portal",
   "/client-access",
 ] as const;
 

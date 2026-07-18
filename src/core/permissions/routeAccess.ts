@@ -34,6 +34,7 @@ export const ROUTE_ACCESS_MAP: RouteAccessEntry[] = [
   { prefix: "/finance", requirement: { kind: "permission", permission: "finance.view" } },
   { prefix: "/documents", requirement: { kind: "permission", permission: "documents.view" } },
   { prefix: "/team", requirement: { kind: "permission", permission: "team.view" } },
+  { prefix: "/client-portal", requirement: { kind: "permission", permission: "clients.portal_view" } },
   { prefix: "/settings", requirement: { kind: "permission", permission: "workspace.manage" } },
 ];
 

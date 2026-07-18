@@ -34,6 +34,7 @@ const ownerSnapshot: MemberSessionSnapshot = {
     "contracts.view",
     "finance.view",
     "documents.view",
+    "clients.portal_view",
   ],
   workspaceDisplayName: "Amoré Bloom",
 };
@@ -42,7 +43,7 @@ describe("Sidebar", () => {
   it("shows every module for an owner with every *.view permission", () => {
     renderSidebar(ownerSnapshot);
 
-    for (const label of ["Dashboard", "Leads", "Clients", "Events", "Contracts", "Finance", "Documents", "Team"]) {
+    for (const label of ["Dashboard", "Leads", "Clients", "Events", "Contracts", "Finance", "Documents", "Team", "Accounts", "Invitations"]) {
       expect(screen.getByRole("link", { name: new RegExp(label) })).toBeInTheDocument();
     }
   });
@@ -55,6 +56,25 @@ describe("Sidebar", () => {
 
     expect(screen.queryByRole("link", { name: /Team/ })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Dashboard/ })).toBeInTheDocument();
+  });
+
+  it("renders Accounts and Invitations under their own Client Portal group, separate from Clients under Sales", () => {
+    renderSidebar(ownerSnapshot);
+
+    expect(screen.getByText("Client Portal")).toBeInTheDocument();
+    expect(screen.getByText("Sales")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Accounts" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Invitations" })).toBeInTheDocument();
+  });
+
+  it("hides the Client Portal group entirely for a member without clients.portal_view", () => {
+    renderSidebar({
+      ...ownerSnapshot,
+      permissions: ownerSnapshot.permissions.filter((p) => p !== "clients.portal_view"),
+    });
+
+    expect(screen.queryByText("Client Portal")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Accounts" })).not.toBeInTheDocument();
   });
 
   it("links the Workspace identity footer to the account page", () => {

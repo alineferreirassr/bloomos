@@ -23,6 +23,12 @@ describe("getRouteAccessRequirement", () => {
     expect(getRouteAccessRequirement("/team")).toEqual({ kind: "permission", permission: "team.view" });
   });
 
+  it("requires clients.portal_view for the Client Portal admin section, including its sub-routes", () => {
+    expect(getRouteAccessRequirement("/client-portal")).toEqual({ kind: "permission", permission: "clients.portal_view" });
+    expect(getRouteAccessRequirement("/client-portal/accounts")).toEqual({ kind: "permission", permission: "clients.portal_view" });
+    expect(getRouteAccessRequirement("/client-portal/invitations")).toEqual({ kind: "permission", permission: "clients.portal_view" });
+  });
+
   it("requires workspace.manage for Workspace Settings", () => {
     expect(getRouteAccessRequirement("/settings")).toEqual({ kind: "permission", permission: "workspace.manage" });
   });

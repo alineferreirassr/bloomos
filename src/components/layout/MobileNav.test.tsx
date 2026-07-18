@@ -15,7 +15,17 @@ const staffSnapshot: MemberSessionSnapshot = {
   profile: { full_name: "Sofia Lima", avatar_url: null },
   workspace: { id: "ws_amore_bloom", name: "Amoré Bloom" },
   membership: { id: "member_4", role: "staff", status: "active", created_at: "2026-04-01T00:00:00Z" },
-  permissions: ["workspace.view", "team.view", "leads.view", "clients.view", "events.view", "contracts.view", "finance.view", "documents.view"],
+  permissions: [
+    "workspace.view",
+    "team.view",
+    "leads.view",
+    "clients.view",
+    "events.view",
+    "contracts.view",
+    "finance.view",
+    "documents.view",
+    "clients.portal_view",
+  ],
   workspaceDisplayName: "Amoré Bloom Team",
 };
 
@@ -29,6 +39,18 @@ describe("MobileNav", () => {
 
     expect(screen.queryByRole("link", { name: "Team" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Leads" })).toBeInTheDocument();
+  });
+
+  it("renders the Client Portal group with Accounts and Invitations", () => {
+    render(
+      <MemberSessionProvider snapshot={staffSnapshot}>
+        <MobileNav open onClose={() => {}} workspaceDisplayName="Amoré Bloom Team" />
+      </MemberSessionProvider>,
+    );
+
+    expect(screen.getByText("Client Portal")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Accounts" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Invitations" })).toBeInTheDocument();
   });
 
   it("closes when a navigation link is clicked", () => {
