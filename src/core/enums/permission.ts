@@ -38,6 +38,10 @@ export const PERMISSIONS = [
   "documents.create",
   "documents.update",
   "documents.archive",
+  "clients.portal_view",
+  "clients.portal_invite",
+  "clients.portal_manage",
+  "clients.portal_suspend",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

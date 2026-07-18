@@ -80,7 +80,7 @@ Current, actionable tasks. Keep this in sync with reality — check items off as
 - [x] Update documentation (`docs/database.md`, `docs/workflows.md`, `docs/permissions.md`, `docs/integrations.md`, `ROADMAP.md`, `CHANGELOG.md`, `TODO.md`)
 - [x] Final sequential verification, one commit ("Build team membership and invitations foundation"), push to `origin/feature/team-foundation`, report
 
-## Phase 2 — Team Portal MVP (in progress, `feature/team-foundation`)
+## Phase 2 — Team Portal MVP (complete, `feature/team-foundation`)
 
 The authenticated internal app shell made permission-aware, consuming the Team foundation above rather than a second identity/authorization system. Excludes Client Accounts, Client Portal, Team Knowledge Base, Client Knowledge Base, Notification Center, Automation Center — see "Post-MVP modules" below.
 
@@ -95,10 +95,28 @@ The authenticated internal app shell made permission-aware, consuming the Team f
 - [x] Build the `/account` profile page (name/email/role/status/Workspace, link to existing `/update-password`, sign-out)
 - [x] Gate create/edit/archive/lifecycle UI actions across Leads/Clients/Events/Contracts/Finance/Documents by granular permission — UI-level only, RLS remains the real enforcement boundary
 - [x] Write tests for the route-access map, the access decision function, the session snapshot/provider, both blocked-access components, the route guard, Sidebar/MobileNav visibility, the Account page, dashboard permission-aware rendering, and permission-gated action rendering across every business module
-- [ ] Run sequential lint/typecheck/test/build
-- [ ] Live browser verification (12 steps) using the real, already-authenticated Owner Workspace — no second workspace, no signing out of the real Owner session
-- [ ] Update documentation (`docs/workflows.md`, `docs/permissions.md`, `docs/integrations.md`, `ROADMAP.md`, `CHANGELOG.md`, `TODO.md`) — in progress
-- [ ] Final sequential verification, one commit ("Build Team Portal MVP"), push to `origin/feature/team-foundation`, report
+- [x] Run sequential lint/typecheck/test/build
+- [x] Live browser verification (12 steps) using the real, already-authenticated Owner Workspace — no second workspace, no signing out of the real Owner session
+- [x] Update documentation (`docs/workflows.md`, `docs/permissions.md`, `docs/integrations.md`, `ROADMAP.md`, `CHANGELOG.md`, `TODO.md`)
+- [x] Final sequential verification, one commit ("Build Team Portal MVP"), push to `origin/feature/team-foundation`, report
+
+## Phase 2 — Client Accounts + Invitations foundation (in progress, `feature/client-access`)
+
+The authentication, account-linking, and invitation foundation for external Amoré Bloom clients, deliberately separate from internal Team membership — a client account is never a `workspace_members` row, never an internal role. Excludes the full Client Portal (real Events/Contracts/Invoices/Documents views), Team Portal persona invitations, both Knowledge Bases, the Notification Center, and the Automation Center — see "Post-MVP modules" below.
+
+- [x] Pre-migration audit of clients/profiles/Supabase Auth flow/workspace_members/Team invitation flow/route protection/AppShell assumptions/business repositories/document visibility for reusable pieces, required schema additions, and privacy/security gaps
+- [x] Design the `client_accounts`/`client_invitations` schema and access model (invited/active/suspended/revoked account statuses; the reused pending/accepted/expired/revoked invitation lifecycle; the 4 new `clients.portal_*` permissions)
+- [x] Write 8 ordered SQL migrations under `supabase/migrations/` (client_accounts, client_invitations, permission-catalog extension, updated_at triggers, invitation helper functions, account-access helper functions, indexes/constraints, RLS)
+- [x] Build `ClientAccessRepository` (interface + mock + Supabase) — Accounts and Invitations bundled into one repository pair, same pattern as every prior module
+- [x] Build the minimum internal Client Access management UI (`ClientAccessSection.tsx`, embedded on Client Detail, gated on `clients.portal_view`)
+- [x] Build the Client invitation acceptance page (`/client-invitations/[token]`)
+- [x] Build the minimal Client Portal landing page (`/client-access`) and the auth-separation routing (`(client-portal)` route group, `resolveClientAccountSessionSnapshot()`, `ClientAccountSessionProvider`)
+- [x] Write tests for account creation/uniqueness/status transitions, invitation creation/resend/revoke/acceptance/expiry, no `workspace_members` row is ever created, auth separation, and every Client Portal access state (82 new tests, 1710 → 1792)
+- [x] Run sequential lint/typecheck/test/build — all clean
+- [ ] Ask approval, apply the 8 migrations to the live Supabase project, verify schema via read-only SQL
+- [ ] Live browser verification (24 steps) against the real authenticated Workspace + RLS verification via read-only SQL
+- [x] Update documentation (`docs/database.md`, `docs/workflows.md`, `docs/permissions.md`, `docs/integrations.md`, `ROADMAP.md`, `CHANGELOG.md`, `TODO.md`)
+- [ ] Final sequential verification, one commit ("Build client accounts and invitations foundation"), push to `origin/feature/client-access`, report
 
 ## Phase 2 — Post-MVP modules (not started, reserved in the architecture only)
 

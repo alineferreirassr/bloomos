@@ -24,6 +24,7 @@ import { VipBadge } from "@/modules/clients/components/VipBadge";
 import { ClientActions } from "@/modules/clients/components/ClientActions";
 import { TagsEditor } from "@/modules/clients/components/TagsEditor";
 import { DocumentsSummarySection } from "@/modules/documents/components/DocumentsSummarySection";
+import { ClientAccessSection } from "@/modules/clientAccess/components/ClientAccessSection";
 import { CONTACT_METHOD_LABELS } from "@/core/enums/contactMethod";
 
 type LoadState =
@@ -268,6 +269,8 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
           </Card>
 
           <DocumentsSummarySection ownerType="client" ownerId={client.id} newDocumentParams={{ clientId: client.id }} />
+
+          <ClientAccessSection clientId={client.id} clientEmail={client.email} />
 
           <Card>
             <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>

@@ -16,6 +16,8 @@ import type { Document } from "@/types/document";
 import type { DocumentFolder } from "@/types/documentFolder";
 import type { TeamMember } from "@/types/teamMember";
 import type { WorkspaceInvitation, WorkspaceInvitationWithToken, InvitationPreview } from "@/types/workspaceInvitation";
+import type { ClientAccount, ClientAccountContext } from "@/types/clientAccount";
+import type { ClientInvitation, ClientInvitationWithToken, ClientInvitationPreview } from "@/types/clientInvitation";
 import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 import type { InvitationStatus } from "@/core/enums/invitationStatus";
 import type { Permission } from "@/core/enums/permission";
@@ -23,6 +25,10 @@ import type {
   CreateWorkspaceInvitationInput,
   WorkspaceInvitationFilters,
 } from "@/lib/data/team/repository";
+import type {
+  CreateClientInvitationInput,
+  ClientInvitationFilters,
+} from "@/lib/data/clientAccess/repository";
 import type { EntityType } from "@/core/enums/entityType";
 import type { DocumentCategory } from "@/core/enums/documentCategory";
 import type { DocumentVisibility } from "@/core/enums/documentVisibility";
@@ -107,6 +113,8 @@ import { mockDocumentsRepository } from "@/lib/data/documents/mockRepository";
 import { supabaseDocumentsRepository } from "@/lib/data/documents/supabaseRepository";
 import { mockTeamRepository, resetTeamMembersStore, resetWorkspaceInvitationsStore } from "@/lib/data/team/mockRepository";
 import { supabaseTeamRepository } from "@/lib/data/team/supabaseRepository";
+import { mockClientAccessRepository, resetClientAccountsStore, resetClientInvitationsStore } from "@/lib/data/clientAccess/mockRepository";
+import { supabaseClientAccessRepository } from "@/lib/data/clientAccess/supabaseRepository";
 import {
   readLeads,
   resetLeadsStore,
@@ -1634,6 +1642,108 @@ export async function getInvitationNextAction(id: string): Promise<string | null
 export type { CreateWorkspaceInvitationInput, WorkspaceInvitationFilters } from "@/lib/data/team/repository";
 
 // ---------------------------------------------------------------------------
+// Client accounts + invitations
+//
+// Deliberately separate from Team above: a client account is never a
+// workspace_members row, never carries an internal role, and never grants
+// access to another Client's records. Foundation only — the full Client
+// Portal (client-facing Events/Contracts/Invoices/Documents UI) is later,
+// separately-scoped work. See docs/permissions.md.
+// ---------------------------------------------------------------------------
+
+function clientAccessRepository() {
+  return selectRepository({ mock: mockClientAccessRepository, supabase: supabaseClientAccessRepository });
+}
+
+export async function getClientAccounts(clientId?: string): Promise<ClientAccount[]> {
+  return clientAccessRepository().getClientAccounts(clientId);
+}
+
+export async function getClientAccountById(id: string): Promise<ClientAccount> {
+  return clientAccessRepository().getClientAccountById(id);
+}
+
+export async function getClientAccountsByClientId(clientId: string): Promise<ClientAccount[]> {
+  return clientAccessRepository().getClientAccountsByClientId(clientId);
+}
+
+export async function getCurrentClientAccount(): Promise<ClientAccount | null> {
+  return clientAccessRepository().getCurrentClientAccount();
+}
+
+export async function getCurrentClientAccountContext(): Promise<ClientAccountContext | null> {
+  return clientAccessRepository().getCurrentClientAccountContext();
+}
+
+export async function activateClientAccount(id: string): Promise<DataResult<ClientAccount>> {
+  return clientAccessRepository().activateClientAccount(id);
+}
+
+export async function suspendClientAccount(id: string): Promise<DataResult<ClientAccount>> {
+  return clientAccessRepository().suspendClientAccount(id);
+}
+
+export async function reactivateClientAccount(id: string): Promise<DataResult<ClientAccount>> {
+  return clientAccessRepository().reactivateClientAccount(id);
+}
+
+export async function revokeClientAccount(id: string): Promise<DataResult<ClientAccount>> {
+  return clientAccessRepository().revokeClientAccount(id);
+}
+
+export async function updateClientLastAccess(id: string): Promise<void> {
+  return clientAccessRepository().updateClientLastAccess(id);
+}
+
+export async function canCurrentUserAccessClient(clientId: string): Promise<boolean> {
+  return clientAccessRepository().canCurrentUserAccessClient(clientId);
+}
+
+export async function getClientInvitations(filters: ClientInvitationFilters = {}): Promise<ClientInvitation[]> {
+  return clientAccessRepository().getClientInvitations(filters);
+}
+
+export async function getClientInvitationById(id: string): Promise<ClientInvitation> {
+  return clientAccessRepository().getClientInvitationById(id);
+}
+
+export async function createClientInvitation(
+  input: CreateClientInvitationInput,
+): Promise<DataResult<ClientInvitationWithToken>> {
+  return clientAccessRepository().createClientInvitation(input);
+}
+
+export async function resendClientInvitation(id: string): Promise<DataResult<ClientInvitationWithToken>> {
+  return clientAccessRepository().resendClientInvitation(id);
+}
+
+export async function revokeClientInvitation(id: string): Promise<DataResult<ClientInvitation>> {
+  return clientAccessRepository().revokeClientInvitation(id);
+}
+
+export async function acceptClientInvitation(token: string): Promise<DataResult<ClientAccount>> {
+  return clientAccessRepository().acceptClientInvitation(token);
+}
+
+export async function expireClientInvitations(): Promise<void> {
+  return clientAccessRepository().expireClientInvitations();
+}
+
+export async function getClientInvitationByToken(token: string): Promise<ClientInvitationPreview | null> {
+  return clientAccessRepository().getClientInvitationByToken(token);
+}
+
+export async function getClientInvitationStatus(id: string): Promise<InvitationStatus> {
+  return clientAccessRepository().getClientInvitationStatus(id);
+}
+
+export async function getClientInvitationNextAction(id: string): Promise<string | null> {
+  return clientAccessRepository().getClientInvitationNextAction(id);
+}
+
+export type { CreateClientInvitationInput, ClientInvitationFilters } from "@/lib/data/clientAccess/repository";
+
+// ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
 
@@ -1896,6 +2006,8 @@ export function resetAllMockData(): void {
   resetDocumentFoldersStore();
   resetTeamMembersStore();
   resetWorkspaceInvitationsStore();
+  resetClientAccountsStore();
+  resetClientInvitationsStore();
 }
 
 /**

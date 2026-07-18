@@ -217,6 +217,99 @@ export interface Database {
         };
         Relationships: [];
       };
+      client_accounts: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          client_id: string;
+          auth_user_id: string;
+          email: string;
+          status: string;
+          invited_by: string;
+          accepted_at: string | null;
+          suspended_at: string | null;
+          revoked_at: string | null;
+          last_access_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          client_id: string;
+          auth_user_id: string;
+          email: string;
+          status?: string;
+          invited_by: string;
+          accepted_at?: string | null;
+          suspended_at?: string | null;
+          revoked_at?: string | null;
+          last_access_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          client_id?: string;
+          auth_user_id?: string;
+          email?: string;
+          status?: string;
+          invited_by?: string;
+          accepted_at?: string | null;
+          suspended_at?: string | null;
+          revoked_at?: string | null;
+          last_access_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      client_invitations: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          client_id: string;
+          email: string;
+          invited_by: string;
+          token_hash: string;
+          status: string;
+          expires_at: string;
+          accepted_at: string | null;
+          revoked_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          client_id: string;
+          email: string;
+          invited_by: string;
+          token_hash: string;
+          status?: string;
+          expires_at: string;
+          accepted_at?: string | null;
+          revoked_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          client_id?: string;
+          email?: string;
+          invited_by?: string;
+          token_hash?: string;
+          status?: string;
+          expires_at?: string;
+          accepted_at?: string | null;
+          revoked_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       leads: {
         Row: {
           id: string;
@@ -1444,6 +1537,38 @@ export interface Database {
       accept_workspace_invitation: {
         Args: { p_token: string };
         Returns: Database["public"]["Tables"]["workspace_members"]["Row"];
+      };
+      get_client_invitation_by_token: {
+        Args: { p_token: string };
+        Returns: {
+          workspace_name: string;
+          client_name: string;
+          email: string;
+          status: string;
+          expires_at: string;
+        }[];
+      };
+      accept_client_invitation: {
+        Args: { p_token: string };
+        Returns: Database["public"]["Tables"]["client_accounts"]["Row"];
+      };
+      is_client_account_holder: {
+        Args: { p_client_id: string };
+        Returns: boolean;
+      };
+      get_current_client_account_context: {
+        Args: Record<string, never>;
+        Returns: {
+          account_id: string;
+          workspace_name: string;
+          client_name: string;
+          status: string;
+          last_access_at: string | null;
+        }[];
+      };
+      touch_client_account_last_access: {
+        Args: Record<string, never>;
+        Returns: undefined;
       };
     };
     Enums: Record<string, never>;

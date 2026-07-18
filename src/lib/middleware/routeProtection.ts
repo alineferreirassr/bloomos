@@ -1,6 +1,15 @@
 import type { DataMode } from "@/lib/env";
 
-/** Every business-module route this phase — kept in sync manually with `src/app/(app)`. */
+/**
+ * Every business-module route this phase — kept in sync manually with
+ * `src/app/(app)`. `/client-access` is the Client Portal's own landing
+ * route (its own route group, never nested under `(app)`) — this array
+ * only confirms *some* session exists, the same coarse check every other
+ * entry gets; the finer "is this actually a client account, not a team
+ * member" check happens in that route group's own layout, mirroring how
+ * `(app)/layout.tsx` does the finer Workspace-membership check for
+ * everything else here.
+ */
 export const PROTECTED_ROUTE_PREFIXES = [
   "/dashboard",
   "/account",
@@ -11,6 +20,7 @@ export const PROTECTED_ROUTE_PREFIXES = [
   "/finance",
   "/documents",
   "/team",
+  "/client-access",
 ] as const;
 
 /** Never redirect these — doing so would create a redirect loop. Invitation acceptance is intentionally an auth route: the page must render (and offer sign-up/sign-in) before the visitor has any session at all. */
@@ -20,6 +30,7 @@ export const AUTH_ROUTE_PREFIXES = [
   "/update-password",
   "/auth/callback",
   "/invitations",
+  "/client-invitations",
 ] as const;
 
 function matchesPrefix(pathname: string, prefixes: readonly string[]): boolean {

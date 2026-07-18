@@ -1,6 +1,6 @@
 # Database
 
-This document defines the data model for BloomOS. Most of it is a design reference, written ahead of any live Supabase connection for the tables it covers. The exceptions are the **Supabase Foundation** (`profiles`, `workspaces`, `workspace_members`), the **Leads**, **Clients**, **Events**, **Contracts**, **Finance**, and **Documents** modules (`leads`, `clients`, `events`, `checklist_items`, `event_schedule_items`, `contracts`, `contract_templates`, `contract_exhibits`, `invoices`, `payments`, `expenses`, `documents`, `document_folders`, `notes`, `timeline_activities`), the **Media Library** (`media_assets`), and the **Team foundation** (`roles`, `permissions`, `role_permissions`, `workspace_invitations`) — these tables have real, ordered SQL migrations under `supabase/migrations/`, applied to a live, connected Supabase project (see `docs/integrations.md`). This completes every Phase 1 MVP module plus the Phase 2 Team Members + Invitations foundation. Every other table in this document (Team Portal, Client Portal/Client Accounts, Knowledge Base, Notification Center, Automation Center) remains mock-only or planned; no migration exists for them yet. Terminology follows `BLOOMOS_BIBLE.md`; if they ever disagree, the Bible wins and this file gets corrected.
+This document defines the data model for BloomOS. Most of it is a design reference, written ahead of any live Supabase connection for the tables it covers. The exceptions are the **Supabase Foundation** (`profiles`, `workspaces`, `workspace_members`), the **Leads**, **Clients**, **Events**, **Contracts**, **Finance**, and **Documents** modules (`leads`, `clients`, `events`, `checklist_items`, `event_schedule_items`, `contracts`, `contract_templates`, `contract_exhibits`, `invoices`, `payments`, `expenses`, `documents`, `document_folders`, `notes`, `timeline_activities`), the **Media Library** (`media_assets`), the **Team foundation** (`roles`, `permissions`, `role_permissions`, `workspace_invitations`), and the **Client Accounts + Invitations foundation** (`client_accounts`, `client_invitations`) — these tables have real, ordered SQL migrations under `supabase/migrations/`, applied to a live, connected Supabase project (see `docs/integrations.md`). This completes every Phase 1 MVP module plus the Phase 2 Team Members + Invitations foundation and the Client Accounts + Invitations foundation. Every other table in this document (Team Portal persona invitations, the full Client Portal, Knowledge Base, Notification Center, Automation Center) remains mock-only or planned; no migration exists for them yet. Terminology follows `BLOOMOS_BIBLE.md`; if they ever disagree, the Bible wins and this file gets corrected.
 
 ## Principles
 
@@ -590,6 +590,58 @@ Two functions, and only these two in this migration set, run as `security define
 - **`trg_protect_workspace_owners`** (`before update or delete on workspace_members`) — blocks any change that would leave the Workspace with zero active owners (demotion, deactivation, or removal), and blocks any non-owner from granting the owner role or modifying an existing owner's row at all.
 - **`trg_validate_invitation_role_authority`** (`before insert on workspace_invitations`) — an admin may only invite `manager`/`staff`; only an owner may invite `owner`/`admin`. RLS' own `has_permission(workspace_id, 'team.invite')` check already keeps manager/staff from reaching this insert at all — this trigger is the finer-grained rule a single boolean RLS check can't express on its own.
 
+## Client Accounts + Invitations foundation — **live** (`supabase/migrations/20260725100000_client_accounts.sql` through `20260725100700_client_access_rls.sql`, 8 migrations)
+
+The authentication, account-linking, and invitation foundation for **external** Amoré Bloom clients — Phase 2's second module, on `feature/client-access`. Deliberately separate from the Team foundation above: a client account is never a `workspace_members` row, never carries an internal role, and never receives a `role_permissions` grant. Canonical model: `auth.users` row → `client_accounts` row → exactly one `clients` row → (future) permitted Events/Contracts/Invoices/Documents. The full client-facing Portal UI (real Events/Contracts/Invoices/Documents views) remains separately-scoped future work — this phase builds only the account/invitation plumbing plus a minimal landing page, per the approved spec.
+
+### `client_accounts`
+Links one external Supabase Auth user to exactly one `clients` row within one Workspace.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workspace_id | uuid | FK → workspaces, on delete cascade |
+| client_id | uuid | FK → clients, on delete cascade |
+| auth_user_id | uuid | FK → auth.users, on delete cascade |
+| email | text | Normalized (lowercase, trimmed) — CHECK-enforced |
+| status | enum | `invited`, `active`, `suspended`, `revoked` — `core/enums/clientAccountStatus.ts`. `invited` is reserved/unused, the same precedent as `workspace_members.status`: a real row is created directly with `status: 'active'` by `accept_client_invitation`, never as an intermediate `invited` row |
+| invited_by | uuid | FK → auth.users |
+| accepted_at / suspended_at / revoked_at | timestamptz | Nullable, each CHECK-tied to its corresponding status (except `accepted_at`, which also stays set through a later suspend/revoke — an account's original acceptance date is never erased) |
+| last_access_at | timestamptz | Nullable — updated only by `touch_client_account_last_access()` (below); explicitly not a required security dependency |
+| created_at / updated_at | timestamptz | |
+
+Unique constraint on (`workspace_id`, `client_id`, `auth_user_id`) — at most one linking row per person/Client/Workspace triple, structurally preventing a duplicate account rather than relying on application logic alone. A revoked/suspended row is reactivated in place (never duplicated) either by `reactivateClientAccount` (an internal team member's explicit action) or by accepting a fresh invitation for the same triple. No delete policy — suspension/revocation is the terminal-but-reversible state, the same reversibility precedent as every other domain in this schema.
+
+### `client_invitations`
+A single-use, token-based invitation linking to a specific `clients` row — **not the same table as `workspace_invitations`** (see "Team foundation" above) and not a reuse of it, per the design docs/permissions.md already anticipated ("expected to need its own linking table"). Same token-hash security shape as `workspace_invitations`: only a SHA-256 hash of the raw token is ever stored.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| workspace_id | uuid | FK → workspaces, on delete cascade |
+| client_id | uuid | FK → clients, on delete cascade |
+| email | text | Normalized — CHECK-enforced |
+| invited_by | uuid | FK → auth.users |
+| token_hash | text | Lowercase hex SHA-256 of the raw token — never the raw token itself |
+| status | enum | `pending`, `accepted`, `expired`, `revoked` — reuses `core/enums/invitationStatus.ts` (the same lifecycle as `WorkspaceInvitation`; `core/workflows/invitationWorkflow.ts` is reused unchanged rather than duplicated) |
+| expires_at | timestamptz | 7 days from creation/resend |
+| accepted_at / revoked_at | timestamptz | Nullable |
+| created_at / updated_at | timestamptz | |
+
+A partial unique index (`client_invitations_pending_email_unique`, on `(workspace_id, client_id, email) where status = 'pending'`) enforces at most one active pending invitation per Client/email pair at a time. A second unique index on `token_hash` backstops the token against collision. No delete policy.
+
+### Permission catalog extension
+Four new permissions added to the existing global `permissions`/`role_permissions` catalog (never a parallel permission system): `clients.portal_view` (granted to owner/admin/manager/staff by default, the same "broad view" precedent as `team.view`), `clients.portal_invite`/`clients.portal_manage`/`clients.portal_suspend` (owner/admin only by default, the same precedent as `team.invite`/`team.manage_roles`/`team.deactivate`).
+
+### Invitation and account-access functions — live (`security definer`, narrowly scoped)
+
+- **`get_client_invitation_by_token(p_token text)`** — returns only display-safe fields (Workspace name, Client's first/last name, invited email, status, expiry) for the invitation-acceptance page, reachable by `anon` and `authenticated` alike. Never returns `token_hash`, `invited_by`, or the invitation/client id, and never any internal-only `clients` field.
+- **`accept_client_invitation(p_token text)`** — atomically validates a pending, unexpired, unrevoked invitation whose email matches the caller's own `profiles.email`, then either inserts a new `client_accounts` row or reactivates an existing one in place (never a duplicate row) and marks the invitation `accepted`. Uses its own errcode range (`P0101`–`P0107`) distinct from `accept_workspace_invitation`'s (`P0001`–`P0007`), so the two flows are never ambiguous to a caller inspecting a Postgres error code. Never creates a `workspace_members` row.
+- **`is_client_account_holder(p_client_id uuid)`** — the Client Portal's direct analog of `is_workspace_member()`. Not consumed by any business-module RLS policy yet (Leads/Clients/Events/Contracts/Finance/Documents remain Workspace-isolation-only, unchanged) — built now as this phase's minimal forward-looking helper, so a future Client Portal RLS phase can reuse it directly.
+- **`touch_client_account_last_access()`** — the sole write a Client Portal user may ever perform on `client_accounts` directly; only ever sets `last_access_at` on the caller's own active row, identified purely by `auth.uid()`.
+- **`get_current_client_account_context()`** — returns the caller's own account plus the Client/Workspace display names the landing page needs; business-module RLS on `clients` grants a client caller no other path to read even their own Client row this phase, so this narrowly-scoped function is the one exception.
+- **`validate_client_account_action_authority`** (`before update on client_accounts`) — a revoke or reactivate-from-revoked transition requires `clients.portal_manage` specifically; a suspend/reactivate-from-suspended transition requires `clients.portal_suspend` or `clients.portal_manage`. Deliberately bypassed (via a transaction-local flag) when `accept_client_invitation` itself is reactivating a row, since that caller is the client accepting their own invitation, not a permissioned team member.
+
 ## Relationships
 
 ```
@@ -603,11 +655,17 @@ workspaces 1—* payments
 workspaces 1—* expenses
 workspaces 1—* workspace_members
 workspaces 1—* workspace_invitations
+workspaces 1—* client_accounts
+workspaces 1—* client_invitations
 roles 1—* workspace_members          (workspace_members.role)
 roles 1—* workspace_invitations      (workspace_invitations.invited_role)
 roles 1—* role_permissions
 permissions 1—* role_permissions
 auth.users 1—* workspace_invitations (invited_by, optional accepted_by)
+clients 1—* client_accounts
+clients 1—* client_invitations
+auth.users 1—* client_accounts       (auth_user_id, invited_by)
+auth.users 1—* client_invitations    (invited_by)
 leads 1—* notes                    (owner_type = 'lead')
 leads 1—* timeline_activities      (owner_type = 'lead')
 clients 1—* notes                   (owner_type = 'client')
@@ -668,11 +726,11 @@ invoices 1—0/* payments             (payment.invoice_id — optional)
 
 ## Post-MVP tables (not created yet)
 
-Anticipated, not implemented: `inventory_items`, `suppliers`, `event_team_assignments`, `vehicles`, `client_portal_access`, `team_portal_access`, `automations`, `automation_runs`, `emails`, `gallery_media`, `feedback`. `team_members` as a standalone table is superseded — internal team identity now lives in `workspace_members` (live, see "Team foundation" above); nothing further is needed there. When the remaining tables ship, `checklist_items.owner_type`/`schedule_items.owner_type` and `checklist_items.assigned_type` are expected to gain `employee`/`vendor`/`inventory`/`vehicle` values rather than needing new tables — that reuse is the reason those two tables were generalized ahead of time; `documents.owner_type` is expected to gain `supplier`/`inventory_item` the same way (`document` and `document_folder` are already live owner types unrelated to this). These will be specified in detail when their phase (see `ROADMAP.md`) begins. The former single `knowledge_base_articles` placeholder has been split into two separate, independent future modules — see `team_kb_articles` and `client_kb_articles` below.
+Anticipated, not implemented: `inventory_items`, `suppliers`, `event_team_assignments`, `vehicles`, `team_portal_access`, `automations`, `automation_runs`, `emails`, `gallery_media`, `feedback`. `team_members` as a standalone table is superseded — internal team identity now lives in `workspace_members` (live, see "Team foundation" above); nothing further is needed there. **`client_portal_access` is likewise superseded** — external client identity now lives in `client_accounts`/`client_invitations` (live, see "Client Accounts + Invitations foundation" above); nothing further is needed for the account/invitation layer itself, though the full client-facing Portal UI (real Events/Contracts/Invoices/Documents views, and the RLS to scope them to `is_client_account_holder()`) remains future scope. When the remaining tables ship, `checklist_items.owner_type`/`schedule_items.owner_type` and `checklist_items.assigned_type` are expected to gain `employee`/`vendor`/`inventory`/`vehicle` values rather than needing new tables — that reuse is the reason those two tables were generalized ahead of time; `documents.owner_type` is expected to gain `supplier`/`inventory_item` the same way (`document` and `document_folder` are already live owner types unrelated to this). These will be specified in detail when their phase (see `ROADMAP.md`) begins. The former single `knowledge_base_articles` placeholder has been split into two separate, independent future modules — see `team_kb_articles` and `client_kb_articles` below.
 
-### `invitations` (planned, not created — Client Portal / Team Portal only)
+### `team_portal_invitations` (planned, not created — Team Portal persona only)
 
-**Not the same table as `workspace_invitations`** (live, see "Team foundation" above, which already covers inviting internal owner/admin/manager/staff team members). This sketch is narrower and still entirely future scope: inviting a **Client** or a future **Team Portal** persona to their own portal session — a different audience, different acceptance destination, and expected to reuse `workspace_invitations`' proven token-hash/self-service-signup design rather than the Supabase Auth Admin API sketch this table previously assumed. See `docs/permissions.md`'s "Client and Team Portal invitations" section for the current design and `docs/workflows.md`'s "Invitation lifecycle" for the status state machine. Column names/types below are not final until that phase begins.
+**Not the same table as `workspace_invitations`** (live, "Team foundation" above — inviting a full owner/admin/manager/staff member) **nor `client_invitations`** (live, "Client Accounts + Invitations foundation" above — inviting a Client to their own Client Portal account). This sketch is narrower and still entirely future scope: a scoped-down, internal-lite persona (e.g. day-of staff or contractors) that isn't a full Workspace member — a different audience from both live invitation flows, expected to reuse the same proven token-hash design rather than invent a third one. See `docs/permissions.md`'s "Client and Team Portal invitations" section. Column names/types below are not final until that phase begins.
 
 | Column (sketch) | Type | Notes |
 |---|---|---|
@@ -680,17 +738,15 @@ Anticipated, not implemented: `inventory_items`, `suppliers`, `event_team_assign
 | workspace_id | uuid | FK → workspaces |
 | email | text | recipient |
 | name | text | recipient's display name |
-| portal_type | enum | `client`, `team` — never both on one invitation |
-| role | text | the role to grant on acceptance |
+| role | text | the scoped-down role to grant on acceptance |
 | permissions | jsonb | nullable — finer-grained grant beyond `role`, if needed |
-| related_client_id | uuid | nullable — links to a `clients` row (Client Portal invitations) |
-| status | enum | `pending`, `accepted`, `expired`, `revoked` — same shape as `workspace_invitations`, see `docs/workflows.md` |
+| status | enum | `pending`, `accepted`, `expired`, `revoked` — same shape as `workspace_invitations`/`client_invitations` |
 | invited_by | uuid | FK → auth.users |
 | expires_at | timestamptz | |
 | created_at / updated_at | timestamptz | |
 | accepted_at / revoked_at | timestamptz | nullable |
 
-`documents`/`document_folders` visibility enforcement (below) is the main thing this table's eventual implementation unblocks — a Client Portal session needs a real membership-equivalent row to check `visibility` against.
+`documents`/`document_folders` visibility enforcement (below) is the main thing a future Client Portal RLS phase unblocks for the `client`/`client_and_team` visibility values — `client_accounts`/`is_client_account_holder()` (live, above) already provide the membership-equivalent row and check that phase would key off; nothing about that phase requires a new table.
 
 `documents` now exists (see above) — `contract_exhibits.document_id`, `payments.document_id`, and `expenses.document_id` remain nullable placeholder columns that a real Document's id can be written into via the placeholder attachment helpers (`attachDocumentToContractExhibit`, `attachDocumentToPayment`, `attachDocumentToExpense`, and their Invoice/Event/Client counterparts) — metadata-only linking, no real binary upload. These helpers are additive: they never rewrite an existing `document_id` automatically, and no seed data populates them yet.
 
@@ -905,6 +961,6 @@ No payment-provider (Stripe, Square, PayPal, banks, accounting software) is conn
 ## Supabase-specific notes
 
 - **Every Phase 1 MVP module now reads exclusively from live Supabase tables in `supabase` mode — no module cross-references another domain's mock store anymore.** This was a real, fixed gap at every prior migration (`getDashboardMetrics`, cross-module summary functions, and each new module's own owner/reference validation originally read `readClients()`/`readEvents()`/etc. against the in-memory mock stores regardless of `NEXT_PUBLIC_DATA_MODE`); the Documents migration closed the last instance of it (`validateDocumentOwnerAndReferences`, the `attachDocumentTo*` helpers, and `getDashboardMetrics`'s Documents section all now call the repository-routed `getClients()`/`getEvents()`/`getContract()`/`getInvoiceById()`/`getPaymentById()`/`getExpenseById()`/`getContractExhibitById()`/`getDocuments()` instead). Cross-domain validation inside a Supabase repository still queries the target table directly via Supabase (not through another module's repository wrapper, which would be circular) — that's the established, correct pattern, not the bug described above; see e.g. `validateDocumentOwnerAndReferences` in `lib/data/documents/supabaseRepository.ts`.
-- Row-Level Security (RLS) is **live** for `profiles`/`workspaces`/`workspace_members` (the Supabase Foundation), `leads`/`notes`/`timeline_activities`, `clients`, `events`/`checklist_items`/`event_schedule_items`, `media_assets`, `contracts`/`contract_templates`/`contract_exhibits`, `invoices`/`payments`/`expenses`, `documents`/`document_folders`, and `roles`/`permissions`/`role_permissions`/`workspace_invitations` (the Team foundation) — a real Supabase project is connected (see `docs/integrations.md`). This covers every Phase 1 MVP table plus the Team foundation. `roles`/`permissions`/`role_permissions` are global reference tables with `using (true)` select-only policies (still scoped `to authenticated`, blocking anonymous) — the sole, documented exception to this codebase's "no bare `using(true)`" convention, justified because they hold non-sensitive catalog data with no `workspace_id` to scope by. `workspace_members`' own policies were replaced during the Team foundation migration: the four Foundation-phase policies (hardcoded `has_workspace_role(..., array['owner','admin'])` checks) were dropped and recreated using the granular `has_permission(workspace_id, 'team.view' | 'team.manage_roles')` helper instead, so future roles can gain or lose team-management power without another RLS migration. For every other table in this document (Client/Team Portal, Knowledge Base, Notification Center, Automation Center), RLS remains design-only — no migration exists for them yet. See `docs/permissions.md`.
+- Row-Level Security (RLS) is **live** for `profiles`/`workspaces`/`workspace_members` (the Supabase Foundation), `leads`/`notes`/`timeline_activities`, `clients`, `events`/`checklist_items`/`event_schedule_items`, `media_assets`, `contracts`/`contract_templates`/`contract_exhibits`, `invoices`/`payments`/`expenses`, `documents`/`document_folders`, `roles`/`permissions`/`role_permissions`/`workspace_invitations` (the Team foundation), and `client_accounts`/`client_invitations` (the Client Accounts + Invitations foundation) — a real Supabase project is connected (see `docs/integrations.md`). This covers every Phase 1 MVP table plus both Phase 2 foundations so far. `roles`/`permissions`/`role_permissions` are global reference tables with `using (true)` select-only policies (still scoped `to authenticated`, blocking anonymous) — the sole, documented exception to this codebase's "no bare `using(true)`" convention, justified because they hold non-sensitive catalog data with no `workspace_id` to scope by. `workspace_members`' own policies were replaced during the Team foundation migration: the four Foundation-phase policies (hardcoded `has_workspace_role(..., array['owner','admin'])` checks) were dropped and recreated using the granular `has_permission(workspace_id, 'team.view' | 'team.manage_roles')` helper instead, so future roles can gain or lose team-management power without another RLS migration. `client_accounts` uniquely carries **two** permissive select policies evaluated with OR semantics — a client reading only their own row (`auth_user_id = auth.uid()`) and a team member reading every account in their Workspace (`has_permission(workspace_id, 'clients.portal_view')`) — since these are two genuinely different, non-overlapping legitimate callers, not a single role check. For every other table in this document (the full Client Portal, Team Portal persona invitations, Knowledge Base, Notification Center, Automation Center), RLS remains design-only — no migration exists for them yet. See `docs/permissions.md`.
 - Enum values above are the intended constraint; whether they're implemented as Postgres `enum` types or `check` constraints is an implementation decision made at connection time, not before — except `workspace_members.role`/`status`, which are already implemented as `check` constraints in migration 4 (`supabase/migrations/20260715150300_workspace_members.sql`).
 - `role`/`allowed_roles` values passed into the `has_workspace_role()` SQL helper function are plain `text`/`text[]`, not a Postgres enum — this mirrors the `check`-constraint choice above and keeps role checks a single string comparison rather than a cross-schema enum-type dependency.

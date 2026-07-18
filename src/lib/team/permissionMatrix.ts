@@ -38,6 +38,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<WorkspaceMemberRole, readonly Perm
     "documents.create",
     "documents.update",
     "documents.archive",
+    "clients.portal_view",
   ],
   staff: [
     "workspace.view",
@@ -48,6 +49,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<WorkspaceMemberRole, readonly Perm
     "contracts.view",
     "finance.view",
     "documents.view",
+    "clients.portal_view",
   ],
 };
 

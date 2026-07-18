@@ -31,14 +31,15 @@ Scope, and only scope: **Dashboard, Leads, Clients, Events, Contracts, Finance.*
 
 ## Phase 2 — Operational depth
 
-- Team Management — **Team Members + Invitations foundation complete**, and **Team Portal MVP complete**: the authenticated internal app shell — permission-aware sidebar/navigation, a central route-access map, role-aware dashboard, member session context, inactive-member/unauthorized states, and granular action-level gating across every business module (internal `owner`/`admin`/`manager`/`staff` roles, granular permissions, Supabase Auth-backed invitation flow; see `docs/permissions.md`, `docs/workflows.md`). Client Accounts and a Client Portal remain unstarted (Phase 3, below).
+- Team Management — **Team Members + Invitations foundation complete**, and **Team Portal MVP complete**: the authenticated internal app shell — permission-aware sidebar/navigation, a central route-access map, role-aware dashboard, member session context, inactive-member/unauthorized states, and granular action-level gating across every business module (internal `owner`/`admin`/`manager`/`staff` roles, granular permissions, Supabase Auth-backed invitation flow; see `docs/permissions.md`, `docs/workflows.md`).
+- Client Accounts — **Client Accounts + Invitations foundation complete**: external client authentication, account-linking (`client_accounts`), and invitation flow (`client_invitations`), a minimal Client Portal landing page (`/client-access`) and invitation acceptance page, and internal Client Access management on Client Detail — all built as a separate, wholly non-overlapping model from internal Team membership (see `docs/permissions.md`, `docs/workflows.md`). The full Client Portal experience (real Events/Contracts/Invoices/Documents views) remains unstarted (Phase 3, below).
 - Inventory
 - Suppliers
 - Calendar
 
 ## Phase 3 — Client-facing & intelligence
 
-- Client Portal
+- Client Portal (full business-data experience — the account/invitation foundation is already live, see Phase 2 above)
 - Bloom AI (assistant)
 - Automations
 - Email Center

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isAuthRoute, isProtectedRoute, resolveRouteProtectionDecision } from "@/lib/middleware/routeProtection";
 
 describe("isProtectedRoute", () => {
-  it.each(["/dashboard", "/account", "/leads", "/clients", "/events", "/contracts", "/finance", "/documents", "/team"])(
+  it.each(["/dashboard", "/account", "/leads", "/clients", "/events", "/contracts", "/finance", "/documents", "/team", "/client-access"])(
     "treats %s as protected",
     (pathname) => {
       expect(isProtectedRoute(pathname)).toBe(true);
@@ -26,7 +26,7 @@ describe("isProtectedRoute", () => {
 });
 
 describe("isAuthRoute", () => {
-  it.each(["/sign-in", "/reset-password", "/update-password", "/auth/callback", "/invitations"])(
+  it.each(["/sign-in", "/reset-password", "/update-password", "/auth/callback", "/invitations", "/client-invitations"])(
     "treats %s as an auth route",
     (pathname) => {
       expect(isAuthRoute(pathname)).toBe(true);

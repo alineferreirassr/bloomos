@@ -23,9 +23,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix migrations, in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation migrations, in chronological (execution) order", () => {
     const files = migrationFiles();
-    expect(files).toHaveLength(70);
+    expect(files).toHaveLength(78);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -279,5 +279,91 @@ describe("Team foundation migrations", () => {
     for (const errcode of ["P0001", "P0002", "P0003", "P0004", "P0005", "P0006", "P0007"]) {
       expect(sql).toMatch(new RegExp(`errcode = '${errcode}'`));
     }
+  });
+});
+
+describe("Client Accounts + Invitations foundation migrations", () => {
+  it("gives client_accounts a workspace/client/auth-user uniqueness constraint — no duplicate account rows", () => {
+    const sql = readMigration("20260725100000_client_accounts.sql");
+    expect(sql).toMatch(/client_accounts_workspace_client_user_unique unique \(workspace_id, client_id, auth_user_id\)/);
+  });
+
+  it("never adds an internal role column or a workspace_members FK to client_accounts (structurally, not just in prose comments)", () => {
+    const sql = stripSqlComments(readMigration("20260725100000_client_accounts.sql"));
+    expect(sql).not.toMatch(/references public\.workspace_members/);
+    expect(sql).not.toMatch(/\brole text\b/);
+  });
+
+  it("stores only a token hash on client_invitations, never a raw token column", () => {
+    const sql = readMigration("20260725100100_client_invitations.sql");
+    expect(sql).toMatch(/token_hash text not null/);
+    expect(sql).not.toMatch(/\btoken text\b/);
+  });
+
+  it("enforces at most one pending invitation per Workspace/Client/email via a partial unique index", () => {
+    const sql = readMigration("20260725100100_client_invitations.sql");
+    expect(sql).toMatch(/client_invitations_pending_email_unique/);
+    expect(sql).toMatch(/where status = 'pending'/);
+  });
+
+  it("extends the existing permission catalog rather than creating a parallel one", () => {
+    const sql = readMigration("20260725100200_client_portal_permissions_seed.sql");
+    expect(sql).toMatch(/insert into public\.permissions/);
+    expect(sql).toMatch(/insert into public\.role_permissions/);
+    for (const permission of ["clients.portal_view", "clients.portal_invite", "clients.portal_manage", "clients.portal_suspend"]) {
+      expect(sql).toMatch(new RegExp(`'${permission.replace(".", "\\.")}'`));
+    }
+  });
+
+  it("defines the token-based lookup and acceptance functions as security definer with a pinned search_path, using a distinct errcode range from the Team invitation flow", () => {
+    const sql = readMigration("20260725100400_client_invitation_helper_functions.sql");
+    const definerFunctionBlocks = sql.split(/create or replace function/i).slice(1);
+    expect(definerFunctionBlocks.length).toBeGreaterThan(0);
+    for (const block of definerFunctionBlocks) {
+      if (/security definer/i.test(block)) {
+        expect(block).toMatch(/set search_path = public/i);
+      }
+    }
+    for (const errcode of ["P0101", "P0102", "P0103", "P0104", "P0105", "P0106", "P0107"]) {
+      expect(sql).toMatch(new RegExp(`errcode = '${errcode}'`));
+    }
+  });
+
+  it("never creates a workspace_members row from accept_client_invitation", () => {
+    const sql = readMigration("20260725100400_client_invitation_helper_functions.sql");
+    expect(sql).not.toMatch(/insert into public\.workspace_members/);
+  });
+
+  it("defines is_client_account_holder as the Client Portal analog of is_workspace_member, and the action-authority trigger on client_accounts", () => {
+    const sql = readMigration("20260725100500_client_account_access_helper_functions.sql");
+    expect(sql).toMatch(/create or replace function public\.is_client_account_holder/);
+    expect(sql).toMatch(/trg_validate_client_account_action_authority/);
+    expect(sql).toMatch(/before update on public\.client_accounts/);
+  });
+
+  it("defines get_current_client_account_context, security definer, scoped to auth.uid()'s own row only", () => {
+    const sql = readMigration("20260725100500_client_account_access_helper_functions.sql");
+    expect(sql).toMatch(/create or replace function public\.get_current_client_account_context/);
+    expect(sql).toMatch(/where ca\.auth_user_id = auth\.uid\(\)/);
+  });
+
+  it("enables RLS on both new tables", () => {
+    const sql = readMigration("20260725100700_client_access_rls.sql");
+    for (const table of ["client_accounts", "client_invitations"]) {
+      expect(sql).toMatch(new RegExp(`alter table public\\.${table} enable row level security`, "i"));
+    }
+  });
+
+  it("never uses a bare permissive `using (true)` policy", () => {
+    const sql = stripSqlComments(readMigration("20260725100700_client_access_rls.sql"));
+    expect(sql).not.toMatch(/using\s*\(\s*true\s*\)/i);
+  });
+
+  it("gives a client select access to only their own client_accounts row, never an insert or delete policy", () => {
+    const sql = readMigration("20260725100700_client_access_rls.sql");
+    expect(sql).toMatch(/client_accounts_select_own/);
+    expect(sql).toMatch(/auth_user_id = auth\.uid\(\)/);
+    expect(sql).not.toMatch(/on public\.client_accounts for insert/i);
+    expect(sql).not.toMatch(/on public\.client_accounts for delete/i);
   });
 });
