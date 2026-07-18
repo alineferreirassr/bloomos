@@ -28,7 +28,7 @@ describe("ClientPortalShell", () => {
     );
 
     expect(screen.getByText("Client Portal")).toBeInTheDocument();
-    for (const label of ["Overview", "Events", "Contracts", "Invoices", "Documents", "Account"]) {
+    for (const label of ["Overview", "My Events", "My Contracts", "My Invoices", "My Documents", "Account"]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
     expect(screen.queryByText("Dashboard")).not.toBeInTheDocument();
@@ -44,7 +44,7 @@ describe("ClientPortalShell", () => {
       </ClientPortalShell>,
     );
 
-    const eventsLinks = screen.getAllByRole("link", { name: "Events" });
+    const eventsLinks = screen.getAllByRole("link", { name: "My Events" });
     expect(eventsLinks[0].className).toMatch(/text-accent/);
   });
 

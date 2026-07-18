@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/Button";
 interface AccessBlockedPageProps {
   title: string;
   message: string;
+  /** Optional qualifier shown under the Amoré Bloom logo — e.g. "Client Portal", so an external blocked state never reads as the bare internal brand. Omitted entirely for internal Team Portal callers, unchanged. */
+  brandSuffix?: string;
 }
 
 /**
@@ -24,7 +26,7 @@ interface AccessBlockedPageProps {
  * without having already redirected server-side (mock mode never redirects
  * from `signOut()`, Supabase mode always does on success).
  */
-export function AccessBlockedPage({ title, message }: AccessBlockedPageProps) {
+export function AccessBlockedPage({ title, message, brandSuffix }: AccessBlockedPageProps) {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +55,9 @@ export function AccessBlockedPage({ title, message }: AccessBlockedPageProps) {
             priority
             className="h-auto w-48"
           />
+          {brandSuffix ? (
+            <div className="mt-1 text-[11px] tracking-[0.06em] text-text/55 uppercase">{brandSuffix}</div>
+          ) : null}
         </div>
         <Card>
           <h1 className="mb-2 font-serif text-lg font-semibold text-text">{title}</h1>

@@ -135,7 +135,35 @@ The real, business-data-facing external Client Portal, consuming the account/inv
 - [x] Run sequential lint/typecheck/test/build — all clean
 - [x] Live verification: owner-side regression check (Client Access management, existing invitations, internal branding, auth separation) against the real Owner session; client-persona behavior verified via the automated/mock test suite (no second real client account created, per instruction)
 - [x] Update documentation (`docs/database.md`, `docs/workflows.md`, `docs/permissions.md`, `docs/integrations.md`, `ROADMAP.md`, `CHANGELOG.md`, `TODO.md`)
-- [ ] Final sequential verification, one commit ("Build Client Portal MVP"), push to `origin/feature/client-access`, report
+- [x] Final sequential verification, one commit ("Build Client Portal MVP"), push to `origin/feature/client-access`, report
+
+## Phase 2 — Client Portal administration (internal, complete, `feature/client-access`)
+
+A new internal-only Sidebar/MobileNav group — Client Portal — distinct from Clients (the CRM module), administering external account/access for a Client without ever merging into the Clients section. No schema/RLS change; reuses `ClientAccessRepository` and the existing `clients.portal_*` permissions unchanged.
+
+- [x] Restructure `config/navigation.ts` into grouped sections (Dashboard, Sales, Operations, Client Portal, Team) via a new `getVisibleNavigationGroups()`, and update Sidebar/MobileNav to render group headers
+- [x] Add `/client-portal` to the route-access map (`clients.portal_view`) and `PROTECTED_ROUTE_PREFIXES`
+- [x] Build `ClientAccountsAdminView` (`/client-portal/accounts`) — Workspace-wide account list, search, status filter, suspend/reactivate/revoke, linked-Client link
+- [x] Build `ClientInvitationsAdminView` (`/client-portal/invitations`) — Workspace-wide invitation list, search, status filter, resend/revoke, linked-Client link
+- [x] Write tests (26 new tests, 1875 → 1901)
+- [x] Run sequential lint/typecheck/test/build — all clean
+- [x] Live verification against the real Owner session (nav grouping, both new admin pages, no regression to `ClientAccessSection` on Client Detail)
+- [x] Rename in-group nav labels "Client Accounts"/"Client Invitations" → "Accounts"/"Invitations" (the parent group already supplies context); page headings unchanged
+- [x] Update documentation (`docs/workflows.md`, `docs/permissions.md`, `CHANGELOG.md`, `TODO.md`)
+- [x] Two commits ("Create Client Portal administration section", plus the nav-label rename folded into the same commit), pushed to `origin/feature/client-access`
+
+## Phase 2 — Client Portal architecture audit (external surface, complete, `feature/client-access`)
+
+A scoped audit confirming the already-shipped My Events/Contracts/Invoices/Documents pages conform to the final Client Portal architecture — no route removed, no page rebuilt, no duplicate implementation introduced.
+
+- [x] Audit shell/context/route-protection/DTO-safety against the canonical architecture; confirm no `select("*")`, no internal-field leakage, RLS/middleware coverage intact
+- [x] Fix: `resolveClientAccountSessionSnapshot()` now resolves a distinct `{ kind: "error" }` snapshot on a thrown repository error, instead of an unhandled rejection stranding the layout on its loading skeleton
+- [x] Fix: `AccessBlockedPage` gained an optional `brandSuffix` prop; every Client Portal blocked state now reads "Amoré Bloom" + "Client Portal", never the bare internal brand
+- [x] Fix: shell nav labels renamed to their canonical form ("My Events"/"My Contracts"/"My Invoices"/"My Documents")
+- [x] Write tests (10 new tests, 1901 → 1911), including a new `clientAccountSession.test.ts` covering every snapshot outcome
+- [x] Run sequential lint/typecheck/test/build — all clean
+- [x] Live verification against the real Owner session (internal admin regression, external invitation page, blocked-state brand qualifier)
+- [x] Update documentation (`docs/workflows.md`, `docs/permissions.md`, `CHANGELOG.md`, `TODO.md`)
 
 ## Phase 2 — Post-MVP modules (not started, reserved in the architecture only)
 

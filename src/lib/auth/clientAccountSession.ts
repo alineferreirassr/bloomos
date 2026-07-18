@@ -21,6 +21,7 @@ export type ClientAccountSessionSnapshot =
   | { kind: "unauthenticated" }
   | { kind: "no-account" }
   | { kind: "blocked"; status: Exclude<ClientAccountStatus, "active"> }
+  | { kind: "error" }
   | {
       kind: "active";
       authUserId: string;
@@ -56,7 +57,16 @@ export async function resolveClientAccountSessionSnapshot(): Promise<ClientAccou
     if (!data.user) return { kind: "unauthenticated" };
   }
 
-  const context = await getCurrentClientAccountContext();
+  let context;
+  try {
+    context = await getCurrentClientAccountContext();
+  } catch {
+    // A thrown repository error (network/DB failure) must resolve to a distinct,
+    // safe blocked state — never left as an unhandled rejection, which would
+    // strand the caller on the layout's loading skeleton indefinitely.
+    return { kind: "error" };
+  }
+
   if (!context) return { kind: "no-account" };
   if (context.account.status !== "active") {
     return { kind: "blocked", status: context.account.status as Exclude<ClientAccountStatus, "active"> };

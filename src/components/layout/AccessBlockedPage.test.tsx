@@ -26,6 +26,16 @@ describe("AccessBlockedPage", () => {
     expect(screen.getByText("Contact a Workspace owner.")).toBeInTheDocument();
   });
 
+  it("renders no brand qualifier by default, unchanged for internal Team Portal callers", () => {
+    render(<AccessBlockedPage title="No Workspace access" message="…" />);
+    expect(screen.queryByText("Client Portal")).not.toBeInTheDocument();
+  });
+
+  it("renders the given brand qualifier when passed, so an external blocked state never reads as the bare internal brand", () => {
+    render(<AccessBlockedPage title="Account inactive" message="…" brandSuffix="Client Portal" />);
+    expect(screen.getByText("Client Portal")).toBeInTheDocument();
+  });
+
   it("navigates to /sign-in after a successful sign-out that didn't already redirect (mock mode)", async () => {
     vi.mocked(signOut).mockResolvedValue({ success: true });
     render(<AccessBlockedPage title="Account inactive" message="…" />);

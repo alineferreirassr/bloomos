@@ -10,10 +10,10 @@ import { Button } from "@/components/ui/Button";
 
 const NAV_ITEMS = [
   { href: "/client-access", label: "Overview" },
-  { href: "/client-access/events", label: "Events" },
-  { href: "/client-access/contracts", label: "Contracts" },
-  { href: "/client-access/invoices", label: "Invoices" },
-  { href: "/client-access/documents", label: "Documents" },
+  { href: "/client-access/events", label: "My Events" },
+  { href: "/client-access/contracts", label: "My Contracts" },
+  { href: "/client-access/invoices", label: "My Invoices" },
+  { href: "/client-access/documents", label: "My Documents" },
 ] as const;
 
 /** Exact match for the Overview route (it's also the prefix of every other route), longest-prefix match for everything else. */

@@ -61,6 +61,33 @@ describe("ClientPortalLayout", () => {
     expect(screen.getByText(/suspended/)).toBeInTheDocument();
   });
 
+  it("shows a distinct, safe blocked state for a repository error, never an infinite loading state", async () => {
+    vi.mocked(resolveClientAccountSessionSnapshot).mockResolvedValue({ kind: "error" });
+
+    render(
+      <ClientPortalLayout>
+        <div>Landing content</div>
+      </ClientPortalLayout>,
+    );
+
+    await waitFor(() => expect(screen.getByText("Something went wrong")).toBeInTheDocument());
+    expect(screen.queryByText("Landing content")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
+  });
+
+  it("shows the Client Portal brand qualifier on every blocked state, never the bare internal brand alone", async () => {
+    vi.mocked(resolveClientAccountSessionSnapshot).mockResolvedValue({ kind: "no-account" });
+
+    render(
+      <ClientPortalLayout>
+        <div>Landing content</div>
+      </ClientPortalLayout>,
+    );
+
+    await waitFor(() => expect(screen.getByText("No Client Portal access")).toBeInTheDocument());
+    expect(screen.getByText("Client Portal")).toBeInTheDocument();
+  });
+
   it("renders children inside the Client Portal shell for an active account", async () => {
     vi.mocked(resolveClientAccountSessionSnapshot).mockResolvedValue({
       kind: "active",

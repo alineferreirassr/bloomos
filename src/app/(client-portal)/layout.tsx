@@ -56,6 +56,7 @@ export default function ClientPortalLayout({ children }: { children: ReactNode }
   if (snapshot.kind === "no-account") {
     return (
       <AccessBlockedPage
+        brandSuffix="Client Portal"
         title="No Client Portal access"
         message="We couldn't find a Client Portal account for your sign-in. Ask your Amoré Bloom contact for an invitation."
       />
@@ -65,12 +66,23 @@ export default function ClientPortalLayout({ children }: { children: ReactNode }
   if (snapshot.kind === "blocked") {
     return (
       <AccessBlockedPage
+        brandSuffix="Client Portal"
         title="Account inactive"
         message={
           snapshot.status === "suspended"
             ? "Your Client Portal access has been suspended. Contact Amoré Bloom if you believe this is a mistake."
             : "Your Client Portal access is no longer active. Contact Amoré Bloom if you believe this is a mistake."
         }
+      />
+    );
+  }
+
+  if (snapshot.kind === "error") {
+    return (
+      <AccessBlockedPage
+        brandSuffix="Client Portal"
+        title="Something went wrong"
+        message="We couldn't load your Client Portal account right now. Please try again in a moment."
       />
     );
   }
