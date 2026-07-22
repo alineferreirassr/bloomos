@@ -35,7 +35,7 @@ export const OWNER_TYPE_LABELS: Record<EntityType, string> = {
   client_kb_article: "Client Knowledge Base Article",
   notification: "Notification",
   automation: "Automation",
-  inventory: "Inventory Item",
+  inventory_item: "Inventory Item",
   vendor: "Vendor",
 };
 

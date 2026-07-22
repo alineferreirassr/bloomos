@@ -15,6 +15,9 @@ import type { Payment } from "@/types/payment";
 import type { Expense } from "@/types/expense";
 import type { Document } from "@/types/document";
 import type { DocumentFolder } from "@/types/documentFolder";
+import type { InventoryItem } from "@/types/inventoryItem";
+import type { InventoryMovement } from "@/types/inventoryMovement";
+import type { CreateInventoryItemInput, InventoryItemInput, RecordInventoryMovementInput } from "@/modules/inventory/schema";
 import type { TeamMember } from "@/types/teamMember";
 import type { WorkspaceInvitation, WorkspaceInvitationWithToken, InvitationPreview } from "@/types/workspaceInvitation";
 import type { ClientAccount, ClientAccountContext } from "@/types/clientAccount";
@@ -128,6 +131,9 @@ import { mockClientAccessRepository, resetClientAccountsStore, resetClientInvita
 import { supabaseClientAccessRepository } from "@/lib/data/clientAccess/supabaseRepository";
 import { mockClientPortalRepository } from "@/lib/data/clientPortal/mockRepository";
 import { supabaseClientPortalRepository } from "@/lib/data/clientPortal/supabaseRepository";
+import type { InventoryItemFilters, InventoryAvailability } from "@/lib/data/inventory/repository";
+import { mockInventoryRepository } from "@/lib/data/inventory/mockRepository";
+import { supabaseInventoryRepository } from "@/lib/data/inventory/supabaseRepository";
 import {
   readLeads,
   resetLeadsStore,
@@ -153,6 +159,8 @@ import { resetPaymentsStore } from "@/lib/data/mock/paymentsStore";
 import { resetExpensesStore } from "@/lib/data/mock/expensesStore";
 import { resetDocumentsStore } from "@/lib/data/mock/documentsStore";
 import { resetDocumentFoldersStore } from "@/lib/data/mock/documentFoldersStore";
+import { resetInventoryItemsStore } from "@/lib/data/mock/inventoryItemsStore";
+import { resetInventoryMovementsStore } from "@/lib/data/mock/inventoryMovementsStore";
 
 // ---------------------------------------------------------------------------
 // Leads
@@ -1987,6 +1995,66 @@ export async function getClientPortalDocumentDownloadUrl(id: string): Promise<Da
 }
 
 // ---------------------------------------------------------------------------
+// Inventory — foundation only (types, workflow, repository); no UI, no
+// Supabase migration yet. `supabaseInventoryRepository` is a typed
+// placeholder that throws rather than querying a table that doesn't exist
+// or silently falling back to mock data in supabase mode.
+// ---------------------------------------------------------------------------
+
+export type { InventoryItemFilters, InventoryAvailability } from "@/lib/data/inventory/repository";
+
+function inventoryRepository() {
+  return selectRepository({ mock: mockInventoryRepository, supabase: supabaseInventoryRepository });
+}
+
+export async function listInventoryItems(filters: InventoryItemFilters = {}): Promise<InventoryItem[]> {
+  return inventoryRepository().listInventoryItems(filters);
+}
+
+export async function getInventoryItem(id: string): Promise<InventoryItem> {
+  return inventoryRepository().getInventoryItem(id);
+}
+
+export async function createInventoryItem(input: CreateInventoryItemInput): Promise<DataResult<InventoryItem>> {
+  return inventoryRepository().createInventoryItem(input);
+}
+
+export async function updateInventoryItem(id: string, input: InventoryItemInput): Promise<DataResult<InventoryItem>> {
+  return inventoryRepository().updateInventoryItem(id, input);
+}
+
+export async function archiveInventoryItem(id: string): Promise<DataResult<InventoryItem>> {
+  return inventoryRepository().archiveInventoryItem(id);
+}
+
+export async function restoreInventoryItem(id: string): Promise<DataResult<InventoryItem>> {
+  return inventoryRepository().restoreInventoryItem(id);
+}
+
+export async function recordInventoryMovement(
+  inventoryItemId: string,
+  input: RecordInventoryMovementInput,
+): Promise<DataResult<InventoryMovement>> {
+  return inventoryRepository().recordInventoryMovement(inventoryItemId, input);
+}
+
+export async function listInventoryMovements(inventoryItemId: string): Promise<InventoryMovement[]> {
+  return inventoryRepository().listInventoryMovements(inventoryItemId);
+}
+
+export async function getInventoryAvailability(inventoryItemId: string): Promise<InventoryAvailability> {
+  return inventoryRepository().getInventoryAvailability(inventoryItemId);
+}
+
+export async function getLowStockInventoryItems(): Promise<InventoryItem[]> {
+  return inventoryRepository().getLowStockItems();
+}
+
+export async function getDamagedOrUnderRepairInventoryItems(): Promise<InventoryItem[]> {
+  return inventoryRepository().getDamagedOrUnderRepairItems();
+}
+
+// ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
 
@@ -2251,6 +2319,8 @@ export function resetAllMockData(): void {
   resetWorkspaceInvitationsStore();
   resetClientAccountsStore();
   resetClientInvitationsStore();
+  resetInventoryItemsStore();
+  resetInventoryMovementsStore();
 }
 
 /**

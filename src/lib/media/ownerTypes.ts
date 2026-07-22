@@ -19,6 +19,7 @@ export const MEDIA_ASSET_OWNER_TYPES: EntityType[] = [
   "client_kb_article",
   "notification",
   "automation",
+  "inventory_item",
 ];
 
 /**

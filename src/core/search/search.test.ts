@@ -17,9 +17,9 @@ describe("search registry", () => {
   });
 
   it("allows a reserved entity type with no route yet (Inventory/Vendors ahead of those modules)", () => {
-    registerSearchableEntity({ entityType: "inventory", label: "Inventory Item", module: "Inventory" });
+    registerSearchableEntity({ entityType: "inventory_item", label: "Inventory Item", module: "Inventory" });
 
-    const config = getSearchableEntityConfig("inventory");
+    const config = getSearchableEntityConfig("inventory_item");
     expect(config).toBeDefined();
     expect(config?.route).toBeUndefined();
   });
@@ -30,7 +30,7 @@ describe("registerDefaultSearchableEntities", () => {
     registerDefaultSearchableEntities();
     const registered = getSearchableEntities().map((c) => c.entityType);
 
-    for (const entityType of ["lead", "client", "event", "document", "invoice", "payment", "expense", "inventory", "vendor"]) {
+    for (const entityType of ["lead", "client", "event", "document", "invoice", "payment", "expense", "inventory_item", "vendor"]) {
       expect(registered).toContain(entityType);
     }
   });
@@ -39,7 +39,7 @@ describe("registerDefaultSearchableEntities", () => {
     registerDefaultSearchableEntities();
 
     expect(getSearchableEntityConfig("lead")?.route?.("lead_1")).toBe("/leads/lead_1");
-    expect(getSearchableEntityConfig("inventory")?.route).toBeUndefined();
+    expect(getSearchableEntityConfig("inventory_item")?.route).toBeUndefined();
     expect(getSearchableEntityConfig("vendor")?.route).toBeUndefined();
   });
 });
