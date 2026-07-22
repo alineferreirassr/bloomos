@@ -37,20 +37,20 @@ describe("MobileNav", () => {
       </MemberSessionProvider>,
     );
 
-    expect(screen.queryByRole("link", { name: "Team" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Team")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Leads" })).toBeInTheDocument();
   });
 
-  it("renders the Client Portal group with Accounts and Invitations", () => {
+  it("renders the CRM module expanded by default with Client Accounts and Client Invitations children", () => {
     render(
       <MemberSessionProvider snapshot={staffSnapshot}>
         <MobileNav open onClose={() => {}} workspaceDisplayName="Amoré Bloom Team" />
       </MemberSessionProvider>,
     );
 
-    expect(screen.getByText("Client Portal")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Accounts" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Invitations" })).toBeInTheDocument();
+    expect(screen.getByText("CRM")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Client Accounts" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Client Invitations" })).toBeInTheDocument();
   });
 
   it("closes when a navigation link is clicked", () => {
@@ -78,5 +78,24 @@ describe("MobileNav", () => {
     expect(accountLink).toHaveAttribute("href", "/account");
     fireEvent.click(accountLink);
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("toggles a default-expanded module's children closed and back open on click, without closing the drawer", () => {
+    const onClose = vi.fn();
+    render(
+      <MemberSessionProvider snapshot={staffSnapshot}>
+        <MobileNav open onClose={onClose} workspaceDisplayName="Amoré Bloom Team" />
+      </MemberSessionProvider>,
+    );
+
+    expect(screen.getByRole("link", { name: "Leads" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /CRM/ }));
+    expect(screen.queryByRole("link", { name: "Leads" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /CRM/ }));
+    expect(screen.getByRole("link", { name: "Leads" })).toBeInTheDocument();
+
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

@@ -1,31 +1,58 @@
 import { describe, expect, it } from "vitest";
-import { getVisibleNavigationGroups, getVisibleNavigationItems, navigationItems } from "@/config/navigation";
+import {
+  findActiveNavLabel,
+  getNavigableLabelEntries,
+  getVisibleNavigationModules,
+  navigationModules,
+} from "@/config/navigation";
 
-describe("getVisibleNavigationItems", () => {
-  it("shows every item for a member with every permission", () => {
-    const visible = getVisibleNavigationItems(() => true);
-    expect(visible.map((item) => item.href)).toEqual(navigationItems.map((item) => item.href));
+describe("getVisibleNavigationModules", () => {
+  it("shows every module for a member with every permission", () => {
+    const visible = getVisibleNavigationModules(() => true);
+    expect(visible.map((m) => m.id)).toEqual(navigationModules.map((m) => m.id));
   });
 
   it("always shows Dashboard, even with no permissions at all", () => {
-    const visible = getVisibleNavigationItems(() => false);
-    expect(visible.map((item) => item.href)).toContain("/dashboard");
+    const visible = getVisibleNavigationModules(() => false);
+    expect(visible.map((m) => m.id)).toContain("dashboard");
   });
 
   it("hides Team for a member without team.view", () => {
     const can = (permission: string) => permission !== "team.view";
-    const visible = getVisibleNavigationItems(can);
-    expect(visible.map((item) => item.href)).not.toContain("/team");
+    const visible = getVisibleNavigationModules(can);
+    expect(visible.map((m) => m.id)).not.toContain("team");
   });
 
-  it("hides both Client Portal admin items for a member without clients.portal_view", () => {
+  it("drops the CRM module's Client Accounts/Invitations children for a member without clients.portal_view, but keeps CRM for its other children", () => {
     const can = (permission: string) => permission !== "clients.portal_view";
-    const visible = getVisibleNavigationItems(can);
-    expect(visible.map((item) => item.href)).not.toContain("/client-portal/accounts");
-    expect(visible.map((item) => item.href)).not.toContain("/client-portal/invitations");
+    const visible = getVisibleNavigationModules(can);
+    const crm = visible.find((m) => m.id === "crm");
+    expect(crm).toBeDefined();
+    expect(crm?.children?.map((c) => c.id)).not.toContain("client-accounts");
+    expect(crm?.children?.map((c) => c.id)).not.toContain("client-invitations");
+    expect(crm?.children?.map((c) => c.id)).toContain("leads");
   });
 
-  it("shows exactly the staff-permitted modules for the seeded staff permission matrix", () => {
+  it("drops a module entirely once every one of its children is hidden by permission", () => {
+    const can = (permission: string) =>
+      !["leads.view", "clients.view", "contracts.view", "clients.portal_view"].includes(permission);
+    const visible = getVisibleNavigationModules(can);
+    expect(visible.find((m) => m.id === "crm")).toBeUndefined();
+  });
+
+  it("keeps disabled placeholder modules with no href (Inventory, Vendors, Services, Bloom AI) visible regardless of permission", () => {
+    const visible = getVisibleNavigationModules(() => false);
+    expect(visible.map((m) => m.id)).toEqual(
+      expect.arrayContaining(["inventory", "vendors", "services", "bloom-ai"]),
+    );
+  });
+
+  it("hides Settings for a member without workspace.manage, since its reserved href is still permission-gated even while disabled", () => {
+    const visible = getVisibleNavigationModules(() => false);
+    expect(visible.map((m) => m.id)).not.toContain("settings");
+  });
+
+  it("shows exactly the staff-permitted modules for the seeded staff permission matrix (Settings excluded — staff lacks workspace.manage)", () => {
     const staffPermissions = new Set([
       "workspace.view",
       "team.view",
@@ -37,35 +64,51 @@ describe("getVisibleNavigationItems", () => {
       "documents.view",
       "clients.portal_view",
     ]);
-    const visible = getVisibleNavigationItems((permission) => staffPermissions.has(permission));
-    expect(visible.map((item) => item.href)).toEqual(navigationItems.map((item) => item.href));
+    const visible = getVisibleNavigationModules((permission) => staffPermissions.has(permission));
+    expect(visible.map((m) => m.id)).toEqual(
+      navigationModules.map((m) => m.id).filter((id) => id !== "settings"),
+    );
   });
 });
 
-describe("getVisibleNavigationGroups", () => {
-  it("groups Dashboard ungrouped, and every other item under its own group", () => {
-    const groups = getVisibleNavigationGroups(() => true);
-    expect(groups.map((g) => g.label)).toEqual([null, "Sales", "Pipeline", "Operations", "Client Portal", "Team"]);
-    expect(groups[0].items.map((i) => i.href)).toEqual(["/dashboard"]);
+describe("getNavigableLabelEntries", () => {
+  it("flattens both top-level direct links and every child leaf, excluding disabled and childless-group entries", () => {
+    const entries = getNavigableLabelEntries();
+    const hrefs = entries.map((e) => e.href);
+
+    expect(hrefs).toContain("/dashboard");
+    expect(hrefs).toContain("/leads");
+    expect(hrefs).toContain("/pipeline/commercial");
+    expect(hrefs).toContain("/client-portal/accounts");
+    expect(hrefs).toContain("/client-portal/invitations");
+    expect(hrefs).not.toContain("/settings");
   });
 
-  it("places Accounts and Invitations under a Client Portal group, not under Sales/Clients", () => {
-    const groups = getVisibleNavigationGroups(() => true);
-    const clientPortalGroup = groups.find((g) => g.label === "Client Portal");
-    expect(clientPortalGroup?.items.map((i) => i.label)).toEqual(["Accounts", "Invitations"]);
+  it("never includes an entry for CRM or Events themselves, since those are childless-of-href expandable groups", () => {
+    const entries = getNavigableLabelEntries();
+    expect(entries.find((e) => e.label === "CRM")).toBeUndefined();
+    expect(entries.find((e) => e.label === "Events" && e.href === undefined)).toBeUndefined();
+  });
+});
 
-    const salesGroup = groups.find((g) => g.label === "Sales");
-    expect(salesGroup?.items.map((i) => i.label)).toEqual(["Leads", "Clients"]);
+describe("findActiveNavLabel", () => {
+  it("resolves a top-level direct link", () => {
+    expect(findActiveNavLabel("/dashboard")).toBe("Dashboard");
   });
 
-  it("drops a group entirely once every one of its items is hidden by permission", () => {
-    const can = (permission: string) => permission !== "clients.portal_view";
-    const groups = getVisibleNavigationGroups(can);
-    expect(groups.find((g) => g.label === "Client Portal")).toBeUndefined();
+  it("resolves a nested child leaf", () => {
+    expect(findActiveNavLabel("/leads")).toBe("Leads");
   });
 
-  it("never renders an empty group header even with no permissions at all", () => {
-    const groups = getVisibleNavigationGroups(() => false);
-    expect(groups.every((g) => g.items.length > 0)).toBe(true);
+  it("resolves a sub-page via prefix match", () => {
+    expect(findActiveNavLabel("/leads/123")).toBe("Leads");
+  });
+
+  it("prefers the longest matching href", () => {
+    expect(findActiveNavLabel("/client-portal/accounts")).toBe("Client Accounts");
+  });
+
+  it("returns null for a path with no match", () => {
+    expect(findActiveNavLabel("/nonexistent")).toBeNull();
   });
 });

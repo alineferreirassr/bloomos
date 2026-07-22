@@ -1,97 +1,158 @@
 import {
-  ClientPortalIcon,
-  ClientsIcon,
-  ContractsIcon,
+  BloomAiIcon,
+  CrmIcon,
   DashboardIcon,
   DocumentsIcon,
   EventsIcon,
   FinanceIcon,
-  LeadsIcon,
-  PipelineIcon,
+  InventoryIcon,
+  ServicesIcon,
+  SettingsIcon,
   TeamIcon,
+  VendorsIcon,
 } from "@/components/ui/icons";
-import { getRouteAccessRequirement } from "@/core/permissions/routeAccess";
+import { canAccessRoute } from "@/core/permissions/routeAccess";
 import type { Permission } from "@/core/enums/permission";
 import type { ComponentType, SVGProps } from "react";
 
 /**
- * `group` is the only thing distinguishing a flat list from a grouped one —
- * `null` renders with no header (Dashboard). Adding a future item is always
- * "append to this array with a `group`," never a change to Sidebar/MobileNav
- * themselves — see `getVisibleNavigationGroups()`.
+ * The permanent BloomOS sidebar architecture — one flat, data-driven array of
+ * top-level modules, each optionally holding nested children. This is the
+ * shape every future module plugs into: adding one is "append an entry with
+ * an `href` (a direct link) or a `children` array (an expandable group),"
+ * never a change to `Sidebar`/`MobileNav`/`TopBar` themselves.
+ *
+ * A module/leaf is one of two things, never both:
+ * - a **direct link** (`href` set, no `children`) — clicking it navigates.
+ * - an **expandable group** (`children` set, no `href` of its own) — clicking
+ *   it only toggles expand/collapse; every actual destination lives in a
+ *   child leaf.
+ *
+ * `disabled` marks a module/leaf whose module hasn't shipped yet (Inventory,
+ * Vendors, Services, Bloom AI, Settings, the future Operational Pipeline) —
+ * it renders in the permanent structure so the sidebar's shape doesn't shift
+ * again when that module ships, but isn't a real link (no `href`, or an
+ * `href` that intentionally has no page behind it yet — see `settings`
+ * below). Flipping `disabled` off (and adding a real `href` if it doesn't
+ * have one already) is the entire activation step for that module.
  */
-export interface NavItem {
+export interface NavLeaf {
+  id: string;
   label: string;
-  href: string;
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
-  group: string | null;
+  href?: string;
+  disabled?: boolean;
 }
 
-export const navigationItems: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: DashboardIcon, group: null },
-  { label: "Leads", href: "/leads", icon: LeadsIcon, group: "Sales" },
-  { label: "Clients", href: "/clients", icon: ClientsIcon, group: "Sales" },
-  { label: "Commercial", href: "/pipeline/commercial", icon: PipelineIcon, group: "Pipeline" },
-  { label: "Events", href: "/events", icon: EventsIcon, group: "Operations" },
-  { label: "Contracts", href: "/contracts", icon: ContractsIcon, group: "Operations" },
-  { label: "Finance", href: "/finance", icon: FinanceIcon, group: "Operations" },
-  { label: "Documents", href: "/documents", icon: DocumentsIcon, group: "Operations" },
+export interface NavModule {
+  id: string;
+  label: string;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  href?: string;
+  disabled?: boolean;
+  /** Whether this module's children render expanded on first load. Irrelevant for a module with no `children`. */
+  defaultExpanded?: boolean;
+  children?: NavLeaf[];
+}
+
+/**
+ * Where Leads/Clients/Commercial Pipeline/Contracts/Client Portal
+ * administration all live now that CRM is a fixed top-level module in this
+ * architecture — the prior flat "Sales"/"Pipeline"/"Client Portal" groups
+ * are folded into it. This moves *where* these already-shipped links sit in
+ * the sidebar; it changes no route, no permission, and no page.
+ */
+export const navigationModules: NavModule[] = [
+  { id: "dashboard", label: "Dashboard", icon: DashboardIcon, href: "/dashboard" },
   {
-    label: "Accounts",
-    href: "/client-portal/accounts",
-    icon: ClientPortalIcon,
-    group: "Client Portal",
+    id: "crm",
+    label: "CRM",
+    icon: CrmIcon,
+    defaultExpanded: true,
+    children: [
+      { id: "leads", label: "Leads", href: "/leads" },
+      { id: "clients", label: "Clients", href: "/clients" },
+      { id: "commercial-pipeline", label: "Commercial Pipeline", href: "/pipeline/commercial" },
+      { id: "contracts", label: "Contracts", href: "/contracts" },
+      { id: "client-accounts", label: "Client Accounts", href: "/client-portal/accounts" },
+      { id: "client-invitations", label: "Client Invitations", href: "/client-portal/invitations" },
+    ],
   },
   {
-    label: "Invitations",
-    href: "/client-portal/invitations",
-    icon: ClientPortalIcon,
-    group: "Client Portal",
+    id: "events",
+    label: "Events",
+    icon: EventsIcon,
+    defaultExpanded: true,
+    children: [
+      { id: "events-list", label: "Events", href: "/events" },
+      { id: "operational-pipeline", label: "Operational Pipeline", disabled: true },
+    ],
   },
-  { label: "Team", href: "/team", icon: TeamIcon, group: "Team" },
+  { id: "inventory", label: "Inventory", icon: InventoryIcon, disabled: true },
+  { id: "vendors", label: "Vendors", icon: VendorsIcon, disabled: true },
+  { id: "finance", label: "Finance", icon: FinanceIcon, href: "/finance" },
+  { id: "documents", label: "Documents", icon: DocumentsIcon, href: "/documents" },
+  { id: "team", label: "Team", icon: TeamIcon, href: "/team" },
+  { id: "services", label: "Services", icon: ServicesIcon, disabled: true },
+  { id: "bloom-ai", label: "Bloom AI", icon: BloomAiIcon, disabled: true },
+  // `/settings` is already reserved in core/permissions/routeAccess.ts (workspace.manage)
+  // ahead of the page existing, so its href is kept here too — permission
+  // visibility resolves identically to every shipped module even though
+  // there's nothing to navigate to yet. `disabled: true` is what actually
+  // prevents it from rendering as a clickable link.
+  { id: "settings", label: "Settings", icon: SettingsIcon, href: "/settings", disabled: true },
 ];
 
-/**
- * Sidebar/MobileNav share this one filter instead of each re-deriving
- * visibility — the requirement itself always comes from
- * `core/permissions/routeAccess.ts` (the single route-access map), never a
- * second, nav-specific permission field on `NavItem`. An item whose route
- * only requires active membership (or isn't listed at all) is always shown;
- * `Sidebar`/`MobileNav` only ever render once the member is already known to
- * be active (see `(app)/layout.tsx`), so the only real filtering that
- * happens here is by specific permission.
- */
-export function getVisibleNavigationItems(can: (permission: Permission) => boolean): NavItem[] {
-  return navigationItems.filter((item) => {
-    const requirement = getRouteAccessRequirement(item.href);
-    if (!requirement || requirement.kind === "active-membership") return true;
-    return can(requirement.permission);
-  });
-}
-
-export interface NavGroup {
-  /** `null` = the ungrouped top-level items (Dashboard) — rendered with no group header. */
-  label: string | null;
-  items: NavItem[];
+function isVisible(entry: { href?: string }, can: (permission: Permission) => boolean): boolean {
+  if (!entry.href) return true;
+  return canAccessRoute(entry.href, can);
 }
 
 /**
- * Groups the same permission-filtered items `getVisibleNavigationItems`
- * already computes — never a second, independent filtering pass. Group
- * order follows each item's first appearance in `navigationItems`; a group
- * that ends up with zero visible items (every item inside it hidden by
- * permission) is dropped entirely rather than rendered as an empty header.
+ * The single visibility pass every nav-rendering surface (`Sidebar`,
+ * `MobileNav`) shares — permission comes from `routeAccess.ts`, never a
+ * second, nav-specific permission field. A module with `children` is dropped
+ * entirely once every one of its children is hidden by permission, matching
+ * how a permission-gated top-level module already disappears.
  */
-export function getVisibleNavigationGroups(can: (permission: Permission) => boolean): NavGroup[] {
-  const visible = getVisibleNavigationItems(can);
-  const groups: NavGroup[] = [];
-  for (const item of visible) {
-    let group = groups.find((g) => g.label === item.group);
-    if (!group) {
-      group = { label: item.group, items: [] };
-      groups.push(group);
+export function getVisibleNavigationModules(can: (permission: Permission) => boolean): NavModule[] {
+  return navigationModules
+    .map((navModule): NavModule | null => {
+      if (!isVisible(navModule, can)) return null;
+      if (!navModule.children) return navModule;
+      const children = navModule.children.filter((child) => isVisible(child, can));
+      if (children.length === 0) return null;
+      return { ...navModule, children };
+    })
+    .filter((navModule): navModule is NavModule => navModule !== null);
+}
+
+/**
+ * Flattened `{ label, href }` pairs for every real, navigable destination
+ * (top-level direct links and every child leaf) — used by `TopBar` to look
+ * up the current page's title without duplicating the tree-walk. Disabled
+ * and childless-group entries are excluded since neither is ever the active
+ * route. Matches the longest-prefix-wins rule `routeAccess.ts` uses, so a
+ * sub-page like `/leads/123` still resolves to the "Leads" entry.
+ */
+export function getNavigableLabelEntries(): { label: string; href: string }[] {
+  const entries: { label: string; href: string }[] = [];
+  for (const navModule of navigationModules) {
+    if (navModule.href && !navModule.disabled) {
+      entries.push({ label: navModule.label, href: navModule.href });
     }
-    group.items.push(item);
+    for (const child of navModule.children ?? []) {
+      if (child.href && !child.disabled) {
+        entries.push({ label: child.label, href: child.href });
+      }
+    }
   }
-  return groups;
+  return entries;
+}
+
+export function findActiveNavLabel(pathname: string): string | null {
+  const matches = getNavigableLabelEntries().filter(
+    (entry) => pathname === entry.href || pathname.startsWith(`${entry.href}/`),
+  );
+  if (matches.length === 0) return null;
+  return matches.reduce((best, entry) => (entry.href.length > best.href.length ? entry : best)).label;
 }

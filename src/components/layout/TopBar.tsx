@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { navigationItems } from "@/config/navigation";
+import { findActiveNavLabel } from "@/config/navigation";
 import { MenuIcon } from "@/components/ui/icons";
 
 interface TopBarProps {
@@ -10,9 +10,7 @@ interface TopBarProps {
 
 export function TopBar({ onMenuClick }: TopBarProps) {
   const pathname = usePathname();
-  const activeItem = navigationItems.find((item) =>
-    pathname.startsWith(item.href),
-  );
+  const activeLabel = findActiveNavLabel(pathname);
 
   return (
     <header className="flex h-[72px] min-h-[72px] items-center gap-3 border-b border-border bg-background px-4 md:px-7">
@@ -33,7 +31,7 @@ export function TopBar({ onMenuClick }: TopBarProps) {
         breadcrumb, so the one large title stays where it already lives.
       */}
       <p className="text-sm font-medium tracking-tight text-text-muted">
-        {activeItem?.label ?? "Amoré Bloom"}
+        {activeLabel ?? "Amoré Bloom"}
       </p>
     </header>
   );
