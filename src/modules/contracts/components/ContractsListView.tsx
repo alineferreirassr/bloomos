@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getClients, getContractNextAction, getContractTemplates, getContracts, getEvents } from "@/lib/data";
+import { getDataPersistenceMessage } from "@/lib/dataModeCopy";
 import type { Contract } from "@/types/contract";
 import type { Client } from "@/types/client";
 import type { Event } from "@/types/event";
@@ -148,7 +149,7 @@ export function ContractsListView() {
           <h2 className="font-serif text-3xl font-semibold text-text">Contracts</h2>
           <p className="mt-1 text-sm text-text-muted">
             Every agreement closing the commercial cycle from Client through Event.
-            Data resets on page reload — there&apos;s no database behind this yet.
+            {" "}{getDataPersistenceMessage()}
           </p>
         </div>
         {canCreate ? (

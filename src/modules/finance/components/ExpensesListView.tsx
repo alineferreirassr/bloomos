@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getEvents, getExpenseNextAction, getExpenses } from "@/lib/data";
+import { getDataPersistenceMessage } from "@/lib/dataModeCopy";
 import type { Expense } from "@/types/expense";
 import type { Event } from "@/types/event";
 import { Button } from "@/components/ui/Button";
@@ -105,7 +106,7 @@ export function ExpensesListView() {
           <h2 className="font-serif text-3xl font-semibold text-text">Expenses</h2>
           <p className="mt-1 text-sm text-text-muted">
             Every cost the business incurs — Event-specific, general business, or supplier/team-related.
-            Data resets on page reload — there&apos;s no database behind this yet.
+            {" "}{getDataPersistenceMessage()}
           </p>
         </div>
         {canCreate ? (

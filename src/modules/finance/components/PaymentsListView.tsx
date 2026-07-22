@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getClients, getEvents, getInvoices, getPayments } from "@/lib/data";
+import { getDataPersistenceMessage } from "@/lib/dataModeCopy";
 import type { Payment } from "@/types/payment";
 import type { Client } from "@/types/client";
 import type { Event } from "@/types/event";
@@ -107,7 +108,7 @@ export function PaymentsListView() {
           <h2 className="font-serif text-3xl font-semibold text-text">Payments</h2>
           <p className="mt-1 text-sm text-text-muted">
             Every money movement — collected from a Client or refunded back to one.
-            Data resets on page reload — there&apos;s no database behind this yet.
+            {" "}{getDataPersistenceMessage()}
           </p>
         </div>
         {canCreate ? (

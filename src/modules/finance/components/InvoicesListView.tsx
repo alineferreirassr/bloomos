@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getClients, getContracts, getEvents, getInvoiceNextAction, getInvoices } from "@/lib/data";
+import { getDataPersistenceMessage } from "@/lib/dataModeCopy";
 import type { Invoice } from "@/types/invoice";
 import type { Client } from "@/types/client";
 import type { Event } from "@/types/event";
@@ -142,7 +143,7 @@ export function InvoicesListView() {
           <h2 className="font-serif text-3xl font-semibold text-text">Invoices</h2>
           <p className="mt-1 text-sm text-text-muted">
             Every invoice billed to a Client, standalone or linked to an Event and Contract.
-            Data resets on page reload — there&apos;s no database behind this yet.
+            {" "}{getDataPersistenceMessage()}
           </p>
         </div>
         {canCreate ? (

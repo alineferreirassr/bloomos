@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getEvents, getClients, getChecklistByEventId, getEventNextAction } from "@/lib/data";
+import { getDataPersistenceMessage } from "@/lib/dataModeCopy";
 import type { Event } from "@/types/event";
 import type { Client } from "@/types/client";
 import { Button } from "@/components/ui/Button";
@@ -131,7 +132,7 @@ export function EventsListView() {
           <h2 className="text-3xl font-semibold text-text">Events</h2>
           <p className="mt-1 text-sm text-text-muted">
             The operational center for every engagement Amoré Bloom is planning.
-            Data resets on page reload — there&apos;s no database behind this yet.
+            {" "}{getDataPersistenceMessage()}
           </p>
         </div>
         {canCreate ? (

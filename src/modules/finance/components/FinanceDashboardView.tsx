@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getClients, getFinanceDashboardData, type FinanceDashboardData } from "@/lib/data";
+import { getDataPersistenceMessage } from "@/lib/dataModeCopy";
 import type { Client } from "@/types/client";
 import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -118,8 +119,7 @@ export function FinanceDashboardView() {
       <div>
         <h2 className="font-serif text-3xl font-semibold text-text">Finance</h2>
         <p className="mt-1 text-sm text-text-muted">
-          Invoices, payments, and expenses across the workspace. Data resets on page reload — there&apos;s no
-          database behind this yet.
+          Invoices, payments, and expenses across the workspace. {getDataPersistenceMessage()}
         </p>
       </div>
 
