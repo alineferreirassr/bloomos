@@ -23,9 +23,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory migrations, in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors migrations, in chronological (execution) order", () => {
     const files = migrationFiles();
-    expect(files).toHaveLength(97);
+    expect(files).toHaveLength(102);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -512,5 +512,59 @@ describe("Inventory migrations", () => {
     for (const file of ["20260729100400_inventory_items_rls.sql", "20260729100500_inventory_movements_rls.sql"]) {
       expect(stripSqlComments(readMigration(file))).not.toMatch(/using\s*\(\s*true\s*\)/i);
     }
+  });
+});
+
+describe("Vendors migrations", () => {
+  it("creates vendors with status/currency CHECK constraints and the full address shape including country", () => {
+    const sql = readMigration("20260730100000_vendors.sql");
+    expect(sql).toMatch(/create table if not exists public\.vendors/);
+    expect(sql).toMatch(/constraint vendors_status_check check \(status in \('active', 'inactive'\)\)/);
+    expect(sql).toMatch(/constraint vendors_currency_check check \(char_length\(default_currency\) = 3\)/);
+    for (const column of ["address", "city", "state", "zip_code", "country"]) {
+      expect(sql).toMatch(new RegExp(`\\b${column} text\\b`));
+    }
+    expect(sql).toMatch(/company_name text not null/);
+  });
+
+  it("widens notes/timeline_activities/media_assets owner_type to add vendor, preserving every prior value", () => {
+    const sql = readMigration("20260730100100_notes_timeline_media_vendor_owner_type.sql");
+    for (const priorOwnerType of ["lead", "client", "event", "contract", "invoice", "payment", "expense", "document", "document_folder", "inventory_item"]) {
+      expect(sql).toMatch(new RegExp(`'${priorOwnerType}'`));
+    }
+    expect(sql).toMatch(/'vendor'/);
+    for (const activityType of ["vendor_created", "vendor_updated", "vendor_archived", "vendor_restored", "vendor_preferred_status_changed"]) {
+      expect(sql).toMatch(new RegExp(activityType));
+    }
+    expect(sql).toMatch(/alter table public\.media_assets drop constraint media_assets_owner_type_check/);
+  });
+
+  it("attaches the shared updated_at trigger to vendors", () => {
+    const sql = readMigration("20260730100200_vendors_updated_at_trigger.sql");
+    expect(sql).toMatch(/before update on public\.vendors/);
+    expect(sql).toMatch(/execute function public\.set_updated_at\(\)/);
+  });
+
+  it("gives vendors select/insert/update policies but no delete policy", () => {
+    const sql = readMigration("20260730100300_vendors_rls.sql");
+    expect(sql).toMatch(/alter table public\.vendors enable row level security/);
+    expect(sql).toMatch(/for select/);
+    expect(sql).toMatch(/for insert/);
+    expect(sql).toMatch(/for update/);
+    expect(sql).not.toMatch(/for delete/);
+    for (const block of sql.split(/create policy/i).slice(1)) {
+      expect(block).toMatch(/is_workspace_member\(workspace_id\)/);
+    }
+  });
+
+  it("indexes vendors and enforces workspace-scoped tax_id uniqueness allowing repeated nulls", () => {
+    const sql = readMigration("20260730100400_vendors_indexes_and_constraints.sql");
+    expect(sql).toMatch(/create unique index if not exists vendors_workspace_tax_id_unique\s*\n\s*on public\.vendors \(workspace_id, tax_id\) where tax_id is not null/);
+    expect(sql).toMatch(/vendors_tags_gin_idx/);
+    expect(sql).toMatch(/vendors_workspace_preferred_idx/);
+  });
+
+  it("never uses a bare permissive `using (true)` policy on the new Vendors RLS migration", () => {
+    expect(stripSqlComments(readMigration("20260730100300_vendors_rls.sql"))).not.toMatch(/using\s*\(\s*true\s*\)/i);
   });
 });
