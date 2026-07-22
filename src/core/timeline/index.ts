@@ -10,6 +10,7 @@ import type { CoreTimelineActivityType } from "@/core/timeline/activityTypeRegis
 
 export type { TimelineActivity } from "@/types/timelineActivity";
 export * from "@/core/timeline/activityTypeRegistry";
+export { registerDefaultTimelineActivityTypes } from "@/core/timeline/defaultActivityTypeRegistrations";
 
 /**
  * Core's canonical Timeline front door, mirroring `core/notes`'s shape.

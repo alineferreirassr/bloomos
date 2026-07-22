@@ -22,12 +22,14 @@ import type { Payment } from "@/types/payment";
 import type { Expense } from "@/types/expense";
 import type { Document } from "@/types/document";
 import type { DocumentFolder } from "@/types/documentFolder";
+import type { Vendor } from "@/types/vendor";
 import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 import type { WorkspaceMemberStatus } from "@/core/enums/workspaceMemberStatus";
 import type { Permission } from "@/core/enums/permission";
 import type { InvitationStatus } from "@/core/enums/invitationStatus";
 import type { LeadStatus } from "@/core/enums/leadStatus";
 import type { ClientStatus } from "@/core/enums/clientStatus";
+import type { VendorStatus } from "@/core/enums/vendorStatus";
 import type { ContactMethod } from "@/core/enums/contactMethod";
 import type { EntityType } from "@/core/enums/entityType";
 import type { EventType } from "@/core/enums/eventType";
@@ -78,6 +80,7 @@ type PaymentRow = Database["public"]["Tables"]["payments"]["Row"];
 type ExpenseRow = Database["public"]["Tables"]["expenses"]["Row"];
 type DocumentRow = Database["public"]["Tables"]["documents"]["Row"];
 type DocumentFolderRow = Database["public"]["Tables"]["document_folders"]["Row"];
+type VendorRow = Database["public"]["Tables"]["vendors"]["Row"];
 
 /**
  * Deliberate seam between raw database rows and domain types, even though
@@ -600,5 +603,33 @@ export function mapTimelineActivityRow(row: TimelineActivityRow): TimelineActivi
     ...(row.metadata
       ? { metadata: row.metadata as unknown as Record<string, string | number | boolean | null> }
       : {}),
+  };
+}
+
+export function mapVendorRow(row: VendorRow): Vendor {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    company_name: row.company_name,
+    display_name: row.display_name,
+    contact_person: row.contact_person,
+    email: row.email,
+    phone: row.phone,
+    website: row.website,
+    tax_id: row.tax_id,
+    address: row.address,
+    city: row.city,
+    state: row.state,
+    zip_code: row.zip_code,
+    country: row.country,
+    notes: row.notes,
+    status: row.status as VendorStatus,
+    tags: row.tags,
+    default_currency: row.default_currency,
+    payment_terms: row.payment_terms,
+    is_preferred: row.is_preferred,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    archived_at: row.archived_at,
   };
 }
