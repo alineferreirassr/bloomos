@@ -295,6 +295,29 @@ Both pages are route-guarded by `/client-portal`'s entry in `core/permissions/ro
 
 **Navigation architecture** (`config/navigation.ts`) — `NavItem` gained a `group: string | null` field; `getVisibleNavigationGroups()` derives grouped sections from the same permission-filtered list `getVisibleNavigationItems()` already computes (no second filtering pass, no duplicated item array). Groups: Dashboard (ungrouped), Sales (Leads/Clients), Operations (Events/Contracts/Finance/Documents), Client Portal (Accounts/Invitations), Team (Team). `Sidebar`/`MobileNav` render a header above each non-empty group; a group whose every item is hidden by permission is dropped entirely, never shown as an empty header — so adding a future nav item is always "append to the array with a `group`," never a Sidebar/MobileNav code change. Nav labels read "Accounts"/"Invitations" (not "Client Accounts"/"Client Invitations") since the parent group already supplies that context — each page's own heading keeps the fuller title.
 
+## Booking Workflow — Commercial Pipeline (live)
+
+The Booking Workflow reuses two already-existing, independent state machines rather than inventing a new "Booking" entity: `Lead.status` drives the **Commercial Pipeline**, `Event.lifecycle_stage` will drive a future **Operational Pipeline**. They stay on separate boards/routes deliberately — a Lead is a prospect, an Event is a confirmed engagement, and mixing them on one Kanban would blur that distinction.
+
+**Column mapping** (`modules/pipeline/constants.ts`) — six columns, five backed by real `LeadStatus` values plus one virtual, action-only column:
+
+| Column | `LeadStatus` value(s) |
+| --- | --- |
+| Lead | `new`, `contacted`, `welcome_guide_sent` |
+| Qualified | `qualified` |
+| Consultation Scheduled | `consultation_scheduled` |
+| Proposal Sent | `proposal_sent` |
+| Waiting Decision | `waiting_decision` |
+| Booked | *(virtual — never a persisted status)* |
+
+`waiting_decision` is a real, persisted `LeadStatus` (between `proposal_sent` and `converted`), not a UI-only label. Dropping a card into a multi-status column (only "Lead" today) sets it to that column's single representative status (`new`); the card's own `LeadStatusBadge` still shows its precise status. Leads whose status is `converted`, `lost`, or `archived` never appear on the board — they've left the Commercial Pipeline by definition.
+
+**`bookLead(leadId, eventInput)`** (`lib/data/index.ts`) orchestrates the "Booked" transition by composing three already-existing, already-tested operations rather than a new database function: `convertLeadToClient` (reuses an existing Client by email match within the Workspace — never a duplicate), `createEvent`, then `updateEventLifecycleStage` to advance the new Event straight to `planning` — the Operational Pipeline's own starting column, since the Commercial Pipeline already covers intake/proposal/booking. `resumeBooking(clientId, eventInput)` retries only the remaining step of a previously-interrupted booking (see below) without re-running Lead conversion.
+
+**Partial-failure recovery** — if Event creation or the lifecycle-stage advance fails after a successful Lead→Client conversion, the conversion is deliberately **not** rolled back (the Client is a real, valid state on its own) and the failure is never silently dropped either. Instead it becomes a generic, durable `pending_recovery` record on the Client (`types/pendingRecovery.ts` — `workflow`, `status`, `reason`, `payload`, `attempts`, `first_attempt_at`, `last_attempt_at`; a single nullable jsonb column, not a workflow-specific column or a separate table, so any future recoverable multi-step operation reuses the same mechanism), a `client_recovery_pending` Timeline entry, and a `critical`/`internal_alert` Note. If only the lifecycle-stage step failed (the Event already exists), the recovery payload carries that Event's id so `resumeBooking` retries the stage advance on the *same* Event instead of calling `createEvent` again and leaving a duplicate behind. A successful resume clears `pending_recovery` and records `client_recovery_resolved`; a repeated failure re-marks it with an incremented `attempts` count and a fresh Timeline entry, never overwriting the audit trail.
+
+**Commercial Pipeline UI** (`/pipeline/commercial`, `modules/pipeline/components/`) — a real multi-column Kanban at desktop (`@dnd-kit/core` for drag-and-drop, keyboard-operable via its built-in `KeyboardSensor`), a single-stage vertical list with a stage selector on mobile (no forced pointer drag on touch) — both share the same `buildQuickActions()` permission-gated action list (`modules/pipeline/quickActions.ts`) so an action available on one is available identically on the other. Dragging or selecting a Quick Action for a normal column move calls the existing `updateLeadStatus` optimistically, with reliable rollback (the pre-move Lead is held in memory and restored verbatim on failure) and a visible inline error. Dragging into "Booked" (or its Quick Action) opens a confirmation dialog summarizing the Lead and collecting the minimum Event draft (`bookLead` requires it must pass Event validation), then calls `bookLead()`; a plain failure shows inline, while a failure that left a `pending_recovery` Client shows a distinct, persistent, dismissible banner linking to the Client record — never represented as a completed booking. Filters (search/assignee/budget range/date range) run entirely in memory over one `getLeads({})` call per board load — assignee/budget/date aren't part of the shared `LeadFilters` repository contract, so adding them here never widens that contract for every other Lead view.
+
 ## Business rules
 
 - An `events` record cannot exist without a `clients` record.

@@ -1,5 +1,18 @@
 import type { SVGProps } from "react";
-import { Home, Users, User, Calendar, FileText, DollarSign, Folder, Menu, X, UserCog, KeyRound } from "lucide-react";
+import {
+  Home,
+  Users,
+  User,
+  Calendar,
+  FileText,
+  DollarSign,
+  Folder,
+  Menu,
+  X,
+  UserCog,
+  KeyRound,
+  Kanban,
+} from "lucide-react";
 
 type IconProps = SVGProps<SVGSVGElement>;
 
@@ -36,6 +49,10 @@ export function DocumentsIcon(props: IconProps) {
 
 export function TeamIcon(props: IconProps) {
   return <UserCog strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+export function PipelineIcon(props: IconProps) {
+  return <Kanban strokeWidth={2} aria-hidden="true" {...props} />;
 }
 
 /** Distinct from ClientsIcon (the CRM record) — this represents external account/access administration, not the client relationship itself. */

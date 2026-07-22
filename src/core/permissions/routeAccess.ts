@@ -28,6 +28,7 @@ export const ROUTE_ACCESS_MAP: RouteAccessEntry[] = [
   { prefix: "/dashboard", requirement: { kind: "active-membership" } },
   { prefix: "/account", requirement: { kind: "active-membership" } },
   { prefix: "/leads", requirement: { kind: "permission", permission: "leads.view" } },
+  { prefix: "/pipeline/commercial", requirement: { kind: "permission", permission: "leads.view" } },
   { prefix: "/clients", requirement: { kind: "permission", permission: "clients.view" } },
   { prefix: "/events", requirement: { kind: "permission", permission: "events.view" } },
   { prefix: "/contracts", requirement: { kind: "permission", permission: "contracts.view" } },

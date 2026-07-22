@@ -7,6 +7,7 @@ import {
   EventsIcon,
   FinanceIcon,
   LeadsIcon,
+  PipelineIcon,
   TeamIcon,
 } from "@/components/ui/icons";
 import { getRouteAccessRequirement } from "@/core/permissions/routeAccess";
@@ -30,6 +31,7 @@ export const navigationItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: DashboardIcon, group: null },
   { label: "Leads", href: "/leads", icon: LeadsIcon, group: "Sales" },
   { label: "Clients", href: "/clients", icon: ClientsIcon, group: "Sales" },
+  { label: "Commercial", href: "/pipeline/commercial", icon: PipelineIcon, group: "Pipeline" },
   { label: "Events", href: "/events", icon: EventsIcon, group: "Operations" },
   { label: "Contracts", href: "/contracts", icon: ContractsIcon, group: "Operations" },
   { label: "Finance", href: "/finance", icon: FinanceIcon, group: "Operations" },

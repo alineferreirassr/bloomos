@@ -45,7 +45,7 @@ describe("getVisibleNavigationItems", () => {
 describe("getVisibleNavigationGroups", () => {
   it("groups Dashboard ungrouped, and every other item under its own group", () => {
     const groups = getVisibleNavigationGroups(() => true);
-    expect(groups.map((g) => g.label)).toEqual([null, "Sales", "Operations", "Client Portal", "Team"]);
+    expect(groups.map((g) => g.label)).toEqual([null, "Sales", "Pipeline", "Operations", "Client Portal", "Team"]);
     expect(groups[0].items.map((i) => i.href)).toEqual(["/dashboard"]);
   });
 

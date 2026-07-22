@@ -165,6 +165,23 @@ A scoped audit confirming the already-shipped My Events/Contracts/Invoices/Docum
 - [x] Live verification against the real Owner session (internal admin regression, external invitation page, blocked-state brand qualifier)
 - [x] Update documentation (`docs/workflows.md`, `docs/permissions.md`, `CHANGELOG.md`, `TODO.md`)
 
+## Phase 2 — Booking Workflow (in progress, `feature/client-access`)
+
+Connects Leads/Clients/Events into one Booking Pipeline — reuses `Lead.status` (Commercial Pipeline) and `Event.lifecycle_stage` (future Operational Pipeline) rather than a new "Booking" entity. Repository foundation, generic recovery infrastructure, and the Commercial Pipeline UI are complete; the Operational Pipeline board and Booking Dashboard are not started.
+
+- [x] Add `waiting_decision` as a real `LeadStatus`; `convert_lead_to_client` (mock + Supabase) reuses an existing Client by email match instead of ever duplicating one
+- [x] `bookLead()`/`resumeBooking()` (`lib/data/index.ts`) — orchestrates Lead→Client conversion + Event creation + advance to `planning`, composing existing operations rather than a new database function
+- [x] Generic `pending_recovery` infrastructure (`types/pendingRecovery.ts`, one nullable jsonb column, `client_recovery_pending`/`client_recovery_resolved` Timeline types) — durable/queryable/auditable/resumable, reusable by any future recoverable workflow; duplicate-Event prevention on resume
+- [x] Build the Commercial Pipeline board (`/pipeline/commercial`) — desktop Kanban (`@dnd-kit/core`), mobile single-stage list, shared permission-gated Quick Actions, optimistic moves with rollback, Book Lead confirmation flow, persistent pending-recovery alert, in-memory filters
+- [x] Wire navigation (`Pipeline` group), route access (`leads.view`), no new permission introduced
+- [x] Write tests (82 new tests, 1911 → 1993)
+- [x] Run sequential lint/typecheck/test/build — all clean
+- [x] Ask approval, apply migrations live, verify schema + payload audit + recovery behavior via SQL
+- [x] Live verification (desktop + mobile) — Chrome only, Safari not verified (automation unavailable)
+- [x] Update documentation (`docs/workflows.md`, `docs/permissions.md`, `CHANGELOG.md`, `TODO.md`)
+- [ ] Operational Pipeline board (`/pipeline/operational`) — Event lifecycle_stage Kanban, Event Health, due-state
+- [ ] Booking Dashboard — Needs Attention (Blocked Events, Missing Deposits, Missing Contracts, Overdue Checklists), pipeline metrics, Recent Activity
+
 ## Phase 2 — Post-MVP modules (not started, reserved in the architecture only)
 
 - [ ] **Team Knowledge Base** — private, internal-only knowledge center for team documentation (Company Rules, Employee Handbook, SOPs, Decoration/Proposal/Photography/Emergency/Cleaning/Inventory procedures, Internal Announcements, Training, FAQ for Employees). Independent module, never merged with Documents/Clients/Team Management/Contracts. Placed after Documents in the roadmap. Architecture reserved in `docs/database.md` (`team_kb_articles` sketch), `docs/workflows.md`, `docs/permissions.md` — no table, migration, UI, route, or CMS exists
