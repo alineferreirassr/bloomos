@@ -23,9 +23,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors migrations, in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function migrations, in chronological (execution) order", () => {
     const files = migrationFiles();
-    expect(files).toHaveLength(102);
+    expect(files).toHaveLength(103);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -566,5 +566,35 @@ describe("Vendors migrations", () => {
 
   it("never uses a bare permissive `using (true)` policy on the new Vendors RLS migration", () => {
     expect(stripSqlComments(readMigration("20260730100300_vendors_rls.sql"))).not.toMatch(/using\s*\(\s*true\s*\)/i);
+  });
+});
+
+describe("Inventory Supabase Repository phase migration", () => {
+  it("defines record_inventory_movement as security invoker with a pinned search_path, matching create_document_version/recompute_invoice_balance's approach rather than a new one", () => {
+    const sql = readMigration("20260731100000_inventory_record_movement_function.sql");
+    expect(sql).toMatch(/create or replace function public\.record_inventory_movement/);
+    expect(sql).toMatch(/security invoker/i);
+    expect(sql).toMatch(/set search_path = public/i);
+    expect(sql).toMatch(/returns public\.inventory_movements/);
+  });
+
+  it("row-locks the target item before computing quantities, preventing two concurrent movements from clobbering each other", () => {
+    const sql = readMigration("20260731100000_inventory_record_movement_function.sql");
+    expect(sql).toMatch(/select \* into v_item from public\.inventory_items where id = p_inventory_item_id for update/);
+  });
+
+  it("raises the same four custom error codes the Supabase repository checks for", () => {
+    const sql = readMigration("20260731100000_inventory_record_movement_function.sql");
+    for (const errcode of ["P0001", "P0002", "P0003", "P0004"]) {
+      expect(sql).toMatch(new RegExp(`errcode = '${errcode}'`));
+    }
+  });
+
+  it("inserts exactly one inventory_movements row and one timeline_activities row, never updating or deleting a prior movement", () => {
+    const sql = stripSqlComments(readMigration("20260731100000_inventory_record_movement_function.sql"));
+    expect(sql).toMatch(/insert into public\.inventory_movements/);
+    expect(sql).toMatch(/insert into public\.timeline_activities/);
+    expect(sql).not.toMatch(/update public\.inventory_movements/);
+    expect(sql).not.toMatch(/delete from public\.inventory_movements/);
   });
 });

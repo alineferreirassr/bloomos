@@ -17,7 +17,7 @@ import { getCoreAuditLogService } from "@/core/audit";
 import { getSearchableEntityConfig, isEntitySearchable } from "@/core/search/registry";
 import { registerDefaultSearchableEntities } from "@/core/search/defaultRegistrations";
 import { ENTITY_TYPES } from "@/core/enums/entityType";
-import { MEDIA_ASSET_OWNER_TYPES } from "@/lib/media/ownerTypes";
+import { MEDIA_ASSET_OWNER_TYPES, LIVE_MEDIA_ASSET_OWNER_TYPES } from "@/lib/media/ownerTypes";
 import { readInventoryItems, writeInventoryItems } from "@/lib/data/mock/inventoryItemsStore";
 import type { CreateInventoryItemInput, InventoryItemInput } from "@/modules/inventory/schema";
 
@@ -517,7 +517,8 @@ describe("EntityType backward compatibility", () => {
     expect(ENTITY_TYPES).not.toContain("inventory");
   });
 
-  it("is present in the Media Library's aspirational owner-type list (not yet in the live/enforced list)", () => {
+  it("is present in the Media Library's aspirational owner-type list and, now that inventory_items has a live Supabase table, the live/enforced list too", () => {
     expect(MEDIA_ASSET_OWNER_TYPES).toContain("inventory_item");
+    expect(LIVE_MEDIA_ASSET_OWNER_TYPES).toContain("inventory_item");
   });
 });

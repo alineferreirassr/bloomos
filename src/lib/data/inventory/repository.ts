@@ -25,10 +25,14 @@ export interface InventoryAvailability {
 /**
  * The single Inventory persistence contract — implemented once by the mock
  * repository (`lib/data/inventory/mockRepository.ts`) and once by the
- * Supabase repository (`lib/data/inventory/supabaseRepository.ts`, a typed
- * placeholder this phase — no migration exists yet), mirroring the
- * Clients/Documents repository pattern. `lib/data/index.ts` picks between
- * them via `lib/data/provider.ts`'s `selectRepository()`.
+ * Supabase repository (`lib/data/inventory/supabaseRepository.ts`),
+ * mirroring the Clients/Documents/Vendors repository pattern.
+ * `lib/data/index.ts` picks between them via `lib/data/provider.ts`'s
+ * `selectRepository()`. `recordInventoryMovement` is implemented atomically
+ * in Supabase mode via the `record_inventory_movement` Postgres function
+ * (see `supabase/migrations/20260731100000_inventory_record_movement_function.sql`),
+ * matching the same transactional-RPC approach already used by
+ * `create_document_version`/`recompute_invoice_balance`.
  *
  * Quantities are never settable directly on an item outside of creation's
  * `initial_quantity` — every other change is a `recordInventoryMovement`

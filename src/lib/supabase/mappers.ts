@@ -23,6 +23,8 @@ import type { Expense } from "@/types/expense";
 import type { Document } from "@/types/document";
 import type { DocumentFolder } from "@/types/documentFolder";
 import type { Vendor } from "@/types/vendor";
+import type { InventoryItem } from "@/types/inventoryItem";
+import type { InventoryMovement } from "@/types/inventoryMovement";
 import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 import type { WorkspaceMemberStatus } from "@/core/enums/workspaceMemberStatus";
 import type { Permission } from "@/core/enums/permission";
@@ -30,6 +32,10 @@ import type { InvitationStatus } from "@/core/enums/invitationStatus";
 import type { LeadStatus } from "@/core/enums/leadStatus";
 import type { ClientStatus } from "@/core/enums/clientStatus";
 import type { VendorStatus } from "@/core/enums/vendorStatus";
+import type { InventoryItemType } from "@/core/enums/inventoryItemType";
+import type { InventoryStatus } from "@/core/enums/inventoryStatus";
+import type { InventoryCondition } from "@/core/enums/inventoryCondition";
+import type { InventoryMovementType } from "@/core/enums/inventoryMovementType";
 import type { ContactMethod } from "@/core/enums/contactMethod";
 import type { EntityType } from "@/core/enums/entityType";
 import type { EventType } from "@/core/enums/eventType";
@@ -81,6 +87,8 @@ type ExpenseRow = Database["public"]["Tables"]["expenses"]["Row"];
 type DocumentRow = Database["public"]["Tables"]["documents"]["Row"];
 type DocumentFolderRow = Database["public"]["Tables"]["document_folders"]["Row"];
 type VendorRow = Database["public"]["Tables"]["vendors"]["Row"];
+type InventoryItemRow = Database["public"]["Tables"]["inventory_items"]["Row"];
+type InventoryMovementRow = Database["public"]["Tables"]["inventory_movements"]["Row"];
 
 /**
  * Deliberate seam between raw database rows and domain types, even though
@@ -631,5 +639,58 @@ export function mapVendorRow(row: VendorRow): Vendor {
     created_at: row.created_at,
     updated_at: row.updated_at,
     archived_at: row.archived_at,
+  };
+}
+
+export function mapInventoryItemRow(row: InventoryItemRow): InventoryItem {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    name: row.name,
+    description: row.description,
+    sku: row.sku,
+    category: row.category,
+    subcategory: row.subcategory,
+    item_type: row.item_type as InventoryItemType,
+    tags: row.tags,
+    status: row.status as InventoryStatus,
+    condition: row.condition as InventoryCondition | null,
+    unit_of_measure: row.unit_of_measure,
+    quantity_on_hand: row.quantity_on_hand,
+    quantity_available: row.quantity_available,
+    quantity_reserved: row.quantity_reserved,
+    reorder_level: row.reorder_level,
+    target_stock_level: row.target_stock_level,
+    unit_cost: row.unit_cost,
+    replacement_cost: row.replacement_cost,
+    rental_value: row.rental_value,
+    storage_location: row.storage_location,
+    bin_location: row.bin_location,
+    primary_vendor_id: row.primary_vendor_id,
+    purchase_date: row.purchase_date,
+    last_inventory_check_at: row.last_inventory_check_at,
+    notes: row.notes,
+    image_url: row.image_url,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    archived_at: row.archived_at,
+  };
+}
+
+export function mapInventoryMovementRow(row: InventoryMovementRow): InventoryMovement {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    inventory_item_id: row.inventory_item_id,
+    movement_type: row.movement_type as InventoryMovementType,
+    quantity: row.quantity,
+    quantity_before: row.quantity_before,
+    quantity_after: row.quantity_after,
+    reason: row.reason,
+    reference_type: row.reference_type,
+    reference_id: row.reference_id,
+    performed_by: row.performed_by,
+    occurred_at: row.occurred_at,
+    created_at: row.created_at,
   };
 }
