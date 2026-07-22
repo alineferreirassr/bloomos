@@ -18,6 +18,9 @@ import type { DocumentFolder } from "@/types/documentFolder";
 import type { InventoryItem } from "@/types/inventoryItem";
 import type { InventoryMovement } from "@/types/inventoryMovement";
 import type { CreateInventoryItemInput, InventoryItemInput, RecordInventoryMovementInput } from "@/modules/inventory/schema";
+import type { Vendor } from "@/types/vendor";
+import type { VendorStatus } from "@/core/enums/vendorStatus";
+import type { CreateVendorInput, UpdateVendorInput } from "@/modules/vendors/schema";
 import type { TeamMember } from "@/types/teamMember";
 import type { WorkspaceInvitation, WorkspaceInvitationWithToken, InvitationPreview } from "@/types/workspaceInvitation";
 import type { ClientAccount, ClientAccountContext } from "@/types/clientAccount";
@@ -134,6 +137,9 @@ import { supabaseClientPortalRepository } from "@/lib/data/clientPortal/supabase
 import type { InventoryItemFilters, InventoryAvailability } from "@/lib/data/inventory/repository";
 import { mockInventoryRepository } from "@/lib/data/inventory/mockRepository";
 import { supabaseInventoryRepository } from "@/lib/data/inventory/supabaseRepository";
+import type { VendorFilters, VendorSort } from "@/lib/data/vendors/repository";
+import { mockVendorsRepository } from "@/lib/data/vendors/mockRepository";
+import { supabaseVendorsRepository } from "@/lib/data/vendors/supabaseRepository";
 import {
   readLeads,
   resetLeadsStore,
@@ -161,6 +167,7 @@ import { resetDocumentsStore } from "@/lib/data/mock/documentsStore";
 import { resetDocumentFoldersStore } from "@/lib/data/mock/documentFoldersStore";
 import { resetInventoryItemsStore } from "@/lib/data/mock/inventoryItemsStore";
 import { resetInventoryMovementsStore } from "@/lib/data/mock/inventoryMovementsStore";
+import { resetVendorsStore } from "@/lib/data/mock/vendorsStore";
 
 // ---------------------------------------------------------------------------
 // Leads
@@ -2055,6 +2062,52 @@ export async function getDamagedOrUnderRepairInventoryItems(): Promise<Inventory
 }
 
 // ---------------------------------------------------------------------------
+// Vendors — repository layer only; no UI yet. Both mock and Supabase
+// repositories exist (unlike the earlier database-layer checkpoint, which
+// deferred a mock repository since nothing consumed it) — every other
+// module wired into this file requires both, so Vendors now matches that
+// convention exactly.
+// ---------------------------------------------------------------------------
+
+export type { VendorFilters, VendorSort } from "@/lib/data/vendors/repository";
+
+function vendorsRepository() {
+  return selectRepository({ mock: mockVendorsRepository, supabase: supabaseVendorsRepository });
+}
+
+export async function getVendors(filters: VendorFilters = {}, sort: VendorSort = {}): Promise<Vendor[]> {
+  return vendorsRepository().getVendors(filters, sort);
+}
+
+export async function getVendorById(id: string): Promise<Vendor> {
+  return vendorsRepository().getVendorById(id);
+}
+
+export async function createVendor(input: CreateVendorInput): Promise<DataResult<Vendor>> {
+  return vendorsRepository().createVendor(input);
+}
+
+export async function updateVendor(id: string, input: UpdateVendorInput): Promise<DataResult<Vendor>> {
+  return vendorsRepository().updateVendor(id, input);
+}
+
+export async function archiveVendor(id: string): Promise<DataResult<Vendor>> {
+  return vendorsRepository().archiveVendor(id);
+}
+
+export async function restoreVendor(id: string): Promise<DataResult<Vendor>> {
+  return vendorsRepository().restoreVendor(id);
+}
+
+export async function setVendorStatus(id: string, status: VendorStatus): Promise<DataResult<Vendor>> {
+  return vendorsRepository().setVendorStatus(id, status);
+}
+
+export async function setVendorPreferredStatus(id: string, isPreferred: boolean): Promise<DataResult<Vendor>> {
+  return vendorsRepository().setVendorPreferredStatus(id, isPreferred);
+}
+
+// ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
 
@@ -2321,6 +2374,7 @@ export function resetAllMockData(): void {
   resetClientInvitationsStore();
   resetInventoryItemsStore();
   resetInventoryMovementsStore();
+  resetVendorsStore();
 }
 
 /**

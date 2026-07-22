@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, Lora } from "next/font/google";
+import { initializeCore } from "@/core/initializeCore";
 import "./globals.css";
+
+initializeCore();
 
 const lora = Lora({
   subsets: ["latin"],
