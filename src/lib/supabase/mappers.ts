@@ -223,6 +223,7 @@ export function mapClientRow(row: ClientRow): Client {
     favorite_music: row.favorite_music,
     favorite_food: row.favorite_food,
     favorite_drinks: row.favorite_drinks,
+    favorite_restaurants: row.favorite_restaurants,
     preferred_style: row.preferred_style,
     disliked_elements: row.disliked_elements,
     allergies: row.allergies,

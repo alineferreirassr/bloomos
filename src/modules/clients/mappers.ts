@@ -28,6 +28,7 @@ export function clientToFormInput(client: Client): ClientFormInput {
     favorite_music: client.favorite_music ?? "",
     favorite_food: client.favorite_food ?? "",
     favorite_drinks: client.favorite_drinks ?? "",
+    favorite_restaurants: client.favorite_restaurants ?? "",
     preferred_style: client.preferred_style ?? "",
     disliked_elements: client.disliked_elements ?? "",
 

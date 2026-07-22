@@ -495,6 +495,7 @@ export interface Database {
           favorite_music: string | null;
           favorite_food: string | null;
           favorite_drinks: string | null;
+          favorite_restaurants: string | null;
           preferred_style: string | null;
           disliked_elements: string | null;
           allergies: string | null;
@@ -542,6 +543,7 @@ export interface Database {
           favorite_music?: string | null;
           favorite_food?: string | null;
           favorite_drinks?: string | null;
+          favorite_restaurants?: string | null;
           preferred_style?: string | null;
           disliked_elements?: string | null;
           allergies?: string | null;
@@ -589,6 +591,7 @@ export interface Database {
           favorite_music?: string | null;
           favorite_food?: string | null;
           favorite_drinks?: string | null;
+          favorite_restaurants?: string | null;
           preferred_style?: string | null;
           disliked_elements?: string | null;
           allergies?: string | null;

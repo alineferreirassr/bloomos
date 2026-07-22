@@ -47,6 +47,7 @@ export const clientFormSchema = z.object({
   favorite_music: z.string().trim(),
   favorite_food: z.string().trim(),
   favorite_drinks: z.string().trim(),
+  favorite_restaurants: z.string().trim(),
   preferred_style: z.string().trim(),
   disliked_elements: z.string().trim(),
 
@@ -92,6 +93,7 @@ export const clientDataSchema = clientFormSchema.transform((data) => ({
   favorite_music: data.favorite_music === "" ? null : data.favorite_music,
   favorite_food: data.favorite_food === "" ? null : data.favorite_food,
   favorite_drinks: data.favorite_drinks === "" ? null : data.favorite_drinks,
+  favorite_restaurants: data.favorite_restaurants === "" ? null : data.favorite_restaurants,
   preferred_style: data.preferred_style === "" ? null : data.preferred_style,
   disliked_elements: data.disliked_elements === "" ? null : data.disliked_elements,
 

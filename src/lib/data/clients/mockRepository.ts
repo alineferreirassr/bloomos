@@ -8,12 +8,15 @@ import { getClientNextRecommendedAction } from "@/core/workflows/clientWorkflow"
 import { clientDataSchema, type ClientFormInput } from "@/modules/clients/schema";
 import type { NoteFormInput } from "@/modules/notes/schema";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
+import { CURRENT_ACTOR } from "@/core/constants/actor";
+import { getCoreAuditLogService } from "@/core/audit";
 import { generateId, nowIso, delay } from "@/lib/data/utils";
 import { type DataResult, ok, fail } from "@/lib/data/result";
 import { readClients, writeClients } from "@/lib/data/mock/clientsStore";
 import { readNotes, writeNotes } from "@/lib/data/mock/notesStore";
 import { recordTimelineActivity } from "@/lib/data/mock/timelineStore";
 import { getNotesByOwner, createNoteForOwner, getTimelineByOwner } from "@/lib/data/mock/notesTimelineShared";
+import { getClientExtensionSummary } from "@/lib/data/clients/extensions";
 import type {
   ClientFilters,
   ClientsRepository,
@@ -125,6 +128,14 @@ async function updateClientStatus(id: string, status: ClientStatus): Promise<Dat
     `Status changed from ${CLIENT_STATUS_LABELS[existing.internal_status]} to ${CLIENT_STATUS_LABELS[status]}`,
     { from: existing.internal_status, to: status },
   );
+  await getCoreAuditLogService().recordAuditEvent(existing.workspace_id, {
+    actor: CURRENT_ACTOR,
+    action: "status_changed",
+    ownerType: "client",
+    ownerId: id,
+    before: { internal_status: existing.internal_status },
+    after: { internal_status: status },
+  });
 
   return ok(updated);
 }
@@ -139,6 +150,14 @@ async function updateClientTags(id: string, tags: string[]): Promise<DataResult<
   writeClients(readClients().map((c) => (c.id === id ? updated : c)));
   recordTimelineActivity(existing.workspace_id, "client", id, "tags_changed", "Tags updated", {
     tags: tags.join(", "),
+  });
+  await getCoreAuditLogService().recordAuditEvent(existing.workspace_id, {
+    actor: CURRENT_ACTOR,
+    action: "tags_changed",
+    ownerType: "client",
+    ownerId: id,
+    before: { tags: existing.tags },
+    after: { tags },
   });
 
   return ok(updated);
@@ -159,6 +178,14 @@ async function setClientVipStatus(id: string, isVip: boolean): Promise<DataResul
     "vip_status_changed",
     isVip ? "Marked as VIP" : "Removed VIP status",
   );
+  await getCoreAuditLogService().recordAuditEvent(existing.workspace_id, {
+    actor: CURRENT_ACTOR,
+    action: "vip_status_changed",
+    ownerType: "client",
+    ownerId: id,
+    before: { is_vip: existing.is_vip },
+    after: { is_vip: isVip },
+  });
 
   return ok(updated);
 }
@@ -183,6 +210,14 @@ async function updateClientContactPreference(
       ? `Preferred contact method set to ${CONTACT_METHOD_LABELS[method]}`
       : "Preferred contact method cleared",
   );
+  await getCoreAuditLogService().recordAuditEvent(existing.workspace_id, {
+    actor: CURRENT_ACTOR,
+    action: "communication_preference_changed",
+    ownerType: "client",
+    ownerId: id,
+    before: { preferred_contact_method: existing.preferred_contact_method },
+    after: { preferred_contact_method: method },
+  });
 
   return ok(updated);
 }
@@ -205,6 +240,14 @@ async function archiveClient(id: string): Promise<DataResult<Client>> {
   };
   writeClients(readClients().map((c) => (c.id === id ? updated : c)));
   recordTimelineActivity(existing.workspace_id, "client", id, "client_archived", "Client archived");
+  await getCoreAuditLogService().recordAuditEvent(existing.workspace_id, {
+    actor: CURRENT_ACTOR,
+    action: "client_archived",
+    ownerType: "client",
+    ownerId: id,
+    before: { internal_status: existing.internal_status, archived_at: existing.archived_at },
+    after: { internal_status: "archived", archived_at: timestamp },
+  });
 
   return ok(updated);
 }
@@ -226,6 +269,14 @@ async function restoreClient(id: string): Promise<DataResult<Client>> {
   };
   writeClients(readClients().map((c) => (c.id === id ? updated : c)));
   recordTimelineActivity(existing.workspace_id, "client", id, "client_restored", "Client restored");
+  await getCoreAuditLogService().recordAuditEvent(existing.workspace_id, {
+    actor: CURRENT_ACTOR,
+    action: "client_restored",
+    ownerType: "client",
+    ownerId: id,
+    before: { internal_status: existing.internal_status, archived_at: existing.archived_at },
+    after: { internal_status: "active", archived_at: null },
+  });
 
   return ok(updated);
 }
@@ -358,4 +409,5 @@ export const mockClientsRepository: ClientsRepository = {
   markClientRecoveryPending,
   resolveClientRecoveryPending,
   getClientsWithPendingRecovery,
+  getClientExtensionSummary,
 };

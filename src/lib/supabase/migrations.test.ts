@@ -23,9 +23,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow migrations, in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration migrations, in chronological (execution) order", () => {
     const files = migrationFiles();
-    expect(files).toHaveLength(89);
+    expect(files).toHaveLength(90);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -427,5 +427,15 @@ describe("Client Portal MVP migrations", () => {
     expect(sql).toMatch(/v_document\.visibility not in \('client', 'client_and_team'\)/);
     expect(sql).toMatch(/is_client_account_holder_in_workspace\(v_document\.workspace_id, v_document\.client_id\)/);
     expect(sql).toMatch(/v_document\.media_asset_id is null/);
+  });
+});
+
+describe("Clients Core-integration foundation migration", () => {
+  it("only adds one nullable column — no table drop, no constraint drop, no data migration", () => {
+    const sql = stripSqlComments(readMigration("20260728100300_clients_favorite_restaurants.sql"));
+    expect(sql).toMatch(/alter table public\.clients add column favorite_restaurants text null;/);
+    expect(sql).not.toMatch(/drop table/i);
+    expect(sql).not.toMatch(/drop column/i);
+    expect(sql).not.toMatch(/drop constraint/i);
   });
 });

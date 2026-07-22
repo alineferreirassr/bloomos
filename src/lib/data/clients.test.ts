@@ -6,6 +6,7 @@ import {
   createLead,
   convertLeadToClient,
   getClientById,
+  getClientExtensionSummary,
   getClientNextAction,
   getClients,
   getClientsWithPendingRecovery,
@@ -22,6 +23,8 @@ import {
   updateClientStatus,
   updateClientTags,
 } from "@/lib/data";
+import { getCoreAuditLogService } from "@/core/audit";
+import { resetAuditLogStore } from "@/lib/data/core/audit/mockRepository";
 import type { ClientFormInput } from "@/modules/clients/schema";
 import type { LeadFormInput } from "@/modules/leads/schema";
 
@@ -49,6 +52,7 @@ const validClientInput: ClientFormInput = {
   favorite_music: "",
   favorite_food: "",
   favorite_drinks: "",
+  favorite_restaurants: "",
   preferred_style: "",
   disliked_elements: "",
   allergies: "",
@@ -79,6 +83,7 @@ const validLeadInput: LeadFormInput = {
 
 beforeEach(() => {
   resetAllMockData();
+  resetAuditLogStore();
 });
 
 describe("createClient", () => {
@@ -456,5 +461,119 @@ describe("Client recovery-pending (Booking Workflow, Phase 2 — generic infra)"
     await resolveClientRecoveryPending(clientA.data.id);
     const afterResolve = await getClientsWithPendingRecovery("booking");
     expect(afterResolve.some((c) => c.id === clientA.data.id)).toBe(false);
+  });
+});
+
+describe("favorite_restaurants", () => {
+  it("stores and round-trips favorite_restaurants like its sibling favorite_* fields", async () => {
+    const created = await createClient({ ...validClientInput, favorite_restaurants: "Bestia, Osteria Mozza" });
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+    expect(created.data.favorite_restaurants).toBe("Bestia, Osteria Mozza");
+
+    const fetched = await getClientById(created.data.id);
+    expect(fetched.favorite_restaurants).toBe("Bestia, Osteria Mozza");
+  });
+
+  it("normalizes an empty string to null, matching every other optional text field", async () => {
+    const created = await createClient({ ...validClientInput, favorite_restaurants: "" });
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+    expect(created.data.favorite_restaurants).toBeNull();
+  });
+});
+
+describe("getClientExtensionSummary", () => {
+  it("returns an empty summary with every field present but unpopulated, since cross-module integration isn't built yet", async () => {
+    const created = await createClient(validClientInput);
+    if (!created.success) throw new Error("setup failed");
+
+    const summary = await getClientExtensionSummary(created.data.id);
+    expect(summary).toEqual({
+      proposalHistory: [],
+      eventHistory: null,
+      paymentSummary: null,
+      documentSummary: null,
+      communicationHistory: [],
+      aiProfileSummary: null,
+    });
+  });
+});
+
+describe("Core Audit Log integration", () => {
+  it("records a status_changed audit event with before/after on updateClientStatus", async () => {
+    const created = await createClient(validClientInput);
+    if (!created.success) throw new Error("setup failed");
+
+    await updateClientStatus(created.data.id, "planning");
+
+    const entries = await getCoreAuditLogService().getAuditLogForOwner(created.data.workspace_id, "client", created.data.id);
+    const entry = entries.find((e) => e.action === "status_changed");
+    expect(entry).toBeDefined();
+    expect(entry?.before).toEqual({ internal_status: "active" });
+    expect(entry?.after).toEqual({ internal_status: "planning" });
+  });
+
+  it("records a vip_status_changed audit event on setClientVipStatus", async () => {
+    const created = await createClient(validClientInput);
+    if (!created.success) throw new Error("setup failed");
+
+    await setClientVipStatus(created.data.id, true);
+
+    const entries = await getCoreAuditLogService().getAuditLogForOwner(created.data.workspace_id, "client", created.data.id);
+    const entry = entries.find((e) => e.action === "vip_status_changed");
+    expect(entry?.before).toEqual({ is_vip: false });
+    expect(entry?.after).toEqual({ is_vip: true });
+  });
+
+  it("records a tags_changed audit event on updateClientTags", async () => {
+    const created = await createClient(validClientInput);
+    if (!created.success) throw new Error("setup failed");
+
+    await updateClientTags(created.data.id, ["vip", "repeat"]);
+
+    const entries = await getCoreAuditLogService().getAuditLogForOwner(created.data.workspace_id, "client", created.data.id);
+    const entry = entries.find((e) => e.action === "tags_changed");
+    expect(entry?.after).toEqual({ tags: ["vip", "repeat"] });
+  });
+
+  it("records a communication_preference_changed audit event on updateClientContactPreference", async () => {
+    const created = await createClient(validClientInput);
+    if (!created.success) throw new Error("setup failed");
+
+    await updateClientContactPreference(created.data.id, "email");
+
+    const entries = await getCoreAuditLogService().getAuditLogForOwner(created.data.workspace_id, "client", created.data.id);
+    const entry = entries.find((e) => e.action === "communication_preference_changed");
+    expect(entry?.after).toEqual({ preferred_contact_method: "email" });
+  });
+
+  it("records client_archived and client_restored audit events with before/after archived_at", async () => {
+    const created = await createClient(validClientInput);
+    if (!created.success) throw new Error("setup failed");
+
+    await archiveClient(created.data.id);
+    await restoreClient(created.data.id);
+
+    const entries = await getCoreAuditLogService().getAuditLogForOwner(created.data.workspace_id, "client", created.data.id);
+    const archived = entries.find((e) => e.action === "client_archived");
+    const restored = entries.find((e) => e.action === "client_restored");
+
+    expect(archived?.before).toEqual({ internal_status: "active", archived_at: null });
+    expect(archived?.after).toMatchObject({ internal_status: "archived" });
+    expect(restored?.before).toMatchObject({ internal_status: "archived" });
+    expect(restored?.after).toEqual({ internal_status: "active", archived_at: null });
+  });
+
+  it("scopes audit entries to the Client's own workspace_id and owner_id, isolated from other Clients", async () => {
+    const clientA = await createClient(validClientInput);
+    if (!clientA.success) throw new Error("setup failed");
+    const clientB = await createClient({ ...validClientInput, email: "second.audit@example.com" });
+    if (!clientB.success) throw new Error("setup failed");
+
+    await setClientVipStatus(clientA.data.id, true);
+
+    const entriesForB = await getCoreAuditLogService().getAuditLogForOwner(clientB.data.workspace_id, "client", clientB.data.id);
+    expect(entriesForB.find((e) => e.action === "vip_status_changed")).toBeUndefined();
   });
 });

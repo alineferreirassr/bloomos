@@ -35,6 +35,8 @@ export const OWNER_TYPE_LABELS: Record<EntityType, string> = {
   client_kb_article: "Client Knowledge Base Article",
   notification: "Notification",
   automation: "Automation",
+  inventory: "Inventory Item",
+  vendor: "Vendor",
 };
 
 export type DocumentSortField = "title" | "uploaded_at" | "updated_at" | "size_bytes" | "expires_at" | "version";

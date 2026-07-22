@@ -1,6 +1,7 @@
 import type { Client } from "@/types/client";
 import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
+import type { ClientExtensionSummary } from "@/types/clientExtensions";
 import type { ClientStatus } from "@/core/enums/clientStatus";
 import type { ContactMethod } from "@/core/enums/contactMethod";
 import type { ClientFormInput } from "@/modules/clients/schema";
@@ -73,4 +74,13 @@ export interface ClientsRepository {
   resolveClientRecoveryPending(clientId: string): Promise<DataResult<Client>>;
   /** Workspace-scoped; `workflow` narrows to one recoverable workflow type when provided. */
   getClientsWithPendingRecovery(workflow?: string): Promise<Client[]>;
+
+  /**
+   * Client's cross-module extension points (Proposal History, Event
+   * History, Payment Summary, Document Summary, Communication History, AI
+   * Profile Summary) — see `types/clientExtensions.ts`. Empty in both data
+   * modes until Leads/Events/Finance/Documents/Bloom AI integration is
+   * actually built.
+   */
+  getClientExtensionSummary(clientId: string): Promise<ClientExtensionSummary>;
 }

@@ -76,6 +76,36 @@ export async function createNoteForOwner(
   return ok(note);
 }
 
+/**
+ * Toggles pin state for a note by id alone — no `ownerType` needed, since
+ * the note row already carries its own `owner_type`. Every module's mock
+ * repository previously reimplemented this same "find by id, guard by
+ * owner_type, flip is_pinned" logic inline (grep for togglePin in each
+ * module's mockRepository.ts); this is the one shared version future
+ * modules should call instead of writing a new copy. Returns `null` only
+ * when no note with this id exists at all — callers that need to guard a
+ * specific owner_type can check `result.data.owner_type` themselves.
+ */
+export async function togglePinNoteById(noteId: string): Promise<DataResult<Note> | null> {
+  await delay(150);
+  const notes = readNotes();
+  const existing = notes.find((note) => note.id === noteId);
+  if (!existing) return null;
+
+  const nextPinned = !existing.is_pinned;
+  const updated: Note = { ...existing, is_pinned: nextPinned, updated_at: nowIso() };
+  writeNotes(notes.map((note) => (note.id === noteId ? updated : note)));
+  recordTimelineActivity(
+    existing.workspace_id,
+    existing.owner_type,
+    existing.owner_id,
+    nextPinned ? "note_pinned" : "note_unpinned",
+    `${nextPinned ? "Note pinned" : "Note unpinned"}: "${existing.title}"`,
+  );
+
+  return ok(updated);
+}
+
 export async function getTimelineByOwner(
   workspaceId: string,
   ownerType: EntityType,

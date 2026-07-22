@@ -34,6 +34,7 @@ export function makeClient(overrides: Partial<Client> = {}): Client {
     favorite_music: null,
     favorite_food: null,
     favorite_drinks: null,
+    favorite_restaurants: null,
     preferred_style: null,
     disliked_elements: null,
 

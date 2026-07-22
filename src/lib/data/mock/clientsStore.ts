@@ -34,6 +34,7 @@ const SEED_CLIENTS: Client[] = [
     favorite_music: "Live jazz trio",
     favorite_food: "Modern Italian",
     favorite_drinks: "Champagne, Aperol spritz",
+    favorite_restaurants: "Bestia, Osteria Mozza",
     preferred_style: "Timeless, garden-inspired",
     disliked_elements: "No confetti cannons, no loud DJ sets",
 
@@ -84,6 +85,7 @@ const SEED_CLIENTS: Client[] = [
     favorite_music: null,
     favorite_food: null,
     favorite_drinks: null,
+    favorite_restaurants: null,
     preferred_style: "Minimal, natural textures",
     disliked_elements: "No fireworks — Sam doesn't like loud noises",
 
@@ -134,6 +136,7 @@ const SEED_CLIENTS: Client[] = [
     favorite_music: null,
     favorite_food: null,
     favorite_drinks: null,
+    favorite_restaurants: null,
     preferred_style: "Romantic, hotel-room glam",
     disliked_elements: null,
 
@@ -184,6 +187,7 @@ const SEED_CLIENTS: Client[] = [
     favorite_music: null,
     favorite_food: null,
     favorite_drinks: null,
+    favorite_restaurants: null,
     preferred_style: null,
     disliked_elements: null,
 

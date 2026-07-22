@@ -2,6 +2,7 @@ import type { Lead } from "@/types/lead";
 import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
 import type { Client } from "@/types/client";
+import type { ClientExtensionSummary } from "@/types/clientExtensions";
 import type { Event } from "@/types/event";
 import type { ChecklistItem } from "@/types/checklistItem";
 import type { EventScheduleItem } from "@/types/eventScheduleItem";
@@ -575,6 +576,10 @@ export async function getClientsWithPendingRecovery(workflow?: string): Promise<
 
 export async function getClientNextAction(clientId: string): Promise<string | null> {
   return clientsRepository().getClientNextAction(clientId);
+}
+
+export async function getClientExtensionSummary(clientId: string): Promise<ClientExtensionSummary> {
+  return clientsRepository().getClientExtensionSummary(clientId);
 }
 
 // ---------------------------------------------------------------------------

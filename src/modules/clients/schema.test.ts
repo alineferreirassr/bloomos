@@ -25,6 +25,7 @@ const validFormInput = {
   favorite_music: "",
   favorite_food: "",
   favorite_drinks: "",
+  favorite_restaurants: "",
   preferred_style: "",
   disliked_elements: "",
   allergies: "",
