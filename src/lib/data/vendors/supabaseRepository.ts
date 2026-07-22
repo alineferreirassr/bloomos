@@ -1,9 +1,12 @@
 import type { Vendor } from "@/types/vendor";
 import type { Database } from "@/types/database.types";
 import type { TimelineActivity } from "@/types/timelineActivity";
+import type { Note } from "@/types/note";
+import type { NoteFormInput } from "@/modules/notes/schema";
 import type { VendorStatus } from "@/core/enums/vendorStatus";
 import { NotFoundError, UnauthorizedError, ForbiddenError } from "@/core/errors";
 import { getCoreTimelineService } from "@/core/timeline";
+import { getCoreNotesService } from "@/core/notes";
 import { createVendorInputSchema, updateVendorInputSchema, type CreateVendorInput, type UpdateVendorInput } from "@/modules/vendors/schema";
 import { type DataResult, ok, fail } from "@/lib/data/result";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
@@ -327,6 +330,35 @@ async function getTimelineByVendorId(vendorId: string): Promise<TimelineActivity
   return getCoreTimelineService(supabase).getTimelineForOwner(vendor.workspace_id, "vendor", vendorId);
 }
 
+async function getNotesByVendorId(vendorId: string): Promise<Note[]> {
+  const vendor = await fetchVendorRow(vendorId);
+  if (!vendor) return [];
+
+  const supabase = createSupabaseClient();
+  return getCoreNotesService(supabase).getNotesForOwner(vendor.workspace_id, "vendor", vendorId);
+}
+
+async function createVendorNote(vendorId: string, input: NoteFormInput): Promise<DataResult<Note>> {
+  const vendor = await fetchVendorRow(vendorId);
+  if (!vendor) return fail("Vendor not found.");
+
+  const session = await requireWorkspaceSession();
+  const supabase = createSupabaseClient();
+  return getCoreNotesService(supabase).createNoteForOwner(vendor.workspace_id, "vendor", vendorId, resolveActorName(session), input);
+}
+
+async function updateVendorNote(noteId: string, input: NoteFormInput): Promise<DataResult<Note> | null> {
+  const session = await requireWorkspaceSession();
+  const supabase = createSupabaseClient();
+  return getCoreNotesService(supabase).updateNoteById(session.workspace.id, noteId, resolveActorName(session), input);
+}
+
+async function toggleVendorNotePin(noteId: string): Promise<DataResult<Note> | null> {
+  const session = await requireWorkspaceSession();
+  const supabase = createSupabaseClient();
+  return getCoreNotesService(supabase).togglePinNoteById(session.workspace.id, noteId, resolveActorName(session));
+}
+
 export const supabaseVendorsRepository: VendorsRepository = {
   getVendors,
   getVendorById,
@@ -337,4 +369,8 @@ export const supabaseVendorsRepository: VendorsRepository = {
   setVendorStatus,
   setVendorPreferredStatus,
   getTimelineByVendorId,
+  getNotesByVendorId,
+  createVendorNote,
+  updateVendorNote,
+  toggleVendorNotePin,
 };

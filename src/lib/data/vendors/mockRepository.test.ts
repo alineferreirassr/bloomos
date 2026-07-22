@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { mockVendorsRepository } from "@/lib/data/vendors/mockRepository";
 import { resetVendorsStore, readVendors } from "@/lib/data/mock/vendorsStore";
+import { resetNotesStore } from "@/lib/data/mock/notesStore";
 import { NotFoundError } from "@/core/errors";
 import type { CreateVendorInput } from "@/modules/vendors/schema";
+import type { NoteFormInput } from "@/modules/notes/schema";
 
 afterEach(() => {
   resetVendorsStore();
+  resetNotesStore();
 });
 
 const MINIMAL_INPUT: CreateVendorInput = {
@@ -292,5 +295,102 @@ describe("mockVendorsRepository.getTimelineByVendorId", () => {
   it("returns an empty array for a vendor that does not exist", async () => {
     const timeline = await mockVendorsRepository.getTimelineByVendorId("missing");
     expect(timeline).toEqual([]);
+  });
+});
+
+const NOTE_INPUT: NoteFormInput = {
+  title: "Delivery preference",
+  content: "Prefers morning deliveries.",
+  category: "general",
+  priority: "normal",
+};
+
+describe("mockVendorsRepository Notes methods", () => {
+  async function createTestVendor() {
+    const created = await mockVendorsRepository.createVendor(MINIMAL_INPUT);
+    expect(created.success).toBe(true);
+    if (!created.success) throw new Error("setup failed");
+    return created.data;
+  }
+
+  it("getNotesByVendorId returns an empty array for a vendor with no notes", async () => {
+    const vendor = await createTestVendor();
+    const notes = await mockVendorsRepository.getNotesByVendorId(vendor.id);
+    expect(notes).toEqual([]);
+  });
+
+  it("getNotesByVendorId returns an empty array for a vendor that does not exist", async () => {
+    const notes = await mockVendorsRepository.getNotesByVendorId("missing");
+    expect(notes).toEqual([]);
+  });
+
+  it("createVendorNote writes through the shared mock Notes store, scoped to the vendor's workspace and owner", async () => {
+    const vendor = await createTestVendor();
+    const result = await mockVendorsRepository.createVendorNote(vendor.id, NOTE_INPUT);
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.owner_type).toBe("vendor");
+    expect(result.data.owner_id).toBe(vendor.id);
+    expect(result.data.workspace_id).toBe(vendor.workspace_id);
+    expect(result.data.title).toBe("Delivery preference");
+
+    const notes = await mockVendorsRepository.getNotesByVendorId(vendor.id);
+    expect(notes).toHaveLength(1);
+    expect(notes[0].id).toBe(result.data.id);
+  });
+
+  it("createVendorNote fails for a vendor that does not exist", async () => {
+    const result = await mockVendorsRepository.createVendorNote("missing", NOTE_INPUT);
+    expect(result.success).toBe(false);
+  });
+
+  it("updateVendorNote edits an existing note's content", async () => {
+    const vendor = await createTestVendor();
+    const created = await mockVendorsRepository.createVendorNote(vendor.id, NOTE_INPUT);
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+
+    const updated = await mockVendorsRepository.updateVendorNote(created.data.id, {
+      ...NOTE_INPUT,
+      title: "Updated title",
+      content: "Updated content",
+    });
+
+    expect(updated).not.toBeNull();
+    expect(updated?.success).toBe(true);
+    if (!updated || !updated.success) return;
+    expect(updated.data.title).toBe("Updated title");
+    expect(updated.data.content).toBe("Updated content");
+
+    const notes = await mockVendorsRepository.getNotesByVendorId(vendor.id);
+    expect(notes[0].title).toBe("Updated title");
+  });
+
+  it("updateVendorNote returns null for a note that does not exist", async () => {
+    const result = await mockVendorsRepository.updateVendorNote("missing", NOTE_INPUT);
+    expect(result).toBeNull();
+  });
+
+  it("toggleVendorNotePin flips a note's pinned state", async () => {
+    const vendor = await createTestVendor();
+    const created = await mockVendorsRepository.createVendorNote(vendor.id, NOTE_INPUT);
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+
+    const pinned = await mockVendorsRepository.toggleVendorNotePin(created.data.id);
+    expect(pinned?.success).toBe(true);
+    if (!pinned || !pinned.success) return;
+    expect(pinned.data.is_pinned).toBe(true);
+
+    const unpinned = await mockVendorsRepository.toggleVendorNotePin(created.data.id);
+    expect(unpinned?.success).toBe(true);
+    if (!unpinned || !unpinned.success) return;
+    expect(unpinned.data.is_pinned).toBe(false);
+  });
+
+  it("toggleVendorNotePin returns null for a note that does not exist", async () => {
+    const result = await mockVendorsRepository.toggleVendorNotePin("missing");
+    expect(result).toBeNull();
   });
 });

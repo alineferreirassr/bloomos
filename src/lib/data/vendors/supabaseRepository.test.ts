@@ -573,3 +573,149 @@ describe("supabaseVendorsRepository.getTimelineByVendorId", () => {
     expect(timeline).toEqual([]);
   });
 });
+
+function noteRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: "note_1",
+    workspace_id: "workspace_1",
+    owner_type: "vendor",
+    owner_id: "vendor_1",
+    title: "Delivery preference",
+    content: "Prefers morning deliveries.",
+    category: "general",
+    priority: "normal",
+    is_pinned: false,
+    attachments: [],
+    created_by: "Amoré Bloom Owner",
+    created_at: "2026-07-30T00:00:00Z",
+    updated_at: "2026-07-30T00:00:00Z",
+    ...overrides,
+  };
+}
+
+const NOTE_INPUT = {
+  title: "Delivery preference",
+  content: "Prefers morning deliveries.",
+  category: "general" as const,
+  priority: "normal" as const,
+};
+
+describe("supabaseVendorsRepository.getNotesByVendorId", () => {
+  it("scopes the notes query to the vendor's workspace and owner id", async () => {
+    const { client, calls } = createMockSupabase([
+      { data: vendorRow(), error: null },
+      { data: [noteRow()], error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const notes = await supabaseVendorsRepository.getNotesByVendorId("vendor_1");
+
+    expect(notes).toHaveLength(1);
+    expect(notes[0].title).toBe("Delivery preference");
+    const noteCalls = calls.filter((c) => c.table === "notes");
+    expect(noteCalls.some((c) => c.method === "eq" && c.args[0] === "workspace_id" && c.args[1] === "workspace_1")).toBe(true);
+    expect(noteCalls.some((c) => c.method === "eq" && c.args[0] === "owner_type" && c.args[1] === "vendor")).toBe(true);
+    expect(noteCalls.some((c) => c.method === "eq" && c.args[0] === "owner_id" && c.args[1] === "vendor_1")).toBe(true);
+  });
+
+  it("returns an empty array for a vendor that does not exist", async () => {
+    const { client } = createMockSupabase([{ data: null, error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const notes = await supabaseVendorsRepository.getNotesByVendorId("missing");
+
+    expect(notes).toEqual([]);
+  });
+});
+
+describe("supabaseVendorsRepository.createVendorNote", () => {
+  it("creates the note through the shared Core Notes helper, scoped to the vendor's workspace", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: vendorRow(), error: null },
+      { data: noteRow(), error: null },
+      { data: null, error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseVendorsRepository.createVendorNote("vendor_1", NOTE_INPUT);
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.owner_type).toBe("vendor");
+    expect(result.data.owner_id).toBe("vendor_1");
+    expect(result.data.workspace_id).toBe("workspace_1");
+  });
+
+  it("fails for a vendor that does not exist", async () => {
+    const { client } = createMockSupabase([{ data: null, error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseVendorsRepository.createVendorNote("missing", NOTE_INPUT);
+
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("supabaseVendorsRepository.updateVendorNote", () => {
+  it("edits an existing note's content, scoped by workspace, without recording a Timeline activity", async () => {
+    mockSession();
+    const { client, calls } = createMockSupabase([
+      { data: noteRow(), error: null },
+      { data: noteRow({ title: "Updated title", content: "Updated content" }), error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseVendorsRepository.updateVendorNote("note_1", {
+      ...NOTE_INPUT,
+      title: "Updated title",
+      content: "Updated content",
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.success).toBe(true);
+    if (!result || !result.success) return;
+    expect(result.data.title).toBe("Updated title");
+    expect(result.data.content).toBe("Updated content");
+    expect(calls.some((c) => c.table === "timeline_activities")).toBe(false);
+  });
+
+  it("returns null for a note that does not exist", async () => {
+    mockSession();
+    const { client } = createMockSupabase([{ data: null, error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseVendorsRepository.updateVendorNote("missing", NOTE_INPUT);
+
+    expect(result).toBeNull();
+  });
+});
+
+describe("supabaseVendorsRepository.toggleVendorNotePin", () => {
+  it("flips is_pinned and records a Timeline activity", async () => {
+    mockSession();
+    const { client, calls } = createMockSupabase([
+      { data: noteRow({ is_pinned: false }), error: null },
+      { data: noteRow({ is_pinned: true }), error: null },
+      { data: null, error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseVendorsRepository.toggleVendorNotePin("note_1");
+
+    expect(result?.success).toBe(true);
+    if (!result || !result.success) return;
+    expect(result.data.is_pinned).toBe(true);
+    expect(calls.some((c) => c.table === "timeline_activities" && c.method === "insert")).toBe(true);
+  });
+
+  it("returns null for a note that does not exist", async () => {
+    mockSession();
+    const { client } = createMockSupabase([{ data: null, error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseVendorsRepository.toggleVendorNotePin("missing");
+
+    expect(result).toBeNull();
+  });
+});

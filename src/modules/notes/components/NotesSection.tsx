@@ -42,6 +42,8 @@ interface NotesSectionProps {
   notes: Note[];
   onCreateNote: (input: NoteFormInput) => Promise<DataResult<Note>>;
   onTogglePin: (noteId: string) => Promise<DataResult<Note>>;
+  /** Optional — omit for owner types that haven't wired edit support; NoteCard hides its Edit affordance when this is absent. */
+  onUpdateNote?: (noteId: string, input: NoteFormInput) => Promise<DataResult<Note>>;
   readOnly: boolean;
   onNotesChanged: () => void;
 }
@@ -53,6 +55,7 @@ export function NotesSection({
   notes,
   onCreateNote,
   onTogglePin,
+  onUpdateNote,
   readOnly,
   onNotesChanged,
 }: NotesSectionProps) {
@@ -70,6 +73,14 @@ export function NotesSection({
     onNotesChanged();
   };
 
+  const handleUpdateNote = onUpdateNote
+    ? async (noteId: string, input: NoteFormInput) => {
+        const result = await onUpdateNote(noteId, input);
+        onNotesChanged();
+        return result;
+      }
+    : undefined;
+
   return (
     <div className="space-y-6" data-workspace-id={workspaceId} data-owner-type={ownerType} data-owner-id={ownerId}>
       {pinned.length > 0 ? (
@@ -81,6 +92,7 @@ export function NotesSection({
                 key={note.id}
                 note={note}
                 onTogglePin={handleTogglePin}
+                onUpdate={handleUpdateNote}
                 readOnly={readOnly}
                 pinPending={pendingNoteId === note.id}
               />
@@ -121,6 +133,7 @@ export function NotesSection({
                 key={note.id}
                 note={note}
                 onTogglePin={handleTogglePin}
+                onUpdate={handleUpdateNote}
                 readOnly={readOnly}
                 pinPending={pendingNoteId === note.id}
               />

@@ -106,6 +106,30 @@ export async function togglePinNoteById(noteId: string): Promise<DataResult<Note
   return ok(updated);
 }
 
+/**
+ * Edits a note's content fields by id alone, same "no owner_type needed"
+ * shape as `togglePinNoteById` — the row already carries its own owner_type.
+ * Returns `null` only when no note with this id exists. No Timeline write:
+ * no `note_updated` activity type exists (only `note_added`/`note_pinned`/
+ * `note_unpinned` do), and this phase doesn't add one.
+ */
+export async function updateNoteById(noteId: string, input: NoteFormInput): Promise<DataResult<Note> | null> {
+  await delay(150);
+  const notes = readNotes();
+  const existing = notes.find((note) => note.id === noteId);
+  if (!existing) return null;
+
+  const parsed = noteFormSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  const updated: Note = { ...existing, ...parsed.data, updated_at: nowIso() };
+  writeNotes(notes.map((note) => (note.id === noteId ? updated : note)));
+
+  return ok(updated);
+}
+
 export async function getTimelineByOwner(
   workspaceId: string,
   ownerType: EntityType,

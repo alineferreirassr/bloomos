@@ -9,6 +9,10 @@ vi.mock("@/lib/data", () => ({
   archiveVendor: vi.fn(),
   restoreVendor: vi.fn(),
   getTimelineByVendorId: vi.fn(),
+  getNotesByVendorId: vi.fn(),
+  createVendorNote: vi.fn(),
+  updateVendorNote: vi.fn(),
+  toggleVendorNotePin: vi.fn(),
 }));
 
 import * as dataLayer from "@/lib/data";
@@ -26,6 +30,7 @@ describe("VendorDetailView", () => {
       }),
     );
     vi.mocked(dataLayer.getTimelineByVendorId).mockResolvedValue([]);
+    vi.mocked(dataLayer.getNotesByVendorId).mockResolvedValue([]);
 
     render(<VendorDetailView vendorId="vendor_1" />);
 
@@ -45,9 +50,10 @@ describe("VendorDetailView", () => {
     expect(await screen.findByText(/could not be found/i)).toBeInTheDocument();
   });
 
-  it("never references Inventory, Purchases, Notes, Documents, or Media", async () => {
+  it("never references Inventory, Purchases, Documents, or Media", async () => {
     vi.mocked(dataLayer.getVendorById).mockResolvedValue(makeVendor());
     vi.mocked(dataLayer.getTimelineByVendorId).mockResolvedValue([]);
+    vi.mocked(dataLayer.getNotesByVendorId).mockResolvedValue([]);
 
     render(<VendorDetailView vendorId="vendor_1" />);
 
@@ -60,6 +66,7 @@ describe("VendorDetailView", () => {
 
   it("includes a Timeline section that renders Vendor activity", async () => {
     vi.mocked(dataLayer.getVendorById).mockResolvedValue(makeVendor());
+    vi.mocked(dataLayer.getNotesByVendorId).mockResolvedValue([]);
     vi.mocked(dataLayer.getTimelineByVendorId).mockResolvedValue([
       {
         id: "activity_1",
@@ -81,11 +88,51 @@ describe("VendorDetailView", () => {
 
   it("still renders the Vendor's main details when Timeline loading fails", async () => {
     vi.mocked(dataLayer.getVendorById).mockResolvedValue(makeVendor({ company_name: "Still Visible Co" }));
+    vi.mocked(dataLayer.getNotesByVendorId).mockResolvedValue([]);
     vi.mocked(dataLayer.getTimelineByVendorId).mockRejectedValue(new Error("boom"));
 
     render(<VendorDetailView vendorId="vendor_test" />);
 
     expect(await screen.findByRole("heading", { name: "Still Visible Co" })).toBeInTheDocument();
     expect(await screen.findByText(/could not load this vendor's activity history/i)).toBeInTheDocument();
+  });
+
+  it("includes a Notes section that renders Vendor notes", async () => {
+    vi.mocked(dataLayer.getVendorById).mockResolvedValue(makeVendor());
+    vi.mocked(dataLayer.getTimelineByVendorId).mockResolvedValue([]);
+    vi.mocked(dataLayer.getNotesByVendorId).mockResolvedValue([
+      {
+        id: "note_1",
+        workspace_id: "ws_test",
+        owner_type: "vendor",
+        owner_id: "vendor_test",
+        title: "Delivery preference",
+        content: "Prefers morning deliveries.",
+        category: "general",
+        priority: "normal",
+        is_pinned: false,
+        attachments: [],
+        created_by: "Amoré Bloom Team",
+        created_at: "2026-01-01T12:00:00.000Z",
+        updated_at: "2026-01-01T12:00:00.000Z",
+      },
+    ]);
+
+    render(<VendorDetailView vendorId="vendor_test" />);
+
+    expect(await screen.findByText("Delivery preference")).toBeInTheDocument();
+    expect(screen.getByText("Prefers morning deliveries.")).toBeInTheDocument();
+  });
+
+  it("still renders the Vendor's main details and Timeline when Notes loading fails", async () => {
+    vi.mocked(dataLayer.getVendorById).mockResolvedValue(makeVendor({ company_name: "Notes Failure Co" }));
+    vi.mocked(dataLayer.getTimelineByVendorId).mockResolvedValue([]);
+    vi.mocked(dataLayer.getNotesByVendorId).mockRejectedValue(new Error("boom"));
+
+    render(<VendorDetailView vendorId="vendor_test" />);
+
+    expect(await screen.findByRole("heading", { name: "Notes Failure Co" })).toBeInTheDocument();
+    expect(await screen.findByText(/could not load this vendor's notes/i)).toBeInTheDocument();
+    expect(await screen.findByText("No activity yet")).toBeInTheDocument();
   });
 });

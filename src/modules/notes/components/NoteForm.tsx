@@ -15,12 +15,16 @@ import type { DataResult } from "@/lib/data/result";
 import type { Note } from "@/types/note";
 
 interface NoteFormProps {
+  /** When provided, the form opens pre-filled for editing an existing note instead of creating a new one. */
+  initialValues?: NoteFormInput;
+  /** Submit button label while idle — defaults to "Add note" (create). Pass "Save" for edit. */
+  submitLabel?: string;
   onSubmit: (input: NoteFormInput) => Promise<DataResult<Note>>;
   onSuccess: () => void;
   onCancel: () => void;
 }
 
-export function NoteForm({ onSubmit, onSuccess, onCancel }: NoteFormProps) {
+export function NoteForm({ initialValues, submitLabel = "Add note", onSubmit, onSuccess, onCancel }: NoteFormProps) {
   const [formError, setFormError] = useState<string | null>(null);
   const {
     register,
@@ -29,7 +33,7 @@ export function NoteForm({ onSubmit, onSuccess, onCancel }: NoteFormProps) {
     formState: { errors, isSubmitting },
   } = useForm<NoteFormInput>({
     resolver: zodResolver(noteFormSchema),
-    defaultValues: { title: "", content: "", category: "general", priority: "normal" },
+    defaultValues: initialValues ?? { title: "", content: "", category: "general", priority: "normal" },
   });
 
   const submit = handleSubmit(async (values) => {
@@ -85,7 +89,7 @@ export function NoteForm({ onSubmit, onSuccess, onCancel }: NoteFormProps) {
       </div>
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Saving…" : "Add note"}
+          {isSubmitting ? "Saving…" : submitLabel}
         </Button>
         <Button type="button" variant="secondary" onClick={onCancel}>
           Cancel

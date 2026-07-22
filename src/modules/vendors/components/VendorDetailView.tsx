@@ -12,6 +12,7 @@ import { VendorStatusBadge } from "@/modules/vendors/components/VendorStatusBadg
 import { PreferredBadge } from "@/modules/vendors/components/PreferredBadge";
 import { VendorActions } from "@/modules/vendors/components/VendorActions";
 import { VendorTimelineSection } from "@/modules/vendors/components/VendorTimelineSection";
+import { VendorNotesSection } from "@/modules/vendors/components/VendorNotesSection";
 
 type LoadState = { status: "loading" } | { status: "not-found" } | { status: "error" } | { status: "ready"; vendor: Vendor };
 
@@ -105,8 +106,19 @@ export function VendorDetailView({ vendorId }: { vendorId: string }) {
           </Card>
 
           <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
+            {/* Renamed from "Notes" to "Internal Notes" — this is the plain
+                free-text field on the Vendor row itself (set via the Vendor
+                form), distinct from the structured, multi-entry Notes feature
+                below it. Keeping both headed "Notes" would be ambiguous. */}
+            <h3 className="font-serif text-[17px] font-semibold text-text">Internal Notes</h3>
             <p className="mt-3 text-sm text-text">{vendor.notes || "—"}</p>
+          </Card>
+
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
+            <div className="mt-3">
+              <VendorNotesSection workspaceId={vendor.workspace_id} vendorId={vendor.id} />
+            </div>
           </Card>
         </div>
 

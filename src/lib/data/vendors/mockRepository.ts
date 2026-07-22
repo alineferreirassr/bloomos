@@ -1,5 +1,7 @@
 import type { Vendor } from "@/types/vendor";
 import type { TimelineActivity } from "@/types/timelineActivity";
+import type { Note } from "@/types/note";
+import type { NoteFormInput } from "@/modules/notes/schema";
 import type { VendorStatus } from "@/core/enums/vendorStatus";
 import { NotFoundError } from "@/core/errors";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
@@ -8,6 +10,7 @@ import { generateId, nowIso, delay } from "@/lib/data/utils";
 import { type DataResult, ok, fail } from "@/lib/data/result";
 import { readVendors, writeVendors } from "@/lib/data/mock/vendorsStore";
 import { getCoreTimelineService } from "@/core/timeline";
+import { getCoreNotesService } from "@/core/notes";
 import { createVendorInputSchema, updateVendorInputSchema, type CreateVendorInput, type UpdateVendorInput } from "@/modules/vendors/schema";
 import type { VendorFilters, VendorSort, VendorsRepository } from "@/lib/data/vendors/repository";
 
@@ -272,6 +275,26 @@ async function getTimelineByVendorId(vendorId: string): Promise<TimelineActivity
   return getCoreTimelineService().getTimelineForOwner(vendor.workspace_id, "vendor", vendorId);
 }
 
+async function getNotesByVendorId(vendorId: string): Promise<Note[]> {
+  const vendor = findVendorRow(vendorId);
+  if (!vendor) return [];
+  return getCoreNotesService().getNotesForOwner(vendor.workspace_id, "vendor", vendorId);
+}
+
+async function createVendorNote(vendorId: string, input: NoteFormInput): Promise<DataResult<Note>> {
+  const vendor = findVendorRow(vendorId);
+  if (!vendor) return fail("Vendor not found.");
+  return getCoreNotesService().createNoteForOwner(vendor.workspace_id, "vendor", vendorId, CURRENT_ACTOR, input);
+}
+
+async function updateVendorNote(noteId: string, input: NoteFormInput): Promise<DataResult<Note> | null> {
+  return getCoreNotesService().updateNoteById(CURRENT_WORKSPACE_ID, noteId, CURRENT_ACTOR, input);
+}
+
+async function toggleVendorNotePin(noteId: string): Promise<DataResult<Note> | null> {
+  return getCoreNotesService().togglePinNoteById(CURRENT_WORKSPACE_ID, noteId, CURRENT_ACTOR);
+}
+
 export const mockVendorsRepository: VendorsRepository = {
   getVendors,
   getVendorById,
@@ -282,4 +305,8 @@ export const mockVendorsRepository: VendorsRepository = {
   setVendorStatus,
   setVendorPreferredStatus,
   getTimelineByVendorId,
+  getNotesByVendorId,
+  createVendorNote,
+  updateVendorNote,
+  toggleVendorNotePin,
 };

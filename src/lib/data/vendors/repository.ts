@@ -3,6 +3,8 @@ import type { VendorStatus } from "@/core/enums/vendorStatus";
 import type { CreateVendorInput, UpdateVendorInput } from "@/modules/vendors/schema";
 import type { DataResult } from "@/lib/data/result";
 import type { TimelineActivity } from "@/types/timelineActivity";
+import type { Note } from "@/types/note";
+import type { NoteFormInput } from "@/modules/notes/schema";
 
 export interface VendorFilters {
   search?: string;
@@ -35,6 +37,17 @@ export interface VendorSort {
  * create/update/archive/restore/status/preferred methods above; this just
  * exposes the matching read via the same Core Timeline service
  * (`getTimelineForOwner`), never a Vendor-specific Timeline store.
+ *
+ * `getNotesByVendorId`/`createVendorNote` mirror `getTimelineByVendorId`
+ * exactly, but through Core's Notes front door (`getCoreNotesService()`)
+ * instead — Vendor is the first real consumer of that service.
+ * `updateVendorNote`/`toggleVendorNotePin` operate on a note by id alone (the
+ * note row already carries its own owner_type/owner_id), so they don't need
+ * to resolve a specific Vendor row first, same as Core's own
+ * `updateNoteById`/`togglePinNoteById`. There is deliberately no
+ * `deleteVendorNote` — Notes are architecturally never deleted anywhere in
+ * this codebase (no DB delete policy exists for the `notes` table), and this
+ * phase preserves that invariant rather than adding one.
  */
 export interface VendorsRepository {
   getVendors(filters?: VendorFilters, sort?: VendorSort): Promise<Vendor[]>;
@@ -46,4 +59,8 @@ export interface VendorsRepository {
   setVendorStatus(id: string, status: VendorStatus): Promise<DataResult<Vendor>>;
   setVendorPreferredStatus(id: string, isPreferred: boolean): Promise<DataResult<Vendor>>;
   getTimelineByVendorId(vendorId: string): Promise<TimelineActivity[]>;
+  getNotesByVendorId(vendorId: string): Promise<Note[]>;
+  createVendorNote(vendorId: string, input: NoteFormInput): Promise<DataResult<Note>>;
+  updateVendorNote(noteId: string, input: NoteFormInput): Promise<DataResult<Note> | null>;
+  toggleVendorNotePin(noteId: string): Promise<DataResult<Note> | null>;
 }

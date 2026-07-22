@@ -2111,6 +2111,25 @@ export async function getTimelineByVendorId(vendorId: string): Promise<TimelineA
   return vendorsRepository().getTimelineByVendorId(vendorId);
 }
 
+export async function getNotesByVendorId(vendorId: string): Promise<Note[]> {
+  return vendorsRepository().getNotesByVendorId(vendorId);
+}
+
+export async function createVendorNote(vendorId: string, input: NoteFormInput): Promise<DataResult<Note>> {
+  return vendorsRepository().createVendorNote(vendorId, input);
+}
+
+/** Normalizes the repository's "no note with this id" `null` into a DataResult failure, matching NotesSection's `Promise<DataResult<Note>>` mutation prop shape. */
+export async function updateVendorNote(noteId: string, input: NoteFormInput): Promise<DataResult<Note>> {
+  const result = await vendorsRepository().updateVendorNote(noteId, input);
+  return result ?? fail("Note not found.");
+}
+
+export async function toggleVendorNotePin(noteId: string): Promise<DataResult<Note>> {
+  const result = await vendorsRepository().toggleVendorNotePin(noteId);
+  return result ?? fail("Note not found.");
+}
+
 // ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------

@@ -132,6 +132,46 @@ export async function togglePinNoteByIdSupabase(
   return ok(updated);
 }
 
+/**
+ * Supabase counterpart to the mock side's `updateNoteById` — same "no
+ * ownerType needed, id + workspace_id alone" shape as
+ * `togglePinNoteByIdSupabase`. The existing `notes_update_workspace_member`
+ * RLS policy is row-level (not column-restricted), so this needs no new
+ * migration. No Timeline write, matching the mock side: no `note_updated`
+ * activity type exists in `timeline_activities_type_check`.
+ */
+export async function updateNoteByIdSupabase(
+  supabase: SupabaseClient<Database>,
+  workspaceId: string,
+  noteId: string,
+  input: NoteFormInput,
+): Promise<DataResult<Note> | null> {
+  const { data: noteRow, error: fetchError } = await supabase
+    .from("notes")
+    .select("*")
+    .eq("id", noteId)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  if (fetchError) throw normalizeSupabaseError(fetchError);
+  if (!noteRow) return null;
+
+  const parsed = noteFormSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  const { data: updatedRow, error: updateError } = await supabase
+    .from("notes")
+    .update(parsed.data)
+    .eq("id", noteId)
+    .eq("workspace_id", workspaceId)
+    .select("*")
+    .single();
+  if (updateError) throw normalizeSupabaseError(updateError);
+
+  return ok(mapNoteRow(updatedRow));
+}
+
 export async function fetchTimelineForOwnerSupabase(
   supabase: SupabaseClient<Database>,
   workspaceId: string,
