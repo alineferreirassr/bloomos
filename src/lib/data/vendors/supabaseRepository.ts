@@ -1,5 +1,6 @@
 import type { Vendor } from "@/types/vendor";
 import type { Database } from "@/types/database.types";
+import type { TimelineActivity } from "@/types/timelineActivity";
 import type { VendorStatus } from "@/core/enums/vendorStatus";
 import { NotFoundError, UnauthorizedError, ForbiddenError } from "@/core/errors";
 import { getCoreTimelineService } from "@/core/timeline";
@@ -318,6 +319,14 @@ async function setVendorPreferredStatus(id: string, isPreferred: boolean): Promi
   return ok(updated);
 }
 
+async function getTimelineByVendorId(vendorId: string): Promise<TimelineActivity[]> {
+  const vendor = await fetchVendorRow(vendorId);
+  if (!vendor) return [];
+
+  const supabase = createSupabaseClient();
+  return getCoreTimelineService(supabase).getTimelineForOwner(vendor.workspace_id, "vendor", vendorId);
+}
+
 export const supabaseVendorsRepository: VendorsRepository = {
   getVendors,
   getVendorById,
@@ -327,4 +336,5 @@ export const supabaseVendorsRepository: VendorsRepository = {
   restoreVendor,
   setVendorStatus,
   setVendorPreferredStatus,
+  getTimelineByVendorId,
 };

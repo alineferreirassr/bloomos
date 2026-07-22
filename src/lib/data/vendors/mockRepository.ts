@@ -1,4 +1,5 @@
 import type { Vendor } from "@/types/vendor";
+import type { TimelineActivity } from "@/types/timelineActivity";
 import type { VendorStatus } from "@/core/enums/vendorStatus";
 import { NotFoundError } from "@/core/errors";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
@@ -265,6 +266,12 @@ async function setVendorPreferredStatus(id: string, isPreferred: boolean): Promi
   return ok(updated);
 }
 
+async function getTimelineByVendorId(vendorId: string): Promise<TimelineActivity[]> {
+  const vendor = findVendorRow(vendorId);
+  if (!vendor) return [];
+  return getCoreTimelineService().getTimelineForOwner(vendor.workspace_id, "vendor", vendorId);
+}
+
 export const mockVendorsRepository: VendorsRepository = {
   getVendors,
   getVendorById,
@@ -274,4 +281,5 @@ export const mockVendorsRepository: VendorsRepository = {
   restoreVendor,
   setVendorStatus,
   setVendorPreferredStatus,
+  getTimelineByVendorId,
 };

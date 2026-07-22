@@ -533,3 +533,43 @@ describe("supabaseVendorsRepository.setVendorPreferredStatus", () => {
     expect(calls.some((c) => c.method === "update")).toBe(false);
   });
 });
+
+describe("supabaseVendorsRepository.getTimelineByVendorId", () => {
+  it("scopes the timeline query to the vendor's workspace and owner id, ordered newest first", async () => {
+    const timelineRow = {
+      id: "activity_1",
+      workspace_id: "workspace_1",
+      owner_type: "vendor",
+      owner_id: "vendor_1",
+      type: "vendor_created",
+      description: "Vendor created",
+      actor: "Amoré Bloom Owner",
+      timestamp: "2026-07-30T00:00:00Z",
+      metadata: null,
+    };
+    const { client, calls } = createMockSupabase([
+      { data: vendorRow(), error: null },
+      { data: [timelineRow], error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const timeline = await supabaseVendorsRepository.getTimelineByVendorId("vendor_1");
+
+    expect(timeline).toHaveLength(1);
+    expect(timeline[0].type).toBe("vendor_created");
+    const timelineCalls = calls.filter((c) => c.table === "timeline_activities");
+    expect(timelineCalls.some((c) => c.method === "eq" && c.args[0] === "workspace_id" && c.args[1] === "workspace_1")).toBe(true);
+    expect(timelineCalls.some((c) => c.method === "eq" && c.args[0] === "owner_type" && c.args[1] === "vendor")).toBe(true);
+    expect(timelineCalls.some((c) => c.method === "eq" && c.args[0] === "owner_id" && c.args[1] === "vendor_1")).toBe(true);
+    expect(timelineCalls.some((c) => c.method === "order" && c.args[0] === "timestamp")).toBe(true);
+  });
+
+  it("returns an empty array for a vendor that does not exist (RLS-invisible or missing)", async () => {
+    const { client } = createMockSupabase([{ data: null, error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const timeline = await supabaseVendorsRepository.getTimelineByVendorId("missing");
+
+    expect(timeline).toEqual([]);
+  });
+});

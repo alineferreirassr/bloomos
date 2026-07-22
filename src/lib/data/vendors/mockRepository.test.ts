@@ -257,3 +257,40 @@ describe("mockVendorsRepository.setVendorPreferredStatus", () => {
     }
   });
 });
+
+describe("mockVendorsRepository.getTimelineByVendorId", () => {
+  it("returns activities recorded by create/update/archive/restore/preferred-status calls", async () => {
+    const created = await mockVendorsRepository.createVendor({
+      company_name: "Timeline Test Vendor",
+      display_name: null,
+      contact_person: null,
+      email: null,
+      phone: null,
+      website: null,
+      tax_id: null,
+      address: null,
+      city: null,
+      state: null,
+      zip_code: null,
+      country: null,
+      notes: null,
+      tags: [],
+      default_currency: "USD",
+      payment_terms: null,
+    });
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+
+    await mockVendorsRepository.archiveVendor(created.data.id);
+    const timeline = await mockVendorsRepository.getTimelineByVendorId(created.data.id);
+
+    expect(timeline.some((activity) => (activity.type as string) === "vendor_created")).toBe(true);
+    expect(timeline.some((activity) => (activity.type as string) === "vendor_archived")).toBe(true);
+    expect(timeline.every((activity) => activity.owner_type === "vendor" && activity.owner_id === created.data.id)).toBe(true);
+  });
+
+  it("returns an empty array for a vendor that does not exist", async () => {
+    const timeline = await mockVendorsRepository.getTimelineByVendorId("missing");
+    expect(timeline).toEqual([]);
+  });
+});

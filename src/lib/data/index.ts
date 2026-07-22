@@ -2107,6 +2107,10 @@ export async function setVendorPreferredStatus(id: string, isPreferred: boolean)
   return vendorsRepository().setVendorPreferredStatus(id, isPreferred);
 }
 
+export async function getTimelineByVendorId(vendorId: string): Promise<TimelineActivity[]> {
+  return vendorsRepository().getTimelineByVendorId(vendorId);
+}
+
 // ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------

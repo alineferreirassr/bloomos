@@ -11,6 +11,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { VendorStatusBadge } from "@/modules/vendors/components/VendorStatusBadge";
 import { PreferredBadge } from "@/modules/vendors/components/PreferredBadge";
 import { VendorActions } from "@/modules/vendors/components/VendorActions";
+import { VendorTimelineSection } from "@/modules/vendors/components/VendorTimelineSection";
 
 type LoadState = { status: "loading" } | { status: "not-found" } | { status: "error" } | { status: "ready"; vendor: Vendor };
 
@@ -135,6 +136,17 @@ export function VendorDetailView({ vendorId }: { vendorId: string }) {
                 <Field label="Archived" value={new Date(vendor.archived_at).toLocaleDateString()} />
               ) : null}
             </dl>
+          </Card>
+
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
+            <div className="mt-3">
+              {/* Keyed on updated_at (not just vendorId, which never changes) so
+                  archiving/restoring/editing this vendor remounts the section
+                  and it re-fetches — otherwise a same-id refetch of the vendor
+                  wouldn't trigger a Timeline refresh. */}
+              <VendorTimelineSection key={vendor.updated_at} vendorId={vendor.id} />
+            </div>
           </Card>
         </div>
       </div>

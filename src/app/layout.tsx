@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, Lora } from "next/font/google";
 import { initializeCore } from "@/core/initializeCore";
+import { CoreClientInitializer } from "@/core/components/CoreClientInitializer";
 import "./globals.css";
 
 initializeCore();
@@ -31,7 +32,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${lora.variable} ${cormorant.variable}`}>
-      <body>{children}</body>
+      <body>
+        <CoreClientInitializer />
+        {children}
+      </body>
     </html>
   );
 }
