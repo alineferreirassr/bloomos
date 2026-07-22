@@ -88,7 +88,7 @@ export const navigationModules: NavModule[] = [
     ],
   },
   { id: "inventory", label: "Inventory", icon: InventoryIcon, disabled: true },
-  { id: "vendors", label: "Vendors", icon: VendorsIcon, disabled: true },
+  { id: "vendors", label: "Vendors", icon: VendorsIcon, href: "/vendors" },
   { id: "finance", label: "Finance", icon: FinanceIcon, href: "/finance" },
   { id: "documents", label: "Documents", icon: DocumentsIcon, href: "/documents" },
   { id: "team", label: "Team", icon: TeamIcon, href: "/team" },
