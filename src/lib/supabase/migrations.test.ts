@@ -23,9 +23,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration migrations, in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory migrations, in chronological (execution) order", () => {
     const files = migrationFiles();
-    expect(files).toHaveLength(90);
+    expect(files).toHaveLength(97);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -437,5 +437,80 @@ describe("Clients Core-integration foundation migration", () => {
     expect(sql).not.toMatch(/drop table/i);
     expect(sql).not.toMatch(/drop column/i);
     expect(sql).not.toMatch(/drop constraint/i);
+  });
+});
+
+describe("Inventory migrations", () => {
+  it("creates inventory_items with item_type/status/condition CHECK constraints and no float money columns", () => {
+    const sql = readMigration("20260729100000_inventory_items.sql");
+    const code = stripSqlComments(sql);
+    expect(sql).toMatch(/create table if not exists public\.inventory_items/);
+    expect(sql).toMatch(/constraint inventory_items_item_type_check check \(item_type in \('consumable', 'reusable'\)\)/);
+    expect(sql).toMatch(/constraint inventory_items_status_check check \(status in \('active', 'inactive', 'archived'\)\)/);
+    expect(sql).toMatch(/constraint inventory_items_condition_check check/);
+    expect(sql).toMatch(/constraint inventory_items_condition_matches_item_type_check check \(\s*item_type <> 'consumable' or condition is null\s*\)/);
+    expect(code).not.toMatch(/\bfloat\b|\bnumeric\b|\breal\b|\bdouble precision\b/i);
+    for (const column of ["unit_cost", "replacement_cost", "rental_value"]) {
+      expect(sql).toMatch(new RegExp(`${column} integer`));
+    }
+  });
+
+  it("creates inventory_movements as an append-only ledger with no updated_at column", () => {
+    const sql = readMigration("20260729100100_inventory_movements.sql");
+    const code = stripSqlComments(sql);
+    expect(sql).toMatch(/create table if not exists public\.inventory_movements/);
+    expect(code).not.toMatch(/updated_at/);
+    expect(sql).toMatch(/constraint inventory_movements_quantity_positive_check check \(quantity > 0\)/);
+    expect(sql).toMatch(/references public\.inventory_items \(id\) on delete cascade/);
+  });
+
+  it("widens notes/timeline_activities/media_assets owner_type to add inventory_item, preserving every prior value", () => {
+    const sql = readMigration("20260729100200_notes_timeline_media_inventory_item_owner_type.sql");
+    for (const priorOwnerType of ["lead", "client", "event", "contract", "invoice", "payment", "expense", "document", "document_folder"]) {
+      expect(sql).toMatch(new RegExp(`'${priorOwnerType}'`));
+    }
+    expect(sql).toMatch(/'inventory_item'/);
+    expect(sql).toMatch(/inventory_item_created/);
+    expect(sql).toMatch(/inventory_movement_recorded/);
+  });
+
+  it("attaches the shared updated_at trigger to inventory_items only", () => {
+    const sql = readMigration("20260729100300_inventory_items_updated_at_trigger.sql");
+    expect(sql).toMatch(/before update on public\.inventory_items/);
+    expect(sql).toMatch(/execute function public\.set_updated_at\(\)/);
+  });
+
+  it("gives inventory_items select/insert/update policies but no delete policy", () => {
+    const sql = readMigration("20260729100400_inventory_items_rls.sql");
+    expect(sql).toMatch(/alter table public\.inventory_items enable row level security/);
+    expect(sql).toMatch(/for select/);
+    expect(sql).toMatch(/for insert/);
+    expect(sql).toMatch(/for update/);
+    expect(sql).not.toMatch(/for delete/);
+    for (const block of sql.split(/create policy/i).slice(1)) {
+      expect(block).toMatch(/is_workspace_member\(workspace_id\)/);
+    }
+  });
+
+  it("gives inventory_movements only select/insert policies — no update or delete, enforcing append-only at the RLS layer", () => {
+    const sql = readMigration("20260729100500_inventory_movements_rls.sql");
+    expect(sql).toMatch(/alter table public\.inventory_movements enable row level security/);
+    expect(sql).toMatch(/for select/);
+    expect(sql).toMatch(/for insert/);
+    expect(sql).not.toMatch(/for update/);
+    expect(sql).not.toMatch(/for delete/);
+  });
+
+  it("indexes inventory_items/inventory_movements and enforces workspace-scoped SKU uniqueness allowing repeated nulls", () => {
+    const sql = readMigration("20260729100600_inventory_indexes_and_constraints.sql");
+    expect(sql).toMatch(/create unique index if not exists inventory_items_workspace_sku_unique\s*\n\s*on public\.inventory_items \(workspace_id, sku\) where sku is not null/);
+    expect(sql).toMatch(/inventory_items_tags_gin_idx/);
+    expect(sql).toMatch(/inventory_movements_workspace_item_occurred_at_idx/);
+  });
+
+  it("never uses a bare permissive `using (true)` policy across the new Inventory RLS migrations", () => {
+    for (const file of ["20260729100400_inventory_items_rls.sql", "20260729100500_inventory_movements_rls.sql"]) {
+      expect(stripSqlComments(readMigration(file))).not.toMatch(/using\s*\(\s*true\s*\)/i);
+    }
   });
 });
