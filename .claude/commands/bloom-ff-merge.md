@@ -1,0 +1,1 @@
+Apply the `fast-forward-merge` skill. Arguments: $ARGUMENTS (expected as `<source> <target>`; if either is missing, ask before doing anything). Run `merge-readiness` first if it hasn't already been confirmed in this conversation.

@@ -2,6 +2,8 @@
 
 This file governs how any AI agent (or engineer) works in this repository. It does not expire between sessions and takes precedence over ad-hoc convenience unless the user explicitly overrides it in a given conversation.
 
+**Project root:** `/Users/alineferreira/Developer/bloomos`. Never work from an old Documents/Downloads copy — if a path doesn't resolve under this root, stop and ask rather than guessing which copy is current.
+
 ## What BloomOS is
 
 BloomOS is a vertical SaaS operating system for luxury event businesses, managing the full lifecycle: Lead → Client → Consultation → Proposal → Contract → Deposit → Planning → Inventory → Team → Event Execution → Gallery → Feedback → Returning Client. Full domain detail lives in `BLOOMOS_BIBLE.md` — treat it as the source of truth for business rules and terminology. If code and `BLOOMOS_BIBLE.md` ever disagree, the Bible wins until the user says otherwise.
@@ -31,6 +33,48 @@ The first customer is Amoré Bloom, but **BloomOS is built as a standalone, mult
 - **Design restraint.** The product should feel premium, calm, and intuitive (Apple / Linear / Notion / Stripe as reference points). Do not introduce visual flourish that these references wouldn't ship.
 - **No comments explaining what code does.** Comment only non-obvious *why* (a workaround, a constraint from `BLOOMOS_BIBLE.md`, a subtlety). Well-named code speaks for itself.
 - **Present before you build.** For any new architectural direction (new module, schema change, integration), propose the plan and wait for approval before writing implementation code. Documentation, structure, and planning don't require the same gate.
+
+## Security rules
+
+- RLS (Row-Level Security) is the actual security boundary, not application-code convention alone — a schema change that touches a table without also confirming its RLS policies is incomplete.
+- Never expose `service_role`, database passwords, access tokens, or user passwords in code, logs, chat, or committed files. Never request a password in chat for live verification — use the credential a session already has, or ask the user to act themselves.
+- `.env.local` must remain untracked. Before staging with a broad `git add`, check `git status` for anything that looks like a secret file, even under an innocuous name.
+- The mock/Supabase split stays behind the repository interface (`lib/data/<module>/repository.ts` + one mock, one Supabase implementation, selected via `lib/data/provider.ts`). UI code never imports a mock store directly, and never branches on data mode itself.
+
+## Git rules
+
+- Inspect current branch, `HEAD`, and `git status` before starting work — never assume which branch or state a session left the repo in.
+- Never delete, squash, rebase, amend, or force-push unless explicitly requested in the current conversation. Never skip hooks (`--no-verify`).
+- Never commit credentials; scan staged files for anything suspicious before committing, especially after `git add` on a broad path.
+- One phase of work is normally one commit — don't split a coherent change into unrequested piecemeal commits, and don't fold unrelated work into one commit for convenience.
+
+## Verification order
+
+Run sequentially, never concurrently, and only report a result actually observed (never assume a check passed without seeing its output):
+
+1. `npm run lint`
+2. `npm run typecheck`
+3. `npm run test`
+4. `npm run build` — only after tests pass
+
+## Reusable workflows
+
+Recurring engineering procedures are packaged as project Skills under `.claude/skills/` (each a `SKILL.md` — Claude loads one automatically when a request matches its description, so this file stays a stable index, not a duplicate of their content) plus short commands under `.claude/commands/`:
+
+| Skill | Use for |
+| --- | --- |
+| `project-rules` | The permanent BloomOS rules above, packaged for quick recall inside any other workflow |
+| `module-foundation` | Scaffolding a business module's data layer (types/enums/schema/repository/migrations/RLS/tests) — no UI |
+| `module-ui` | Building a module's UI once its foundation exists |
+| `supabase-migration` | Proposing, approving, and applying a migration to the linked project |
+| `live-smoke-test` | A reusable browser verification checklist for a live module |
+| `verification` | Running lint/typecheck/test/build in the required order with disciplined output |
+| `git-checkpoint` | Pre-commit safety checks, committing, pushing, confirming a clean tree |
+| `merge-readiness` | A compact report on whether a branch is ready to merge |
+| `fast-forward-merge` | A safe `--ff-only` merge between two branches |
+| `token-economy` | Conciseness rules for progress updates and final reports — always active, not just when named |
+
+Short commands (`.claude/commands/`) invoke the matching skill for a one-line request: `/bloom-preflight`, `/bloom-foundation <module>`, `/bloom-ui <module>`, `/bloom-verify`, `/bloom-smoke <module>`, `/bloom-migration-check`, `/bloom-merge-ready`, `/bloom-ff-merge <source> <target>`, `/bloom-status`.
 
 ## Working agreements
 
