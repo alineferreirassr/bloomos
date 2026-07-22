@@ -13,6 +13,11 @@ vi.mock("@/lib/data", () => ({
   createVendorNote: vi.fn(),
   updateVendorNote: vi.fn(),
   toggleVendorNotePin: vi.fn(),
+  getMediaAssetsByOwner: vi.fn(),
+  uploadMediaAsset: vi.fn(),
+  getMediaAssetDownloadUrl: vi.fn(),
+  deleteMediaAsset: vi.fn(),
+  restoreMediaAsset: vi.fn(),
 }));
 
 import * as dataLayer from "@/lib/data";
@@ -31,6 +36,7 @@ describe("VendorDetailView", () => {
     );
     vi.mocked(dataLayer.getTimelineByVendorId).mockResolvedValue([]);
     vi.mocked(dataLayer.getNotesByVendorId).mockResolvedValue([]);
+    vi.mocked(dataLayer.getMediaAssetsByOwner).mockResolvedValue([]);
 
     render(<VendorDetailView vendorId="vendor_1" />);
 
@@ -50,23 +56,24 @@ describe("VendorDetailView", () => {
     expect(await screen.findByText(/could not be found/i)).toBeInTheDocument();
   });
 
-  it("never references Inventory, Purchases, Documents, or Media", async () => {
+  it("never references Inventory, Purchases, or Media", async () => {
     vi.mocked(dataLayer.getVendorById).mockResolvedValue(makeVendor());
     vi.mocked(dataLayer.getTimelineByVendorId).mockResolvedValue([]);
     vi.mocked(dataLayer.getNotesByVendorId).mockResolvedValue([]);
+    vi.mocked(dataLayer.getMediaAssetsByOwner).mockResolvedValue([]);
 
     render(<VendorDetailView vendorId="vendor_1" />);
 
     await screen.findByRole("heading", { name: "Test Vendor Co" });
     expect(screen.queryByText(/inventory/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/purchase/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/documents/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/media/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\bmedia\b/i)).not.toBeInTheDocument();
   });
 
   it("includes a Timeline section that renders Vendor activity", async () => {
     vi.mocked(dataLayer.getVendorById).mockResolvedValue(makeVendor());
     vi.mocked(dataLayer.getNotesByVendorId).mockResolvedValue([]);
+    vi.mocked(dataLayer.getMediaAssetsByOwner).mockResolvedValue([]);
     vi.mocked(dataLayer.getTimelineByVendorId).mockResolvedValue([
       {
         id: "activity_1",
@@ -89,6 +96,7 @@ describe("VendorDetailView", () => {
   it("still renders the Vendor's main details when Timeline loading fails", async () => {
     vi.mocked(dataLayer.getVendorById).mockResolvedValue(makeVendor({ company_name: "Still Visible Co" }));
     vi.mocked(dataLayer.getNotesByVendorId).mockResolvedValue([]);
+    vi.mocked(dataLayer.getMediaAssetsByOwner).mockResolvedValue([]);
     vi.mocked(dataLayer.getTimelineByVendorId).mockRejectedValue(new Error("boom"));
 
     render(<VendorDetailView vendorId="vendor_test" />);
@@ -100,6 +108,7 @@ describe("VendorDetailView", () => {
   it("includes a Notes section that renders Vendor notes", async () => {
     vi.mocked(dataLayer.getVendorById).mockResolvedValue(makeVendor());
     vi.mocked(dataLayer.getTimelineByVendorId).mockResolvedValue([]);
+    vi.mocked(dataLayer.getMediaAssetsByOwner).mockResolvedValue([]);
     vi.mocked(dataLayer.getNotesByVendorId).mockResolvedValue([
       {
         id: "note_1",
@@ -127,6 +136,7 @@ describe("VendorDetailView", () => {
   it("still renders the Vendor's main details and Timeline when Notes loading fails", async () => {
     vi.mocked(dataLayer.getVendorById).mockResolvedValue(makeVendor({ company_name: "Notes Failure Co" }));
     vi.mocked(dataLayer.getTimelineByVendorId).mockResolvedValue([]);
+    vi.mocked(dataLayer.getMediaAssetsByOwner).mockResolvedValue([]);
     vi.mocked(dataLayer.getNotesByVendorId).mockRejectedValue(new Error("boom"));
 
     render(<VendorDetailView vendorId="vendor_test" />);
@@ -134,5 +144,54 @@ describe("VendorDetailView", () => {
     expect(await screen.findByRole("heading", { name: "Notes Failure Co" })).toBeInTheDocument();
     expect(await screen.findByText(/could not load this vendor's notes/i)).toBeInTheDocument();
     expect(await screen.findByText("No activity yet")).toBeInTheDocument();
+  });
+
+  it("includes a Documents section that renders Vendor documents", async () => {
+    vi.mocked(dataLayer.getVendorById).mockResolvedValue(makeVendor());
+    vi.mocked(dataLayer.getTimelineByVendorId).mockResolvedValue([]);
+    vi.mocked(dataLayer.getNotesByVendorId).mockResolvedValue([]);
+    vi.mocked(dataLayer.getMediaAssetsByOwner).mockResolvedValue([
+      {
+        id: "asset_1",
+        workspace_id: "ws_test",
+        owner_type: "vendor",
+        owner_id: "vendor_test",
+        original_filename: "w9-form.pdf",
+        stored_filename: "w9-form.pdf",
+        storage_bucket: "media-assets",
+        storage_path: "ws_test/vendor/vendor_test/asset_1/v1/w9-form.pdf",
+        mime_type: "application/pdf",
+        extension: "pdf",
+        file_size: 204_800,
+        checksum: "abc123",
+        width: null,
+        height: null,
+        duration: null,
+        version: 1,
+        uploaded_by: "Amoré Bloom Team",
+        created_at: "2026-01-01T12:00:00.000Z",
+        updated_at: "2026-01-01T12:00:00.000Z",
+        archived_at: null,
+      },
+    ]);
+
+    render(<VendorDetailView vendorId="vendor_test" />);
+
+    expect(await screen.findByText("Documents")).toBeInTheDocument();
+    expect(await screen.findByText("w9-form.pdf")).toBeInTheDocument();
+  });
+
+  it("still renders the Vendor's main details, Notes, and Timeline when Documents loading fails", async () => {
+    vi.mocked(dataLayer.getVendorById).mockResolvedValue(makeVendor({ company_name: "Documents Failure Co" }));
+    vi.mocked(dataLayer.getTimelineByVendorId).mockResolvedValue([]);
+    vi.mocked(dataLayer.getNotesByVendorId).mockResolvedValue([]);
+    vi.mocked(dataLayer.getMediaAssetsByOwner).mockRejectedValue(new Error("boom"));
+
+    render(<VendorDetailView vendorId="vendor_test" />);
+
+    expect(await screen.findByRole("heading", { name: "Documents Failure Co" })).toBeInTheDocument();
+    expect(await screen.findByText(/could not load this vendor's documents/i)).toBeInTheDocument();
+    expect(await screen.findByText("No activity yet")).toBeInTheDocument();
+    expect(await screen.findByText("No notes yet")).toBeInTheDocument();
   });
 });

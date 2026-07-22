@@ -24,6 +24,20 @@ describe("mockMediaAssetsRepository.uploadMediaAsset", () => {
     expect(result.success).toBe(false);
   });
 
+  it("accepts owner type 'vendor' now that it's live", async () => {
+    const result = await mockMediaAssetsRepository.uploadMediaAsset({
+      ownerType: "vendor",
+      ownerId: "vendor_1",
+      file: makeFile("hello", "w9-form.pdf", "application/pdf"),
+      originalFilename: "w9-form.pdf",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.owner_type).toBe("vendor");
+      expect(result.data.owner_id).toBe("vendor_1");
+    }
+  });
+
   it("rejects a blocked/unsupported extension", async () => {
     const result = await mockMediaAssetsRepository.uploadMediaAsset({
       ownerType: "event",

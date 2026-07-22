@@ -13,6 +13,7 @@ import { PreferredBadge } from "@/modules/vendors/components/PreferredBadge";
 import { VendorActions } from "@/modules/vendors/components/VendorActions";
 import { VendorTimelineSection } from "@/modules/vendors/components/VendorTimelineSection";
 import { VendorNotesSection } from "@/modules/vendors/components/VendorNotesSection";
+import { VendorDocumentsSection } from "@/modules/vendors/components/VendorDocumentsSection";
 
 type LoadState = { status: "loading" } | { status: "not-found" } | { status: "error" } | { status: "ready"; vendor: Vendor };
 
@@ -118,6 +119,13 @@ export function VendorDetailView({ vendorId }: { vendorId: string }) {
             <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
             <div className="mt-3">
               <VendorNotesSection workspaceId={vendor.workspace_id} vendorId={vendor.id} />
+            </div>
+          </Card>
+
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Documents</h3>
+            <div className="mt-3">
+              <VendorDocumentsSection vendorId={vendor.id} />
             </div>
           </Card>
         </div>

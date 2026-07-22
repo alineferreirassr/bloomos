@@ -36,4 +36,4 @@ export const MEDIA_ASSET_OWNER_TYPES: EntityType[] = [
  * Declared as a `const` tuple (not `EntityType[]`) so it can be passed
  * directly to `z.enum()` in `src/lib/media/schema.ts`.
  */
-export const LIVE_MEDIA_ASSET_OWNER_TYPES = ["lead", "client", "event", "document"] as const satisfies readonly EntityType[];
+export const LIVE_MEDIA_ASSET_OWNER_TYPES = ["lead", "client", "event", "document", "vendor"] as const satisfies readonly EntityType[];
