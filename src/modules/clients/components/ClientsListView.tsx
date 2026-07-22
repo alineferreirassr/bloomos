@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getClientNextAction, getClients } from "@/lib/data";
+import { getDataPersistenceMessage } from "@/lib/dataModeCopy";
 import type { Client } from "@/types/client";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -91,8 +92,7 @@ export function ClientsListView() {
           <h2 className="text-3xl font-semibold text-text">Clients</h2>
           <p className="mt-1 text-sm text-text-muted">
             Ongoing relationships with Amoré Bloom, converted from Leads or added
-            directly. Data resets on page reload — there&apos;s no database
-            behind this yet.
+            directly. {getDataPersistenceMessage()}
           </p>
         </div>
         {canCreate ? (
