@@ -2061,6 +2061,29 @@ export async function getDamagedOrUnderRepairInventoryItems(): Promise<Inventory
   return inventoryRepository().getDamagedOrUnderRepairItems();
 }
 
+export async function getTimelineByInventoryItemId(inventoryItemId: string): Promise<TimelineActivity[]> {
+  return inventoryRepository().getTimelineByInventoryItemId(inventoryItemId);
+}
+
+export async function getNotesByInventoryItemId(inventoryItemId: string): Promise<Note[]> {
+  return inventoryRepository().getNotesByInventoryItemId(inventoryItemId);
+}
+
+export async function createInventoryItemNote(inventoryItemId: string, input: NoteFormInput): Promise<DataResult<Note>> {
+  return inventoryRepository().createInventoryItemNote(inventoryItemId, input);
+}
+
+/** Normalizes the repository's "no note with this id" `null` into a DataResult failure, matching NotesSection's `Promise<DataResult<Note>>` mutation prop shape — same as updateVendorNote. */
+export async function updateInventoryItemNote(noteId: string, input: NoteFormInput): Promise<DataResult<Note>> {
+  const result = await inventoryRepository().updateInventoryItemNote(noteId, input);
+  return result ?? fail("Note not found.");
+}
+
+export async function toggleInventoryItemNotePin(noteId: string): Promise<DataResult<Note>> {
+  const result = await inventoryRepository().toggleInventoryItemNotePin(noteId);
+  return result ?? fail("Note not found.");
+}
+
 // ---------------------------------------------------------------------------
 // Vendors — repository layer only; no UI yet. Both mock and Supabase
 // repositories exist (unlike the earlier database-layer checkpoint, which

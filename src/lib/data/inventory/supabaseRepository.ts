@@ -1,7 +1,12 @@
 import type { InventoryItem } from "@/types/inventoryItem";
 import type { InventoryMovement } from "@/types/inventoryMovement";
 import type { Database } from "@/types/database.types";
+import type { TimelineActivity } from "@/types/timelineActivity";
+import type { Note } from "@/types/note";
+import type { NoteFormInput } from "@/modules/notes/schema";
 import { NotFoundError, UnauthorizedError, ForbiddenError } from "@/core/errors";
+import { getCoreTimelineService } from "@/core/timeline";
+import { getCoreNotesService } from "@/core/notes";
 import { getCoreAuditLogService } from "@/core/audit";
 import { canTransitionInventoryStatus } from "@/core/workflows/inventoryWorkflow";
 import {
@@ -452,6 +457,54 @@ async function getDamagedOrUnderRepairItems(): Promise<InventoryItem[]> {
   return (data ?? []).map(mapInventoryItemRow);
 }
 
+/**
+ * Timeline/Notes reads and note writes delegate to Core's front doors
+ * (`getCoreTimelineService`/`getCoreNotesService`), same as
+ * vendors/supabaseRepository.ts's equivalents — these already know how to
+ * query the real `timeline_activities`/`notes` tables given a Supabase
+ * client, so this file never hand-rolls that query itself. Movement/create/
+ * update/archive/restore Timeline entries above are written directly via
+ * `insertTimelineActivity`/the RPC because those already had their own
+ * write path before Notes support existed; only reads and note writes are
+ * newly added here.
+ */
+async function getTimelineByInventoryItemId(inventoryItemId: string): Promise<TimelineActivity[]> {
+  const item = await fetchInventoryItemRow(inventoryItemId);
+  if (!item) return [];
+
+  const supabase = createSupabaseClient();
+  return getCoreTimelineService(supabase).getTimelineForOwner(item.workspace_id, "inventory_item", inventoryItemId);
+}
+
+async function getNotesByInventoryItemId(inventoryItemId: string): Promise<Note[]> {
+  const item = await fetchInventoryItemRow(inventoryItemId);
+  if (!item) return [];
+
+  const supabase = createSupabaseClient();
+  return getCoreNotesService(supabase).getNotesForOwner(item.workspace_id, "inventory_item", inventoryItemId);
+}
+
+async function createInventoryItemNote(inventoryItemId: string, input: NoteFormInput): Promise<DataResult<Note>> {
+  const item = await fetchInventoryItemRow(inventoryItemId);
+  if (!item) return fail("Inventory item not found.");
+
+  const session = await requireWorkspaceSession();
+  const supabase = createSupabaseClient();
+  return getCoreNotesService(supabase).createNoteForOwner(item.workspace_id, "inventory_item", inventoryItemId, resolveActorName(session), input);
+}
+
+async function updateInventoryItemNote(noteId: string, input: NoteFormInput): Promise<DataResult<Note> | null> {
+  const session = await requireWorkspaceSession();
+  const supabase = createSupabaseClient();
+  return getCoreNotesService(supabase).updateNoteById(session.workspace.id, noteId, resolveActorName(session), input);
+}
+
+async function toggleInventoryItemNotePin(noteId: string): Promise<DataResult<Note> | null> {
+  const session = await requireWorkspaceSession();
+  const supabase = createSupabaseClient();
+  return getCoreNotesService(supabase).togglePinNoteById(session.workspace.id, noteId, resolveActorName(session));
+}
+
 export const supabaseInventoryRepository: InventoryRepository = {
   listInventoryItems,
   getInventoryItem,
@@ -464,4 +517,9 @@ export const supabaseInventoryRepository: InventoryRepository = {
   getInventoryAvailability,
   getLowStockItems,
   getDamagedOrUnderRepairItems,
+  getTimelineByInventoryItemId,
+  getNotesByInventoryItemId,
+  createInventoryItemNote,
+  updateInventoryItemNote,
+  toggleInventoryItemNotePin,
 };

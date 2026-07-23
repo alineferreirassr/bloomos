@@ -110,6 +110,17 @@ describe("createInventoryItem", () => {
     const result = await createInventoryItem({ ...validConsumableInput, reorder_level: -1 });
     expect(result.success).toBe(false);
   });
+
+  it("rejects a duplicate SKU within the same workspace with a field-level error", async () => {
+    const first = await createInventoryItem(validConsumableInput);
+    expect(first.success).toBe(true);
+
+    const second = await createInventoryItem({ ...validConsumableInput, name: "A different name" });
+    expect(second.success).toBe(false);
+    if (!second.success) {
+      expect(second.fieldErrors?.sku).toMatch(/already in use/i);
+    }
+  });
 });
 
 describe("workspace isolation", () => {
@@ -177,7 +188,7 @@ describe("stock movements — decrease", () => {
 
   it("damage/loss/disposal each reduce on-hand and available", async () => {
     for (const movementType of ["damage", "loss", "disposal"] as const) {
-      const created = await createInventoryItem(validConsumableInput);
+      const created = await createInventoryItem({ ...validConsumableInput, sku: `${validConsumableInput.sku}-${movementType}` });
       if (!created.success) throw new Error("setup failed");
 
       const result = await recordInventoryMovement(created.data.id, {
@@ -435,6 +446,15 @@ describe("archive and restore", () => {
 
     const update: InventoryItemInput = { ...validConsumableInput, name: "Renamed" };
     const result = await updateInventoryItem(created.data.id, update);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects renaming an item's SKU to one already used by another item in the workspace", async () => {
+    const first = await createInventoryItem(validConsumableInput);
+    const second = await createInventoryItem({ ...validConsumableInput, name: "Other Candle", sku: "OTHER-SKU" });
+    if (!first.success || !second.success) throw new Error("setup failed");
+
+    const result = await updateInventoryItem(second.data.id, { ...validConsumableInput, sku: validConsumableInput.sku });
     expect(result.success).toBe(false);
   });
 });

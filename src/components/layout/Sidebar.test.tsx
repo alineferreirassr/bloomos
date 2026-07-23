@@ -75,12 +75,18 @@ describe("Sidebar", () => {
     expect(screen.queryByRole("link", { name: "Client Invitations" })).not.toBeInTheDocument();
   });
 
-  it("renders disabled placeholder modules (Inventory, Vendors, Services, Bloom AI) as non-links with a Soon badge", () => {
+  it("renders disabled placeholder modules (Services, Bloom AI) as non-links with a Soon badge", () => {
     renderSidebar(ownerSnapshot);
 
-    expect(screen.queryByRole("link", { name: "Inventory" })).not.toBeInTheDocument();
-    expect(screen.getByText("Inventory")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Services" })).not.toBeInTheDocument();
+    expect(screen.getByText("Services")).toBeInTheDocument();
     expect(screen.getAllByText("Soon").length).toBeGreaterThan(0);
+  });
+
+  it("renders the now-activated Inventory module as a real link", () => {
+    renderSidebar(ownerSnapshot);
+
+    expect(screen.getByRole("link", { name: "Inventory" })).toHaveAttribute("href", "/inventory");
   });
 
   it("links the Workspace identity footer to the account page", () => {

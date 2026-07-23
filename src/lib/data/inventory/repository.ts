@@ -5,6 +5,9 @@ import type { InventoryItemType } from "@/core/enums/inventoryItemType";
 import type { InventoryCondition } from "@/core/enums/inventoryCondition";
 import type { CreateInventoryItemInput, InventoryItemInput, RecordInventoryMovementInput } from "@/modules/inventory/schema";
 import type { DataResult } from "@/lib/data/result";
+import type { TimelineActivity } from "@/types/timelineActivity";
+import type { Note } from "@/types/note";
+import type { NoteFormInput } from "@/modules/notes/schema";
 
 export interface InventoryItemFilters {
   search?: string;
@@ -45,6 +48,16 @@ export interface InventoryAvailability {
  * No hard-delete method exists for items either — `archiveInventoryItem`/
  * `restoreInventoryItem` is the only lifecycle transition out of/into normal
  * use, matching every other BloomOS module's soft-delete convention.
+ *
+ * `getTimelineByInventoryItemId`/`getNotesByInventoryItemId`/
+ * `createInventoryItemNote`/`updateInventoryItemNote`/
+ * `toggleInventoryItemNotePin` mirror Vendor's own additions exactly — both
+ * delegate to Core's Timeline/Notes front doors (`getCoreTimelineService()`/
+ * `getCoreNotesService()`), which already branch on data mode themselves, so
+ * neither repository implementation hand-rolls its own note/timeline
+ * storage. There is deliberately no `deleteInventoryItemNote` — Notes are
+ * never deleted anywhere in this codebase (no DB delete policy exists for
+ * the `notes` table), same invariant Vendor Notes preserved.
  */
 export interface InventoryRepository {
   listInventoryItems(filters?: InventoryItemFilters): Promise<InventoryItem[]>;
@@ -62,4 +75,10 @@ export interface InventoryRepository {
   getLowStockItems(): Promise<InventoryItem[]>;
   /** Items whose `condition` is `damaged` or `under_repair` — always empty for consumable items, which have no condition. */
   getDamagedOrUnderRepairItems(): Promise<InventoryItem[]>;
+
+  getTimelineByInventoryItemId(inventoryItemId: string): Promise<TimelineActivity[]>;
+  getNotesByInventoryItemId(inventoryItemId: string): Promise<Note[]>;
+  createInventoryItemNote(inventoryItemId: string, input: NoteFormInput): Promise<DataResult<Note>>;
+  updateInventoryItemNote(noteId: string, input: NoteFormInput): Promise<DataResult<Note> | null>;
+  toggleInventoryItemNotePin(noteId: string): Promise<DataResult<Note> | null>;
 }

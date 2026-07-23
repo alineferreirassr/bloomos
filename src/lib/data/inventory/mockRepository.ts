@@ -1,5 +1,8 @@
 import type { InventoryItem } from "@/types/inventoryItem";
 import type { InventoryMovement } from "@/types/inventoryMovement";
+import type { TimelineActivity } from "@/types/timelineActivity";
+import type { Note } from "@/types/note";
+import type { NoteFormInput } from "@/modules/notes/schema";
 import { NotFoundError } from "@/core/errors";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 import { CURRENT_ACTOR } from "@/core/constants/actor";
@@ -8,6 +11,7 @@ import { type DataResult, ok, fail } from "@/lib/data/result";
 import { readInventoryItems, writeInventoryItems } from "@/lib/data/mock/inventoryItemsStore";
 import { readInventoryMovements, appendInventoryMovement } from "@/lib/data/mock/inventoryMovementsStore";
 import { getCoreTimelineService, registerTimelineActivityType } from "@/core/timeline";
+import { getCoreNotesService } from "@/core/notes";
 import { getCoreAuditLogService } from "@/core/audit";
 import { INVENTORY_MOVEMENT_TYPE_LABELS } from "@/core/enums/inventoryMovementType";
 import { canTransitionInventoryStatus, validateInventoryQuantities, getInventoryMovementDelta } from "@/core/workflows/inventoryWorkflow";
@@ -46,6 +50,23 @@ function fieldErrorsFromZod(error: {
 
 function findInventoryItemRow(id: string): InventoryItem | null {
   return readInventoryItems().find((item) => item.id === id && item.workspace_id === CURRENT_WORKSPACE_ID) ?? null;
+}
+
+const SKU_CONFLICT_MESSAGE = "This SKU is already in use in this workspace.";
+
+/**
+ * Mirrors the `inventory_items_workspace_sku_unique` partial unique index
+ * (workspace_id, sku) where sku is not null — mock mode has no database
+ * constraint to enforce this, so it's checked explicitly here, same
+ * approach as vendors/mockRepository.ts's findDuplicateTaxId, returning the
+ * exact same field-level conflict message the Supabase repository returns
+ * on a real 23505.
+ */
+function findDuplicateSku(sku: string | null, excludeId?: string): boolean {
+  if (!sku) return false;
+  return readInventoryItems().some(
+    (item) => item.workspace_id === CURRENT_WORKSPACE_ID && item.sku === sku && item.id !== excludeId,
+  );
 }
 
 async function listInventoryItems(filters: InventoryItemFilters = {}): Promise<InventoryItem[]> {
@@ -162,6 +183,9 @@ async function createInventoryItem(input: CreateInventoryItemInput): Promise<Dat
   if (!parsed.success) {
     return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
   }
+  if (findDuplicateSku(parsed.data.sku)) {
+    return fail(SKU_CONFLICT_MESSAGE, { sku: SKU_CONFLICT_MESSAGE });
+  }
 
   const { initial_quantity, ...fields } = parsed.data;
   const timestamp = nowIso();
@@ -226,6 +250,9 @@ async function updateInventoryItem(id: string, input: InventoryItemInput): Promi
   const parsed = inventoryItemInputSchema.safeParse(input);
   if (!parsed.success) {
     return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+  if (findDuplicateSku(parsed.data.sku, id)) {
+    return fail(SKU_CONFLICT_MESSAGE, { sku: SKU_CONFLICT_MESSAGE });
   }
 
   if (existing.status !== parsed.data.status && !canTransitionInventoryStatus(existing.status, parsed.data.status)) {
@@ -376,6 +403,32 @@ async function getDamagedOrUnderRepairItems(): Promise<InventoryItem[]> {
   );
 }
 
+async function getTimelineByInventoryItemId(inventoryItemId: string): Promise<TimelineActivity[]> {
+  const item = findInventoryItemRow(inventoryItemId);
+  if (!item) return [];
+  return getCoreTimelineService().getTimelineForOwner(item.workspace_id, "inventory_item", inventoryItemId);
+}
+
+async function getNotesByInventoryItemId(inventoryItemId: string): Promise<Note[]> {
+  const item = findInventoryItemRow(inventoryItemId);
+  if (!item) return [];
+  return getCoreNotesService().getNotesForOwner(item.workspace_id, "inventory_item", inventoryItemId);
+}
+
+async function createInventoryItemNote(inventoryItemId: string, input: NoteFormInput): Promise<DataResult<Note>> {
+  const item = findInventoryItemRow(inventoryItemId);
+  if (!item) return fail("Inventory item not found.");
+  return getCoreNotesService().createNoteForOwner(item.workspace_id, "inventory_item", inventoryItemId, CURRENT_ACTOR, input);
+}
+
+async function updateInventoryItemNote(noteId: string, input: NoteFormInput): Promise<DataResult<Note> | null> {
+  return getCoreNotesService().updateNoteById(CURRENT_WORKSPACE_ID, noteId, CURRENT_ACTOR, input);
+}
+
+async function toggleInventoryItemNotePin(noteId: string): Promise<DataResult<Note> | null> {
+  return getCoreNotesService().togglePinNoteById(CURRENT_WORKSPACE_ID, noteId, CURRENT_ACTOR);
+}
+
 export const mockInventoryRepository: InventoryRepository = {
   listInventoryItems,
   getInventoryItem,
@@ -388,4 +441,9 @@ export const mockInventoryRepository: InventoryRepository = {
   getInventoryAvailability,
   getLowStockItems,
   getDamagedOrUnderRepairItems,
+  getTimelineByInventoryItemId,
+  getNotesByInventoryItemId,
+  createInventoryItemNote,
+  updateInventoryItemNote,
+  toggleInventoryItemNotePin,
 };

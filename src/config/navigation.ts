@@ -87,7 +87,7 @@ export const navigationModules: NavModule[] = [
       { id: "operational-pipeline", label: "Operational Pipeline", disabled: true },
     ],
   },
-  { id: "inventory", label: "Inventory", icon: InventoryIcon, disabled: true },
+  { id: "inventory", label: "Inventory", icon: InventoryIcon, href: "/inventory" },
   { id: "vendors", label: "Vendors", icon: VendorsIcon, href: "/vendors" },
   { id: "finance", label: "Finance", icon: FinanceIcon, href: "/finance" },
   { id: "documents", label: "Documents", icon: DocumentsIcon, href: "/documents" },
