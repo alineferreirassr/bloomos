@@ -25,6 +25,8 @@ import type { DocumentFolder } from "@/types/documentFolder";
 import type { Vendor } from "@/types/vendor";
 import type { InventoryItem } from "@/types/inventoryItem";
 import type { InventoryMovement } from "@/types/inventoryMovement";
+import type { Purchase } from "@/types/purchase";
+import type { PurchaseItem } from "@/types/purchaseItem";
 import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 import type { WorkspaceMemberStatus } from "@/core/enums/workspaceMemberStatus";
 import type { Permission } from "@/core/enums/permission";
@@ -32,6 +34,7 @@ import type { InvitationStatus } from "@/core/enums/invitationStatus";
 import type { LeadStatus } from "@/core/enums/leadStatus";
 import type { ClientStatus } from "@/core/enums/clientStatus";
 import type { VendorStatus } from "@/core/enums/vendorStatus";
+import type { PurchaseStatus } from "@/core/enums/purchaseStatus";
 import type { InventoryItemType } from "@/core/enums/inventoryItemType";
 import type { InventoryStatus } from "@/core/enums/inventoryStatus";
 import type { InventoryCondition } from "@/core/enums/inventoryCondition";
@@ -87,6 +90,8 @@ type ExpenseRow = Database["public"]["Tables"]["expenses"]["Row"];
 type DocumentRow = Database["public"]["Tables"]["documents"]["Row"];
 type DocumentFolderRow = Database["public"]["Tables"]["document_folders"]["Row"];
 type VendorRow = Database["public"]["Tables"]["vendors"]["Row"];
+type PurchaseRow = Database["public"]["Tables"]["purchases"]["Row"];
+type PurchaseItemRow = Database["public"]["Tables"]["purchase_items"]["Row"];
 type InventoryItemRow = Database["public"]["Tables"]["inventory_items"]["Row"];
 type InventoryMovementRow = Database["public"]["Tables"]["inventory_movements"]["Row"];
 
@@ -692,5 +697,48 @@ export function mapInventoryMovementRow(row: InventoryMovementRow): InventoryMov
     performed_by: row.performed_by,
     occurred_at: row.occurred_at,
     created_at: row.created_at,
+  };
+}
+
+export function mapPurchaseRow(row: PurchaseRow): Purchase {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    vendor_id: row.vendor_id,
+    purchase_number: row.purchase_number,
+    status: row.status as PurchaseStatus,
+    order_date: row.order_date,
+    expected_delivery_date: row.expected_delivery_date,
+    actual_received_date: row.actual_received_date,
+    currency: row.currency,
+    subtotal_minor: row.subtotal_minor,
+    tax_minor: row.tax_minor,
+    shipping_minor: row.shipping_minor,
+    discount_minor: row.discount_minor,
+    total_minor: row.total_minor,
+    notes: row.notes,
+    vendor_reference: row.vendor_reference,
+    created_by: row.created_by,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    archived_at: row.archived_at,
+  };
+}
+
+export function mapPurchaseItemRow(row: PurchaseItemRow): PurchaseItem {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    purchase_id: row.purchase_id,
+    inventory_item_id: row.inventory_item_id,
+    name: row.name,
+    sku: row.sku,
+    quantity_ordered: row.quantity_ordered,
+    quantity_received: row.quantity_received,
+    unit_cost_minor: row.unit_cost_minor,
+    line_subtotal_minor: row.line_subtotal_minor,
+    display_order: row.display_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   };
 }
