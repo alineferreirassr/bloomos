@@ -3,6 +3,9 @@ import { mockVendorsRepository } from "@/lib/data/vendors/mockRepository";
 import { resetVendorsStore, readVendors } from "@/lib/data/mock/vendorsStore";
 import { resetNotesStore } from "@/lib/data/mock/notesStore";
 import { NotFoundError } from "@/core/errors";
+import { getSearchableEntityConfig, isEntitySearchable } from "@/core/search/registry";
+import { registerDefaultSearchableEntities } from "@/core/search/defaultRegistrations";
+import { ENTITY_TYPES } from "@/core/enums/entityType";
 import type { CreateVendorInput } from "@/modules/vendors/schema";
 import type { NoteFormInput } from "@/modules/notes/schema";
 
@@ -392,5 +395,19 @@ describe("mockVendorsRepository Notes methods", () => {
   it("toggleVendorNotePin returns null for a note that does not exist", async () => {
     const result = await mockVendorsRepository.toggleVendorNotePin("missing");
     expect(result).toBeNull();
+  });
+});
+
+describe("Core integration — EntityType and Search", () => {
+  it("includes vendor as a valid EntityType", () => {
+    expect(ENTITY_TYPES).toContain("vendor");
+  });
+
+  it("registers vendor as a searchable entity with a route", () => {
+    registerDefaultSearchableEntities();
+    expect(isEntitySearchable("vendor")).toBe(true);
+    const config = getSearchableEntityConfig("vendor");
+    expect(config?.label).toBe("Vendor");
+    expect(config?.route?.("vendor_1")).toBe("/vendors/vendor_1");
   });
 });

@@ -524,10 +524,10 @@ describe("Core Audit Log integration", () => {
 });
 
 describe("Search registration", () => {
-  it("registers inventory_item as searchable with no route yet", () => {
+  it("registers inventory_item as searchable with a route", () => {
     registerDefaultSearchableEntities();
     expect(isEntitySearchable("inventory_item")).toBe(true);
-    expect(getSearchableEntityConfig("inventory_item")?.route).toBeUndefined();
+    expect(getSearchableEntityConfig("inventory_item")?.route?.("item_1")).toBe("/inventory/item_1");
   });
 });
 

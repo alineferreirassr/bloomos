@@ -16,10 +16,10 @@ describe("search registry", () => {
     expect(isEntitySearchable("workspace")).toBe(false);
   });
 
-  it("allows a reserved entity type with no route yet (Inventory/Vendors ahead of those modules)", () => {
-    registerSearchableEntity({ entityType: "inventory_item", label: "Inventory Item", module: "Inventory" });
+  it("allows registering an entity type with no route yet, for modules ahead of shipping", () => {
+    registerSearchableEntity({ entityType: "contract", label: "Contract", module: "CRM" });
 
-    const config = getSearchableEntityConfig("inventory_item");
+    const config = getSearchableEntityConfig("contract");
     expect(config).toBeDefined();
     expect(config?.route).toBeUndefined();
   });
@@ -35,12 +35,12 @@ describe("registerDefaultSearchableEntities", () => {
     }
   });
 
-  it("gives every live module a route, and leaves Inventory/Vendors without one", () => {
+  it("gives every registered module a route, including Inventory and Vendors", () => {
     registerDefaultSearchableEntities();
 
     expect(getSearchableEntityConfig("lead")?.route?.("lead_1")).toBe("/leads/lead_1");
-    expect(getSearchableEntityConfig("inventory_item")?.route).toBeUndefined();
-    expect(getSearchableEntityConfig("vendor")?.route).toBeUndefined();
+    expect(getSearchableEntityConfig("inventory_item")?.route?.("item_1")).toBe("/inventory/item_1");
+    expect(getSearchableEntityConfig("vendor")?.route?.("vendor_1")).toBe("/vendors/vendor_1");
   });
 });
 
