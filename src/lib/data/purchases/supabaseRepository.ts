@@ -787,6 +787,12 @@ async function receivePurchaseItem(id: string, input: ReceivePurchaseItemInput):
     p_quantity_received: parsed.data.quantity_received,
     p_reason: parsed.data.reason,
     p_actor: actor,
+    // p_receipt_event_id is now a required, caller-supplied idempotency key
+    // (the RPC no longer defaults it server-side). This call site has no
+    // concept of a retryable client action yet, so a fresh id per call
+    // preserves the exact behavior every call already had before the
+    // correction — each submission is its own, distinct receipt event.
+    p_receipt_event_id: crypto.randomUUID(),
   });
   if (error) {
     const code = (error as { code?: string }).code;

@@ -712,6 +712,24 @@ describe("supabasePurchasesRepository.receivePurchaseItem", () => {
     expect(calls.some((c) => c.table === "purchase_items" || c.table === "purchases" || c.table === "timeline_activities")).toBe(false);
   });
 
+  it("supplies a fresh p_receipt_event_id on every call, since the RPC no longer defaults it server-side", async () => {
+    const { client, rpcCalls } = createMockSupabase([
+      { data: purchaseItemRow({ quantity_received: 1 }), error: null },
+      { data: purchaseItemRow({ quantity_received: 2 }), error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+    mockSession();
+
+    await supabasePurchasesRepository.receivePurchaseItem("purchase_item_1", RECEIVE_INPUT);
+    await supabasePurchasesRepository.receivePurchaseItem("purchase_item_1", RECEIVE_INPUT);
+
+    const firstId = (rpcCalls[0].args as Record<string, unknown>).p_receipt_event_id;
+    const secondId = (rpcCalls[1].args as Record<string, unknown>).p_receipt_event_id;
+    expect(typeof firstId).toBe("string");
+    expect((firstId as string).length).toBeGreaterThan(0);
+    expect(firstId).not.toBe(secondId);
+  });
+
   it("passes the caller's reason through, or null when omitted", async () => {
     const { client, rpcCalls } = createMockSupabase([{ data: purchaseItemRow({ quantity_received: 1 }), error: null }]);
     vi.mocked(createClient).mockReturnValue(client as never);

@@ -23,9 +23,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database migrations, in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine migrations, in chronological (execution) order", () => {
     const files = migrationFiles();
-    expect(files).toHaveLength(122);
+    expect(files).toHaveLength(132);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -1074,5 +1074,557 @@ describe("Finance Ledger Database migrations", () => {
       if (file.includes("timeline_activity_types")) continue;
       expect(sql).not.toMatch(/alter table public\.(purchases|purchase_items|inventory_items|inventory_movements|vendors|invoices|payments|expenses)\b/);
     }
+  });
+});
+
+describe("Finance Posting Engine migrations", () => {
+  const POSTING_ENGINE_FILES = [
+    "20260804095000_finance_posting_key.sql",
+    "20260804100000_finance_posting_helpers.sql",
+    "20260804100100_finance_post_purchase_receipt.sql",
+    "20260804100200_finance_post_payment_settlement.sql",
+    "20260804100300_finance_post_expense_transition.sql",
+    "20260804100400_finance_post_inventory_movement_entry.sql",
+    "20260804100500_finance_reverse_journal_entry.sql",
+    "20260804100600_finance_record_manual_adjustment.sql",
+    "20260804100700_finance_timeline_owner_type_widening.sql",
+    "20260804100800_finance_accounting_period_rpcs.sql",
+  ];
+
+  describe("journal_entries.posting_key correction migration", () => {
+    const sql = () => readMigration("20260804095000_finance_posting_key.sql");
+
+    it("adds posting_key as a nullable column, additive only (no drop/alter of an existing column)", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/alter table public\.journal_entries add column if not exists posting_key text;/);
+      expect(code).not.toMatch(/drop column/i);
+      expect(code).not.toMatch(/alter column/i);
+    });
+
+    it("creates a unique index on (workspace_id, posting_key) scoped to posting_key is not null", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create unique index if not exists journal_entries_workspace_posting_key_unique\s*\n\s*on public\.journal_entries \(workspace_id, posting_key\)\s*\n\s*where posting_key is not null;/);
+    });
+
+    it("sorts before every other Posting Engine migration so finance_insert_journal_entry can depend on the column existing", () => {
+      const files = migrationFiles();
+      const postingKeyIndex = files.indexOf("20260804095000_finance_posting_key.sql");
+      const helpersIndex = files.indexOf("20260804100000_finance_posting_helpers.sql");
+      expect(postingKeyIndex).toBeGreaterThanOrEqual(0);
+      expect(postingKeyIndex).toBeLessThan(helpersIndex);
+    });
+  });
+
+  it("standardizes posting_key: no deterministic key embeds workspace_id, since the (workspace_id, posting_key) unique index already scopes uniqueness per workspace", () => {
+    for (const file of POSTING_ENGINE_FILES) {
+      const code = stripSqlComments(readMigration(file));
+      expect(code).not.toMatch(/v_posting_key\s*:=[^;]*workspace_id/);
+    }
+  });
+
+  it("standardizes posting_key: every deterministic value is derived from a fixed literal + the relevant id, never from gen_random_uuid or another random source", () => {
+    for (const file of POSTING_ENGINE_FILES) {
+      const code = stripSqlComments(readMigration(file));
+      expect(code).not.toMatch(/v_posting_key\s*:=[^;]*gen_random_uuid/);
+    }
+  });
+
+  it("defines finance_resolve_account/finance_resolve_period/finance_insert_journal_entry as security invoker with pinned search_path", () => {
+    const sql = readMigration("20260804100000_finance_posting_helpers.sql");
+    for (const fn of ["finance_resolve_account", "finance_resolve_period", "finance_insert_journal_entry"]) {
+      expect(sql).toMatch(new RegExp(`create or replace function public\\.${fn}`));
+    }
+    expect(sql.match(/security invoker/gi)?.length).toBeGreaterThanOrEqual(3);
+    expect(sql.match(/set search_path = public/gi)?.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("finance_resolve_account resolves by (workspace_id, account_number, is_system) and never hardcodes a UUID", () => {
+    const sql = stripSqlComments(readMigration("20260804100000_finance_posting_helpers.sql"));
+    expect(sql).toMatch(/where workspace_id = p_workspace_id and account_number = p_account_number and is_system = true/);
+    expect(sql).toMatch(/errcode = 'P1100'/);
+    expect(sql).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  });
+
+  it("finance_resolve_period never auto-creates a period, only resolves one covering entry_date", () => {
+    const sql = stripSqlComments(readMigration("20260804100000_finance_posting_helpers.sql"));
+    expect(sql).toMatch(/period_start <= p_entry_date/);
+    expect(sql).toMatch(/period_end >= p_entry_date/);
+    expect(sql).not.toMatch(/insert into public\.accounting_periods/);
+    expect(sql).toMatch(/errcode = 'P1101'/);
+  });
+
+  it("uses a fresh P1100-P1117 error range across the Posting Engine migrations, colliding with no prior errcode in this schema", () => {
+    const allCodes = ["P1100", "P1101", "P1102", "P1103", "P1104", "P1105", "P1106", "P1107", "P1108", "P1109", "P1110", "P1111", "P1112", "P1113", "P1114", "P1115", "P1116", "P1117"];
+    const combined = POSTING_ENGINE_FILES.map((f) => readMigration(f)).join("\n");
+    for (const code of ["P1100", "P1101", "P1104", "P1105", "P1106", "P1107", "P1108", "P1109", "P1110", "P1111", "P1112", "P1113", "P1114", "P1115", "P1116", "P1117"]) {
+      expect(combined).toMatch(new RegExp(`errcode = '${code}'`));
+    }
+    for (const otherFile of migrationFiles().filter((f) => !POSTING_ENGINE_FILES.includes(f))) {
+      const sql = readMigration(otherFile);
+      for (const code of allCodes) {
+        expect(sql).not.toMatch(new RegExp(`errcode = '${code}'`));
+      }
+    }
+  });
+
+  it("uses no exception handlers anywhere in the Posting Engine migrations, matching the established no-swallowed-errors convention", () => {
+    for (const file of POSTING_ENGINE_FILES) {
+      expect(stripSqlComments(readMigration(file))).not.toMatch(/exception\s+when/i);
+    }
+  });
+
+  describe("post_purchase_receipt / record_purchase_receipt composition", () => {
+    const sql = () => readMigration("20260804100100_finance_post_purchase_receipt.sql");
+
+    it("requires p_receipt_event_id with no default — the caller must supply a stable id", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create or replace function public\.record_purchase_receipt\(\s*\n\s*p_purchase_item_id uuid,\s*\n\s*p_quantity_received integer,\s*\n\s*p_reason text,\s*\n\s*p_actor text,\s*\n\s*p_receipt_event_id uuid\s*\n\)/);
+      expect(code).not.toMatch(/p_receipt_event_id uuid default/);
+      expect(code).toMatch(/if p_receipt_event_id is null then/);
+      expect(code).toMatch(/errcode = 'P0010'/);
+    });
+
+    it("does not assign P0010 anywhere else in the schema (fresh code in the Purchases-owned P0005-P0009 range)", () => {
+      for (const otherFile of migrationFiles().filter((f) => f !== "20260804100100_finance_post_purchase_receipt.sql")) {
+        expect(readMigration(otherFile)).not.toMatch(/errcode = 'P0010'/);
+      }
+    });
+
+    it("computes the posted amount from unit_cost_minor * the current call's quantity only, not the cumulative quantity_received", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/v_amount_minor := v_item\.unit_cost_minor \* p_quantity_received;/);
+    });
+
+    it("debits 1200 Inventory Asset for inventory-linked lines and 6290 for non-inventory lines, always crediting 2000 Accounts Payable", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/if v_item\.inventory_item_id is not null then\s*\n\s*v_debit_account := public\.finance_resolve_account\(v_purchase\.workspace_id, 1200\);/);
+      expect(code).toMatch(/else\s*\n\s*v_debit_account := public\.finance_resolve_account\(v_purchase\.workspace_id, 6290\);/);
+      expect(code).toMatch(/v_credit_account := public\.finance_resolve_account\(v_purchase\.workspace_id, 2000\);/);
+    });
+
+    it("uses purchase_item_id as source_id (traceability to the operational document), not the receipt event id", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/'purchase_receipt',\s*\n\s*p_purchase_item_id::text,/);
+      expect(code).not.toMatch(/source_id = p_receipt_event_id::text/);
+      expect(code).not.toMatch(/'purchase_receipt',\s*\n\s*p_receipt_event_id::text/);
+    });
+
+    it("derives posting_key from receipt_event_id alone, the system-level idempotency identifier — no workspace_id inside the string, since the (workspace_id, posting_key) unique index already scopes it per workspace", () => {
+      const code = stripSqlComments(sql());
+      const occurrences = code.match(/v_posting_key := 'purchase_receipt:' \|\| p_receipt_event_id;/g) ?? [];
+      expect(occurrences.length).toBeGreaterThanOrEqual(2);
+      expect(code).not.toMatch(/posting_key := 'purchase_receipt:' \|\| v_purchase\.workspace_id/);
+    });
+
+    it("no longer creates a dedicated unique index on bare source_id for purchase_receipt (source_id is purchase_item_id now, not unique per event)", () => {
+      expect(sql()).not.toMatch(/journal_entries_purchase_receipt_event_unique/);
+    });
+
+    it("checks for a duplicate posting_key via the (workspace_id, posting_key) unique index's backing lookup, in both functions", () => {
+      const code = stripSqlComments(sql());
+      const lookups = code.match(/where workspace_id = v_purchase\.workspace_id and posting_key = v_posting_key/g) ?? [];
+      expect(lookups.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("posts exactly 2 balanced lines (one debit, one credit, same amount variable used for both)", () => {
+      const code = stripSqlComments(sql());
+      const lines = code.match(/jsonb_build_object\('account_id'/g) ?? [];
+      expect(lines).toHaveLength(2);
+      expect(code).toMatch(/'debit_minor', v_amount_minor, 'credit_minor', 0/);
+      expect(code).toMatch(/'debit_minor', 0, 'credit_minor', v_amount_minor/);
+    });
+
+    it("calls post_purchase_receipt from inside record_purchase_receipt, after the existing timeline_activities insert, with no new transaction boundary (no begin/commit)", () => {
+      const code = stripSqlComments(sql());
+      const timelineIndex = code.indexOf("insert into public.timeline_activities");
+      const postIndex = code.indexOf("perform public.post_purchase_receipt(");
+      expect(timelineIndex).toBeGreaterThan(-1);
+      expect(postIndex).toBeGreaterThan(timelineIndex);
+      expect(code).not.toMatch(/\bbegin\s*;|\bcommit\s*;/i);
+    });
+
+    it("still rejects over-receipt (P0009) before any posting call could run", () => {
+      const code = stripSqlComments(sql());
+      const overReceiptIndex = code.indexOf("errcode = 'P0009'");
+      const postIndex = code.indexOf("perform public.post_purchase_receipt(");
+      expect(overReceiptIndex).toBeGreaterThan(-1);
+      expect(postIndex).toBeGreaterThan(overReceiptIndex);
+    });
+
+    it("preserves the existing purchase_items -> purchases row-lock order unchanged", () => {
+      const code = stripSqlComments(sql());
+      const itemLockIndex = code.indexOf("select * into v_item from public.purchase_items where id = p_purchase_item_id for update");
+      const purchaseLockIndex = code.indexOf("select * into v_purchase from public.purchases where id = v_item.purchase_id for update");
+      expect(itemLockIndex).toBeGreaterThan(-1);
+      expect(purchaseLockIndex).toBeGreaterThan(itemLockIndex);
+    });
+
+    it("checks for a duplicate receipt_event_id inside record_purchase_receipt BEFORE any mutation — before over-receipt validation, the Inventory movement call, the quantity_received update, and the Timeline insert", () => {
+      const code = stripSqlComments(sql());
+      const purchaseLockIndex = code.indexOf("select * into v_purchase from public.purchases where id = v_item.purchase_id for update");
+      const idempotencyCheckIndex = code.indexOf("if exists (select 1 from public.journal_entries where workspace_id = v_purchase.workspace_id and posting_key = v_posting_key) then\n    return v_item;");
+      const overReceiptIndex = code.indexOf("errcode = 'P0009'");
+      const movementCallIndex = code.indexOf("select public.record_inventory_movement(");
+      const quantityUpdateIndex = code.indexOf("update public.purchase_items");
+      const timelineIndex = code.indexOf("insert into public.timeline_activities");
+
+      expect(purchaseLockIndex).toBeGreaterThan(-1);
+      expect(idempotencyCheckIndex).toBeGreaterThan(purchaseLockIndex);
+      expect(idempotencyCheckIndex).toBeLessThan(overReceiptIndex);
+      expect(idempotencyCheckIndex).toBeLessThan(movementCallIndex);
+      expect(idempotencyCheckIndex).toBeLessThan(quantityUpdateIndex);
+      expect(idempotencyCheckIndex).toBeLessThan(timelineIndex);
+    });
+
+    it("a duplicate receipt_event_id returns the current row as a no-op (idempotent replay), not an error — the retry check does not raise", () => {
+      const code = stripSqlComments(sql());
+      const checkBlock = code.match(/if exists \(select 1 from public\.journal_entries where workspace_id = v_purchase\.workspace_id and posting_key = v_posting_key\) then\s*\n\s*return v_item;\s*\n\s*end if;/);
+      expect(checkBlock).not.toBeNull();
+    });
+
+    it("documents the idempotent-replay vs duplicate-posting distinction — a repeat event is a replay, not an error, unlike every other posting RPC", () => {
+      const sqlRaw = sql();
+      expect(sqlRaw).toMatch(/IDEMPOTENT REPLAY, not duplicate rejection/);
+    });
+
+    it("a genuinely different receipt_event_id produces a different posting_key, so distinct partial receipts remain valid (idempotency is keyed on the event id, not the item)", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/'purchase_receipt:' \|\| p_receipt_event_id/);
+      expect(code).not.toMatch(/posting_key = 'purchase_receipt:';?\s*$/m);
+    });
+  });
+
+  describe("post_payment_settlement / record_payment_settlement", () => {
+    const sql = () => readMigration("20260804100200_finance_post_payment_settlement.sql");
+
+    it("rejects payment_method = 'stripe' with a clear domain error, never resolving account 1010 Stripe Clearing", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/if p_payment_method = 'stripe' then/);
+      expect(code).toMatch(/errcode = 'P1117'/);
+      expect(code).not.toMatch(/finance_resolve_account\([^)]*,\s*1010\)/);
+    });
+
+    it("debits 1000 Cash and credits 1100 Accounts Receivable when invoice-linked, or 2200 Customer Deposits when not", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/if v_payment\.invoice_id is not null then\s*\n\s*v_credit_account := public\.finance_resolve_account\(v_payment\.workspace_id, 1100\);/);
+      expect(code).toMatch(/else\s*\n\s*v_credit_account := public\.finance_resolve_account\(v_payment\.workspace_id, 2200\);/);
+      expect(code).toMatch(/finance_resolve_account\(v_payment\.workspace_id, 1000\)/);
+    });
+
+    it("is idempotent per payment_id: locks the row and pre-checks for an existing posting before inserting", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/select \* into v_payment from public\.payments where id = p_payment_id for update/);
+      expect(code).toMatch(/source_type = 'payment_settlement' and source_id = p_payment_id::text/);
+      expect(code).toMatch(/errcode = 'P1104'/);
+    });
+
+    it("carries a deterministic posting_key of payment_settlement:<payment_id>", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/v_posting_key := 'payment_settlement:' \|\| p_payment_id;/);
+      expect(code).toMatch(/p_actor,\s*\n\s*null,\s*\n\s*v_posting_key,/);
+    });
+
+    it("record_payment_settlement composes recompute_invoice_balance and post_payment_settlement in one function, no new transaction boundary", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/perform public\.recompute_invoice_balance\(p_invoice_id, p_actor\)/);
+      expect(code).toMatch(/perform public\.post_payment_settlement\(v_payment\.id, p_actor\)/);
+      expect(code).not.toMatch(/\bbegin\s*;|\bcommit\s*;/i);
+    });
+  });
+
+  describe("post_expense_transition / record_expense_transition", () => {
+    const sql = () => readMigration("20260804100300_finance_post_expense_transition.sql");
+
+    it("maps ExpenseCategory to its Chart of Accounts account, with category=inventory -> 1200 and category=refund -> 4950 as special cases", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/when 'inventory' then 1200/);
+      expect(code).toMatch(/when 'refund' then 4950/);
+      expect(code).toMatch(/when 'decor' then 6100/);
+      expect(code).toMatch(/when 'miscellaneous' then 6900/);
+    });
+
+    it("detects a prior expense_due entry to decide the 'paid' debit side, never recognizing the expense twice", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/select exists\(\s*\n\s*select 1 from public\.journal_entries where source_type = 'expense_due' and source_id = p_expense_id::text\s*\n\s*\) into v_had_due_entry;/);
+      expect(code).toMatch(/if v_had_due_entry then\s*\n\s*v_debit_account := public\.finance_resolve_account\(v_expense\.workspace_id, 2000\);/);
+    });
+
+    it("is idempotent per (expense, transition source_type)", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/source_type = v_source_type and source_id = p_expense_id::text/);
+      expect(code).toMatch(/errcode = 'P1104'/);
+    });
+
+    it("carries a deterministic posting_key of expense_due|expense_paid|expense_reimbursement:<expense_id> — 'reimbursement' in posting_key even though source_type stays 'expense_reimbursed'", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/when 'due' then 'expense_due:' \|\| p_expense_id/);
+      expect(code).toMatch(/when 'paid' then 'expense_paid:' \|\| p_expense_id/);
+      expect(code).toMatch(/when 'reimbursed' then 'expense_reimbursement:' \|\| p_expense_id/);
+      expect(code).toMatch(/p_actor,\s*\n\s*null,\s*\n\s*v_posting_key,/);
+    });
+
+    it("record_expense_transition validates the status transition before updating, rejecting an invalid one with P1105", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/if v_expense\.status not in \('planned', 'approved'\) then/);
+      expect(code).toMatch(/if v_expense\.status not in \('planned', 'approved', 'due'\) then/);
+      expect(code).toMatch(/if v_expense\.status <> 'paid' then/);
+      expect(code.match(/errcode = 'P1105'/g)?.length).toBeGreaterThanOrEqual(3);
+    });
+  });
+
+  describe("post_inventory_movement_entry / record_inventory_movement composition", () => {
+    const sql = () => readMigration("20260804100400_finance_post_inventory_movement_entry.sql");
+
+    it("returns null without posting for reservation, reservation_release, and purchase (purchase is owned by post_purchase_receipt instead)", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/if v_movement\.movement_type in \('reservation', 'reservation_release', 'purchase'\) then\s*\n\s*return null;/);
+    });
+
+    it("maps every financially-relevant movement type to its approved debit/credit account pair", () => {
+      const code = stripSqlComments(sql());
+      const expectations: Record<string, [number, number]> = {
+        initial_stock: [1200, 3000],
+        adjustment_increase: [1200, 7100],
+        adjustment_decrease: [5100, 1200],
+        event_checkout: [5000, 1200],
+        event_return: [1200, 5000],
+        damage: [5100, 1200],
+        loss: [5100, 1200],
+        disposal: [5100, 1200],
+      };
+      const debitCase = code.match(/v_debit_number := case v_movement\.movement_type([\s\S]*?)end;/)?.[1] ?? "";
+      const creditCase = code.match(/v_credit_number := case v_movement\.movement_type([\s\S]*?)end;/)?.[1] ?? "";
+      for (const [type, [debit, credit]] of Object.entries(expectations)) {
+        expect(debitCase).toMatch(new RegExp(`when '${type}' then ${debit}`));
+        expect(creditCase).toMatch(new RegExp(`when '${type}' then ${credit}`));
+      }
+    });
+
+    it("refuses to post when the Inventory item has no unit_cost, rather than valuing the movement at zero", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/if v_item\.unit_cost is null then/);
+      expect(code).toMatch(/cannot value this movement for posting/);
+    });
+
+    it("is idempotent per movement row (source_id = inventory_movement id)", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/source_type = v_source_type and source_id = p_inventory_movement_id::text/);
+      expect(code).toMatch(/errcode = 'P1104'/);
+    });
+
+    it("carries a deterministic posting_key of inventory_movement:<movement_id>", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/v_posting_key := 'inventory_movement:' \|\| p_inventory_movement_id;/);
+      expect(code).toMatch(/p_actor,\s*\n\s*null,\s*\n\s*v_posting_key,/);
+    });
+
+    it("calls post_inventory_movement_entry from inside record_inventory_movement, after the existing Timeline insert, with no new transaction boundary", () => {
+      const code = stripSqlComments(sql());
+      const timelineIndex = code.indexOf("insert into public.timeline_activities");
+      const postIndex = code.indexOf("perform public.post_inventory_movement_entry(");
+      expect(timelineIndex).toBeGreaterThan(-1);
+      expect(postIndex).toBeGreaterThan(timelineIndex);
+      expect(code).not.toMatch(/\bbegin\s*;|\bcommit\s*;/i);
+    });
+
+    it("preserves record_inventory_movement's existing item lock and quantity-invariant checks unchanged", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/select \* into v_item from public\.inventory_items where id = p_inventory_item_id for update/);
+      expect(code).toMatch(/errcode = 'P0004'/);
+    });
+  });
+
+  describe("reverse_journal_entry", () => {
+    const sql = () => readMigration("20260804100500_finance_reverse_journal_entry.sql");
+
+    it("widens journal_entries_source_type_check additively to add 'reversal', preserving every prior value", () => {
+      const code = stripSqlComments(sql());
+      for (const priorType of ["purchase_receipt", "invoice_issued", "payment_settlement", "expense_due", "manual_adjustment"]) {
+        expect(code).toMatch(new RegExp(`'${priorType}'`));
+      }
+      expect(code).toMatch(/'reversal'/);
+    });
+
+    it("rejects a blank or missing reason with P1112", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/if p_reason is null or btrim\(p_reason\) = '' then/);
+      expect(code).toMatch(/errcode = 'P1112'/);
+    });
+
+    it("locks the target entry and rejects reversing an already-reversed entry with P1109", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/select \* into v_original from public\.journal_entries where id = p_journal_entry_id for update/);
+      expect(code).toMatch(/if v_original\.reversed_by_entry_id is not null then/);
+      expect(code).toMatch(/errcode = 'P1109'/);
+    });
+
+    it("swaps every line's debit and credit via jsonb_agg, never mutating the original entry's financial values", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/'debit_minor', credit_minor,\s*\n\s*'credit_minor', debit_minor,/);
+      expect(code).not.toMatch(/update public\.journal_lines/);
+      expect(code).not.toMatch(/update public\.journal_entries\s*\n\s*set\s+(?!reversed_by_entry_id)/);
+    });
+
+    it("carries a deterministic posting_key of reversal:<original_journal_entry_id>", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/v_posting_key := 'reversal:' \|\| p_journal_entry_id;/);
+      expect(code).toMatch(/p_journal_entry_id,\s*\n\s*v_posting_key,\s*\n\s*v_reversed_lines/);
+    });
+
+    it("sets reverses_entry_id on the new entry and reversed_by_entry_id on the original, in that order", () => {
+      const code = stripSqlComments(sql());
+      const insertIndex = code.indexOf("v_reversal := public.finance_insert_journal_entry(");
+      const updateMatch = code.match(/update public\.journal_entries\s*\n\s*set reversed_by_entry_id = v_reversal\.id/);
+      expect(insertIndex).toBeGreaterThan(-1);
+      expect(updateMatch).not.toBeNull();
+      expect(code.indexOf(updateMatch![0])).toBeGreaterThan(insertIndex);
+    });
+
+    it("relies on the existing period-protection trigger for locked/closed-period rejection rather than re-implementing it", () => {
+      const code = stripSqlComments(sql());
+      expect(code).not.toMatch(/errcode = 'P1102'/);
+      expect(code).not.toMatch(/errcode = 'P1103'/);
+      expect(code).not.toMatch(/status = 'locked'/);
+    });
+  });
+
+  describe("record_manual_adjustment", () => {
+    const sql = () => readMigration("20260804100600_finance_record_manual_adjustment.sql");
+
+    it("rejects a blank memo (P1113) and fewer than 2 lines (P1114)", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/if p_memo is null or btrim\(p_memo\) = '' then/);
+      expect(code).toMatch(/errcode = 'P1113'/);
+      expect(code).toMatch(/jsonb_array_length\(p_lines\) < 2/);
+      expect(code).toMatch(/errcode = 'P1114'/);
+    });
+
+    it("rejects a line with both sides zero or both sides positive (P1115)", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/\(v_debit > 0 and v_credit > 0\) or \(v_debit = 0 and v_credit = 0\)/);
+      expect(code).toMatch(/errcode = 'P1115'/);
+    });
+
+    it("rejects a cross-workspace account (P1107) and an archived account (P1108)", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/if v_account\.workspace_id <> p_workspace_id then/);
+      expect(code).toMatch(/errcode = 'P1107'/);
+      expect(code).toMatch(/if v_account\.archived_at is not null then/);
+      expect(code).toMatch(/errcode = 'P1108'/);
+    });
+
+    it("pre-validates the total debit equals total credit (P1106) before ever attempting the insert", () => {
+      const code = stripSqlComments(sql());
+      const balanceCheckIndex = code.indexOf("if v_total_debit <> v_total_credit then");
+      const insertIndex = code.indexOf("v_entry := public.finance_insert_journal_entry(");
+      expect(balanceCheckIndex).toBeGreaterThan(-1);
+      expect(insertIndex).toBeGreaterThan(balanceCheckIndex);
+      expect(code).toMatch(/errcode = 'P1106'/);
+    });
+
+    it("never auto-balances or adds a plug line — no arithmetic adjusts v_total_debit/v_total_credit to force equality", () => {
+      const code = stripSqlComments(sql());
+      expect(code).not.toMatch(/v_total_debit\s*:=\s*v_total_credit/);
+      expect(code).not.toMatch(/v_total_credit\s*:=\s*v_total_debit/);
+    });
+
+    it("always posts with source_type = 'manual_adjustment' and a null source_id", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/'manual_adjustment', null, p_memo/);
+    });
+
+    it("never assigns a deterministic posting_key — passes null, unlike every other posting RPC", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/p_workspace_id, p_entry_date, 'manual_adjustment', null, p_memo, p_actor, null, null, p_lines/);
+    });
+  });
+
+  describe("Finance Timeline owner_type widening", () => {
+    it("adds only 'accounting_period' to timeline_activities_owner_type_check, not 'journal_entry', preserving every prior value", () => {
+      const sql = readMigration("20260804100700_finance_timeline_owner_type_widening.sql");
+      const code = stripSqlComments(sql);
+      for (const priorType of ["lead", "client", "event", "contract", "invoice", "payment", "expense", "document", "document_folder", "inventory_item", "vendor", "purchase"]) {
+        expect(sql).toMatch(new RegExp(`'${priorType}'`));
+      }
+      expect(sql).toMatch(/'accounting_period'/);
+      expect(code).not.toMatch(/'journal_entry'/);
+      expect(code).not.toMatch(/timeline_activities_type_check/);
+    });
+  });
+
+  describe("create_accounting_period / close_period / lock_period", () => {
+    const sql = () => readMigration("20260804100800_finance_accounting_period_rpcs.sql");
+
+    it("create_accounting_period pre-checks overlap with an explicit SELECT rather than an exception handler, and rejects period_end <= period_start", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/if p_period_end <= p_period_start then/);
+      expect(code).toMatch(/daterange\(period_start, period_end, '\[\]'\) && daterange\(p_period_start, p_period_end, '\[\]'\)/);
+      expect(code).toMatch(/errcode = 'P1116'/);
+    });
+
+    it("close_period rejects a non-open period and unresolved pending/failed postings, then sets closed_at/closed_by and logs Timeline", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/if v_period\.status <> 'open' then/);
+      expect(code).toMatch(/posting_status in \('pending', 'failed'\)/);
+      expect(code).toMatch(/set status = 'closed', closed_at = now\(\), closed_by = p_actor/);
+      expect(code).toMatch(/'accounting_period', v_period\.id, 'accounting_period_closed'/);
+    });
+
+    it("lock_period rejects a direct open-to-locked transition and an already-locked period, then sets locked_at/locked_by and logs Timeline", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/if v_period\.status <> 'closed' then/);
+      expect(code).toMatch(/set status = 'locked', locked_at = now\(\), locked_by = p_actor/);
+      expect(code).toMatch(/'accounting_period', v_period\.id, 'accounting_period_locked'/);
+    });
+
+    it("close_period and lock_period both row-lock the target period before checking its status", () => {
+      const code = stripSqlComments(sql());
+      const closeLockIndex = code.indexOf("select * into v_period from public.accounting_periods where id = p_period_id for update");
+      const lockLockIndex = code.lastIndexOf("select * into v_period from public.accounting_periods where id = p_period_id for update");
+      expect(closeLockIndex).toBeGreaterThan(-1);
+      expect(lockLockIndex).toBeGreaterThan(closeLockIndex);
+    });
+  });
+
+  describe("Audit contract", () => {
+    it("documents the atomicity boundary between Journal posting and Core Audit Log in a migration comment, without inventing a new SQL audit mechanism", () => {
+      const sql = readMigration("20260804100000_finance_posting_helpers.sql");
+      expect(sql).toMatch(/AUDIT CONTRACT/);
+      expect(sql).toMatch(/Core Audit Log entries are NOT part of that\s*\n-- transaction/);
+      expect(sql).toMatch(/must never retry a financial RPC merely because writing the Audit entry\s*\n-- afterward failed/);
+    });
+
+    it("introduces no parallel Finance-specific audit table, trigger, or function across the entire Posting Engine migration set", () => {
+      for (const file of POSTING_ENGINE_FILES) {
+        const code = stripSqlComments(readMigration(file));
+        expect(code).not.toMatch(/create table[^;]*audit/i);
+        expect(code).not.toMatch(/create or replace function public\.\w*audit\w*/i);
+        expect(code).not.toMatch(/create trigger[^;]*audit/i);
+      }
+    });
+
+    it("no Finance migration references an audit_log or audit_events table — Core Audit Log has no live Supabase table anywhere in this schema", () => {
+      for (const file of POSTING_ENGINE_FILES) {
+        const code = stripSqlComments(readMigration(file));
+        expect(code).not.toMatch(/audit_log|audit_events/i);
+      }
+    });
+  });
+
+  describe("Stripe deferral", () => {
+    it("introduces no Stripe SDK, routes, environment variables, or code touching stripe_webhook_events across the entire Posting Engine migration set", () => {
+      for (const file of POSTING_ENGINE_FILES) {
+        const sql = readMigration(file);
+        expect(sql).not.toMatch(/stripe_webhook_events/);
+        expect(sql).not.toMatch(/post_stripe_payout/);
+        expect(sql).not.toMatch(/stripe_webhook_received/);
+        expect(sql).not.toMatch(/STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|stripe\.com\/v1/i);
+      }
+    });
+
+    it("post_payment_settlement never resolves account 1010 Stripe Clearing in its actual account-resolution code", () => {
+      const sql = stripSqlComments(readMigration("20260804100200_finance_post_payment_settlement.sql"));
+      expect(sql).not.toMatch(/finance_resolve_account\([^)]*,\s*1010\)/);
+    });
   });
 });

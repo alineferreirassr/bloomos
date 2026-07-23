@@ -1906,6 +1906,7 @@ export interface Database {
           posting_status: string;
           failure_reason: string | null;
           posted_by: string;
+          posting_key: string | null;
           created_at: string;
         };
         Insert: {
@@ -1922,6 +1923,7 @@ export interface Database {
           posting_status?: string;
           failure_reason?: string | null;
           posted_by: string;
+          posting_key?: string | null;
           created_at?: string;
         };
         Update: {
@@ -1938,6 +1940,7 @@ export interface Database {
           posting_status?: string;
           failure_reason?: string | null;
           posted_by?: string;
+          posting_key?: string | null;
           created_at?: string;
         };
         Relationships: [];
@@ -2105,8 +2108,109 @@ export interface Database {
           p_quantity_received: number;
           p_reason: string | null;
           p_actor: string;
+          p_receipt_event_id: string;
         };
         Returns: Database["public"]["Tables"]["purchase_items"]["Row"];
+      };
+      finance_resolve_account: {
+        Args: { p_workspace_id: string; p_account_number: number };
+        Returns: Database["public"]["Tables"]["chart_of_accounts"]["Row"];
+      };
+      finance_resolve_period: {
+        Args: { p_workspace_id: string; p_entry_date: string };
+        Returns: string;
+      };
+      finance_insert_journal_entry: {
+        Args: {
+          p_workspace_id: string;
+          p_entry_date: string;
+          p_source_type: string;
+          p_source_id: string | null;
+          p_memo: string | null;
+          p_posted_by: string;
+          p_reverses_entry_id: string | null;
+          p_posting_key: string | null;
+          p_lines: Json;
+        };
+        Returns: Database["public"]["Tables"]["journal_entries"]["Row"];
+      };
+      post_purchase_receipt: {
+        Args: {
+          p_purchase_item_id: string;
+          p_quantity_received: number;
+          p_receipt_event_id: string;
+          p_actor: string;
+        };
+        Returns: Database["public"]["Tables"]["journal_entries"]["Row"];
+      };
+      post_payment_settlement: {
+        Args: { p_payment_id: string; p_actor: string };
+        Returns: Database["public"]["Tables"]["journal_entries"]["Row"];
+      };
+      record_payment_settlement: {
+        Args: {
+          p_workspace_id: string;
+          p_invoice_id: string | null;
+          p_client_id: string;
+          p_event_id: string | null;
+          p_contract_id: string | null;
+          p_payment_type: string;
+          p_amount_minor: number;
+          p_currency: string;
+          p_payment_method: string;
+          p_reference: string | null;
+          p_transaction_date: string;
+          p_notes: string | null;
+          p_actor: string;
+        };
+        Returns: Database["public"]["Tables"]["payments"]["Row"];
+      };
+      finance_resolve_expense_category_account: {
+        Args: { p_workspace_id: string; p_category: string };
+        Returns: Database["public"]["Tables"]["chart_of_accounts"]["Row"];
+      };
+      post_expense_transition: {
+        Args: { p_expense_id: string; p_transition: string; p_actor: string };
+        Returns: Database["public"]["Tables"]["journal_entries"]["Row"];
+      };
+      record_expense_transition: {
+        Args: { p_expense_id: string; p_transition: string; p_actor: string };
+        Returns: Database["public"]["Tables"]["expenses"]["Row"];
+      };
+      post_inventory_movement_entry: {
+        Args: { p_inventory_movement_id: string; p_actor: string };
+        Returns: Database["public"]["Tables"]["journal_entries"]["Row"] | null;
+      };
+      reverse_journal_entry: {
+        Args: { p_journal_entry_id: string; p_reason: string; p_actor: string };
+        Returns: Database["public"]["Tables"]["journal_entries"]["Row"];
+      };
+      record_manual_adjustment: {
+        Args: {
+          p_workspace_id: string;
+          p_entry_date: string;
+          p_memo: string;
+          p_lines: Json;
+          p_actor: string;
+        };
+        Returns: Database["public"]["Tables"]["journal_entries"]["Row"];
+      };
+      create_accounting_period: {
+        Args: {
+          p_workspace_id: string;
+          p_period_start: string;
+          p_period_end: string;
+          p_actor: string;
+        };
+        Returns: Database["public"]["Tables"]["accounting_periods"]["Row"];
+      };
+      close_period: {
+        Args: { p_period_id: string; p_actor: string };
+        Returns: Database["public"]["Tables"]["accounting_periods"]["Row"];
+      };
+      lock_period: {
+        Args: { p_period_id: string; p_actor: string };
+        Returns: Database["public"]["Tables"]["accounting_periods"]["Row"];
       };
       has_permission: {
         Args: { p_workspace_id: string; p_permission: string };
