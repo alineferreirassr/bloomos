@@ -33,6 +33,12 @@ import { type DataResult, fail } from "@/lib/data/result";
  *     but post_purchase_receipt's own composition inside
  *     record_purchase_receipt — owned by the Purchases repository, not
  *     this one — can; included here only for completeness of the range).
+ *   - invalid report date range/filter:     P1200 (the four Finance Reports
+ *     RPCs — finance_general_ledger_report/finance_trial_balance_report/
+ *     finance_profit_and_loss_report/finance_balance_sheet_report — share
+ *     this one code; a report's date range is either syntactically valid
+ *     or it is not, so no finer granularity is needed the way the Posting
+ *     Engine's writes required).
  *
  * "not found" and "permission denied" are deliberately NOT in this set:
  * those are handled the same way every other repository in this codebase
@@ -63,6 +69,7 @@ export const FINANCE_VALIDATION_ERROR_CODES = new Set([
   "P1115",
   "P1116",
   "P1117",
+  "P1200",
 ]);
 
 /**
@@ -78,6 +85,23 @@ export function handleFinanceRpcError<T>(error: unknown): DataResult<T> {
   const message = (error as { message?: string } | null)?.message;
   if (code && message && FINANCE_VALIDATION_ERROR_CODES.has(code)) {
     return fail(message);
+  }
+  throw normalizeSupabaseError(error);
+}
+
+/**
+ * The report RPCs are reads, not writes — every other read in this
+ * repository (getChartOfAccount, getJournalEntry, ...) throws rather than
+ * returning a DataResult, so a report's own input-validation failure (an
+ * invalid date range, P1200) is thrown too, as a safe, readable Error
+ * rather than a raw Postgres internal — never re-derived wording, the
+ * RPC's own message is already authored to be user-facing.
+ */
+export function throwFinanceReportError(error: unknown): never {
+  const code = (error as { code?: string } | null)?.code;
+  const message = (error as { message?: string } | null)?.message;
+  if (code && message && FINANCE_VALIDATION_ERROR_CODES.has(code)) {
+    throw new Error(message);
   }
   throw normalizeSupabaseError(error);
 }

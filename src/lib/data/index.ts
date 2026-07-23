@@ -16,6 +16,12 @@ import type { Expense } from "@/types/expense";
 import type { ChartOfAccount } from "@/types/chartOfAccount";
 import type { JournalEntry } from "@/types/journalEntry";
 import type { AccountingPeriod } from "@/types/accountingPeriod";
+import type {
+  GeneralLedgerReport,
+  TrialBalanceReport,
+  ProfitAndLossReport,
+  BalanceSheetReport,
+} from "@/types/financeReport";
 import type { Document } from "@/types/document";
 import type { DocumentFolder } from "@/types/documentFolder";
 import type { InventoryItem } from "@/types/inventoryItem";
@@ -138,6 +144,10 @@ import type {
   ChartOfAccountFilters,
   JournalEntryFilters,
   AccountingPeriodFilters,
+  GeneralLedgerReportFilters,
+  TrialBalanceReportFilters,
+  ProfitAndLossReportFilters,
+  BalanceSheetReportFilters,
 } from "@/lib/data/finance/repository";
 import { mockFinanceRepository } from "@/lib/data/finance/mockRepository";
 import { supabaseFinanceRepository } from "@/lib/data/finance/supabaseRepository";
@@ -1068,6 +1078,10 @@ export type {
   ChartOfAccountFilters,
   JournalEntryFilters,
   AccountingPeriodFilters,
+  GeneralLedgerReportFilters,
+  TrialBalanceReportFilters,
+  ProfitAndLossReportFilters,
+  BalanceSheetReportFilters,
 } from "@/lib/data/finance/repository";
 
 function financeRepository() {
@@ -1624,6 +1638,30 @@ export async function closeAccountingPeriod(id: string): Promise<DataResult<Acco
 
 export async function lockAccountingPeriod(id: string): Promise<DataResult<AccountingPeriod>> {
   return financeRepository().lockAccountingPeriod(id);
+}
+
+// ---------------------------------------------------------------------------
+// Finance Reports Foundation — derives exclusively from the ledger (journal_
+// entries/journal_lines/chart_of_accounts), never from invoices/payments/
+// expenses/purchases/inventory_movements directly. Cash Flow / AR Aging /
+// AP Aging are not implemented in this phase — see docs/finance-reports.md's
+// Deferred Reports section for the exact schema gap behind each one.
+// ---------------------------------------------------------------------------
+
+export async function getGeneralLedgerReport(filters: GeneralLedgerReportFilters): Promise<GeneralLedgerReport> {
+  return financeRepository().getGeneralLedgerReport(filters);
+}
+
+export async function getTrialBalanceReport(filters: TrialBalanceReportFilters): Promise<TrialBalanceReport> {
+  return financeRepository().getTrialBalanceReport(filters);
+}
+
+export async function getProfitAndLossReport(filters: ProfitAndLossReportFilters): Promise<ProfitAndLossReport> {
+  return financeRepository().getProfitAndLossReport(filters);
+}
+
+export async function getBalanceSheetReport(filters: BalanceSheetReportFilters): Promise<BalanceSheetReport> {
+  return financeRepository().getBalanceSheetReport(filters);
 }
 
 // ---------------------------------------------------------------------------

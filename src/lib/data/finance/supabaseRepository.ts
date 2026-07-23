@@ -56,7 +56,7 @@ import {
 } from "@/lib/supabase/mappers";
 import { getClientWorkspaceSession, type WorkspaceSession } from "@/lib/auth/workspaceSessionClient";
 import { getCoreAuditLogService } from "@/core/audit";
-import { handleFinanceRpcError } from "@/lib/data/finance/errors";
+import { handleFinanceRpcError, throwFinanceReportError } from "@/lib/data/finance/errors";
 import type {
   InvoiceFilters,
   PaymentFilters,
@@ -64,8 +64,23 @@ import type {
   ChartOfAccountFilters,
   JournalEntryFilters,
   AccountingPeriodFilters,
+  GeneralLedgerReportFilters,
+  TrialBalanceReportFilters,
+  ProfitAndLossReportFilters,
+  BalanceSheetReportFilters,
   FinanceRepository,
 } from "@/lib/data/finance/repository";
+import type {
+  GeneralLedgerReport,
+  GeneralLedgerAccount,
+  GeneralLedgerTransaction,
+  TrialBalanceReport,
+  TrialBalanceRow,
+  ProfitAndLossReport,
+  BalanceSheetReport,
+} from "@/types/financeReport";
+import type { NormalBalance } from "@/core/enums/normalBalance";
+import { validateTrialBalance, buildProfitAndLossSections, buildBalanceSheetSections, validateAccountingEquation } from "@/lib/data/finance/reportCalculations";
 
 const DEFAULT_JOURNAL_ENTRY_PAGE_SIZE = 50;
 
@@ -1782,6 +1797,190 @@ async function getAccountingPeriod(id: string): Promise<AccountingPeriod> {
   return mapAccountingPeriodRow(row);
 }
 
+/**
+ * Finance Reports Foundation — every method below calls a database-side
+ * report RPC (never re-aggregating the ledger in TypeScript) and reshapes
+ * the RPC's flat rows into the nested report domain shape via the same
+ * shared reportCalculations.ts helpers the mock repository uses, so the two
+ * can never compute a report differently. A report's own input-validation
+ * failure (e.g. an invalid date range, P1200) throws a plain Error via
+ * throwFinanceReportError, matching every other read in this repository.
+ * See docs/finance-reports.md.
+ */
+
+async function getGeneralLedgerReport(filters: GeneralLedgerReportFilters): Promise<GeneralLedgerReport> {
+  const session = await requireWorkspaceSession();
+  const supabase = createSupabaseClient();
+  const { data, error } = await supabase.rpc("finance_general_ledger_report", {
+    p_workspace_id: session.workspace.id,
+    p_start_date: filters.startDate,
+    p_end_date: filters.endDate,
+    p_account_id: filters.accountId ?? null,
+    p_account_type: filters.accountType ?? null,
+    p_source_type: filters.sourceType ?? null,
+  });
+  if (error) throwFinanceReportError(error);
+
+  const accountsById = new Map<string, GeneralLedgerAccount>();
+  for (const row of data ?? []) {
+    let account = accountsById.get(row.account_id);
+    if (!account) {
+      account = {
+        accountId: row.account_id,
+        accountNumber: row.account_number,
+        accountName: row.account_name,
+        accountType: row.account_type as GeneralLedgerAccount["accountType"],
+        normalBalance: row.normal_balance as NormalBalance,
+        openingBalanceMinor: row.opening_balance_minor,
+        transactions: [],
+        closingBalanceMinor: row.opening_balance_minor,
+      };
+      accountsById.set(row.account_id, account);
+    }
+    if (row.journal_entry_id !== null && row.journal_line_id !== null) {
+      const transaction: GeneralLedgerTransaction = {
+        journalEntryId: row.journal_entry_id,
+        entryDate: row.entry_date!,
+        memo: row.memo,
+        sourceType: row.source_type!,
+        sourceId: row.source_id,
+        postingStatus: row.posting_status!,
+        journalLineId: row.journal_line_id,
+        lineMemo: row.line_memo,
+        debitMinor: row.debit_minor!,
+        creditMinor: row.credit_minor!,
+        runningBalanceMinor: row.running_balance_minor,
+      };
+      account.transactions.push(transaction);
+      account.closingBalanceMinor = row.running_balance_minor;
+    }
+  }
+
+  return {
+    workspaceId: session.workspace.id,
+    generatedAt: new Date().toISOString(),
+    startDate: filters.startDate,
+    endDate: filters.endDate,
+    accounts: Array.from(accountsById.values()),
+  };
+}
+
+async function getTrialBalanceReport(filters: TrialBalanceReportFilters): Promise<TrialBalanceReport> {
+  const session = await requireWorkspaceSession();
+  const supabase = createSupabaseClient();
+  const { data, error } = await supabase.rpc("finance_trial_balance_report", {
+    p_workspace_id: session.workspace.id,
+    p_as_of_date: filters.asOfDate,
+    p_include_zero_balances: filters.includeZeroBalances ?? false,
+  });
+  if (error) throwFinanceReportError(error);
+
+  const rows: TrialBalanceRow[] = (data ?? []).map((row) => {
+    const net = row.total_debit_minor - row.total_credit_minor;
+    return {
+      accountId: row.account_id,
+      accountNumber: row.account_number,
+      accountName: row.account_name,
+      accountType: row.account_type as TrialBalanceRow["accountType"],
+      normalBalance: row.normal_balance as NormalBalance,
+      isArchived: row.is_archived,
+      debitMinor: row.total_debit_minor,
+      creditMinor: row.total_credit_minor,
+      endingDebitMinor: net >= 0 ? net : 0,
+      endingCreditMinor: net < 0 ? -net : 0,
+    };
+  });
+
+  const { isBalanced, totalEndingDebitMinor, totalEndingCreditMinor } = validateTrialBalance(rows);
+
+  return {
+    workspaceId: session.workspace.id,
+    generatedAt: new Date().toISOString(),
+    asOfDate: filters.asOfDate,
+    rows,
+    totalEndingDebitMinor,
+    totalEndingCreditMinor,
+    isBalanced,
+  };
+}
+
+async function getProfitAndLossReport(filters: ProfitAndLossReportFilters): Promise<ProfitAndLossReport> {
+  const session = await requireWorkspaceSession();
+  const supabase = createSupabaseClient();
+  const { data, error } = await supabase.rpc("finance_profit_and_loss_report", {
+    p_workspace_id: session.workspace.id,
+    p_start_date: filters.startDate,
+    p_end_date: filters.endDate,
+    p_comparison_start_date: filters.comparison?.startDate ?? null,
+    p_comparison_end_date: filters.comparison?.endDate ?? null,
+  });
+  if (error) throwFinanceReportError(error);
+
+  const movements = (data ?? []).map((row) => ({
+    accountId: row.account_id,
+    accountNumber: row.account_number,
+    accountName: row.account_name,
+    accountType: row.account_type as ProfitAndLossReport["sections"][number]["rows"][number]["accountType"],
+    normalBalance: row.normal_balance as NormalBalance,
+    currentDebitMinor: row.current_debit_minor,
+    currentCreditMinor: row.current_credit_minor,
+    comparisonDebitMinor: row.comparison_debit_minor,
+    comparisonCreditMinor: row.comparison_credit_minor,
+  }));
+
+  const { sections, netIncomeMinor, comparisonNetIncomeMinor } = buildProfitAndLossSections(movements, !!filters.comparison);
+
+  return {
+    workspaceId: session.workspace.id,
+    generatedAt: new Date().toISOString(),
+    startDate: filters.startDate,
+    endDate: filters.endDate,
+    comparisonStartDate: filters.comparison?.startDate ?? null,
+    comparisonEndDate: filters.comparison?.endDate ?? null,
+    sections,
+    netIncomeMinor,
+    comparisonNetIncomeMinor,
+  };
+}
+
+async function getBalanceSheetReport(filters: BalanceSheetReportFilters): Promise<BalanceSheetReport> {
+  const session = await requireWorkspaceSession();
+  const supabase = createSupabaseClient();
+  const { data, error } = await supabase.rpc("finance_balance_sheet_report", {
+    p_workspace_id: session.workspace.id,
+    p_as_of_date: filters.asOfDate,
+  });
+  if (error) throwFinanceReportError(error);
+
+  const rows = data ?? [];
+  const currentPeriodEarningsMinor = rows[0]?.current_period_earnings_minor ?? 0;
+  const balances = rows.map((row) => ({
+    accountId: row.account_id,
+    accountNumber: row.account_number,
+    accountName: row.account_name,
+    accountType: row.account_type as BalanceSheetReport["sections"][number]["rows"][number]["accountType"],
+    parentAccountId: row.parent_account_id,
+    closingBalanceMinor: row.closing_balance_minor,
+  }));
+
+  const { sections, totalAssetsMinor, totalLiabilitiesMinor, totalEquityMinor } = buildBalanceSheetSections(
+    balances,
+    currentPeriodEarningsMinor,
+  );
+
+  return {
+    workspaceId: session.workspace.id,
+    generatedAt: new Date().toISOString(),
+    asOfDate: filters.asOfDate,
+    sections,
+    totalAssetsMinor,
+    totalLiabilitiesMinor,
+    totalEquityMinor,
+    currentPeriodEarningsMinor,
+    isBalanced: validateAccountingEquation(totalAssetsMinor, totalLiabilitiesMinor, totalEquityMinor),
+  };
+}
+
 /** Calls record_payment_settlement. payment_method='stripe' is rejected here, at the Repository boundary, independent of and before the RPC's own P1117 rejection — Stripe remains deferred at every layer. */
 async function recordPaymentSettlement(input: PaymentSettlementInput): Promise<DataResult<Payment>> {
   if (input.payment_method === "stripe") {
@@ -2090,4 +2289,8 @@ export const supabaseFinanceRepository: FinanceRepository = {
   createAccountingPeriod,
   closeAccountingPeriod,
   lockAccountingPeriod,
+  getGeneralLedgerReport,
+  getTrialBalanceReport,
+  getProfitAndLossReport,
+  getBalanceSheetReport,
 };

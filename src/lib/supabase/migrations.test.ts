@@ -23,9 +23,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine migrations, in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation migrations, in chronological (execution) order", () => {
     const files = migrationFiles();
-    expect(files).toHaveLength(132);
+    expect(files).toHaveLength(133);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -1626,5 +1626,102 @@ describe("Finance Posting Engine migrations", () => {
       const sql = stripSqlComments(readMigration("20260804100200_finance_post_payment_settlement.sql"));
       expect(sql).not.toMatch(/finance_resolve_account\([^)]*,\s*1010\)/);
     });
+  });
+});
+
+describe("Finance Reports Foundation migration", () => {
+  const FILE = "20260805100000_finance_report_rpcs.sql";
+  const sql = () => readMigration(FILE);
+  const REPORT_FUNCTIONS = [
+    "finance_general_ledger_report",
+    "finance_trial_balance_report",
+    "finance_profit_and_loss_report",
+    "finance_balance_sheet_report",
+  ];
+
+  it("defines all four report functions as security invoker, stable, with a pinned search_path", () => {
+    const code = stripSqlComments(sql());
+    for (const fn of REPORT_FUNCTIONS) {
+      expect(code).toMatch(new RegExp(`create or replace function public\\.${fn}`));
+    }
+    expect(code.match(/security invoker/gi)?.length).toBe(4);
+    expect(code.match(/\bstable\b/gi)?.length).toBe(4);
+    expect(code.match(/set search_path = public/gi)?.length).toBe(4);
+  });
+
+  it("uses no exception handlers, matching the established no-swallowed-errors convention", () => {
+    expect(stripSqlComments(sql())).not.toMatch(/exception\s+when/i);
+  });
+
+  it("uses a fresh P1200 error code for report input validation, colliding with no prior errcode in this schema", () => {
+    expect(sql()).toMatch(/errcode = 'P1200'/);
+    for (const otherFile of migrationFiles().filter((f) => f !== FILE)) {
+      expect(readMigration(otherFile)).not.toMatch(/errcode = 'P1200'/);
+    }
+  });
+
+  it("every function validates its own required date parameter(s) with a P1200 check that appears before its own return query", () => {
+    const code = stripSqlComments(sql());
+    for (const fn of REPORT_FUNCTIONS) {
+      const start = code.indexOf(`create or replace function public.${fn}`);
+      const end = code.indexOf("end;\n$$;", start);
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(end).toBeGreaterThan(start);
+      const body = code.slice(start, end);
+      const validationIndex = body.indexOf("errcode = 'P1200'");
+      const queryIndex = body.indexOf("return query");
+      expect(validationIndex, `${fn} should raise P1200 somewhere in its body`).toBeGreaterThanOrEqual(0);
+      expect(queryIndex, `${fn} should call return query`).toBeGreaterThanOrEqual(0);
+      expect(validationIndex, `${fn} must validate before querying`).toBeLessThan(queryIndex);
+    }
+  });
+
+  it("finance_profit_and_loss_report specifically rejects a comparison period missing one of its two dates", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/p_comparison_start_date is null\)\s*<>\s*\(p_comparison_end_date is null\)/);
+  });
+
+  it("derives exclusively from journal_entries/journal_lines/chart_of_accounts — never from invoices, payments, expenses, purchases, or inventory_movements", () => {
+    const code = stripSqlComments(sql());
+    for (const forbiddenTable of ["invoices", "payments", "expenses", "purchases", "purchase_items", "inventory_movements"]) {
+      expect(code).not.toMatch(new RegExp(`\\bfrom public\\.${forbiddenTable}\\b`));
+      expect(code).not.toMatch(new RegExp(`\\bjoin public\\.${forbiddenTable}\\b`));
+    }
+  });
+
+  it("every query filters to posting_status = 'posted'", () => {
+    const code = stripSqlComments(sql());
+    expect(code.match(/posting_status = 'posted'/g)?.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("finance_general_ledger_report is driven from eligible_accounts (not activity), so a zero-activity account still gets a row", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/from eligible_accounts ea\s*\n\s*left join opening o on o\.account_id = ea\.id\s*\n\s*left join activity a on a\.account_id = ea\.id/);
+  });
+
+  it("finance_balance_sheet_report computes current-period earnings as credit minus debit uniformly, without a per-account CASE", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/sum\(jl\.credit_minor - jl\.debit_minor\)/);
+  });
+
+  it("introduces no Stripe SDK, routes, environment variables, or code touching stripe_webhook_events", () => {
+    const code = sql();
+    expect(code).not.toMatch(/stripe_webhook_events/);
+    expect(code).not.toMatch(/STRIPE_SECRET_KEY|STRIPE_WEBHOOK_SECRET|stripe\.com\/v1/i);
+  });
+
+  it("adds no new table, index, or RLS policy — every report reads through the existing RLS-protected ledger tables", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/create table/i);
+    expect(code).not.toMatch(/create index/i);
+    expect(code).not.toMatch(/create policy/i);
+    expect(code).not.toMatch(/enable row level security/i);
+  });
+
+  it("sorts after every Posting Engine migration", () => {
+    const files = migrationFiles();
+    const reportsIndex = files.indexOf(FILE);
+    const lastPostingEngineIndex = files.indexOf("20260804100800_finance_accounting_period_rpcs.sql");
+    expect(reportsIndex).toBeGreaterThan(lastPostingEngineIndex);
   });
 });

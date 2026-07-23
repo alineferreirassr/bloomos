@@ -2212,6 +2212,84 @@ export interface Database {
         Args: { p_period_id: string; p_actor: string };
         Returns: Database["public"]["Tables"]["accounting_periods"]["Row"];
       };
+      finance_general_ledger_report: {
+        Args: {
+          p_workspace_id: string;
+          p_start_date: string;
+          p_end_date: string;
+          p_account_id?: string | null;
+          p_account_type?: string | null;
+          p_source_type?: string | null;
+        };
+        Returns: {
+          account_id: string;
+          account_number: number;
+          account_name: string;
+          account_type: string;
+          normal_balance: string;
+          opening_balance_minor: number;
+          // journal_entry_id/entry_date/source_type/posting_status/journal_line_id/
+          // debit_minor/credit_minor are all null together on the one placeholder
+          // row a zero-in-range-activity account gets (see finance_general_
+          // ledger_report's own comment) — never independently null otherwise.
+          journal_entry_id: string | null;
+          entry_date: string | null;
+          memo: string | null;
+          source_type: string | null;
+          source_id: string | null;
+          posting_status: string | null;
+          journal_line_id: string | null;
+          line_memo: string | null;
+          debit_minor: number | null;
+          credit_minor: number | null;
+          running_balance_minor: number;
+        }[];
+      };
+      finance_trial_balance_report: {
+        Args: { p_workspace_id: string; p_as_of_date: string; p_include_zero_balances?: boolean };
+        Returns: {
+          account_id: string;
+          account_number: number;
+          account_name: string;
+          account_type: string;
+          normal_balance: string;
+          is_archived: boolean;
+          total_debit_minor: number;
+          total_credit_minor: number;
+        }[];
+      };
+      finance_profit_and_loss_report: {
+        Args: {
+          p_workspace_id: string;
+          p_start_date: string;
+          p_end_date: string;
+          p_comparison_start_date?: string | null;
+          p_comparison_end_date?: string | null;
+        };
+        Returns: {
+          account_id: string;
+          account_number: number;
+          account_name: string;
+          account_type: string;
+          normal_balance: string;
+          current_debit_minor: number;
+          current_credit_minor: number;
+          comparison_debit_minor: number;
+          comparison_credit_minor: number;
+        }[];
+      };
+      finance_balance_sheet_report: {
+        Args: { p_workspace_id: string; p_as_of_date: string };
+        Returns: {
+          account_id: string;
+          account_number: number;
+          account_name: string;
+          account_type: string;
+          parent_account_id: string | null;
+          closing_balance_minor: number;
+          current_period_earnings_minor: number;
+        }[];
+      };
       has_permission: {
         Args: { p_workspace_id: string; p_permission: string };
         Returns: boolean;

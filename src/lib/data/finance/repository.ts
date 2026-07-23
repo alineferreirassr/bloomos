@@ -27,6 +27,12 @@ import type {
 } from "@/modules/finance/schema";
 import type { NoteFormInput } from "@/modules/notes/schema";
 import type { DataResult } from "@/lib/data/result";
+import type {
+  GeneralLedgerReport,
+  TrialBalanceReport,
+  ProfitAndLossReport,
+  BalanceSheetReport,
+} from "@/types/financeReport";
 
 export interface InvoiceFilters {
   search?: string;
@@ -87,6 +93,35 @@ export interface JournalEntryFilters {
 
 export interface AccountingPeriodFilters {
   status?: AccountingPeriodStatus | "all";
+}
+
+/**
+ * Finance Reports Foundation filter shapes — every field is a plain string/
+ * boolean, matching the request body of the corresponding
+ * finance_*_report RPC (mock/Supabase parity means these are the ONLY
+ * inputs either implementation needs). See docs/finance-reports.md.
+ */
+export interface GeneralLedgerReportFilters {
+  startDate: string;
+  endDate: string;
+  accountId?: string;
+  accountType?: AccountType;
+  sourceType?: string;
+}
+
+export interface TrialBalanceReportFilters {
+  asOfDate: string;
+  includeZeroBalances?: boolean;
+}
+
+export interface ProfitAndLossReportFilters {
+  startDate: string;
+  endDate: string;
+  comparison?: { startDate: string; endDate: string };
+}
+
+export interface BalanceSheetReportFilters {
+  asOfDate: string;
 }
 
 /**
@@ -194,4 +229,20 @@ export interface FinanceRepository {
   closeAccountingPeriod(id: string): Promise<DataResult<AccountingPeriod>>;
   /** Calls lock_period. */
   lockAccountingPeriod(id: string): Promise<DataResult<AccountingPeriod>>;
+
+  // ---------------------------------------------------------------------
+  // Finance Reports Foundation — derives exclusively from journal_entries/
+  // journal_lines/chart_of_accounts (never invoices/payments/expenses/
+  // purchases/inventory_movements directly). Reads; throw on failure
+  // (an invalid date range throws a plain Error via
+  // throwFinanceReportError), matching every other read method in this
+  // interface. Cash Flow / AR Aging / AP Aging are not implemented in this
+  // phase — see docs/finance-reports.md's Deferred Reports section for the
+  // exact, individually documented schema gap behind each one.
+  // ---------------------------------------------------------------------
+
+  getGeneralLedgerReport(filters: GeneralLedgerReportFilters): Promise<GeneralLedgerReport>;
+  getTrialBalanceReport(filters: TrialBalanceReportFilters): Promise<TrialBalanceReport>;
+  getProfitAndLossReport(filters: ProfitAndLossReportFilters): Promise<ProfitAndLossReport>;
+  getBalanceSheetReport(filters: BalanceSheetReportFilters): Promise<BalanceSheetReport>;
 }

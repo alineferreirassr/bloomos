@@ -63,8 +63,30 @@ import type {
   ChartOfAccountFilters,
   JournalEntryFilters,
   AccountingPeriodFilters,
+  GeneralLedgerReportFilters,
+  TrialBalanceReportFilters,
+  ProfitAndLossReportFilters,
+  BalanceSheetReportFilters,
   FinanceRepository,
 } from "@/lib/data/finance/repository";
+import type {
+  GeneralLedgerReport,
+  GeneralLedgerAccount,
+  GeneralLedgerTransaction,
+  TrialBalanceReport,
+  TrialBalanceRow,
+  ProfitAndLossReport,
+  BalanceSheetReport,
+} from "@/types/financeReport";
+import {
+  calculateNormalBalance,
+  calculateRunningBalance,
+  splitEndingBalance,
+  validateTrialBalance,
+  buildProfitAndLossSections,
+  buildBalanceSheetSections,
+  validateAccountingEquation,
+} from "@/lib/data/finance/reportCalculations";
 
 function fieldErrorsFromZod(error: {
   issues: { path: PropertyKey[]; message: string }[];
@@ -1763,6 +1785,263 @@ async function lockAccountingPeriod(id: string): Promise<DataResult<AccountingPe
   return ok(updated);
 }
 
+/**
+ * Finance Reports Foundation — every method below derives exclusively from
+ * the mock journalEntriesStore/journalLinesStore/chartOfAccountsStore (never
+ * invoices/payments/expenses/purchases/inventory_movements), filtering to
+ * posting_status = 'posted' only, exactly mirroring the Supabase RPCs'
+ * semantics via the same shared reportCalculations.ts helpers — the two
+ * repositories can never compute a report differently. See
+ * docs/finance-reports.md.
+ */
+
+function postedJournalEntriesById(): Map<string, JournalEntry> {
+  return new Map(
+    readJournalEntries()
+      .filter((entry) => entry.workspace_id === CURRENT_WORKSPACE_ID && entry.posting_status === "posted")
+      .map((entry) => [entry.id, entry]),
+  );
+}
+
+function compareLineOrder(
+  a: { entry: JournalEntry; line: JournalLine },
+  b: { entry: JournalEntry; line: JournalLine },
+): number {
+  if (a.entry.entry_date !== b.entry.entry_date) return a.entry.entry_date < b.entry.entry_date ? -1 : 1;
+  if (a.entry.created_at !== b.entry.created_at) return a.entry.created_at < b.entry.created_at ? -1 : 1;
+  if (a.entry.id !== b.entry.id) return a.entry.id < b.entry.id ? -1 : 1;
+  return a.line.id < b.line.id ? -1 : 1;
+}
+
+async function getGeneralLedgerReport(filters: GeneralLedgerReportFilters): Promise<GeneralLedgerReport> {
+  const { startDate, endDate, accountId, accountType, sourceType } = filters;
+  if (!startDate || !endDate) {
+    throw new Error("A start date and end date are required.");
+  }
+  if (endDate < startDate) {
+    throw new Error("End date must not be before start date.");
+  }
+
+  const eligibleAccounts = readChartOfAccounts()
+    .filter((account) => account.workspace_id === CURRENT_WORKSPACE_ID)
+    .filter((account) => !accountId || account.id === accountId)
+    .filter((account) => !accountType || account.account_type === accountType);
+
+  const entriesById = postedJournalEntriesById();
+  const allLines = readJournalLines().filter((line) => entriesById.has(line.journal_entry_id));
+
+  const accounts: GeneralLedgerAccount[] = eligibleAccounts.map((account) => {
+    const accountEntries = allLines
+      .filter((line) => line.account_id === account.id)
+      .map((line) => ({ line, entry: entriesById.get(line.journal_entry_id)! }))
+      .sort(compareLineOrder);
+
+    const beforeRange = accountEntries.filter((x) => x.entry.entry_date < startDate);
+    const openingBalanceMinor = beforeRange.reduce(
+      (sum, x) => sum + calculateNormalBalance(account.normal_balance, x.line.debit_minor, x.line.credit_minor),
+      0,
+    );
+
+    const inRange = accountEntries.filter((x) => x.entry.entry_date >= startDate && x.entry.entry_date <= endDate);
+    const runningBalances = calculateRunningBalance(
+      account.normal_balance,
+      openingBalanceMinor,
+      inRange.map((x) => ({ debitMinor: x.line.debit_minor, creditMinor: x.line.credit_minor })),
+    );
+
+    const transactions: GeneralLedgerTransaction[] = inRange
+      .map((x, index) => ({ x, runningBalanceMinor: runningBalances[index] }))
+      .filter(({ x }) => !sourceType || x.entry.source_type === sourceType)
+      .map(({ x, runningBalanceMinor }) => ({
+        journalEntryId: x.entry.id,
+        entryDate: x.entry.entry_date,
+        memo: x.entry.memo,
+        sourceType: x.entry.source_type,
+        sourceId: x.entry.source_id,
+        postingStatus: x.entry.posting_status,
+        journalLineId: x.line.id,
+        lineMemo: x.line.line_memo,
+        debitMinor: x.line.debit_minor,
+        creditMinor: x.line.credit_minor,
+        runningBalanceMinor,
+      }));
+
+    const closingBalanceMinor = runningBalances.length > 0 ? runningBalances[runningBalances.length - 1] : openingBalanceMinor;
+
+    return {
+      accountId: account.id,
+      accountNumber: account.account_number,
+      accountName: account.name,
+      accountType: account.account_type,
+      normalBalance: account.normal_balance,
+      openingBalanceMinor,
+      transactions,
+      closingBalanceMinor,
+    };
+  });
+
+  return { workspaceId: CURRENT_WORKSPACE_ID, generatedAt: nowIso(), startDate, endDate, accounts };
+}
+
+async function getTrialBalanceReport(filters: TrialBalanceReportFilters): Promise<TrialBalanceReport> {
+  const { asOfDate, includeZeroBalances = false } = filters;
+  if (!asOfDate) {
+    throw new Error("An as-of date is required.");
+  }
+
+  const accounts = readChartOfAccounts().filter((account) => account.workspace_id === CURRENT_WORKSPACE_ID);
+  const entriesById = new Map(
+    Array.from(postedJournalEntriesById()).filter(([, entry]) => entry.entry_date <= asOfDate),
+  );
+  const lines = readJournalLines().filter((line) => entriesById.has(line.journal_entry_id));
+
+  const rows: TrialBalanceRow[] = [];
+  for (const account of accounts) {
+    const accountLines = lines.filter((line) => line.account_id === account.id);
+    const debitMinor = sumMinor(accountLines.map((line) => line.debit_minor));
+    const creditMinor = sumMinor(accountLines.map((line) => line.credit_minor));
+    if (!includeZeroBalances && debitMinor === 0 && creditMinor === 0) continue;
+    const { endingDebitMinor, endingCreditMinor } = splitEndingBalance(debitMinor, creditMinor);
+    rows.push({
+      accountId: account.id,
+      accountNumber: account.account_number,
+      accountName: account.name,
+      accountType: account.account_type,
+      normalBalance: account.normal_balance,
+      isArchived: account.archived_at !== null,
+      debitMinor,
+      creditMinor,
+      endingDebitMinor,
+      endingCreditMinor,
+    });
+  }
+  rows.sort((a, b) => a.accountNumber - b.accountNumber);
+
+  const { isBalanced, totalEndingDebitMinor, totalEndingCreditMinor } = validateTrialBalance(rows);
+
+  return { workspaceId: CURRENT_WORKSPACE_ID, generatedAt: nowIso(), asOfDate, rows, totalEndingDebitMinor, totalEndingCreditMinor, isBalanced };
+}
+
+const INCOME_STATEMENT_ACCOUNT_TYPES = new Set([
+  "revenue",
+  "contra_revenue",
+  "cost_of_goods_sold",
+  "operating_expense",
+  "other_income",
+  "other_expense",
+]);
+
+async function getProfitAndLossReport(filters: ProfitAndLossReportFilters): Promise<ProfitAndLossReport> {
+  const { startDate, endDate, comparison } = filters;
+  if (!startDate || !endDate) {
+    throw new Error("A start date and end date are required.");
+  }
+  if (endDate < startDate) {
+    throw new Error("End date must not be before start date.");
+  }
+  if (comparison && comparison.endDate < comparison.startDate) {
+    throw new Error("Comparison end date must not be before comparison start date.");
+  }
+
+  const accounts = readChartOfAccounts()
+    .filter((account) => account.workspace_id === CURRENT_WORKSPACE_ID)
+    .filter((account) => INCOME_STATEMENT_ACCOUNT_TYPES.has(account.account_type));
+  const entriesById = postedJournalEntriesById();
+  const lines = readJournalLines().filter((line) => entriesById.has(line.journal_entry_id));
+
+  const movements = accounts.map((account) => {
+    const accountLines = lines
+      .filter((line) => line.account_id === account.id)
+      .map((line) => ({ line, entry: entriesById.get(line.journal_entry_id)! }));
+
+    const inCurrentRange = accountLines.filter((x) => x.entry.entry_date >= startDate && x.entry.entry_date <= endDate);
+    const inComparisonRange = comparison
+      ? accountLines.filter((x) => x.entry.entry_date >= comparison.startDate && x.entry.entry_date <= comparison.endDate)
+      : [];
+
+    return {
+      accountId: account.id,
+      accountNumber: account.account_number,
+      accountName: account.name,
+      accountType: account.account_type,
+      normalBalance: account.normal_balance,
+      currentDebitMinor: sumMinor(inCurrentRange.map((x) => x.line.debit_minor)),
+      currentCreditMinor: sumMinor(inCurrentRange.map((x) => x.line.credit_minor)),
+      comparisonDebitMinor: sumMinor(inComparisonRange.map((x) => x.line.debit_minor)),
+      comparisonCreditMinor: sumMinor(inComparisonRange.map((x) => x.line.credit_minor)),
+    };
+  });
+
+  const { sections, netIncomeMinor, comparisonNetIncomeMinor } = buildProfitAndLossSections(movements, !!comparison);
+
+  return {
+    workspaceId: CURRENT_WORKSPACE_ID,
+    generatedAt: nowIso(),
+    startDate,
+    endDate,
+    comparisonStartDate: comparison?.startDate ?? null,
+    comparisonEndDate: comparison?.endDate ?? null,
+    sections,
+    netIncomeMinor,
+    comparisonNetIncomeMinor,
+  };
+}
+
+const BALANCE_SHEET_ACCOUNT_TYPES = new Set(["asset", "liability", "equity"]);
+
+async function getBalanceSheetReport(filters: BalanceSheetReportFilters): Promise<BalanceSheetReport> {
+  const { asOfDate } = filters;
+  if (!asOfDate) {
+    throw new Error("An as-of date is required.");
+  }
+
+  const allAccounts = readChartOfAccounts().filter((account) => account.workspace_id === CURRENT_WORKSPACE_ID);
+  const entriesById = new Map(
+    Array.from(postedJournalEntriesById()).filter(([, entry]) => entry.entry_date <= asOfDate),
+  );
+  const lines = readJournalLines().filter((line) => entriesById.has(line.journal_entry_id));
+
+  const currentPeriodEarningsMinor = lines
+    .filter((line) => {
+      const account = allAccounts.find((a) => a.id === line.account_id);
+      return account && INCOME_STATEMENT_ACCOUNT_TYPES.has(account.account_type);
+    })
+    .reduce((sum, line) => sum + (line.credit_minor - line.debit_minor), 0);
+
+  const balanceSheetAccounts = allAccounts.filter((account) => BALANCE_SHEET_ACCOUNT_TYPES.has(account.account_type));
+  const balances = balanceSheetAccounts.map((account) => {
+    const accountLines = lines.filter((line) => line.account_id === account.id);
+    return {
+      accountId: account.id,
+      accountNumber: account.account_number,
+      accountName: account.name,
+      accountType: account.account_type,
+      parentAccountId: account.parent_account_id,
+      closingBalanceMinor: accountLines.reduce(
+        (sum, line) => sum + calculateNormalBalance(account.normal_balance, line.debit_minor, line.credit_minor),
+        0,
+      ),
+    };
+  });
+
+  const { sections, totalAssetsMinor, totalLiabilitiesMinor, totalEquityMinor } = buildBalanceSheetSections(
+    balances,
+    currentPeriodEarningsMinor,
+  );
+
+  return {
+    workspaceId: CURRENT_WORKSPACE_ID,
+    generatedAt: nowIso(),
+    asOfDate,
+    sections,
+    totalAssetsMinor,
+    totalLiabilitiesMinor,
+    totalEquityMinor,
+    currentPeriodEarningsMinor,
+    isBalanced: validateAccountingEquation(totalAssetsMinor, totalLiabilitiesMinor, totalEquityMinor),
+  };
+}
+
 export const mockFinanceRepository: FinanceRepository = {
   getInvoices,
   getInvoiceById,
@@ -1826,4 +2105,8 @@ export const mockFinanceRepository: FinanceRepository = {
   createAccountingPeriod,
   closeAccountingPeriod,
   lockAccountingPeriod,
+  getGeneralLedgerReport,
+  getTrialBalanceReport,
+  getProfitAndLossReport,
+  getBalanceSheetReport,
 };
