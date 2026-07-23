@@ -23,9 +23,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function migrations, in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases migrations, in chronological (execution) order", () => {
     const files = migrationFiles();
-    expect(files).toHaveLength(103);
+    expect(files).toHaveLength(110);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -596,5 +596,147 @@ describe("Inventory Supabase Repository phase migration", () => {
     expect(sql).toMatch(/insert into public\.timeline_activities/);
     expect(sql).not.toMatch(/update public\.inventory_movements/);
     expect(sql).not.toMatch(/delete from public\.inventory_movements/);
+  });
+});
+
+describe("Purchases migrations", () => {
+  it("creates purchases with a status CHECK, an exact total-consistency CHECK, and no float money columns", () => {
+    const sql = readMigration("20260801100000_purchases.sql");
+    const code = stripSqlComments(sql);
+    expect(sql).toMatch(/create table if not exists public\.purchases/);
+    expect(sql).toMatch(
+      /constraint purchases_status_check check \(\s*status in \('draft', 'submitted', 'partially_received', 'fully_received', 'cancelled', 'archived'\)\s*\)/,
+    );
+    expect(sql).toMatch(
+      /constraint purchases_total_consistency_check check \(\s*total_minor = subtotal_minor \+ tax_minor \+ shipping_minor - discount_minor\s*\)/,
+    );
+    expect(sql).toMatch(/vendor_id uuid not null references public\.vendors \(id\)/);
+    expect(sql).toMatch(/created_by text not null/);
+    expect(code).not.toMatch(/\bfloat\b|\bnumeric\b|\breal\b|\bdouble precision\b/i);
+    for (const column of ["subtotal_minor", "tax_minor", "shipping_minor", "discount_minor", "total_minor"]) {
+      expect(sql).toMatch(new RegExp(`${column} integer`));
+    }
+  });
+
+  it("does not encode the full status transition graph as a CHECK constraint — only a single status IN-list constraint exists", () => {
+    const sql = stripSqlComments(readMigration("20260801100000_purchases.sql"));
+    const statusConstraints = sql.match(/constraint \w*status\w*_check/g) ?? [];
+    expect(statusConstraints).toEqual(["constraint purchases_status_check"]);
+    expect(sql).not.toMatch(/->|=>|transition/i);
+  });
+
+  it("creates purchase_items with a purchase_id cascade FK, a nullable inventory_item_id set-null FK, and quantity/line-subtotal CHECKs", () => {
+    const sql = readMigration("20260801100100_purchase_items.sql");
+    const code = stripSqlComments(sql);
+    expect(sql).toMatch(/create table if not exists public\.purchase_items/);
+    expect(sql).toMatch(/purchase_id uuid not null references public\.purchases \(id\) on delete cascade/);
+    expect(sql).toMatch(/inventory_item_id uuid references public\.inventory_items \(id\) on delete set null/);
+    expect(sql).toMatch(/constraint purchase_items_quantity_ordered_check check \(quantity_ordered > 0\)/);
+    expect(sql).toMatch(
+      /constraint purchase_items_quantity_received_check check \(\s*quantity_received >= 0 and quantity_received <= quantity_ordered\s*\)/,
+    );
+    expect(sql).toMatch(
+      /constraint purchase_items_line_subtotal_consistency_check check \(\s*line_subtotal_minor = unit_cost_minor \* quantity_ordered\s*\)/,
+    );
+    expect(code).not.toMatch(/\bfloat\b|\bnumeric\b|\breal\b|\bdouble precision\b/i);
+  });
+
+  it("widens notes/timeline_activities/media_assets owner_type to add purchase, preserving every prior value, without adding purchase_item as a Core owner type", () => {
+    const sql = readMigration("20260801100200_notes_timeline_media_purchase_owner_type.sql");
+    const code = stripSqlComments(sql);
+    for (const priorOwnerType of [
+      "lead",
+      "client",
+      "event",
+      "contract",
+      "invoice",
+      "payment",
+      "expense",
+      "document",
+      "document_folder",
+      "inventory_item",
+      "vendor",
+    ]) {
+      expect(sql).toMatch(new RegExp(`'${priorOwnerType}'`));
+    }
+    expect(sql).toMatch(/'purchase'/);
+    expect(code).not.toMatch(/'purchase_item'/);
+    for (const activityType of [
+      "purchase_created",
+      "purchase_updated",
+      "purchase_status_changed",
+      "purchase_archived",
+      "purchase_restored",
+      "purchase_item_added",
+      "purchase_item_updated",
+      "purchase_item_removed",
+      "purchase_item_received",
+    ]) {
+      expect(sql).toMatch(new RegExp(activityType));
+    }
+    expect(sql).toMatch(/alter table public\.media_assets drop constraint media_assets_owner_type_check/);
+  });
+
+  it("attaches the shared updated_at trigger to both purchases and purchase_items", () => {
+    const sql = readMigration("20260801100300_purchases_updated_at_triggers.sql");
+    expect(sql).toMatch(/before update on public\.purchases\b/);
+    expect(sql).toMatch(/before update on public\.purchase_items/);
+    expect(sql.match(/execute function public\.set_updated_at\(\)/g)).toHaveLength(2);
+  });
+
+  it("gives purchases select/insert/update policies but no delete policy", () => {
+    const sql = readMigration("20260801100400_purchases_rls.sql");
+    expect(sql).toMatch(/alter table public\.purchases enable row level security/);
+    expect(sql).toMatch(/for select/);
+    expect(sql).toMatch(/for insert/);
+    expect(sql).toMatch(/for update/);
+    expect(sql).not.toMatch(/for delete/);
+    for (const block of sql.split(/create policy/i).slice(1)) {
+      expect(block).toMatch(/is_workspace_member\(workspace_id\)/);
+    }
+  });
+
+  it("gives purchase_items select/insert/update/delete policies, since removePurchaseItem is a real hard delete", () => {
+    const sql = readMigration("20260801100500_purchase_items_rls.sql");
+    expect(sql).toMatch(/alter table public\.purchase_items enable row level security/);
+    expect(sql).toMatch(/for select/);
+    expect(sql).toMatch(/for insert/);
+    expect(sql).toMatch(/for update/);
+    expect(sql).toMatch(/for delete/);
+    for (const block of sql.split(/create policy/i).slice(1)) {
+      expect(block).toMatch(/is_workspace_member\(workspace_id\)/);
+    }
+  });
+
+  it("never uses a bare permissive `using (true)` policy across the new Purchases RLS migrations", () => {
+    for (const file of ["20260801100400_purchases_rls.sql", "20260801100500_purchase_items_rls.sql"]) {
+      expect(stripSqlComments(readMigration(file))).not.toMatch(/using\s*\(\s*true\s*\)/i);
+    }
+  });
+
+  it("indexes purchases/purchase_items and enforces workspace-scoped purchase_number uniqueness across all rows, including archived ones", () => {
+    const sql = readMigration("20260801100600_purchases_indexes_and_constraints.sql");
+    expect(sql).toMatch(
+      /create unique index if not exists purchases_workspace_number_unique\s*\n\s*on public\.purchases \(workspace_id, purchase_number\);/,
+    );
+    expect(stripSqlComments(sql)).not.toMatch(/purchases_workspace_number_unique[\s\S]*where/);
+    expect(sql).toMatch(/purchases_workspace_vendor_idx/);
+    expect(sql).toMatch(/purchase_items_purchase_id_display_order_idx/);
+  });
+
+  it("does not create any receiving RPC function in this phase", () => {
+    const files = migrationFiles().filter((f) => f.startsWith("20260801"));
+    for (const file of files) {
+      const sql = stripSqlComments(readMigration(file));
+      expect(sql).not.toMatch(/create (or replace )?function/i);
+    }
+  });
+
+  it("does not touch any Finance table (invoices/payments/expenses)", () => {
+    const files = migrationFiles().filter((f) => f.startsWith("20260801"));
+    for (const file of files) {
+      const sql = stripSqlComments(readMigration(file));
+      expect(sql).not.toMatch(/\b(invoices|payments|expenses)\b/);
+    }
   });
 });
