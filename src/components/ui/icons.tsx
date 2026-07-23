@@ -15,6 +15,7 @@ import {
   Handshake,
   Package,
   Truck,
+  ShoppingCart,
   Wrench,
   Sparkles,
   Settings,
@@ -78,6 +79,10 @@ export function InventoryIcon(props: IconProps) {
 
 export function VendorsIcon(props: IconProps) {
   return <Truck strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+export function PurchasesIcon(props: IconProps) {
+  return <ShoppingCart strokeWidth={2} aria-hidden="true" {...props} />;
 }
 
 export function ServicesIcon(props: IconProps) {

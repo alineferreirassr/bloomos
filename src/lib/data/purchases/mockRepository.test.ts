@@ -629,11 +629,11 @@ describe("Core integration — EntityType and Search", () => {
     expect(ENTITY_TYPES).toContain("purchase");
   });
 
-  it("registers purchase as a searchable entity with no route yet", () => {
+  it("registers purchase as a searchable entity with a route", () => {
     registerDefaultSearchableEntities();
     expect(isEntitySearchable("purchase")).toBe(true);
     const config = getSearchableEntityConfig("purchase");
     expect(config?.label).toBe("Purchase");
-    expect(config?.route).toBeUndefined();
+    expect(config?.route?.("purchase_1")).toBe("/purchases/purchase_1");
   });
 });

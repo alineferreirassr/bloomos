@@ -21,6 +21,6 @@ export function registerDefaultSearchableEntities(): void {
   registerSearchableEntity({ entityType: "inventory_item", label: "Inventory Item", module: "Inventory" });
   registerSearchableEntity({ entityType: "vendor", label: "Vendor", module: "Vendors" });
 
-  // Purchases Foundation phase — domain/repository only, no route yet (same reserved-ahead-of-shipping precedent).
-  registerSearchableEntity({ entityType: "purchase", label: "Purchase", module: "Purchases" });
+  // Purchases UI Foundation phase — the module now has a live route.
+  registerSearchableEntity({ entityType: "purchase", label: "Purchase", module: "Purchases", route: (id) => `/purchases/${id}` });
 }
