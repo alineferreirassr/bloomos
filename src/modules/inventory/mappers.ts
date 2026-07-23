@@ -22,6 +22,7 @@ export function inventoryItemToFormInput(item: InventoryItem): InventoryItemForm
     rental_value: item.rental_value === null ? "" : String(minorToMajor(item.rental_value)),
     storage_location: item.storage_location ?? "",
     bin_location: item.bin_location ?? "",
+    primary_vendor_id: item.primary_vendor_id ?? "",
     purchase_date: item.purchase_date ?? "",
     notes: item.notes ?? "",
     initial_quantity: "0",

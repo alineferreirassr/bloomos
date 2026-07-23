@@ -108,7 +108,7 @@ async function insertTimelineActivity(
 
 async function listInventoryItems(filters: InventoryItemFilters = {}): Promise<InventoryItem[]> {
   const session = await requireWorkspaceSession();
-  const { search, status, category, itemType, condition, includeArchived = false } = filters;
+  const { search, status, category, itemType, condition, includeArchived = false, primaryVendorId } = filters;
 
   const supabase = createSupabaseClient();
   let query = supabase.from("inventory_items").select("*").eq("workspace_id", session.workspace.id);
@@ -127,6 +127,9 @@ async function listInventoryItems(filters: InventoryItemFilters = {}): Promise<I
   }
   if (condition && condition !== "all") {
     query = query.eq("condition", condition);
+  }
+  if (primaryVendorId) {
+    query = query.eq("primary_vendor_id", primaryVendorId);
   }
 
   const { data, error } = await query.order("created_at", { ascending: false });

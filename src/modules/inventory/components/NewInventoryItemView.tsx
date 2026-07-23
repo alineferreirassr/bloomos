@@ -38,7 +38,7 @@ export function NewInventoryItemView() {
               rental_value: values.rental_value === "" ? null : majorToMinor(Number(values.rental_value)),
               storage_location: values.storage_location || null,
               bin_location: values.bin_location || null,
-              primary_vendor_id: null,
+              primary_vendor_id: values.primary_vendor_id || null,
               purchase_date: values.purchase_date || null,
               notes: values.notes || null,
               image_url: null,

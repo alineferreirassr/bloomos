@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { InventoryItemDetailView } from "@/modules/inventory/components/InventoryItemDetailView";
 import { makeInventoryItem } from "@/modules/inventory/testUtils";
+import { makeVendor } from "@/modules/vendors/testUtils";
 import { NotFoundError } from "@/core/errors";
 
 vi.mock("next/navigation", () => ({
@@ -24,6 +25,7 @@ vi.mock("@/lib/data", () => ({
   getMediaAssetDownloadUrl: vi.fn(),
   deleteMediaAsset: vi.fn(),
   restoreMediaAsset: vi.fn(),
+  getVendorById: vi.fn(),
 }));
 
 import * as dataLayer from "@/lib/data";
@@ -118,5 +120,42 @@ describe("InventoryItemDetailView", () => {
     expect(screen.getByRole("heading", { name: "Timeline" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Documents" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Movement history" })).toBeInTheDocument();
+  });
+
+  it("shows the linked vendor's name, company, status, and a link to its detail page", async () => {
+    vi.mocked(dataLayer.getInventoryItem).mockResolvedValue(makeInventoryItem({ primary_vendor_id: "vendor_1" }));
+    vi.mocked(dataLayer.getVendorById).mockResolvedValue(
+      makeVendor({ id: "vendor_1", company_name: "Bloom & Stem Florals", display_name: "Bloom & Stem", status: "active" }),
+    );
+
+    render(<InventoryItemDetailView inventoryItemId="item-1" />);
+    await screen.findByRole("heading", { name: "Ivory Taper Candle" });
+
+    const link = await screen.findByRole("link", { name: "Bloom & Stem Florals" });
+    expect(link).toHaveAttribute("href", "/vendors/vendor_1");
+    expect(screen.getByText("Bloom & Stem")).toBeInTheDocument();
+    expect(screen.getAllByText("Active").length).toBeGreaterThan(0);
+    expect(dataLayer.getVendorById).toHaveBeenCalledWith("vendor_1");
+  });
+
+  it('shows "No Vendor assigned." when the item has no linked vendor', async () => {
+    vi.mocked(dataLayer.getInventoryItem).mockResolvedValue(makeInventoryItem({ primary_vendor_id: null }));
+
+    render(<InventoryItemDetailView inventoryItemId="item-1" />);
+    await screen.findByRole("heading", { name: "Ivory Taper Candle" });
+
+    expect(await screen.findByText("No Vendor assigned.")).toBeInTheDocument();
+    expect(dataLayer.getVendorById).not.toHaveBeenCalled();
+  });
+
+  it("shows a retryable error state when the linked vendor fails to load", async () => {
+    vi.mocked(dataLayer.getInventoryItem).mockResolvedValue(makeInventoryItem({ primary_vendor_id: "vendor_1" }));
+    vi.mocked(dataLayer.getVendorById).mockRejectedValue(new Error("boom"));
+
+    render(<InventoryItemDetailView inventoryItemId="item-1" />);
+    await screen.findByRole("heading", { name: "Ivory Taper Candle" });
+
+    expect(await screen.findByText(/could not load the linked vendor/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
   });
 });

@@ -71,7 +71,7 @@ function findDuplicateSku(sku: string | null, excludeId?: string): boolean {
 
 async function listInventoryItems(filters: InventoryItemFilters = {}): Promise<InventoryItem[]> {
   await delay(200);
-  const { search, status, category, itemType, condition, includeArchived = false } = filters;
+  const { search, status, category, itemType, condition, includeArchived = false, primaryVendorId } = filters;
 
   return readInventoryItems().filter((item) => {
     if (item.workspace_id !== CURRENT_WORKSPACE_ID) return false;
@@ -80,6 +80,7 @@ async function listInventoryItems(filters: InventoryItemFilters = {}): Promise<I
     if (category && category !== "all" && item.category !== category) return false;
     if (itemType && itemType !== "all" && item.item_type !== itemType) return false;
     if (condition && condition !== "all" && item.condition !== condition) return false;
+    if (primaryVendorId && item.primary_vendor_id !== primaryVendorId) return false;
     if (search) {
       const q = search.trim().toLowerCase();
       if (q) {

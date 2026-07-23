@@ -13,8 +13,10 @@ import { Button } from "@/components/ui/Button";
 import { TagsInput } from "@/modules/vendors/components/TagsInput";
 import { INVENTORY_ITEM_TYPE_LABELS, INVENTORY_ITEM_TYPES, type InventoryItemType } from "@/core/enums/inventoryItemType";
 import { INVENTORY_CONDITION_LABELS, INVENTORY_CONDITIONS, type InventoryCondition } from "@/core/enums/inventoryCondition";
+import { getVendors } from "@/lib/data";
 import type { DataResult } from "@/lib/data/result";
 import type { InventoryItem } from "@/types/inventoryItem";
+import type { Vendor } from "@/types/vendor";
 
 const nonNegativeIntStringOrEmpty = z
   .string()
@@ -38,9 +40,12 @@ const moneyStringOrEmpty = z
  * Quantity fields (quantity_on_hand/available/reserved) are deliberately
  * absent — they're movement-controlled only, never edited through this
  * form, matching the repository contract's own invariant.
- * `primary_vendor_id`/`image_url` are also absent: no Vendor integration
- * exists yet this phase, and image upload isn't part of this checkpoint —
- * both are submitted as `null` by the calling View.
+ * `image_url` is also absent — image upload isn't part of this checkpoint,
+ * submitted as `null` by the calling View. `primary_vendor_id` IS present
+ * (added for the Inventory↔Vendor integration phase) as a plain string —
+ * `""` means "no vendor", matching every other relationship-select in the
+ * codebase (ExpenseForm's client_id/event_id/contract_id, InvoiceForm's,
+ * etc.), never `null` for the same reason those fields aren't `null` either.
  */
 const inventoryItemFormSchema = z
   .object({
@@ -61,6 +66,7 @@ const inventoryItemFormSchema = z
     rental_value: moneyStringOrEmpty,
     storage_location: z.string().trim(),
     bin_location: z.string().trim(),
+    primary_vendor_id: z.string(),
     purchase_date: z.string().trim(),
     notes: z.string().trim(),
     initial_quantity: nonNegativeIntStringOrEmpty,
@@ -99,6 +105,7 @@ const emptyDefaults: InventoryItemFormValues = {
   rental_value: "",
   storage_location: "",
   bin_location: "",
+  primary_vendor_id: "",
   purchase_date: "",
   notes: "",
   initial_quantity: "0",
@@ -107,6 +114,9 @@ const emptyDefaults: InventoryItemFormValues = {
 export function InventoryItemForm({ defaultValues, onSubmit, submitLabel, cancelHref, showInitialQuantity }: InventoryItemFormProps) {
   const router = useRouter();
   const [formError, setFormError] = useState<string | null>(null);
+  const [vendors, setVendors] = useState<Vendor[] | null>(null);
+  const [vendorsError, setVendorsError] = useState(false);
+  const [vendorSearch, setVendorSearch] = useState("");
   const {
     register,
     handleSubmit,
@@ -126,6 +136,38 @@ export function InventoryItemForm({ defaultValues, onSubmit, submitLabel, cancel
       setValue("condition", "", { shouldDirty: false });
     }
   }, [itemType, setValue]);
+
+  // Same fix ExpenseForm/InvoiceForm apply for their cascading selects: an
+  // uncontrolled <select>'s defaultValue is only applied against whatever
+  // <option>s exist at mount. Vendors arrive after mount, so a pre-selected
+  // vendor_id (edit mode) would silently revert to "" once the fetch was
+  // the *last* thing to render — re-apply it explicitly once options exist.
+  useEffect(() => {
+    if (vendors && defaultValues?.primary_vendor_id) {
+      setValue("primary_vendor_id", defaultValues.primary_vendor_id, { shouldDirty: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendors]);
+
+  // Same shape as ExpenseForm/InvoiceForm's Client select: fetch the full
+  // (non-archived) list once on mount into local state, render it as plain
+  // <option>s — no searchable-combobox component exists anywhere in this
+  // codebase to reuse, so a live-filtered <Select> stays the smallest
+  // consistent implementation rather than inventing one. `vendorSearch`
+  // narrows the rendered <option> list client-side; it never re-fetches.
+  useEffect(() => {
+    let cancelled = false;
+    getVendors({ includeArchived: false })
+      .then((result) => {
+        if (!cancelled) setVendors(result);
+      })
+      .catch(() => {
+        if (!cancelled) setVendorsError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isDirty) return;
@@ -254,6 +296,46 @@ export function InventoryItemForm({ defaultValues, onSubmit, submitLabel, cancel
             <Input id="bin_location" invalid={!!errors.bin_location} {...register("bin_location")} />
           </FormField>
         </div>
+      </section>
+
+      <section>
+        <h3 className="text-sm font-semibold text-text">Vendor</h3>
+        <p className="mt-1 text-xs text-text-muted">Optional — the supplier this item is usually purchased from.</p>
+        <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <FormField label="Search vendors" htmlFor="vendor_search" hint="Filters the list below">
+            <Input
+              id="vendor_search"
+              value={vendorSearch}
+              onChange={(event) => setVendorSearch(event.target.value)}
+              placeholder="Search by company or display name…"
+              disabled={!vendors}
+            />
+          </FormField>
+          <FormField label="Vendor" htmlFor="primary_vendor_id" error={errors.primary_vendor_id?.message}>
+            <Select id="primary_vendor_id" invalid={!!errors.primary_vendor_id} disabled={!vendors} {...register("primary_vendor_id")}>
+              <option value="">{vendors ? "No vendor assigned" : "Loading vendors…"}</option>
+              {vendors
+                ?.filter((vendor) => {
+                  const q = vendorSearch.trim().toLowerCase();
+                  if (!q) return true;
+                  return `${vendor.company_name} ${vendor.display_name ?? ""}`.toLowerCase().includes(q);
+                })
+                .map((vendor) => (
+                  <option key={vendor.id} value={vendor.id}>
+                    {vendor.company_name}
+                    {vendor.display_name ? ` (${vendor.display_name})` : ""}
+                  </option>
+                ))}
+            </Select>
+          </FormField>
+        </div>
+        {vendorsError ? (
+          <p role="alert" className="mt-2 text-sm text-danger">
+            Could not load vendors. You can still save this item without a vendor.
+          </p>
+        ) : vendors && vendors.length === 0 ? (
+          <p className="mt-2 text-xs text-text-muted">No vendors exist yet.</p>
+        ) : null}
       </section>
 
       <section>

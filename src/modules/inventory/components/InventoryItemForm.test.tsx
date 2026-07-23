@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { InventoryItemForm } from "@/modules/inventory/components/InventoryItemForm";
 import { makeInventoryItem } from "@/modules/inventory/testUtils";
@@ -7,8 +7,18 @@ import { makeInventoryItem } from "@/modules/inventory/testUtils";
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
+vi.mock("@/lib/data", () => ({
+  getVendors: vi.fn(),
+}));
+
+import * as dataLayer from "@/lib/data";
 
 describe("InventoryItemForm", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(dataLayer.getVendors).mockResolvedValue([]);
+  });
+
   it("shows a validation error for a missing name and does not submit", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
@@ -115,5 +125,62 @@ describe("InventoryItemForm", () => {
 
     expect(screen.getByRole("button", { name: /saving/i })).toBeDisabled();
     resolveSubmit({ success: true, data: makeInventoryItem() });
+  });
+
+  it("looks up vendors on mount and lists them in the picker", async () => {
+    vi.mocked(dataLayer.getVendors).mockResolvedValue([
+      { id: "vendor_1", company_name: "Bloom & Stem Florals", display_name: null } as never,
+      { id: "vendor_2", company_name: "Petal Co", display_name: "Petal" } as never,
+    ]);
+    render(<InventoryItemForm submitLabel="Create Item" cancelHref="/inventory" onSubmit={vi.fn()} />);
+
+    expect(await screen.findByRole("option", { name: "Bloom & Stem Florals" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Petal Co (Petal)" })).toBeInTheDocument();
+    expect(dataLayer.getVendors).toHaveBeenCalledWith({ includeArchived: false });
+  });
+
+  it("selects a vendor and submits its id as primary_vendor_id", async () => {
+    const user = userEvent.setup();
+    vi.mocked(dataLayer.getVendors).mockResolvedValue([{ id: "vendor_1", company_name: "Bloom & Stem Florals", display_name: null } as never]);
+    const onSubmit = vi.fn().mockResolvedValue({ success: true, data: makeInventoryItem() });
+    render(<InventoryItemForm submitLabel="Create Item" cancelHref="/inventory" onSubmit={onSubmit} />);
+
+    await screen.findByRole("option", { name: "Bloom & Stem Florals" });
+    await user.type(screen.getByLabelText(/^name/i), "Ivory Taper Candle");
+    await user.selectOptions(screen.getByLabelText(/^vendor$/i), "vendor_1");
+    await user.click(screen.getByRole("button", { name: /create item/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ primary_vendor_id: "vendor_1" })));
+  });
+
+  it("clears a selected vendor back to none", async () => {
+    const user = userEvent.setup();
+    vi.mocked(dataLayer.getVendors).mockResolvedValue([{ id: "vendor_1", company_name: "Bloom & Stem Florals", display_name: null } as never]);
+    const onSubmit = vi.fn().mockResolvedValue({ success: true, data: makeInventoryItem() });
+    render(
+      <InventoryItemForm
+        submitLabel="Save changes"
+        cancelHref="/inventory"
+        onSubmit={onSubmit}
+        defaultValues={{ primary_vendor_id: "vendor_1" }}
+      />,
+    );
+
+    await screen.findByRole("option", { name: "Bloom & Stem Florals" });
+    expect(screen.getByLabelText(/^vendor$/i)).toHaveValue("vendor_1");
+
+    await user.selectOptions(screen.getByLabelText(/^vendor$/i), "");
+    await user.type(screen.getByLabelText(/^name/i), "Ivory Taper Candle");
+    await user.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ primary_vendor_id: "" })));
+  });
+
+  it("shows an inline error but keeps the form usable when vendors fail to load", async () => {
+    vi.mocked(dataLayer.getVendors).mockRejectedValue(new Error("boom"));
+    render(<InventoryItemForm submitLabel="Create Item" cancelHref="/inventory" onSubmit={vi.fn()} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/could not load vendors/i);
+    expect(screen.getByLabelText(/^vendor$/i)).toBeDisabled();
   });
 });

@@ -18,6 +18,7 @@ import { InventoryNotesSection } from "@/modules/inventory/components/InventoryN
 import { InventoryDocumentsSection } from "@/modules/inventory/components/InventoryDocumentsSection";
 import { InventoryMovementActionsSection } from "@/modules/inventory/components/InventoryMovementActionsSection";
 import { InventoryMovementHistorySection } from "@/modules/inventory/components/InventoryMovementHistorySection";
+import { InventoryItemVendorSection } from "@/modules/inventory/components/InventoryItemVendorSection";
 import { formatInventoryDate } from "@/modules/inventory/mappers";
 import { isInventoryItemLowStock } from "@/modules/inventory/inventoryStats";
 
@@ -160,6 +161,13 @@ export function InventoryItemDetailView({ inventoryItemId }: { inventoryItemId: 
               <Field label="Storage location" value={item.storage_location} />
               <Field label="Bin location" value={item.bin_location} />
             </dl>
+          </Card>
+
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Vendor</h3>
+            <div className="mt-3">
+              <InventoryItemVendorSection vendorId={item.primary_vendor_id} />
+            </div>
           </Card>
 
           <Card>

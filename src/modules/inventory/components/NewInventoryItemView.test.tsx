@@ -10,6 +10,7 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/data", () => ({
   createInventoryItem: vi.fn(),
+  getVendors: vi.fn(),
 }));
 
 import * as dataLayer from "@/lib/data";
@@ -17,6 +18,7 @@ import * as dataLayer from "@/lib/data";
 describe("NewInventoryItemView", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(dataLayer.getVendors).mockResolvedValue([]);
   });
 
   it("creates the item with the entered initial quantity and navigates to its detail page", async () => {

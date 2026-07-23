@@ -16,6 +16,8 @@ export interface InventoryItemFilters {
   itemType?: InventoryItemType | "all";
   condition?: InventoryCondition | "all";
   includeArchived?: boolean;
+  /** Narrows to items whose primary_vendor_id matches — added for VendorInventorySection's reverse lookup ("items this Vendor supplies"), same generic-filter-on-the-existing-list-method pattern as clientId on EventFilters/ContractFilters. */
+  primaryVendorId?: string;
 }
 
 export interface InventoryAvailability {
