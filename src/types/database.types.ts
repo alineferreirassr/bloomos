@@ -1880,6 +1880,15 @@ export interface Database {
         };
         Returns: Database["public"]["Tables"]["inventory_movements"]["Row"];
       };
+      record_purchase_receipt: {
+        Args: {
+          p_purchase_item_id: string;
+          p_quantity_received: number;
+          p_reason: string | null;
+          p_actor: string;
+        };
+        Returns: Database["public"]["Tables"]["purchase_items"]["Row"];
+      };
       has_permission: {
         Args: { p_workspace_id: string; p_permission: string };
         Returns: boolean;

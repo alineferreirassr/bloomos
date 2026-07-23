@@ -1,6 +1,6 @@
 # Purchases
 
-**Status: schema ready, repository not yet migrated.** Types, workflow, mock repository, Core integration, and the live Supabase schema (`purchases`/`purchase_items` tables, RLS, indexes, triggers) all exist. `lib/data/purchases/supabaseRepository.ts` is still a throwing placeholder — no live Supabase repository, no UI, no navigation route yet. See `CHANGELOG.md` for the phase this shipped in.
+**Status: repository live, no UI yet.** Types, workflow, mock repository, Core integration, the live Supabase schema (`purchases`/`purchase_items` tables, RLS, indexes, triggers), the real Supabase repository, and the atomic `record_purchase_receipt` receiving RPC all exist. No UI, no navigation route yet. See `CHANGELOG.md` for the phase this shipped in.
 
 ## Domain model
 
@@ -72,7 +72,7 @@ Receiving a Purchase item linked to an Inventory item calls straight into the **
 - A non-inventory line (no `inventory_item_id`) simply updates its own `quantity_received` — there's nothing for Inventory to do.
 - After either path, the parent Purchase's subtotal/total/status are recomputed immediately (`recomputePurchaseAggregates`).
 
-**This Foundation phase never calls a live Supabase RPC** — `lib/data/purchases/mockRepository.ts` calls `mockInventoryRepository` directly (a peer mock repository, not the mode-selecting `@/lib/data` barrel, which would create a circular import). Once Purchases gets its own Supabase migration and repository, the equivalent call there will go through the real `record_inventory_movement` Postgres function the same way Inventory's own UI already does — that wiring is deferred, not designed differently.
+In mock mode, `lib/data/purchases/mockRepository.ts` calls `mockInventoryRepository` directly (a peer mock repository, not the mode-selecting `@/lib/data` barrel, which would create a circular import). In Supabase mode, the equivalent path goes through `record_purchase_receipt` — an atomic RPC that itself composes the existing `record_inventory_movement` function for an Inventory-linked line (see "Receiving RPC" below) — never a second Inventory movement implementation.
 
 ## Archive behavior
 
@@ -102,7 +102,31 @@ Seven migrations (`supabase/migrations/20260801100000` through `20260801100600`)
 
 **Search.** No database changes were needed or made — `core/search/` has no database-reading layer at all today (`nullSearchProvider` is the only registered `SearchProvider`, and it always returns `[]`); the TypeScript-side registration Purchases already has (`core/search/defaultRegistrations.ts`) is the entirety of Purchases' Search support until a real search backend exists.
 
-**Future receiving RPC.** No RPC was added this phase — `receivePurchaseItem` still routes through the mock repository. The schema as designed does not block a future atomic version: a `record_purchase_receipt`-style function (mirroring `record_inventory_movement`'s `security invoker`/row-locking/custom-error-code shape) could `select ... for update` both the target `purchases` row and `purchase_items` row, validate `status`/quantity via the same rules `purchaseWorkflow.ts` already encodes, call (or reproduce) `record_inventory_movement` for an Inventory-linked line, update `quantity_received`, recompute `subtotal_minor`/`total_minor`/`status`/`actual_received_date`, and insert one `timeline_activities` row — all inside one transaction, the same shape `create_document_version`/`recompute_invoice_balance`/`record_inventory_movement` already establish. Composing that RPC with the existing `record_inventory_movement` function safely (calling it from within another `security invoker` function, so the caller's own row-level permissions still apply end-to-end) appears straightforward given the two functions' matching `security invoker`/`set search_path = public` shape — no architectural obstacle was found. Building it is deferred to the Supabase repository implementation phase, not attempted here.
+## Receiving RPC
+
+`record_purchase_receipt` (`supabase/migrations/20260802100000_purchases_record_receipt_function.sql`) is the atomic, row-locked implementation of receiving — it replaced an earlier Supabase repository version of `receivePurchaseItem` that performed the Inventory movement call, the `purchase_items` update, and the `purchases` aggregate recompute as three separate, non-atomic network round-trips (a disclosed concurrency gap: two concurrent receipts against different items of the same Purchase could race on the final aggregate write).
+
+**Composition, not duplication.** `record_purchase_receipt` calls `record_inventory_movement` directly — a plain PL/pgSQL function call, not a second HTTP round-trip — for an Inventory-linked line, rather than re-deriving that function's delta/quantity-invariant logic. A function call from within another `security invoker` function runs in the *same* transaction: the inner function's own `for update` lock on `inventory_items` is held for the lifetime of the outer transaction, and if `record_purchase_receipt` raises afterward, the inventory movement and everything else rolls back together. No PostgreSQL limitation forced a second implementation here.
+
+**Locking order:** `purchase_items` → `purchases` → `inventory_items` (the last acquired inside `record_inventory_movement`) — the natural dependency chain, since the item's `purchase_id` is needed before the purchase can be locked. No other function in this schema acquires these three locks in a different order, so this introduces no deadlock cycle. Locking the `purchases` row is what actually closes the concurrency gap: two concurrent receipts against different items of the same Purchase now serialize on that single row, so the aggregate recompute can never be based on a stale read.
+
+**Validation** (mirroring `purchaseWorkflow.ts`'s rules exactly): quantity must be positive; the purchase item (and, defensively, its parent purchase) must exist; the purchase must not be archived; the purchase's status must be `submitted` or `partially_received` (rejecting `draft`, `cancelled`, `fully_received`, and `archived` alike); the resulting `quantity_received` must not exceed `quantity_ordered`.
+
+**Workspace validation** is enforced structurally through RLS on the two `for update` selects (`purchase_items_update_workspace_member`/`purchases_update_workspace_member`) — the same no-explicit-workspace-parameter design `record_inventory_movement` itself already uses, never a separate `p_workspace_id` parameter.
+
+**Error codes** (scoped to this function; distinct from `record_inventory_movement`'s own P0001–P0004, which may still surface unmodified if the composed call fails, so a Purchase-level failure is never confused with an Inventory-level one):
+
+| Code | Meaning |
+|---|---|
+| P0005 | `quantity_received` not greater than zero |
+| P0006 | Purchase item (or its parent purchase) not found |
+| P0007 | Purchase is archived |
+| P0008 | Purchase is not in a receivable status |
+| P0009 | The receipt would exceed the line's `quantity_ordered` |
+
+**Effects, all in one transaction:** updates the line's `quantity_received`; recomputes `subtotal_minor`/`total_minor` from the current `purchase_items` ledger (exact-integer arithmetic, matching `computePurchaseSubtotal`/`computePurchaseTotal`); re-derives `status`/`actual_received_date` from the sum of every item's ordered/received quantities (matching `derivePurchaseReceiptStatus` exactly — a sum-of-all-items comparison, not a per-item check); inserts one `timeline_activities` row directly (the same "the RPC writes its own Timeline entry" convention `record_inventory_movement` already uses, not a call through Core's Timeline front door). Audit Log is not written by the RPC — it isn't a Supabase table — the Supabase repository still calls `getCoreAuditLogService().recordAuditEvent(...)` itself after a successful RPC call, deriving before/after quantities from the RPC's own return value.
+
+The Supabase repository's `receivePurchaseItem` is now a thin wrapper: parse input, call the RPC, map any of the codes above (or a forwarded P0001–P0004) to a `DataResult` failure, otherwise map the returned row and record the Audit entry. It performs no pre-validation of its own and never touches `purchase_items`/`purchases`/`timeline_activities` directly — that's the RPC's job now.
 
 ## Repository methods
 
@@ -118,7 +142,7 @@ Seven migrations (`supabase/migrations/20260801100000` through `20260801100600`)
 
 **Notes/Timeline** — `getTimelineByPurchaseId`, `getNotesByPurchaseId`, `createPurchaseNote`, `updatePurchaseNote`, `togglePurchaseNotePin` — included from this first Foundation phase (not deferred to a later "UI Foundation" pass, the way Inventory's original file didn't have them). Vendor's own repository shipped these from its very first commit, and that — not Inventory's original, later-amended file — is the current convention this codebase follows for a brand-new domain. All five delegate to Core's Timeline/Notes front doors (`getCoreTimelineService()`/`getCoreNotesService()`), never a Purchases-only store. There is deliberately no `deletePurchaseNote` — Notes are never deleted anywhere in this codebase.
 
-`lib/data/purchases/supabaseRepository.ts` is a typed placeholder that throws immediately (`notYetMigrated()`) rather than querying a table that doesn't exist or silently falling back to mock data in supabase mode — byte-for-byte the same pattern Inventory Foundation's own original placeholder used.
+`lib/data/purchases/supabaseRepository.ts` is now a real implementation, matching Inventory's/Vendor's own Supabase repository shape exactly — see "Database schema" and "Receiving RPC" above for the migration and RPC it depends on.
 
 ## Core integration
 
@@ -132,7 +156,6 @@ Seven migrations (`supabase/migrations/20260801100000` through `20260801100600`)
 ## What is intentionally deferred
 
 - **UI** — list/detail/create/edit views, receiving actions, receipt-history display, open/overdue dashboards. No route was added to `config/navigation.ts`.
-- **The real Supabase repository** — `lib/data/purchases/supabaseRepository.ts` is still a typed placeholder (`notYetMigrated()`) even though the schema it will query now exists live. Wiring it up — including `generate_purchase_number`, a real `receivePurchaseItem` implementation, and (optionally) the atomic receiving RPC sketched above — is its own future phase.
+- **`generate_purchase_number` RPC** — number generation still uses a client-side generate-and-retry-on-conflict loop (mirroring Finance's own `insertInvoiceWithGeneratedNumber`), not a dedicated Postgres function. Safe as-is; a future RPC is optional, not required.
 - **Finance integration** — Purchases are not connected to Expense tracking, Accounts Payable, or any accounting function. No approval workflows, departments, budgets, or warehouses exist anywhere in this domain — none of those concepts are present elsewhere in the project, so none were invented here.
-- **Live Inventory RPC call** — the mock repository calls `mockInventoryRepository` directly; the equivalent Supabase-mode call (through the real `record_inventory_movement` Postgres function, or a future composing `record_purchase_receipt`) is deferred to the Supabase repository phase.
 - **Bloom AI** — no AI integration of any kind this phase.

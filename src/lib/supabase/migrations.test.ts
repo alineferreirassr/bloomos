@@ -23,9 +23,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases migrations, in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function migrations, in chronological (execution) order", () => {
     const files = migrationFiles();
-    expect(files).toHaveLength(110);
+    expect(files).toHaveLength(111);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -738,5 +738,96 @@ describe("Purchases migrations", () => {
       const sql = stripSqlComments(readMigration(file));
       expect(sql).not.toMatch(/\b(invoices|payments|expenses)\b/);
     }
+  });
+});
+
+describe("Purchases Receiving RPC migration", () => {
+  it("defines record_purchase_receipt as security invoker with a pinned search_path, matching record_inventory_movement's approach rather than a new one", () => {
+    const sql = readMigration("20260802100000_purchases_record_receipt_function.sql");
+    expect(sql).toMatch(/create or replace function public\.record_purchase_receipt/);
+    expect(sql).toMatch(/security invoker/i);
+    expect(sql).toMatch(/set search_path = public/i);
+    expect(sql).toMatch(/returns public\.purchase_items/);
+  });
+
+  it("row-locks the purchase_items row, then the purchases row, before validating or writing anything", () => {
+    const sql = stripSqlComments(readMigration("20260802100000_purchases_record_receipt_function.sql"));
+    expect(sql).toMatch(/select \* into v_item from public\.purchase_items where id = p_purchase_item_id for update/);
+    expect(sql).toMatch(/select \* into v_purchase from public\.purchases where id = v_item\.purchase_id for update/);
+    const itemLockIndex = sql.indexOf("select * into v_item from public.purchase_items");
+    const purchaseLockIndex = sql.indexOf("select * into v_purchase from public.purchases");
+    expect(itemLockIndex).toBeGreaterThan(-1);
+    expect(purchaseLockIndex).toBeGreaterThan(itemLockIndex);
+  });
+
+  it("composes record_inventory_movement rather than re-deriving its delta/quantity-invariant logic", () => {
+    const sql = stripSqlComments(readMigration("20260802100000_purchases_record_receipt_function.sql"));
+    expect(sql).toMatch(/select public\.record_inventory_movement\(/);
+    expect(sql).not.toMatch(/quantity_on_hand|quantity_available|quantity_reserved/);
+  });
+
+  it("raises its own P0005-P0009 error codes, distinct from record_inventory_movement's P0001-P0004", () => {
+    const sql = readMigration("20260802100000_purchases_record_receipt_function.sql");
+    for (const errcode of ["P0005", "P0006", "P0007", "P0008", "P0009"]) {
+      expect(sql).toMatch(new RegExp(`errcode = '${errcode}'`));
+    }
+    for (const errcode of ["P0001", "P0002", "P0003", "P0004"]) {
+      expect(sql).not.toMatch(new RegExp(`errcode = '${errcode}'`));
+    }
+  });
+
+  it("rejects a purchase that is archived, not in a receivable status, or would be over-received, before writing anything", () => {
+    const sql = stripSqlComments(readMigration("20260802100000_purchases_record_receipt_function.sql"));
+    expect(sql).toMatch(/if v_purchase\.archived_at is not null then/);
+    expect(sql).toMatch(/if v_purchase\.status not in \('submitted', 'partially_received'\) then/);
+    expect(sql).toMatch(/if v_next_received > v_item\.quantity_ordered then/);
+  });
+
+  it("updates purchase_items and purchases and inserts exactly one timeline_activities row, never updating or deleting a prior movement or activity", () => {
+    const sql = stripSqlComments(readMigration("20260802100000_purchases_record_receipt_function.sql"));
+    expect(sql).toMatch(/update public\.purchase_items/);
+    expect(sql).toMatch(/update public\.purchases/);
+    expect(sql).toMatch(/insert into public\.timeline_activities/);
+    expect(sql).not.toMatch(/delete from public\./);
+    expect(sql.match(/insert into public\.timeline_activities/g)).toHaveLength(1);
+  });
+
+  it("recomputes totals as an exact sum over the current purchase_items ledger, matching computePurchaseSubtotal/computePurchaseTotal's arithmetic", () => {
+    const sql = stripSqlComments(readMigration("20260802100000_purchases_record_receipt_function.sql"));
+    expect(sql).toMatch(/coalesce\(sum\(line_subtotal_minor\), 0\)/);
+    expect(sql).toMatch(/v_total_minor := v_subtotal_minor \+ v_purchase\.tax_minor \+ v_purchase\.shipping_minor - v_purchase\.discount_minor/);
+  });
+
+  it("does not modify any Finance table", () => {
+    const sql = stripSqlComments(readMigration("20260802100000_purchases_record_receipt_function.sql"));
+    expect(sql).not.toMatch(/\b(invoices|payments|expenses)\b/);
+  });
+
+  it("derives partially_received vs fully_received from the sum of every item's ordered/received quantities, matching derivePurchaseReceiptStatus", () => {
+    const sql = stripSqlComments(readMigration("20260802100000_purchases_record_receipt_function.sql"));
+    expect(sql).toMatch(/if v_total_received >= v_total_ordered and v_total_ordered > 0 then/);
+    expect(sql).toMatch(/v_next_status := 'fully_received'/);
+    expect(sql).toMatch(/elsif v_total_received > 0 then/);
+    expect(sql).toMatch(/v_next_status := 'partially_received'/);
+  });
+
+  it("rejects receiving against a cancelled purchase (cancelled is not in the receivable-status allow-list)", () => {
+    const sql = stripSqlComments(readMigration("20260802100000_purchases_record_receipt_function.sql"));
+    const statusCheck = sql.match(/if v_purchase\.status not in \(([^)]*)\) then/);
+    expect(statusCheck).not.toBeNull();
+    expect(statusCheck?.[1]).not.toMatch(/cancelled/);
+  });
+
+  it("has no exception handler that would swallow a raised error and prevent the whole transaction from rolling back", () => {
+    const sql = stripSqlComments(readMigration("20260802100000_purchases_record_receipt_function.sql"));
+    expect(sql).not.toMatch(/exception\s+when/i);
+  });
+
+  it("locks the purchases row (serializing concurrent receipts against the same Purchase) before recomputing aggregates from the item ledger", () => {
+    const sql = stripSqlComments(readMigration("20260802100000_purchases_record_receipt_function.sql"));
+    const purchaseLockIndex = sql.indexOf("select * into v_purchase from public.purchases");
+    const recomputeIndex = sql.indexOf("coalesce(sum(line_subtotal_minor)");
+    expect(purchaseLockIndex).toBeGreaterThan(-1);
+    expect(recomputeIndex).toBeGreaterThan(purchaseLockIndex);
   });
 });

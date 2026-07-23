@@ -694,16 +694,9 @@ describe("supabasePurchasesRepository.removePurchaseItem", () => {
 });
 
 describe("supabasePurchasesRepository.receivePurchaseItem", () => {
-  it("calls record_inventory_movement for an Inventory-linked item, then updates quantity_received and recomputes totals", async () => {
-    const { client, rpcCalls } = createMockSupabase([
-      { data: purchaseItemRow({ inventory_item_id: "inv_1", quantity_ordered: 5 }), error: null }, // fetch item
-      { data: purchaseRow({ status: "submitted" }), error: null }, // fetch purchase
-      { data: { id: "movement_1" }, error: null }, // rpc
-      { data: purchaseItemRow({ inventory_item_id: "inv_1", quantity_ordered: 5, quantity_received: 1 }), error: null }, // update item
-      { data: purchaseRow({ status: "submitted" }), error: null }, // recompute: fetch purchase
-      { data: [purchaseItemRow({ inventory_item_id: "inv_1", quantity_ordered: 5, quantity_received: 1 })], error: null }, // recompute: fetch items
-      { data: purchaseRow({ status: "partially_received" }), error: null }, // recompute: update
-      { data: null, error: null }, // timeline insert
+  it("calls record_purchase_receipt exactly once and maps the returned row — no more direct purchase_items/purchases/timeline_activities calls", async () => {
+    const { client, calls, rpcCalls } = createMockSupabase([
+      { data: purchaseItemRow({ inventory_item_id: "inv_1", quantity_ordered: 5, quantity_received: 1 }), error: null }, // rpc
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
     mockSession();
@@ -713,60 +706,80 @@ describe("supabasePurchasesRepository.receivePurchaseItem", () => {
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.quantity_received).toBe(1);
     expect(rpcCalls).toHaveLength(1);
-    expect(rpcCalls[0].name).toBe("record_inventory_movement");
-    expect((rpcCalls[0].args as Record<string, unknown>).p_movement_type).toBe("purchase");
-    expect((rpcCalls[0].args as Record<string, unknown>).p_reference_type).toBe("purchase");
+    expect(rpcCalls[0].name).toBe("record_purchase_receipt");
+    expect((rpcCalls[0].args as Record<string, unknown>).p_purchase_item_id).toBe("purchase_item_1");
+    expect((rpcCalls[0].args as Record<string, unknown>).p_quantity_received).toBe(1);
+    expect(calls.some((c) => c.table === "purchase_items" || c.table === "purchases" || c.table === "timeline_activities")).toBe(false);
   });
 
-  it("skips the Inventory RPC entirely for a non-inventory line", async () => {
-    const { client, rpcCalls } = createMockSupabase([
-      { data: purchaseItemRow({ inventory_item_id: null, quantity_ordered: 5 }), error: null },
-      { data: purchaseRow({ status: "submitted" }), error: null },
-      { data: purchaseItemRow({ inventory_item_id: null, quantity_ordered: 5, quantity_received: 1 }), error: null },
-      { data: purchaseRow({ status: "submitted" }), error: null },
-      { data: [purchaseItemRow({ inventory_item_id: null, quantity_ordered: 5, quantity_received: 1 })], error: null },
-      { data: purchaseRow({ status: "partially_received" }), error: null },
-      { data: null, error: null },
+  it("passes the caller's reason through, or null when omitted", async () => {
+    const { client, rpcCalls } = createMockSupabase([{ data: purchaseItemRow({ quantity_received: 1 }), error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+    mockSession();
+
+    await supabasePurchasesRepository.receivePurchaseItem("purchase_item_1", { quantity_received: 1, reason: "Partial shipment" });
+
+    expect((rpcCalls[0].args as Record<string, unknown>).p_reason).toBe("Partial shipment");
+  });
+
+  it("rejects validation before ever calling the RPC for a non-positive quantity_received", async () => {
+    const { client, rpcCalls } = createMockSupabase([]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabasePurchasesRepository.receivePurchaseItem("purchase_item_1", { quantity_received: 0, reason: null });
+
+    expect(result.success).toBe(false);
+    expect(rpcCalls).toHaveLength(0);
+  });
+
+  it("converts a P0006 (not found) RPC failure into a DataResult failure without throwing", async () => {
+    const { client } = createMockSupabase([{ data: null, error: { code: "P0006", message: "Purchase item not found." } }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+    mockSession();
+
+    const result = await supabasePurchasesRepository.receivePurchaseItem("missing", RECEIVE_INPUT);
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toContain("not found");
+  });
+
+  it("converts a P0007 (archived purchase) RPC failure into a DataResult failure without throwing", async () => {
+    const { client } = createMockSupabase([{ data: null, error: { code: "P0007", message: "Archived purchases cannot receive stock." } }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+    mockSession();
+
+    const result = await supabasePurchasesRepository.receivePurchaseItem("purchase_item_1", RECEIVE_INPUT);
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toContain("Archived");
+  });
+
+  it("converts a P0008 (draft/cancelled/fully_received purchase) RPC failure into a DataResult failure without throwing", async () => {
+    const { client } = createMockSupabase([
+      { data: null, error: { code: "P0008", message: "This purchase cannot receive stock in its current status." } },
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
     mockSession();
 
     const result = await supabasePurchasesRepository.receivePurchaseItem("purchase_item_1", RECEIVE_INPUT);
 
-    expect(result.success).toBe(true);
-    expect(rpcCalls).toHaveLength(0);
-  });
-
-  it("rejects receiving against a draft purchase", async () => {
-    const { client, calls } = createMockSupabase([
-      { data: purchaseItemRow(), error: null },
-      { data: purchaseRow({ status: "draft" }), error: null },
-    ]);
-    vi.mocked(createClient).mockReturnValue(client as never);
-
-    const result = await supabasePurchasesRepository.receivePurchaseItem("purchase_item_1", RECEIVE_INPUT);
-
     expect(result.success).toBe(false);
-    expect(calls.some((c) => c.table === "purchase_items" && c.method === "update")).toBe(false);
   });
 
-  it("rejects an over-receipt (quantity_received would exceed quantity_ordered)", async () => {
-    const { client, calls } = createMockSupabase([
-      { data: purchaseItemRow({ quantity_ordered: 1, quantity_received: 1 }), error: null },
-      { data: purchaseRow({ status: "submitted" }), error: null },
-    ]);
-    vi.mocked(createClient).mockReturnValue(client as never);
-
-    const result = await supabasePurchasesRepository.receivePurchaseItem("purchase_item_1", RECEIVE_INPUT);
-
-    expect(result.success).toBe(false);
-    expect(calls.some((c) => c.method === "update")).toBe(false);
-  });
-
-  it("converts a P0003 (archived Inventory item) RPC failure into a DataResult failure without throwing", async () => {
+  it("converts a P0009 (over-receipt) RPC failure into a DataResult failure without throwing", async () => {
     const { client } = createMockSupabase([
-      { data: purchaseItemRow({ inventory_item_id: "inv_1" }), error: null },
-      { data: purchaseRow({ status: "submitted" }), error: null },
+      { data: null, error: { code: "P0009", message: "Quantity received cannot exceed quantity ordered." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+    mockSession();
+
+    const result = await supabasePurchasesRepository.receivePurchaseItem("purchase_item_1", RECEIVE_INPUT);
+
+    expect(result.success).toBe(false);
+  });
+
+  it("converts a P0003 (archived Inventory item) RPC failure — forwarded unchanged from the composed record_inventory_movement — into a DataResult failure without throwing", async () => {
+    const { client } = createMockSupabase([
       { data: null, error: { code: "P0003", message: "Archived inventory items cannot receive stock movements. Restore it first." } },
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
@@ -779,11 +792,7 @@ describe("supabasePurchasesRepository.receivePurchaseItem", () => {
   });
 
   it("throws (does not silently succeed) for an unrecognized RPC error code", async () => {
-    const { client } = createMockSupabase([
-      { data: purchaseItemRow({ inventory_item_id: "inv_1" }), error: null },
-      { data: purchaseRow({ status: "submitted" }), error: null },
-      { data: null, error: { code: "23503", message: "foreign key violation" } },
-    ]);
+    const { client } = createMockSupabase([{ data: null, error: { code: "23503", message: "foreign key violation" } }]);
     vi.mocked(createClient).mockReturnValue(client as never);
     mockSession();
 

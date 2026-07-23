@@ -14,8 +14,6 @@ import {
   canEditPurchase,
   canEditPurchaseItems,
   canRemovePurchaseItem,
-  canReceivePurchase,
-  validatePurchaseItemQuantities,
   computeLineSubtotal,
   computePurchaseSubtotal,
   computePurchaseTotal,
@@ -41,13 +39,27 @@ import type { PurchaseFilters, PurchaseReceiptSummary, PurchasesRepository } fro
 const UNIQUE_VIOLATION = "23505";
 
 /**
- * Error codes raised by `record_inventory_movement` (see
- * supabase/migrations/20260731100000_inventory_record_movement_function.sql)
- * — this file reuses that existing RPC as-is for the Inventory-linked half
- * of `receivePurchaseItem` (see below); it never re-implements
- * getInventoryMovementDelta/validateInventoryQuantities itself.
+ * Error codes raised by `record_purchase_receipt` (see supabase/migrations/
+ * 20260802100000_purchases_record_receipt_function.sql) — P0001-P0004 are
+ * `record_inventory_movement`'s own codes, forwarded unchanged when that
+ * RPC (composed inside record_purchase_receipt) is the one that fails;
+ * P0005-P0009 are record_purchase_receipt's own Purchase-level validation.
+ * All are treated the same way here (a user-facing `fail(...)`, never
+ * thrown) — the distinct ranges exist so a Purchase-level failure is never
+ * confused with an Inventory-level one, not because this file branches on
+ * which range fired.
  */
-const APP_VALIDATION_ERROR_CODES = new Set(["P0001", "P0002", "P0003", "P0004"]);
+const APP_VALIDATION_ERROR_CODES = new Set([
+  "P0001",
+  "P0002",
+  "P0003",
+  "P0004",
+  "P0005",
+  "P0006",
+  "P0007",
+  "P0008",
+  "P0009",
+]);
 
 /**
  * No `generate_purchase_number` RPC exists yet (unlike Invoice/Contract,
@@ -745,16 +757,20 @@ async function removePurchaseItem(id: string): Promise<DataResult<null>> {
 }
 
 /**
- * The one place receiving happens. For an Inventory-linked line, this calls
- * straight into the existing `record_inventory_movement` RPC (see
- * inventory/supabaseRepository.ts's own `applyInventoryMovementViaRpc`)
- * using the `"purchase"` movement type — never a second Inventory movement
- * implementation, never a re-derivation of the delta/quantity-invariant
- * logic that RPC already owns. A non-inventory line just updates its own
- * `quantity_received` — there is nothing for Inventory to do. Either way,
- * the parent Purchase's subtotal/total/status are recomputed immediately
- * after via `recomputePurchaseAggregates` (see that function's own doc
- * comment for the one disclosed non-atomicity gap this introduces).
+ * The one place receiving happens — a thin wrapper around the atomic
+ * `record_purchase_receipt` RPC (see supabase/migrations/
+ * 20260802100000_purchases_record_receipt_function.sql). That function does
+ * everything this method used to do sequentially (validate status/archived/
+ * quantity, apply the Inventory movement via the existing
+ * `record_inventory_movement` RPC for an Inventory-linked line, update
+ * `quantity_received`, recompute the parent Purchase's subtotal/total/
+ * status/actual_received_date, and log one Timeline entry) inside a single,
+ * row-locked transaction — closing the concurrency gap the previous
+ * sequential implementation carried as a disclosed limitation. This
+ * function therefore does no pre-validation of its own and never touches
+ * `purchase_items`/`purchases`/`timeline_activities` directly; only Audit
+ * (mock-only, not a Supabase table the RPC could write to) is still handled
+ * here, after a successful RPC call.
  */
 async function receivePurchaseItem(id: string, input: ReceivePurchaseItemInput): Promise<DataResult<PurchaseItem>> {
   const parsed = receivePurchaseItemInputSchema.safeParse(input);
@@ -762,76 +778,33 @@ async function receivePurchaseItem(id: string, input: ReceivePurchaseItemInput):
     return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
   }
 
-  const item = await fetchPurchaseItemRow(id);
-  if (!item) {
-    return fail("Purchase item not found.");
-  }
-  const purchase = await fetchPurchaseRow(item.purchase_id);
-  if (!purchase) {
-    return fail("Purchase not found.");
-  }
-  if (!canReceivePurchase(purchase.status)) {
-    return fail(
-      purchase.status === "cancelled" ? "Cancelled purchases cannot receive stock." : "This purchase cannot receive stock in its current status.",
-    );
-  }
-
-  const nextReceived = item.quantity_received + parsed.data.quantity_received;
-  const quantityError = validatePurchaseItemQuantities(item.quantity_ordered, nextReceived);
-  if (quantityError) {
-    return fail(quantityError);
-  }
-
   const session = await requireWorkspaceSession();
   const actor = resolveActorName(session);
   const supabase = createSupabaseClient();
 
-  if (item.inventory_item_id) {
-    const { error: movementError } = await supabase.rpc("record_inventory_movement", {
-      p_inventory_item_id: item.inventory_item_id,
-      p_movement_type: "purchase",
-      p_quantity: parsed.data.quantity_received,
-      p_reason: parsed.data.reason ?? `Received against ${purchase.purchase_number}`,
-      p_reference_type: "purchase",
-      p_reference_id: purchase.id,
-      p_actor: actor,
-    });
-    if (movementError) {
-      const code = (movementError as { code?: string }).code;
-      if (code && APP_VALIDATION_ERROR_CODES.has(code)) {
-        return fail(movementError.message);
-      }
-      throw normalizeSupabaseError(movementError);
+  const { data, error } = await supabase.rpc("record_purchase_receipt", {
+    p_purchase_item_id: id,
+    p_quantity_received: parsed.data.quantity_received,
+    p_reason: parsed.data.reason,
+    p_actor: actor,
+  });
+  if (error) {
+    const code = (error as { code?: string }).code;
+    if (code && APP_VALIDATION_ERROR_CODES.has(code)) {
+      return fail(error.message);
     }
+    throw normalizeSupabaseError(error);
   }
 
-  const { data, error } = await supabase
-    .from("purchase_items")
-    .update({ quantity_received: nextReceived })
-    .eq("id", id)
-    .select("*")
-    .single();
-  if (error) throw normalizeSupabaseError(error);
+  const updatedItem = mapPurchaseItemRow(data as Database["public"]["Tables"]["purchase_items"]["Row"]);
 
-  const updatedItem = mapPurchaseItemRow(data);
-  await recomputePurchaseAggregates(purchase.id);
-
-  await getCoreTimelineService(supabase).recordActivity(
-    purchase.workspace_id,
-    "purchase",
-    purchase.id,
-    actor,
-    "purchase_item_received",
-    `Received ${parsed.data.quantity_received} × "${item.name}"`,
-    { purchase_item_id: id, quantity_received: parsed.data.quantity_received },
-  );
-  await getCoreAuditLogService().recordAuditEvent(purchase.workspace_id, {
+  await getCoreAuditLogService().recordAuditEvent(updatedItem.workspace_id, {
     actor,
     action: "purchase_item_received",
     ownerType: "purchase",
-    ownerId: purchase.id,
-    before: { quantity_received: item.quantity_received },
-    after: { quantity_received: nextReceived },
+    ownerId: updatedItem.purchase_id,
+    before: { quantity_received: updatedItem.quantity_received - parsed.data.quantity_received },
+    after: { quantity_received: updatedItem.quantity_received },
   });
 
   return ok(updatedItem);
