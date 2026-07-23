@@ -27,6 +27,7 @@ const OWNER_LABEL: Record<EntityType, string> = {
   automation: "Automation",
   inventory_item: "Inventory Item",
   vendor: "Vendor",
+  purchase: "Purchase",
 };
 
 /**

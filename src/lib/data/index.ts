@@ -21,6 +21,9 @@ import type { CreateInventoryItemInput, InventoryItemInput, RecordInventoryMovem
 import type { Vendor } from "@/types/vendor";
 import type { VendorStatus } from "@/core/enums/vendorStatus";
 import type { CreateVendorInput, UpdateVendorInput } from "@/modules/vendors/schema";
+import type { Purchase } from "@/types/purchase";
+import type { PurchaseItem } from "@/types/purchaseItem";
+import type { CreatePurchaseInput, PurchaseInput, PurchaseItemInput, ReceivePurchaseItemInput } from "@/modules/purchases/schema";
 import type { TeamMember } from "@/types/teamMember";
 import type { WorkspaceInvitation, WorkspaceInvitationWithToken, InvitationPreview } from "@/types/workspaceInvitation";
 import type { ClientAccount, ClientAccountContext } from "@/types/clientAccount";
@@ -140,6 +143,9 @@ import { supabaseInventoryRepository } from "@/lib/data/inventory/supabaseReposi
 import type { VendorFilters, VendorSort } from "@/lib/data/vendors/repository";
 import { mockVendorsRepository } from "@/lib/data/vendors/mockRepository";
 import { supabaseVendorsRepository } from "@/lib/data/vendors/supabaseRepository";
+import type { PurchaseFilters, PurchaseReceiptSummary } from "@/lib/data/purchases/repository";
+import { mockPurchasesRepository } from "@/lib/data/purchases/mockRepository";
+import { supabasePurchasesRepository } from "@/lib/data/purchases/supabaseRepository";
 import {
   readLeads,
   resetLeadsStore,
@@ -168,6 +174,8 @@ import { resetDocumentFoldersStore } from "@/lib/data/mock/documentFoldersStore"
 import { resetInventoryItemsStore } from "@/lib/data/mock/inventoryItemsStore";
 import { resetInventoryMovementsStore } from "@/lib/data/mock/inventoryMovementsStore";
 import { resetVendorsStore } from "@/lib/data/mock/vendorsStore";
+import { resetPurchasesStore } from "@/lib/data/mock/purchasesStore";
+import { resetPurchaseItemsStore } from "@/lib/data/mock/purchaseItemsStore";
 
 // ---------------------------------------------------------------------------
 // Leads
@@ -2154,6 +2162,111 @@ export async function toggleVendorNotePin(noteId: string): Promise<DataResult<No
 }
 
 // ---------------------------------------------------------------------------
+// Purchases — foundation only (types, workflow, repository); no UI, no
+// Supabase migration yet. `supabasePurchasesRepository` is a typed
+// placeholder that throws rather than querying a table that doesn't exist
+// or silently falling back to mock data in supabase mode — same convention
+// as Inventory's own foundation phase.
+// ---------------------------------------------------------------------------
+
+export type { PurchaseFilters, PurchaseReceiptSummary } from "@/lib/data/purchases/repository";
+
+function purchasesRepository() {
+  return selectRepository({ mock: mockPurchasesRepository, supabase: supabasePurchasesRepository });
+}
+
+export async function listPurchases(filters: PurchaseFilters = {}): Promise<Purchase[]> {
+  return purchasesRepository().listPurchases(filters);
+}
+
+export async function getPurchase(id: string): Promise<Purchase> {
+  return purchasesRepository().getPurchase(id);
+}
+
+export async function createPurchase(input: CreatePurchaseInput): Promise<DataResult<Purchase>> {
+  return purchasesRepository().createPurchase(input);
+}
+
+export async function updatePurchase(id: string, input: PurchaseInput): Promise<DataResult<Purchase>> {
+  return purchasesRepository().updatePurchase(id, input);
+}
+
+export async function submitPurchase(id: string): Promise<DataResult<Purchase>> {
+  return purchasesRepository().submitPurchase(id);
+}
+
+export async function cancelPurchase(id: string): Promise<DataResult<Purchase>> {
+  return purchasesRepository().cancelPurchase(id);
+}
+
+export async function archivePurchase(id: string): Promise<DataResult<Purchase>> {
+  return purchasesRepository().archivePurchase(id);
+}
+
+export async function restorePurchase(id: string): Promise<DataResult<Purchase>> {
+  return purchasesRepository().restorePurchase(id);
+}
+
+export async function listPurchaseItems(purchaseId: string): Promise<PurchaseItem[]> {
+  return purchasesRepository().listPurchaseItems(purchaseId);
+}
+
+export async function addPurchaseItem(purchaseId: string, input: PurchaseItemInput): Promise<DataResult<PurchaseItem>> {
+  return purchasesRepository().addPurchaseItem(purchaseId, input);
+}
+
+export async function updatePurchaseItem(id: string, input: PurchaseItemInput): Promise<DataResult<PurchaseItem>> {
+  return purchasesRepository().updatePurchaseItem(id, input);
+}
+
+export async function removePurchaseItem(id: string): Promise<DataResult<null>> {
+  return purchasesRepository().removePurchaseItem(id);
+}
+
+export async function receivePurchaseItem(id: string, input: ReceivePurchaseItemInput): Promise<DataResult<PurchaseItem>> {
+  return purchasesRepository().receivePurchaseItem(id, input);
+}
+
+export async function getPurchaseReceiptSummary(purchaseId: string): Promise<PurchaseReceiptSummary> {
+  return purchasesRepository().getPurchaseReceiptSummary(purchaseId);
+}
+
+export async function getPurchasesByVendorId(vendorId: string): Promise<Purchase[]> {
+  return purchasesRepository().getPurchasesByVendorId(vendorId);
+}
+
+export async function getOpenPurchases(): Promise<Purchase[]> {
+  return purchasesRepository().getOpenPurchases();
+}
+
+export async function getOverduePurchases(): Promise<Purchase[]> {
+  return purchasesRepository().getOverduePurchases();
+}
+
+export async function getTimelineByPurchaseId(purchaseId: string): Promise<TimelineActivity[]> {
+  return purchasesRepository().getTimelineByPurchaseId(purchaseId);
+}
+
+export async function getNotesByPurchaseId(purchaseId: string): Promise<Note[]> {
+  return purchasesRepository().getNotesByPurchaseId(purchaseId);
+}
+
+export async function createPurchaseNote(purchaseId: string, input: NoteFormInput): Promise<DataResult<Note>> {
+  return purchasesRepository().createPurchaseNote(purchaseId, input);
+}
+
+/** Normalizes the repository's "no note with this id" `null` into a DataResult failure, matching updateVendorNote's exact shape. */
+export async function updatePurchaseNote(noteId: string, input: NoteFormInput): Promise<DataResult<Note>> {
+  const result = await purchasesRepository().updatePurchaseNote(noteId, input);
+  return result ?? fail("Note not found.");
+}
+
+export async function togglePurchaseNotePin(noteId: string): Promise<DataResult<Note>> {
+  const result = await purchasesRepository().togglePurchaseNotePin(noteId);
+  return result ?? fail("Note not found.");
+}
+
+// ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
 
@@ -2421,6 +2534,8 @@ export function resetAllMockData(): void {
   resetInventoryItemsStore();
   resetInventoryMovementsStore();
   resetVendorsStore();
+  resetPurchasesStore();
+  resetPurchaseItemsStore();
 }
 
 /**

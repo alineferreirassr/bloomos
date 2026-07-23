@@ -20,4 +20,7 @@ export function registerDefaultSearchableEntities(): void {
   // Reserved — no route until these modules ship (see entityType.ts's comment on "inventory_item"/"vendor").
   registerSearchableEntity({ entityType: "inventory_item", label: "Inventory Item", module: "Inventory" });
   registerSearchableEntity({ entityType: "vendor", label: "Vendor", module: "Vendors" });
+
+  // Purchases Foundation phase — domain/repository only, no route yet (same reserved-ahead-of-shipping precedent).
+  registerSearchableEntity({ entityType: "purchase", label: "Purchase", module: "Purchases" });
 }

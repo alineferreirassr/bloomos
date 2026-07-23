@@ -28,6 +28,10 @@ export const ENTITY_TYPES = [
   // types) before the Inventory Foundation phase existed.
   "inventory_item",
   "vendor",
+  // Purchases Foundation phase — reserved the same way inventory_item/vendor
+  // were: no live route or migration yet, added now so Notes/Timeline/
+  // Search/Audit can type-check against it ahead of the UI/migration phases.
+  "purchase",
 ] as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[number];
