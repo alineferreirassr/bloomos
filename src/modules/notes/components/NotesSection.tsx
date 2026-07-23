@@ -28,6 +28,8 @@ const OWNER_LABEL: Record<EntityType, string> = {
   inventory_item: "Inventory Item",
   vendor: "Vendor",
   purchase: "Purchase",
+  journal_entry: "Journal Entry",
+  accounting_period: "Accounting Period",
 };
 
 /**

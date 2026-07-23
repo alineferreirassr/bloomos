@@ -3,13 +3,28 @@ import type { Payment } from "@/types/payment";
 import type { Expense } from "@/types/expense";
 import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
+import type { ChartOfAccount } from "@/types/chartOfAccount";
+import type { JournalEntry } from "@/types/journalEntry";
+import type { AccountingPeriod } from "@/types/accountingPeriod";
 import type { InvoiceStatus } from "@/core/enums/invoiceStatus";
 import type { PaymentStatus } from "@/core/enums/paymentStatus";
 import type { PaymentType } from "@/core/enums/paymentType";
 import type { PaymentMethod } from "@/core/enums/paymentMethod";
 import type { ExpenseStatus } from "@/core/enums/expenseStatus";
 import type { ExpenseCategory } from "@/core/enums/expenseCategory";
-import type { InvoiceInput, PaymentInput, ExpenseInput } from "@/modules/finance/schema";
+import type { AccountType } from "@/core/enums/accountType";
+import type { PostingStatus } from "@/core/enums/postingStatus";
+import type { AccountingPeriodStatus } from "@/core/enums/accountingPeriodStatus";
+import type {
+  InvoiceInput,
+  PaymentInput,
+  ExpenseInput,
+  ManualAdjustmentInput,
+  PaymentSettlementInput,
+  ExpenseTransitionInput,
+  JournalEntryReversalInput,
+  AccountingPeriodCreateInput,
+} from "@/modules/finance/schema";
 import type { NoteFormInput } from "@/modules/notes/schema";
 import type { DataResult } from "@/lib/data/result";
 
@@ -51,6 +66,27 @@ export interface ExpenseFilters {
   dueOnly?: boolean;
   reimbursableOnly?: boolean;
   includeArchived?: boolean;
+}
+
+export interface ChartOfAccountFilters {
+  includeArchived?: boolean;
+  accountType?: AccountType | "all";
+}
+
+export interface JournalEntryFilters {
+  dateFrom?: string;
+  dateTo?: string;
+  sourceType?: string | "all";
+  postingStatus?: PostingStatus | "all";
+  /** Filters to entries with at least one line against this account — a real join, not a client-side filter, so it stays efficient at any entry volume. */
+  accountId?: string;
+  /** Defaults to 50 (see supabaseRepository.ts/mockRepository.ts) — Journal Entries have no existing pagination precedent elsewhere in this codebase, so this uses Postgrest's native .range() rather than inventing a cursor/page-token scheme. */
+  limit?: number;
+  offset?: number;
+}
+
+export interface AccountingPeriodFilters {
+  status?: AccountingPeriodStatus | "all";
 }
 
 /**
@@ -122,4 +158,40 @@ export interface FinanceRepository {
   createExpenseNote(expenseId: string, input: NoteFormInput): Promise<DataResult<Note>>;
   togglePinExpenseNote(noteId: string): Promise<DataResult<Note> | null>;
   getTimelineByExpenseId(expenseId: string): Promise<TimelineActivity[]>;
+
+  // ---------------------------------------------------------------------
+  // Finance Ledger (Repository Layer phase) — consumes the already-
+  // approved Finance Posting Engine RPCs; never recreates accounting logic
+  // already implemented in Postgres. Read methods return the plain domain
+  // object or throw NotFoundError (matching getInvoiceById's own
+  // convention); write methods return DataResult<T> (matching every other
+  // mutation in this interface) and write exactly one Core Audit entry
+  // after a successful RPC call.
+  // ---------------------------------------------------------------------
+
+  listChartOfAccounts(filters?: ChartOfAccountFilters): Promise<ChartOfAccount[]>;
+  getChartOfAccount(id: string): Promise<ChartOfAccount>;
+
+  listJournalEntries(filters?: JournalEntryFilters): Promise<JournalEntry[]>;
+  /** Includes `lines` (with `account` enrichment) — see JournalEntry's own doc comment for why list omits them. */
+  getJournalEntry(id: string): Promise<JournalEntry>;
+
+  listAccountingPeriods(filters?: AccountingPeriodFilters): Promise<AccountingPeriod[]>;
+  getAccountingPeriod(id: string): Promise<AccountingPeriod>;
+
+  /** Calls record_payment_settlement. Rejects payment_method='stripe' at this boundary too (Stripe remains deferred), independent of the RPC's own P1117 rejection. */
+  recordPaymentSettlement(input: PaymentSettlementInput): Promise<DataResult<Payment>>;
+  /** Calls record_expense_transition. */
+  recordExpenseTransition(expenseId: string, input: ExpenseTransitionInput): Promise<DataResult<Expense>>;
+  /** Calls record_manual_adjustment. Balance equality is validated by the RPC, not re-checked here. */
+  recordManualAdjustment(input: ManualAdjustmentInput): Promise<DataResult<JournalEntry>>;
+  /** Calls reverse_journal_entry. Never updates the original entry directly — the RPC sets reversed_by_entry_id itself. */
+  reverseJournalEntry(journalEntryId: string, input: JournalEntryReversalInput): Promise<DataResult<JournalEntry>>;
+
+  /** Calls create_accounting_period. */
+  createAccountingPeriod(input: AccountingPeriodCreateInput): Promise<DataResult<AccountingPeriod>>;
+  /** Calls close_period. */
+  closeAccountingPeriod(id: string): Promise<DataResult<AccountingPeriod>>;
+  /** Calls lock_period. */
+  lockAccountingPeriod(id: string): Promise<DataResult<AccountingPeriod>>;
 }

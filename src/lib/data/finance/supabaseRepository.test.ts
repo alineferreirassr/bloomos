@@ -7,6 +7,18 @@ vi.mock("@/lib/auth/workspaceSessionClient", () => ({
   getClientWorkspaceSession: vi.fn(),
 }));
 
+// Hoisted so the same spy instance is returned by every getCoreAuditLogService()
+// call the repository makes AND is importable here for assertions — a plain
+// `vi.fn()` inside the vi.mock factory below would create a fresh, unobservable
+// instance per call instead.
+const recordAuditEventMock = vi.hoisted(() => vi.fn());
+vi.mock("@/core/audit", () => ({
+  getCoreAuditLogService: () => ({
+    recordAuditEvent: recordAuditEventMock,
+    getAuditLogForOwner: vi.fn(),
+  }),
+}));
+
 import { supabaseFinanceRepository } from "@/lib/data/finance/supabaseRepository";
 import { createClient } from "@/lib/supabase/client";
 import { getClientWorkspaceSession } from "@/lib/auth/workspaceSessionClient";
@@ -38,7 +50,9 @@ function createMockSupabase(responses: QueryResult[]) {
     b.gte = chain("gte");
     b.lte = chain("lte");
     b.in = chain("in");
+    b.is = chain("is");
     b.order = chain("order");
+    b.range = chain("range");
     b.insert = chain("insert");
     b.update = chain("update");
     b.delete = chain("delete");
@@ -237,6 +251,102 @@ function expenseRow(overrides: Partial<Record<string, unknown>> = {}) {
     ...overrides,
   };
 }
+
+function chartOfAccountRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: "account_1000",
+    workspace_id: "workspace_1",
+    account_number: 1000,
+    name: "Cash",
+    account_type: "asset",
+    normal_balance: "debit",
+    parent_account_id: null,
+    description: null,
+    is_system: true,
+    created_at: "2026-08-03T10:00:00Z",
+    updated_at: "2026-08-03T10:00:00Z",
+    archived_at: null,
+    ...overrides,
+  };
+}
+
+function journalEntryRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: "journal_entry_1",
+    workspace_id: "workspace_1",
+    entry_date: "2026-07-20",
+    accounting_period_id: "accounting_period_1",
+    source_type: "payment_settlement",
+    source_id: "payment_1",
+    posting_key: "payment_settlement:payment_1",
+    memo: "Payment settlement (deposit, cash)",
+    currency: "USD",
+    reversed_by_entry_id: null,
+    reverses_entry_id: null,
+    posting_status: "posted",
+    failure_reason: null,
+    posted_by: "Amoré Bloom Owner",
+    created_at: "2026-07-20T00:00:00Z",
+    ...overrides,
+  };
+}
+
+function journalLineRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: "journal_line_1",
+    journal_entry_id: "journal_entry_1",
+    workspace_id: "workspace_1",
+    account_id: "account_1000",
+    debit_minor: 50000,
+    credit_minor: 0,
+    currency: "USD",
+    amount_in_base_currency_minor: 50000,
+    line_memo: null,
+    line_order: 0,
+    created_at: "2026-07-20T00:00:00Z",
+    ...overrides,
+  };
+}
+
+function accountingPeriodRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: "accounting_period_1",
+    workspace_id: "workspace_1",
+    period_start: "2026-07-01",
+    period_end: "2026-07-31",
+    status: "open",
+    closed_at: null,
+    closed_by: null,
+    locked_at: null,
+    locked_by: null,
+    created_at: "2026-07-01T00:00:00Z",
+    updated_at: "2026-07-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+const PAYMENT_SETTLEMENT_INPUT = {
+  invoice_id: "invoice_1",
+  client_id: "client_1",
+  event_id: null,
+  contract_id: null,
+  payment_type: "deposit" as const,
+  amount_minor: 50000,
+  currency: "USD",
+  payment_method: "cash" as const,
+  reference: null,
+  transaction_date: "2026-07-20",
+  notes: null,
+};
+
+const MANUAL_ADJUSTMENT_INPUT = {
+  entry_date: "2026-07-20",
+  memo: "Correcting entry",
+  lines: [
+    { account_id: "account_1000", debit_minor: 5000, credit_minor: 0, line_memo: null },
+    { account_id: "account_2000", debit_minor: 0, credit_minor: 5000, line_memo: null },
+  ],
+};
 
 const INVOICE_INPUT = {
   client_id: "client_1",
@@ -819,5 +929,409 @@ describe("supabaseFinanceRepository Notes and Timeline", () => {
 
     const result = await supabaseFinanceRepository.togglePinInvoiceNote("note_x");
     expect(result).toBeNull();
+  });
+});
+
+describe("supabaseFinanceRepository.listChartOfAccounts / getChartOfAccount", () => {
+  it("scopes the list to the current workspace, excludes archived by default, and orders by account_number", async () => {
+    mockSession();
+    const { client, calls } = createMockSupabase([{ data: [chartOfAccountRow()], error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const accounts = await supabaseFinanceRepository.listChartOfAccounts();
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0].account_number).toBe(1000);
+    expect(accounts[0].account_type).toBe("asset");
+    expect(calls.some((c) => c.table === "chart_of_accounts" && c.method === "eq" && c.args[0] === "workspace_id" && c.args[1] === "workspace_1")).toBe(true);
+    expect(calls.some((c) => c.table === "chart_of_accounts" && c.method === "is" && c.args[0] === "archived_at" && c.args[1] === null)).toBe(true);
+    expect(calls.some((c) => c.table === "chart_of_accounts" && c.method === "order" && c.args[0] === "account_number")).toBe(true);
+  });
+
+  it("getChartOfAccount throws NotFoundError when the row is invisible (RLS)", async () => {
+    const { client } = createMockSupabase([{ data: null, error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await expect(supabaseFinanceRepository.getChartOfAccount("nope")).rejects.toThrow("was not found");
+  });
+});
+
+describe("supabaseFinanceRepository.listJournalEntries / getJournalEntry", () => {
+  it("scopes to the workspace and applies date/source_type/posting_status filters", async () => {
+    mockSession();
+    const { client, calls } = createMockSupabase([{ data: [journalEntryRow()], error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const entries = await supabaseFinanceRepository.listJournalEntries({
+      dateFrom: "2026-07-01",
+      dateTo: "2026-07-31",
+      sourceType: "payment_settlement",
+      postingStatus: "posted",
+    });
+    expect(entries).toHaveLength(1);
+    expect(entries[0].posting_key).toBe("payment_settlement:payment_1");
+    expect(entries[0].source_id).toBe("payment_1");
+    expect(calls.some((c) => c.table === "journal_entries" && c.method === "gte" && c.args[0] === "entry_date")).toBe(true);
+    expect(calls.some((c) => c.table === "journal_entries" && c.method === "lte" && c.args[0] === "entry_date")).toBe(true);
+    expect(calls.some((c) => c.table === "journal_entries" && c.method === "range")).toBe(true);
+  });
+
+  it("filters by accountId via a real journal_lines lookup, not a client-side filter", async () => {
+    mockSession();
+    const { client, calls } = createMockSupabase([
+      { data: [{ journal_entry_id: "journal_entry_1" }], error: null }, // journal_lines lookup
+      { data: [journalEntryRow()], error: null }, // journal_entries query
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const entries = await supabaseFinanceRepository.listJournalEntries({ accountId: "account_1000" });
+    expect(entries).toHaveLength(1);
+    expect(calls.some((c) => c.table === "journal_lines" && c.method === "eq" && c.args[0] === "account_id")).toBe(true);
+    expect(calls.some((c) => c.table === "journal_entries" && c.method === "in" && c.args[0] === "id")).toBe(true);
+  });
+
+  it("returns an empty array without querying journal_entries when accountId matches no lines", async () => {
+    mockSession();
+    const { client, calls } = createMockSupabase([{ data: [], error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const entries = await supabaseFinanceRepository.listJournalEntries({ accountId: "account_9999" });
+    expect(entries).toEqual([]);
+    expect(calls.some((c) => c.table === "journal_entries")).toBe(false);
+  });
+
+  it("getJournalEntry attaches lines with account enrichment (account_number/name/account_type), preserving integer minor units", async () => {
+    const { client } = createMockSupabase([
+      { data: journalEntryRow(), error: null }, // fetch entry
+      { data: [journalLineRow()], error: null }, // fetch lines
+      { data: [{ id: "account_1000", account_number: 1000, name: "Cash", account_type: "asset" }], error: null }, // fetch accounts
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const entry = await supabaseFinanceRepository.getJournalEntry("journal_entry_1");
+    expect(entry.lines).toHaveLength(1);
+    expect(entry.lines?.[0].debit_minor).toBe(50000);
+    expect(Number.isInteger(entry.lines?.[0].debit_minor)).toBe(true);
+    expect(entry.lines?.[0].account).toEqual({ account_number: 1000, name: "Cash", account_type: "asset" });
+  });
+
+  it("getJournalEntry throws NotFoundError when the entry is invisible (RLS)", async () => {
+    const { client } = createMockSupabase([{ data: null, error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await expect(supabaseFinanceRepository.getJournalEntry("nope")).rejects.toThrow("was not found");
+  });
+
+  it("preserves nullable source_id/reverses_entry_id/reversed_by_entry_id fields exactly", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: [journalEntryRow({ source_type: "manual_adjustment", source_id: null, posting_key: null, reverses_entry_id: null, reversed_by_entry_id: null })], error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const [entry] = await supabaseFinanceRepository.listJournalEntries();
+    expect(entry.source_id).toBeNull();
+    expect(entry.posting_key).toBeNull();
+    expect(entry.reverses_entry_id).toBeNull();
+    expect(entry.reversed_by_entry_id).toBeNull();
+  });
+});
+
+describe("supabaseFinanceRepository.listAccountingPeriods / getAccountingPeriod", () => {
+  it("scopes to the workspace, filters by status, orders by period_start", async () => {
+    mockSession();
+    const { client, calls } = createMockSupabase([{ data: [accountingPeriodRow()], error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const periods = await supabaseFinanceRepository.listAccountingPeriods({ status: "open" });
+    expect(periods).toHaveLength(1);
+    expect(periods[0].status).toBe("open");
+    expect(calls.some((c) => c.table === "accounting_periods" && c.method === "eq" && c.args[0] === "status" && c.args[1] === "open")).toBe(true);
+    expect(calls.some((c) => c.table === "accounting_periods" && c.method === "order" && c.args[0] === "period_start")).toBe(true);
+  });
+
+  it("getAccountingPeriod throws NotFoundError when the row is invisible (RLS)", async () => {
+    const { client } = createMockSupabase([{ data: null, error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await expect(supabaseFinanceRepository.getAccountingPeriod("nope")).rejects.toThrow("was not found");
+  });
+});
+
+describe("supabaseFinanceRepository.recordPaymentSettlement", () => {
+  it("rejects payment_method='stripe' at the Repository boundary without ever calling Supabase", async () => {
+    const { client, rpcCalls } = createMockSupabase([]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.recordPaymentSettlement({ ...PAYMENT_SETTLEMENT_INPUT, payment_method: "stripe" });
+    expect(result.success).toBe(false);
+    expect(rpcCalls).toHaveLength(0);
+  });
+
+  it("calls record_payment_settlement with the correct RPC name and arguments, maps the result, and writes exactly one Audit entry", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([{ data: paymentRow(), error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT);
+    expect(result.success).toBe(true);
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0].name).toBe("record_payment_settlement");
+    const args = rpcCalls[0].args as Record<string, unknown>;
+    expect(args.p_workspace_id).toBe("workspace_1");
+    expect(args.p_payment_method).toBe("cash");
+    expect(args.p_amount_minor).toBe(50000);
+
+    expect(recordAuditEventMock).toHaveBeenCalledTimes(1);
+    const [workspaceId, auditInput] = recordAuditEventMock.mock.calls[0];
+    expect(workspaceId).toBe("workspace_1");
+    expect(auditInput.ownerType).toBe("payment");
+    expect(auditInput.ownerId).toBe("payment_1");
+  });
+
+  it("translates a known Finance errcode into a DataResult fail() and does not call Audit", async () => {
+    mockSession();
+    const { client } = createMockSupabase([{ data: null, error: { code: "P1100", message: "System account 1000 not found for this workspace." } }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toBe("System account 1000 not found for this workspace.");
+    expect(recordAuditEventMock).not.toHaveBeenCalled();
+  });
+
+  it("throws (via normalizeSupabaseError) for an unrecognized error code, and does not call Audit", async () => {
+    mockSession();
+    const { client } = createMockSupabase([{ data: null, error: { code: "42501", message: "permission denied" } }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await expect(supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT)).rejects.toThrow();
+    expect(recordAuditEventMock).not.toHaveBeenCalled();
+  });
+
+  it("does not retry the RPC merely because Audit recording is invoked afterward — exactly one rpc call regardless", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([{ data: paymentRow(), error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT);
+    expect(rpcCalls).toHaveLength(1);
+  });
+});
+
+describe("supabaseFinanceRepository.recordExpenseTransition", () => {
+  it("calls record_expense_transition with the correct arguments, maps the result, and writes exactly one Audit entry", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: expenseRow({ status: "planned" }), error: null }, // fetchExpenseRow
+      { data: expenseRow({ status: "due" }), error: null }, // rpc result
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.recordExpenseTransition("expense_1", { transition: "due" });
+    expect(result.success).toBe(true);
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0].name).toBe("record_expense_transition");
+    expect((rpcCalls[0].args as Record<string, unknown>).p_transition).toBe("due");
+
+    expect(recordAuditEventMock).toHaveBeenCalledTimes(1);
+    const [, auditInput] = recordAuditEventMock.mock.calls[0];
+    expect(auditInput.ownerType).toBe("expense");
+    expect(auditInput.action).toBe("expense_due");
+  });
+
+  it("fails without calling the RPC when the Expense does not exist", async () => {
+    const { client, rpcCalls } = createMockSupabase([{ data: null, error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.recordExpenseTransition("nope", { transition: "due" });
+    expect(result.success).toBe(false);
+    expect(rpcCalls).toHaveLength(0);
+  });
+
+  it("translates a known Finance errcode into fail() without calling Audit", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: expenseRow(), error: null },
+      { data: null, error: { code: "P1105", message: "Unsupported Expense transition: due." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.recordExpenseTransition("expense_1", { transition: "due" });
+    expect(result.success).toBe(false);
+    expect(recordAuditEventMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("supabaseFinanceRepository.recordManualAdjustment", () => {
+  it("rejects a blank memo and fewer than two lines before ever reaching the RPC", async () => {
+    const { client, rpcCalls } = createMockSupabase([]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const blankMemo = await supabaseFinanceRepository.recordManualAdjustment({ ...MANUAL_ADJUSTMENT_INPUT, memo: "" });
+    expect(blankMemo.success).toBe(false);
+
+    const oneLine = await supabaseFinanceRepository.recordManualAdjustment({ ...MANUAL_ADJUSTMENT_INPUT, lines: [MANUAL_ADJUSTMENT_INPUT.lines[0]] });
+    expect(oneLine.success).toBe(false);
+
+    expect(rpcCalls).toHaveLength(0);
+  });
+
+  it("rejects a zero-value line and a double-sided line before ever reaching the RPC", async () => {
+    const { client, rpcCalls } = createMockSupabase([]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const zeroLine = await supabaseFinanceRepository.recordManualAdjustment({
+      ...MANUAL_ADJUSTMENT_INPUT,
+      lines: [
+        { account_id: "account_1000", debit_minor: 0, credit_minor: 0, line_memo: null },
+        { account_id: "account_2000", debit_minor: 0, credit_minor: 0, line_memo: null },
+      ],
+    });
+    expect(zeroLine.success).toBe(false);
+
+    const doubleSided = await supabaseFinanceRepository.recordManualAdjustment({
+      ...MANUAL_ADJUSTMENT_INPUT,
+      lines: [
+        { account_id: "account_1000", debit_minor: 100, credit_minor: 100, line_memo: null },
+        { account_id: "account_2000", debit_minor: 0, credit_minor: 100, line_memo: null },
+      ],
+    });
+    expect(doubleSided.success).toBe(false);
+
+    expect(rpcCalls).toHaveLength(0);
+  });
+
+  it("does NOT reject an unbalanced total client-side — that check is left to record_manual_adjustment's own P1106", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: null, error: { code: "P1106", message: "Manual adjustment is not balanced: total debits 5000 do not equal total credits 4000." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.recordManualAdjustment({
+      ...MANUAL_ADJUSTMENT_INPUT,
+      lines: [
+        { account_id: "account_1000", debit_minor: 5000, credit_minor: 0, line_memo: null },
+        { account_id: "account_2000", debit_minor: 0, credit_minor: 4000, line_memo: null },
+      ],
+    });
+    expect(result.success).toBe(false);
+    expect(rpcCalls).toHaveLength(1);
+  });
+
+  it("calls record_manual_adjustment with lines carrying no plug/balancing entry, maps the result, and writes exactly one Audit entry", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([{ data: journalEntryRow({ source_type: "manual_adjustment", source_id: null, posting_key: null }), error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT);
+    expect(result.success).toBe(true);
+    expect(rpcCalls[0].name).toBe("record_manual_adjustment");
+    const args = rpcCalls[0].args as Record<string, unknown>;
+    expect(args.p_lines).toHaveLength(2);
+
+    expect(recordAuditEventMock).toHaveBeenCalledTimes(1);
+    const [, auditInput] = recordAuditEventMock.mock.calls[0];
+    expect(auditInput.ownerType).toBe("journal_entry");
+  });
+});
+
+describe("supabaseFinanceRepository.reverseJournalEntry", () => {
+  it("requires a nonblank reason before ever reaching the RPC", async () => {
+    const { client, rpcCalls } = createMockSupabase([]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.reverseJournalEntry("journal_entry_1", { reason: "" });
+    expect(result.success).toBe(false);
+    expect(rpcCalls).toHaveLength(0);
+  });
+
+  it("calls reverse_journal_entry, maps the reversal, writes exactly one Audit entry, and never issues a direct update to journal_entries", async () => {
+    mockSession();
+    const { client, calls, rpcCalls } = createMockSupabase([
+      { data: journalEntryRow(), error: null }, // fetch original
+      { data: journalEntryRow({ id: "journal_entry_2", source_type: "reversal", source_id: "journal_entry_1", posting_key: "reversal:journal_entry_1", reverses_entry_id: "journal_entry_1" }), error: null }, // rpc
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.reverseJournalEntry("journal_entry_1", { reason: "Correcting a duplicate entry" });
+    expect(result.success).toBe(true);
+    expect(rpcCalls[0].name).toBe("reverse_journal_entry");
+    expect((rpcCalls[0].args as Record<string, unknown>).p_reason).toBe("Correcting a duplicate entry");
+    expect(calls.some((c) => c.table === "journal_entries" && (c.method === "update" || c.method === "insert"))).toBe(false);
+
+    expect(recordAuditEventMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails without calling the RPC when the original entry does not exist", async () => {
+    const { client, rpcCalls } = createMockSupabase([{ data: null, error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.reverseJournalEntry("nope", { reason: "test" });
+    expect(result.success).toBe(false);
+    expect(rpcCalls).toHaveLength(0);
+  });
+});
+
+describe("supabaseFinanceRepository accounting period write methods", () => {
+  it("createAccountingPeriod calls create_accounting_period and writes exactly one Audit entry", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([{ data: accountingPeriodRow(), error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.createAccountingPeriod({ period_start: "2026-08-01", period_end: "2026-08-31" });
+    expect(result.success).toBe(true);
+    expect(rpcCalls[0].name).toBe("create_accounting_period");
+    expect(recordAuditEventMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects period_end <= period_start before ever reaching the RPC", async () => {
+    const { client, rpcCalls } = createMockSupabase([]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.createAccountingPeriod({ period_start: "2026-08-31", period_end: "2026-08-01" });
+    expect(result.success).toBe(false);
+    expect(rpcCalls).toHaveLength(0);
+  });
+
+  it("closeAccountingPeriod calls close_period, never mutates accounting_periods directly, and writes exactly one Audit entry", async () => {
+    mockSession();
+    const { client, calls, rpcCalls } = createMockSupabase([
+      { data: accountingPeriodRow({ status: "open" }), error: null },
+      { data: accountingPeriodRow({ status: "closed" }), error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.closeAccountingPeriod("accounting_period_1");
+    expect(result.success).toBe(true);
+    expect(rpcCalls[0].name).toBe("close_period");
+    expect(calls.some((c) => c.table === "accounting_periods" && c.method === "update")).toBe(false);
+    expect(recordAuditEventMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("lockAccountingPeriod calls lock_period, never mutates accounting_periods directly, and writes exactly one Audit entry", async () => {
+    mockSession();
+    const { client, calls, rpcCalls } = createMockSupabase([
+      { data: accountingPeriodRow({ status: "closed" }), error: null },
+      { data: accountingPeriodRow({ status: "locked" }), error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.lockAccountingPeriod("accounting_period_1");
+    expect(result.success).toBe(true);
+    expect(rpcCalls[0].name).toBe("lock_period");
+    expect(calls.some((c) => c.table === "accounting_periods" && c.method === "update")).toBe(false);
+    expect(recordAuditEventMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("supabaseFinanceRepository Stripe deferral (Finance Ledger)", () => {
+  it("recordPaymentSettlement never accesses stripe_webhook_events or account 1010", async () => {
+    mockSession();
+    const { client, calls } = createMockSupabase([{ data: paymentRow(), error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT);
+    expect(calls.some((c) => c.table === "stripe_webhook_events")).toBe(false);
   });
 });

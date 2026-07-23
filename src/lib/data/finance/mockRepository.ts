@@ -3,6 +3,10 @@ import type { Payment } from "@/types/payment";
 import type { Expense } from "@/types/expense";
 import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
+import type { ChartOfAccount } from "@/types/chartOfAccount";
+import type { JournalEntry, JournalLine } from "@/types/journalEntry";
+import type { AccountingPeriod } from "@/types/accountingPeriod";
+import type { ExpenseCategory } from "@/core/enums/expenseCategory";
 import { NotFoundError } from "@/core/errors";
 import { INVOICE_STATUS_LABELS, type InvoiceStatus } from "@/core/enums/invoiceStatus";
 import { PAYMENT_STATUS_LABELS, PAYMENT_STATUSES_COUNTING_TOWARD_PAID } from "@/core/enums/paymentStatus";
@@ -15,12 +19,30 @@ import {
   getPaymentNextRecommendedAction,
 } from "@/core/workflows/paymentWorkflow";
 import { canTransitionExpenseStatus, isExpenseTerminal, getExpenseNextRecommendedAction } from "@/core/workflows/expenseWorkflow";
-import { invoiceSchema, paymentSchema, expenseSchema, type InvoiceInput, type PaymentInput, type ExpenseInput } from "@/modules/finance/schema";
+import {
+  invoiceSchema,
+  paymentSchema,
+  expenseSchema,
+  manualAdjustmentInputSchema,
+  journalEntryReversalInputSchema,
+  expenseTransitionInputSchema,
+  accountingPeriodCreateInputSchema,
+  type InvoiceInput,
+  type PaymentInput,
+  type ExpenseInput,
+  type ManualAdjustmentInput,
+  type PaymentSettlementInput,
+  type ExpenseTransitionInput,
+  type JournalEntryReversalInput,
+  type AccountingPeriodCreateInput,
+} from "@/modules/finance/schema";
 import type { NoteFormInput } from "@/modules/notes/schema";
 import { addMinor, subtractMinor, sumMinor, calculateBalance } from "@/lib/money";
 import { generateId, nowIso, delay } from "@/lib/data/utils";
 import { type DataResult, ok, fail } from "@/lib/data/result";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
+import { CURRENT_ACTOR } from "@/core/constants/actor";
+import { getCoreAuditLogService } from "@/core/audit";
 import { readClients } from "@/lib/data/mock/clientsStore";
 import { readEvents } from "@/lib/data/mock/eventsStore";
 import { readContracts } from "@/lib/data/mock/contractsStore";
@@ -28,12 +50,19 @@ import { readInvoices, writeInvoices } from "@/lib/data/mock/invoicesStore";
 import { readPayments, writePayments } from "@/lib/data/mock/paymentsStore";
 import { readExpenses, writeExpenses } from "@/lib/data/mock/expensesStore";
 import { readNotes, writeNotes } from "@/lib/data/mock/notesStore";
+import { readChartOfAccounts } from "@/lib/data/mock/chartOfAccountsStore";
+import { readJournalEntries, writeJournalEntries } from "@/lib/data/mock/journalEntriesStore";
+import { readJournalLines, writeJournalLines } from "@/lib/data/mock/journalLinesStore";
+import { readAccountingPeriods, writeAccountingPeriods } from "@/lib/data/mock/accountingPeriodsStore";
 import { recordTimelineActivity } from "@/lib/data/mock/timelineStore";
 import { getNotesByOwner, createNoteForOwner, getTimelineByOwner } from "@/lib/data/mock/notesTimelineShared";
 import type {
   InvoiceFilters,
   PaymentFilters,
   ExpenseFilters,
+  ChartOfAccountFilters,
+  JournalEntryFilters,
+  AccountingPeriodFilters,
   FinanceRepository,
 } from "@/lib/data/finance/repository";
 
@@ -1215,6 +1244,525 @@ async function getTimelineByExpenseId(expenseId: string): Promise<TimelineActivi
   return getTimelineByOwner(expense.workspace_id, "expense", expenseId);
 }
 
+// ---------------------------------------------------------------------------
+// Finance Ledger (Repository Layer phase). Mirrors the same account-number
+// mapping and posting_key vocabulary the real Posting Engine RPCs use (see
+// supabase/migrations/20260804*.sql), simplified — this is interface
+// parity for UI development and unit tests, not a second independent
+// accounting engine. It does not re-derive account resolution failures,
+// period-closed rejection, or duplicate-posting detection the way Postgres
+// does; it only needs to behave plausibly for a mock session.
+// ---------------------------------------------------------------------------
+
+/** Mirrors finance_resolve_expense_category_account's mapping exactly (see supabase/migrations/20260804100300_finance_post_expense_transition.sql). */
+const EXPENSE_CATEGORY_ACCOUNT_NUMBERS: Record<ExpenseCategory, number> = {
+  decor: 6100,
+  flowers: 6110,
+  rentals: 6120,
+  venue: 6130,
+  photography: 6140,
+  video: 6150,
+  food_beverage: 6160,
+  transportation: 6170,
+  printing: 6180,
+  supplies: 6190,
+  inventory: 1200,
+  team_payroll: 6200,
+  supplier_payment: 6210,
+  marketing: 6220,
+  software: 6230,
+  insurance: 6240,
+  taxes: 6250,
+  fees: 6260,
+  travel: 6270,
+  refund: 4950,
+  reimbursement: 6280,
+  miscellaneous: 6900,
+};
+
+function findAccountByNumber(workspaceId: string, accountNumber: number): ChartOfAccount {
+  const account = readChartOfAccounts().find((a) => a.workspace_id === workspaceId && a.account_number === accountNumber);
+  if (!account) {
+    throw new Error(`Mock Chart of Accounts is missing seeded account ${accountNumber} for workspace ${workspaceId}`);
+  }
+  return account;
+}
+
+/** Appends one Journal Entry + its lines — mirrors finance_insert_journal_entry's shape (posting_key/source_type/source_id all distinct fields, never conflated). Throws if no seeded period covers entry_date, matching finance_resolve_period's own "never auto-create" rule. */
+function insertMockJournalEntry(params: {
+  workspace_id: string;
+  entry_date: string;
+  source_type: string;
+  source_id: string | null;
+  posting_key: string | null;
+  memo: string | null;
+  posted_by: string;
+  reverses_entry_id?: string | null;
+  lines: { account_id: string; debit_minor: number; credit_minor: number; line_memo?: string | null }[];
+}): JournalEntry {
+  const period = readAccountingPeriods().find(
+    (p) => p.workspace_id === params.workspace_id && p.period_start <= params.entry_date && p.period_end >= params.entry_date,
+  );
+  if (!period) {
+    throw new Error(`No accounting period covers ${params.entry_date} for workspace ${params.workspace_id}`);
+  }
+
+  const timestamp = nowIso();
+  const entry: JournalEntry = {
+    id: generateId("journal_entry"),
+    workspace_id: params.workspace_id,
+    entry_date: params.entry_date,
+    accounting_period_id: period.id,
+    source_type: params.source_type,
+    source_id: params.source_id,
+    posting_key: params.posting_key,
+    memo: params.memo,
+    currency: "USD",
+    reversed_by_entry_id: null,
+    reverses_entry_id: params.reverses_entry_id ?? null,
+    posting_status: "posted",
+    failure_reason: null,
+    posted_by: params.posted_by,
+    created_at: timestamp,
+  };
+  writeJournalEntries([...readJournalEntries(), entry]);
+
+  const lines: JournalLine[] = params.lines.map((line, index) => ({
+    id: generateId("journal_line"),
+    journal_entry_id: entry.id,
+    workspace_id: params.workspace_id,
+    account_id: line.account_id,
+    debit_minor: line.debit_minor,
+    credit_minor: line.credit_minor,
+    currency: "USD",
+    amount_in_base_currency_minor: Math.max(line.debit_minor, line.credit_minor),
+    line_memo: line.line_memo ?? null,
+    line_order: index,
+    created_at: timestamp,
+  }));
+  writeJournalLines([...readJournalLines(), ...lines]);
+
+  return entry;
+}
+
+async function listChartOfAccounts(filters: ChartOfAccountFilters = {}): Promise<ChartOfAccount[]> {
+  const { includeArchived = false, accountType } = filters;
+  return readChartOfAccounts()
+    .filter((a) => a.workspace_id === CURRENT_WORKSPACE_ID)
+    .filter((a) => includeArchived || a.archived_at === null)
+    .filter((a) => !accountType || accountType === "all" || a.account_type === accountType)
+    .sort((a, b) => a.account_number - b.account_number);
+}
+
+async function getChartOfAccount(id: string): Promise<ChartOfAccount> {
+  const account = readChartOfAccounts().find((a) => a.id === id);
+  if (!account) {
+    throw new NotFoundError(`Chart of Accounts entry ${id} was not found`);
+  }
+  return account;
+}
+
+/** accountId/pagination are applied the same way the Supabase repository applies them — a real filter/slice, not a different, looser mock-only semantic — so interface parity holds for both data modes. */
+async function listJournalEntries(filters: JournalEntryFilters = {}): Promise<JournalEntry[]> {
+  const { dateFrom, dateTo, sourceType, postingStatus, accountId, limit = 50, offset = 0 } = filters;
+
+  let entryIdsForAccount: Set<string> | null = null;
+  if (accountId) {
+    entryIdsForAccount = new Set(
+      readJournalLines()
+        .filter((line) => line.workspace_id === CURRENT_WORKSPACE_ID && line.account_id === accountId)
+        .map((line) => line.journal_entry_id),
+    );
+  }
+
+  const filtered = readJournalEntries()
+    .filter((entry) => entry.workspace_id === CURRENT_WORKSPACE_ID)
+    .filter((entry) => !dateFrom || entry.entry_date >= dateFrom)
+    .filter((entry) => !dateTo || entry.entry_date <= dateTo)
+    .filter((entry) => !sourceType || sourceType === "all" || entry.source_type === sourceType)
+    .filter((entry) => !postingStatus || postingStatus === "all" || entry.posting_status === postingStatus)
+    .filter((entry) => !entryIdsForAccount || entryIdsForAccount.has(entry.id))
+    .sort((a, b) => (a.entry_date === b.entry_date ? b.id.localeCompare(a.id) : b.entry_date.localeCompare(a.entry_date)));
+
+  return filtered.slice(offset, offset + limit);
+}
+
+async function getJournalEntry(id: string): Promise<JournalEntry> {
+  const entry = readJournalEntries().find((e) => e.id === id);
+  if (!entry) {
+    throw new NotFoundError(`Journal entry ${id} was not found`);
+  }
+
+  const lines = readJournalLines()
+    .filter((line) => line.journal_entry_id === id)
+    .sort((a, b) => a.line_order - b.line_order)
+    .map((line) => {
+      const account = readChartOfAccounts().find((a) => a.id === line.account_id);
+      return account
+        ? { ...line, account: { account_number: account.account_number, name: account.name, account_type: account.account_type } }
+        : { ...line };
+    });
+
+  return { ...entry, lines };
+}
+
+async function listAccountingPeriods(filters: AccountingPeriodFilters = {}): Promise<AccountingPeriod[]> {
+  const { status } = filters;
+  return readAccountingPeriods()
+    .filter((p) => p.workspace_id === CURRENT_WORKSPACE_ID)
+    .filter((p) => !status || status === "all" || p.status === status)
+    .sort((a, b) => a.period_start.localeCompare(b.period_start));
+}
+
+async function getAccountingPeriod(id: string): Promise<AccountingPeriod> {
+  const period = readAccountingPeriods().find((p) => p.id === id);
+  if (!period) {
+    throw new NotFoundError(`Accounting period ${id} was not found`);
+  }
+  return period;
+}
+
+/**
+ * Rejects payment_method='stripe' at this boundary too (Stripe remains
+ * deferred). Does not call createPayment() — record_payment_settlement's
+ * own RPC only requires a positive amount and an existing client/invoice,
+ * a narrower check than createPayment's full validation (event/contract-
+ * belongs-to-client, overpayment), so this inlines just that subset
+ * instead of running checks the real RPC doesn't perform either. Inserts
+ * the Payment directly as 'succeeded' — no separate pending state, since
+ * settlement means the money has already moved.
+ */
+async function recordPaymentSettlement(input: PaymentSettlementInput): Promise<DataResult<Payment>> {
+  if (input.payment_method === "stripe") {
+    return fail("Stripe payments are not supported in this phase — record only manual/internal payment methods.");
+  }
+
+  const parsed = paymentSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  const client = readClients().find((c) => c.id === parsed.data.client_id);
+  if (!client) {
+    return fail("Please select a valid client.", { client_id: "Client not found." });
+  }
+
+  let invoice: Invoice | undefined;
+  if (parsed.data.invoice_id !== null) {
+    invoice = readInvoices().find((i) => i.id === parsed.data.invoice_id);
+    if (!invoice) {
+      return fail("Please select a valid invoice.", { invoice_id: "Invoice not found." });
+    }
+  }
+
+  const timestamp = nowIso();
+  const payment: Payment = {
+    id: generateId("payment"),
+    workspace_id: client.workspace_id,
+    ...parsed.data,
+    status: "succeeded",
+    received_at: timestamp,
+    failed_at: null,
+    refunded_at: null,
+    document_id: null,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+  writePayments([...readPayments(), payment]);
+  recordTimelineActivity(payment.workspace_id, "payment", payment.id, "payment_created", "Payment created: Succeeded");
+
+  if (invoice) {
+    applyPaymentToInvoice(invoice.id);
+  }
+
+  const creditAccount = findAccountByNumber(payment.workspace_id, invoice ? 1100 : 2200);
+  const debitAccount = findAccountByNumber(payment.workspace_id, 1000);
+  insertMockJournalEntry({
+    workspace_id: payment.workspace_id,
+    entry_date: payment.transaction_date,
+    source_type: "payment_settlement",
+    source_id: payment.id,
+    posting_key: `payment_settlement:${payment.id}`,
+    memo: `Payment settlement (${payment.payment_type}, ${payment.payment_method})`,
+    posted_by: CURRENT_ACTOR,
+    lines: [
+      { account_id: debitAccount.id, debit_minor: payment.amount_minor, credit_minor: 0 },
+      { account_id: creditAccount.id, debit_minor: 0, credit_minor: payment.amount_minor },
+    ],
+  });
+
+  await getCoreAuditLogService().recordAuditEvent(payment.workspace_id, {
+    actor: CURRENT_ACTOR,
+    action: "payment_settlement_recorded",
+    ownerType: "payment",
+    ownerId: payment.id,
+    before: null,
+    after: { amount_minor: payment.amount_minor, payment_method: payment.payment_method, invoice_id: payment.invoice_id },
+  });
+
+  return ok(payment);
+}
+
+/**
+ * Delegates the status transition itself to the existing markExpenseDue/
+ * markExpensePaid/markExpenseReimbursed — no second copy of that
+ * validation. Known, disclosed deviation from the Supabase/RPC path:
+ * markExpenseReimbursed also requires `reimbursable=true` (pre-existing
+ * mock behavior, not introduced by this phase), while record_expense_
+ * transition's own SQL does not check that flag — see the pre-commit
+ * report for this phase.
+ */
+async function recordExpenseTransition(expenseId: string, input: ExpenseTransitionInput): Promise<DataResult<Expense>> {
+  const parsed = expenseTransitionInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  const existing = readExpenses().find((e) => e.id === expenseId);
+  if (!existing) {
+    return fail("Expense not found.");
+  }
+
+  const transitionResult =
+    parsed.data.transition === "due"
+      ? await markExpenseDue(expenseId)
+      : parsed.data.transition === "paid"
+        ? await markExpensePaid(expenseId)
+        : await markExpenseReimbursed(expenseId);
+  if (!transitionResult.success) {
+    return transitionResult;
+  }
+
+  const expense = transitionResult.data;
+  const postingKeyLabel = parsed.data.transition === "reimbursed" ? "expense_reimbursement" : `expense_${parsed.data.transition}`;
+  const debitAccount =
+    parsed.data.transition === "reimbursed"
+      ? findAccountByNumber(expense.workspace_id, 6280)
+      : findAccountByNumber(expense.workspace_id, EXPENSE_CATEGORY_ACCOUNT_NUMBERS[expense.category]);
+  const creditAccount = findAccountByNumber(expense.workspace_id, parsed.data.transition === "due" ? 2000 : 1000);
+
+  insertMockJournalEntry({
+    workspace_id: expense.workspace_id,
+    entry_date: expense.due_date ?? expense.transaction_date,
+    source_type: `expense_${parsed.data.transition}`,
+    source_id: expenseId,
+    posting_key: `${postingKeyLabel}:${expenseId}`,
+    memo: `Expense ${parsed.data.transition}: "${expense.description}"`,
+    posted_by: CURRENT_ACTOR,
+    lines: [
+      { account_id: debitAccount.id, debit_minor: expense.amount_minor, credit_minor: 0 },
+      { account_id: creditAccount.id, debit_minor: 0, credit_minor: expense.amount_minor },
+    ],
+  });
+
+  await getCoreAuditLogService().recordAuditEvent(expense.workspace_id, {
+    actor: CURRENT_ACTOR,
+    action: `expense_${parsed.data.transition}`,
+    ownerType: "expense",
+    ownerId: expense.id,
+    before: { status: existing.status },
+    after: { status: expense.status },
+  });
+
+  return ok(expense);
+}
+
+/** Balance equality is validated here (unlike the Supabase repository, which defers entirely to record_manual_adjustment's own P1106 check) since the mock has no Postgres backstop of its own — this is the one place this phase's "no automatic balancing" rule is enforced client-side, not a duplicated accounting RULE (which side is debited/credited), just the arithmetic invariant a Journal Entry can never skip. */
+async function recordManualAdjustment(input: ManualAdjustmentInput): Promise<DataResult<JournalEntry>> {
+  const parsed = manualAdjustmentInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  for (const line of parsed.data.lines) {
+    const account = readChartOfAccounts().find((a) => a.id === line.account_id);
+    if (!account) {
+      return fail("One or more lines reference an account that does not exist.");
+    }
+    if (account.workspace_id !== CURRENT_WORKSPACE_ID) {
+      return fail("One or more lines reference an account from a different workspace.");
+    }
+    if (account.archived_at) {
+      return fail(`Line references archived account "${account.name}".`);
+    }
+  }
+
+  const totalDebit = sumMinor(parsed.data.lines.map((line) => line.debit_minor));
+  const totalCredit = sumMinor(parsed.data.lines.map((line) => line.credit_minor));
+  if (totalDebit !== totalCredit) {
+    return fail(`Manual adjustment is not balanced: total debits ${totalDebit} do not equal total credits ${totalCredit}.`);
+  }
+
+  const entry = insertMockJournalEntry({
+    workspace_id: CURRENT_WORKSPACE_ID,
+    entry_date: parsed.data.entry_date,
+    source_type: "manual_adjustment",
+    source_id: null,
+    posting_key: null,
+    memo: parsed.data.memo,
+    posted_by: CURRENT_ACTOR,
+    lines: parsed.data.lines.map((line) => ({
+      account_id: line.account_id,
+      debit_minor: line.debit_minor,
+      credit_minor: line.credit_minor,
+      line_memo: line.line_memo ?? null,
+    })),
+  });
+
+  await getCoreAuditLogService().recordAuditEvent(entry.workspace_id, {
+    actor: CURRENT_ACTOR,
+    action: "manual_adjustment_recorded",
+    ownerType: "journal_entry",
+    ownerId: entry.id,
+    before: null,
+    after: { memo: entry.memo, line_count: parsed.data.lines.length },
+  });
+
+  return ok(entry);
+}
+
+/** Creates a new entry with every line's debit/credit swapped; the original is never mutated except for reversed_by_entry_id, matching reverse_journal_entry's own guarantee. Append-only: no journal_lines row is ever edited or removed. */
+async function reverseJournalEntry(journalEntryId: string, input: JournalEntryReversalInput): Promise<DataResult<JournalEntry>> {
+  const parsed = journalEntryReversalInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  const original = readJournalEntries().find((e) => e.id === journalEntryId);
+  if (!original) {
+    return fail("Journal entry not found.");
+  }
+  if (original.reversed_by_entry_id) {
+    return fail("This journal entry has already been reversed.");
+  }
+
+  const originalLines = readJournalLines().filter((line) => line.journal_entry_id === journalEntryId);
+
+  const reversal = insertMockJournalEntry({
+    workspace_id: original.workspace_id,
+    entry_date: nowIso().slice(0, 10),
+    source_type: "reversal",
+    source_id: journalEntryId,
+    posting_key: `reversal:${journalEntryId}`,
+    memo: parsed.data.reason,
+    posted_by: CURRENT_ACTOR,
+    reverses_entry_id: journalEntryId,
+    lines: originalLines.map((line) => ({
+      account_id: line.account_id,
+      debit_minor: line.credit_minor,
+      credit_minor: line.debit_minor,
+      line_memo: line.line_memo,
+    })),
+  });
+
+  writeJournalEntries(readJournalEntries().map((e) => (e.id === journalEntryId ? { ...e, reversed_by_entry_id: reversal.id } : e)));
+
+  await getCoreAuditLogService().recordAuditEvent(reversal.workspace_id, {
+    actor: CURRENT_ACTOR,
+    action: "journal_entry_reversed",
+    ownerType: "journal_entry",
+    ownerId: journalEntryId,
+    before: { reversed_by_entry_id: null },
+    after: { reversed_by_entry_id: reversal.id },
+  });
+
+  return ok(reversal);
+}
+
+async function createAccountingPeriod(input: AccountingPeriodCreateInput): Promise<DataResult<AccountingPeriod>> {
+  const parsed = accountingPeriodCreateInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  const overlaps = readAccountingPeriods().some(
+    (p) =>
+      p.workspace_id === CURRENT_WORKSPACE_ID &&
+      p.period_start <= parsed.data.period_end &&
+      p.period_end >= parsed.data.period_start,
+  );
+  if (overlaps) {
+    return fail("This date range overlaps an existing accounting period for this workspace.");
+  }
+
+  const timestamp = nowIso();
+  const period: AccountingPeriod = {
+    id: generateId("accounting_period"),
+    workspace_id: CURRENT_WORKSPACE_ID,
+    period_start: parsed.data.period_start,
+    period_end: parsed.data.period_end,
+    status: "open",
+    closed_at: null,
+    closed_by: null,
+    locked_at: null,
+    locked_by: null,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+  writeAccountingPeriods([...readAccountingPeriods(), period]);
+
+  await getCoreAuditLogService().recordAuditEvent(period.workspace_id, {
+    actor: CURRENT_ACTOR,
+    action: "accounting_period_created",
+    ownerType: "accounting_period",
+    ownerId: period.id,
+    before: null,
+    after: { period_start: period.period_start, period_end: period.period_end },
+  });
+
+  return ok(period);
+}
+
+async function closeAccountingPeriod(id: string): Promise<DataResult<AccountingPeriod>> {
+  const existing = readAccountingPeriods().find((p) => p.id === id);
+  if (!existing) {
+    return fail("Accounting period not found.");
+  }
+  if (existing.status !== "open") {
+    return fail(`Cannot close a period with status ${existing.status}.`);
+  }
+
+  const timestamp = nowIso();
+  const updated: AccountingPeriod = { ...existing, status: "closed", closed_at: timestamp, closed_by: CURRENT_ACTOR, updated_at: timestamp };
+  writeAccountingPeriods(readAccountingPeriods().map((p) => (p.id === id ? updated : p)));
+
+  await getCoreAuditLogService().recordAuditEvent(updated.workspace_id, {
+    actor: CURRENT_ACTOR,
+    action: "accounting_period_closed",
+    ownerType: "accounting_period",
+    ownerId: updated.id,
+    before: { status: existing.status },
+    after: { status: updated.status },
+  });
+
+  return ok(updated);
+}
+
+async function lockAccountingPeriod(id: string): Promise<DataResult<AccountingPeriod>> {
+  const existing = readAccountingPeriods().find((p) => p.id === id);
+  if (!existing) {
+    return fail("Accounting period not found.");
+  }
+  if (existing.status !== "closed") {
+    return fail(`Cannot lock a period with status ${existing.status} — a period must be closed before it can be locked.`);
+  }
+
+  const timestamp = nowIso();
+  const updated: AccountingPeriod = { ...existing, status: "locked", locked_at: timestamp, locked_by: CURRENT_ACTOR, updated_at: timestamp };
+  writeAccountingPeriods(readAccountingPeriods().map((p) => (p.id === id ? updated : p)));
+
+  await getCoreAuditLogService().recordAuditEvent(updated.workspace_id, {
+    actor: CURRENT_ACTOR,
+    action: "accounting_period_locked",
+    ownerType: "accounting_period",
+    ownerId: updated.id,
+    before: { status: existing.status },
+    after: { status: updated.status },
+  });
+
+  return ok(updated);
+}
+
 export const mockFinanceRepository: FinanceRepository = {
   getInvoices,
   getInvoiceById,
@@ -1265,4 +1813,17 @@ export const mockFinanceRepository: FinanceRepository = {
   createExpenseNote,
   togglePinExpenseNote,
   getTimelineByExpenseId,
+  listChartOfAccounts,
+  getChartOfAccount,
+  listJournalEntries,
+  getJournalEntry,
+  listAccountingPeriods,
+  getAccountingPeriod,
+  recordPaymentSettlement,
+  recordExpenseTransition,
+  recordManualAdjustment,
+  reverseJournalEntry,
+  createAccountingPeriod,
+  closeAccountingPeriod,
+  lockAccountingPeriod,
 };

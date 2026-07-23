@@ -94,6 +94,81 @@ export const expenseSchema = z.object({
 export type ExpenseInput = z.infer<typeof expenseSchema>;
 
 /**
+ * Finance Repository Layer (Ledger) input schemas — validate shape only
+ * (required fields, integer minor units, line count, exactly one nonzero
+ * side per line), never accounting rules already enforced in Postgres.
+ * Balance equality (total debits = total credits) is deliberately NOT
+ * checked here — record_manual_adjustment's own P1106 check is the single
+ * source of truth for that invariant; duplicating it in TypeScript would
+ * create two places balance logic could drift apart. No UI exists yet for
+ * any of these, so — same as invoiceSchema/paymentSchema/expenseSchema
+ * above — there is no client-side form-schema variant, only the
+ * authoritative shape the repository layer validates against.
+ */
+
+export const manualAdjustmentLineInputSchema = z
+  .object({
+    account_id: z.string().trim().min(1, "An account is required"),
+    debit_minor: moneyMinor,
+    credit_minor: moneyMinor,
+    line_memo: z.string().trim().nullable().optional(),
+  })
+  .refine((line) => (line.debit_minor > 0) !== (line.credit_minor > 0), {
+    message: "Enter an amount on exactly one side (debit or credit), not both or neither",
+    path: ["debit_minor"],
+  });
+
+export type ManualAdjustmentLineInput = z.infer<typeof manualAdjustmentLineInputSchema>;
+
+export const manualAdjustmentInputSchema = z.object({
+  entry_date: z.string().trim().min(1, "Entry date is required"),
+  memo: z.string().trim().min(1, "A memo is required"),
+  lines: z.array(manualAdjustmentLineInputSchema).min(2, "A manual adjustment requires at least two lines"),
+});
+
+export type ManualAdjustmentInput = z.infer<typeof manualAdjustmentInputSchema>;
+
+export const journalEntryReversalInputSchema = z.object({
+  reason: z.string().trim().min(1, "A reversal reason is required"),
+});
+
+export type JournalEntryReversalInput = z.infer<typeof journalEntryReversalInputSchema>;
+
+export const expenseTransitionInputSchema = z.object({
+  transition: z.enum(["due", "paid", "reimbursed"]),
+});
+
+export type ExpenseTransitionInput = z.infer<typeof expenseTransitionInputSchema>;
+
+/**
+ * PaymentSettlementInput reuses paymentSchema/PaymentInput as-is — the
+ * record_payment_settlement RPC's args are the same shape as
+ * createPayment's (invoice_id/client_id/event_id/contract_id/payment_type/
+ * amount_minor/currency/payment_method/reference/transaction_date/notes),
+ * so a second, parallel schema would just duplicate this one. The one rule
+ * unique to settlement — reject payment_method='stripe' — is a repository-
+ * layer boundary check, not a shape-validation rule, so it lives in
+ * lib/data/finance/supabaseRepository.ts / mockRepository.ts instead of here.
+ */
+export type PaymentSettlementInput = PaymentInput;
+
+export const accountingPeriodCreateInputSchema = z
+  .object({
+    period_start: z.string().trim().min(1, "Start date is required"),
+    period_end: z.string().trim().min(1, "End date is required"),
+  })
+  .refine((data) => data.period_end > data.period_start, {
+    message: "End date must be after start date",
+    path: ["period_end"],
+  });
+
+export type AccountingPeriodCreateInput = z.infer<typeof accountingPeriodCreateInputSchema>;
+
+// close_period/lock_period take no body input beyond the target period's
+// id — already a plain function argument on closeAccountingPeriod(id)/
+// lockAccountingPeriod(id), so no input type exists for either.
+
+/**
  * Client-side (react-hook-form) form schemas for the Finance UI — every
  * field is a plain string or boolean, matching what HTML form inputs
  * actually produce, mirroring modules/contracts/schema.ts's

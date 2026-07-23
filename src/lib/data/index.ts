@@ -13,6 +13,9 @@ import type { ContractExhibit } from "@/types/contractExhibit";
 import type { Invoice } from "@/types/invoice";
 import type { Payment } from "@/types/payment";
 import type { Expense } from "@/types/expense";
+import type { ChartOfAccount } from "@/types/chartOfAccount";
+import type { JournalEntry } from "@/types/journalEntry";
+import type { AccountingPeriod } from "@/types/accountingPeriod";
 import type { Document } from "@/types/document";
 import type { DocumentFolder } from "@/types/documentFolder";
 import type { InventoryItem } from "@/types/inventoryItem";
@@ -67,7 +70,16 @@ import type { EventFormInput, ScheduleItemInput } from "@/modules/events/schema"
 import type { ChecklistItemInput } from "@/modules/checklist/schema";
 import type { ContractInput, ContractExhibitInput } from "@/modules/contracts/schema";
 import { computeContractStats } from "@/modules/contracts/contractStats";
-import type { InvoiceInput, PaymentInput, ExpenseInput } from "@/modules/finance/schema";
+import type {
+  InvoiceInput,
+  PaymentInput,
+  ExpenseInput,
+  ManualAdjustmentInput,
+  PaymentSettlementInput,
+  ExpenseTransitionInput,
+  JournalEntryReversalInput,
+  AccountingPeriodCreateInput,
+} from "@/modules/finance/schema";
 import type { DocumentMetadataInput, NewDocumentVersionInput, DocumentFolderInput } from "@/modules/documents/schema";
 import {
   computeDocumentWorkspaceSummary,
@@ -119,7 +131,14 @@ import { supabaseMediaAssetsRepository } from "@/lib/data/media/supabaseReposito
 import type { ContractFilters, ContractTemplateFilters } from "@/lib/data/contracts/repository";
 import { mockContractsRepository } from "@/lib/data/contracts/mockRepository";
 import { supabaseContractsRepository } from "@/lib/data/contracts/supabaseRepository";
-import type { InvoiceFilters, PaymentFilters, ExpenseFilters } from "@/lib/data/finance/repository";
+import type {
+  InvoiceFilters,
+  PaymentFilters,
+  ExpenseFilters,
+  ChartOfAccountFilters,
+  JournalEntryFilters,
+  AccountingPeriodFilters,
+} from "@/lib/data/finance/repository";
 import { mockFinanceRepository } from "@/lib/data/finance/mockRepository";
 import { supabaseFinanceRepository } from "@/lib/data/finance/supabaseRepository";
 import type {
@@ -1042,7 +1061,14 @@ export async function reorderContractExhibits(
 // expenseWorkflow.ts).
 // ---------------------------------------------------------------------------
 
-export type { InvoiceFilters, PaymentFilters, ExpenseFilters } from "@/lib/data/finance/repository";
+export type {
+  InvoiceFilters,
+  PaymentFilters,
+  ExpenseFilters,
+  ChartOfAccountFilters,
+  JournalEntryFilters,
+  AccountingPeriodFilters,
+} from "@/lib/data/finance/repository";
 
 function financeRepository() {
   return selectRepository({ mock: mockFinanceRepository, supabase: supabaseFinanceRepository });
@@ -1539,6 +1565,65 @@ export async function createExpenseNote(expenseId: string, input: NoteFormInput)
 
 export async function getTimelineByExpenseId(expenseId: string): Promise<TimelineActivity[]> {
   return financeRepository().getTimelineByExpenseId(expenseId);
+}
+
+// ---------------------------------------------------------------------------
+// Finance Ledger (Repository Layer phase) — consumes the already-approved
+// Finance Posting Engine RPCs; bundled into the same financeRepository()
+// factory call above rather than a separate module, since it lives in the
+// same lib/data/finance/ repository (see repository.ts's own doc comment).
+// ---------------------------------------------------------------------------
+
+export async function getChartOfAccounts(filters?: ChartOfAccountFilters): Promise<ChartOfAccount[]> {
+  return financeRepository().listChartOfAccounts(filters);
+}
+
+export async function getChartOfAccount(id: string): Promise<ChartOfAccount> {
+  return financeRepository().getChartOfAccount(id);
+}
+
+export async function getJournalEntries(filters?: JournalEntryFilters): Promise<JournalEntry[]> {
+  return financeRepository().listJournalEntries(filters);
+}
+
+export async function getJournalEntry(id: string): Promise<JournalEntry> {
+  return financeRepository().getJournalEntry(id);
+}
+
+export async function getAccountingPeriods(filters?: AccountingPeriodFilters): Promise<AccountingPeriod[]> {
+  return financeRepository().listAccountingPeriods(filters);
+}
+
+export async function getAccountingPeriod(id: string): Promise<AccountingPeriod> {
+  return financeRepository().getAccountingPeriod(id);
+}
+
+export async function recordPaymentSettlement(input: PaymentSettlementInput): Promise<DataResult<Payment>> {
+  return financeRepository().recordPaymentSettlement(input);
+}
+
+export async function recordExpenseTransition(expenseId: string, input: ExpenseTransitionInput): Promise<DataResult<Expense>> {
+  return financeRepository().recordExpenseTransition(expenseId, input);
+}
+
+export async function recordManualAdjustment(input: ManualAdjustmentInput): Promise<DataResult<JournalEntry>> {
+  return financeRepository().recordManualAdjustment(input);
+}
+
+export async function reverseJournalEntry(journalEntryId: string, input: JournalEntryReversalInput): Promise<DataResult<JournalEntry>> {
+  return financeRepository().reverseJournalEntry(journalEntryId, input);
+}
+
+export async function createAccountingPeriod(input: AccountingPeriodCreateInput): Promise<DataResult<AccountingPeriod>> {
+  return financeRepository().createAccountingPeriod(input);
+}
+
+export async function closeAccountingPeriod(id: string): Promise<DataResult<AccountingPeriod>> {
+  return financeRepository().closeAccountingPeriod(id);
+}
+
+export async function lockAccountingPeriod(id: string): Promise<DataResult<AccountingPeriod>> {
+  return financeRepository().lockAccountingPeriod(id);
 }
 
 // ---------------------------------------------------------------------------

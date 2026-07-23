@@ -32,6 +32,15 @@ export const ENTITY_TYPES = [
   // were: no live route or migration yet, added now so Notes/Timeline/
   // Search/Audit can type-check against it ahead of the UI/migration phases.
   "purchase",
+  // Finance Repository Layer phase — needed so Core Audit Log's
+  // recordAuditEvent() can type-check ownerType for Journal Entry and
+  // Accounting Period mutations (Manual Adjustment, Reversal, period
+  // create/close/lock). timeline_activities_owner_type_check already
+  // widened to include "accounting_period" during the Posting Engine
+  // phase; "journal_entry" needs no equivalent DB widening since nothing
+  // writes a Timeline row owned by one yet, only Audit entries.
+  "journal_entry",
+  "accounting_period",
 ] as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[number];

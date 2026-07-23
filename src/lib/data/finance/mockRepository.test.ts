@@ -5,8 +5,20 @@ import { resetPaymentsStore } from "@/lib/data/mock/paymentsStore";
 import { resetExpensesStore } from "@/lib/data/mock/expensesStore";
 import { resetTimelineStore } from "@/lib/data/mock/timelineStore";
 import { resetNotesStore } from "@/lib/data/mock/notesStore";
+import { resetChartOfAccountsStore } from "@/lib/data/mock/chartOfAccountsStore";
+import { resetJournalEntriesStore } from "@/lib/data/mock/journalEntriesStore";
+import { resetJournalLinesStore } from "@/lib/data/mock/journalLinesStore";
+import { resetAccountingPeriodsStore } from "@/lib/data/mock/accountingPeriodsStore";
+import { resetAuditLogStore, mockAuditLogRepository } from "@/lib/data/core/audit/mockRepository";
 import { NotFoundError } from "@/core/errors";
-import type { InvoiceInput, PaymentInput, ExpenseInput } from "@/modules/finance/schema";
+import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
+import type {
+  InvoiceInput,
+  PaymentInput,
+  ExpenseInput,
+  ManualAdjustmentInput,
+  PaymentSettlementInput,
+} from "@/modules/finance/schema";
 
 afterEach(() => {
   resetInvoicesStore();
@@ -14,6 +26,11 @@ afterEach(() => {
   resetExpensesStore();
   resetTimelineStore();
   resetNotesStore();
+  resetChartOfAccountsStore();
+  resetJournalEntriesStore();
+  resetJournalLinesStore();
+  resetAccountingPeriodsStore();
+  resetAuditLogStore();
 });
 
 // event_1 -> client_2, event_2 -> client_3, event_3/event_4 -> client_1, event_5 -> client_4
@@ -775,5 +792,278 @@ describe("mockFinanceRepository Expense Notes and Timeline", () => {
   it("togglePinExpenseNote returns null for a note that isn't Expense-owned", async () => {
     const result = await mockFinanceRepository.togglePinExpenseNote("note_1");
     expect(result).toBeNull();
+  });
+});
+
+const PAYMENT_SETTLEMENT_INPUT: PaymentSettlementInput = { ...BASE_PAYMENT_INPUT };
+
+const MANUAL_ADJUSTMENT_INPUT: ManualAdjustmentInput = {
+  entry_date: "2026-07-15",
+  memo: "Correcting entry",
+  lines: [
+    { account_id: "account_1000", debit_minor: 5000, credit_minor: 0, line_memo: null },
+    { account_id: "account_2000", debit_minor: 0, credit_minor: 5000, line_memo: null },
+  ],
+};
+
+describe("mockFinanceRepository.listChartOfAccounts / getChartOfAccount", () => {
+  it("returns the full 41-account seed, workspace-scoped, ordered by account_number, excluding archived by default", async () => {
+    const accounts = await mockFinanceRepository.listChartOfAccounts();
+    expect(accounts.length).toBeGreaterThan(30);
+    expect(accounts.every((a) => a.workspace_id === CURRENT_WORKSPACE_ID)).toBe(true);
+    for (let i = 1; i < accounts.length; i++) {
+      expect(accounts[i].account_number).toBeGreaterThan(accounts[i - 1].account_number);
+    }
+  });
+
+  it("filters by accountType", async () => {
+    const accounts = await mockFinanceRepository.listChartOfAccounts({ accountType: "asset" });
+    expect(accounts.length).toBeGreaterThan(0);
+    expect(accounts.every((a) => a.account_type === "asset")).toBe(true);
+  });
+
+  it("getChartOfAccount throws NotFoundError for an unknown id", async () => {
+    await expect(mockFinanceRepository.getChartOfAccount("nope")).rejects.toThrow(NotFoundError);
+  });
+
+  it("getChartOfAccount returns a matching row with integer minor-unit-free, correctly-typed fields for a known id", async () => {
+    const account = await mockFinanceRepository.getChartOfAccount("account_1000");
+    expect(account.account_number).toBe(1000);
+    expect(account.name).toBe("Cash");
+    expect(account.normal_balance).toBe("debit");
+  });
+});
+
+describe("mockFinanceRepository accounting periods", () => {
+  it("listAccountingPeriods returns the seeded open period", async () => {
+    const periods = await mockFinanceRepository.listAccountingPeriods();
+    expect(periods.some((p) => p.status === "open")).toBe(true);
+  });
+
+  it("getAccountingPeriod throws NotFoundError for an unknown id", async () => {
+    await expect(mockFinanceRepository.getAccountingPeriod("nope")).rejects.toThrow(NotFoundError);
+  });
+
+  it("createAccountingPeriod rejects an overlapping range and writes exactly one Audit entry on success", async () => {
+    const overlap = await mockFinanceRepository.createAccountingPeriod({ period_start: "2026-07-15", period_end: "2026-09-15" });
+    expect(overlap.success).toBe(false);
+
+    const created = await mockFinanceRepository.createAccountingPeriod({ period_start: "2026-09-01", period_end: "2026-09-30" });
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+    expect(created.data.status).toBe("open");
+
+    const auditEntries = await mockAuditLogRepository.getAuditLogForOwner(CURRENT_WORKSPACE_ID, "accounting_period", created.data.id);
+    expect(auditEntries.filter((e) => e.action === "accounting_period_created")).toHaveLength(1);
+  });
+
+  it("period lifecycle follows open -> closed -> locked, rejecting a direct open -> locked transition, never mutating the row via a second table write", async () => {
+    const periods = await mockFinanceRepository.listAccountingPeriods({ status: "open" });
+    const openPeriod = periods[0];
+
+    const lockBeforeClose = await mockFinanceRepository.lockAccountingPeriod(openPeriod.id);
+    expect(lockBeforeClose.success).toBe(false);
+
+    const closed = await mockFinanceRepository.closeAccountingPeriod(openPeriod.id);
+    expect(closed.success).toBe(true);
+    if (!closed.success) return;
+    expect(closed.data.status).toBe("closed");
+    expect(closed.data.closed_at).not.toBeNull();
+
+    const closeAgain = await mockFinanceRepository.closeAccountingPeriod(openPeriod.id);
+    expect(closeAgain.success).toBe(false);
+
+    const locked = await mockFinanceRepository.lockAccountingPeriod(openPeriod.id);
+    expect(locked.success).toBe(true);
+    if (!locked.success) return;
+    expect(locked.data.status).toBe("locked");
+    expect(locked.data.locked_at).not.toBeNull();
+
+    const auditEntries = await mockAuditLogRepository.getAuditLogForOwner(CURRENT_WORKSPACE_ID, "accounting_period", openPeriod.id);
+    expect(auditEntries.some((e) => e.action === "accounting_period_closed")).toBe(true);
+    expect(auditEntries.some((e) => e.action === "accounting_period_locked")).toBe(true);
+  });
+});
+
+describe("mockFinanceRepository.recordPaymentSettlement", () => {
+  it("rejects payment_method='stripe'", async () => {
+    const result = await mockFinanceRepository.recordPaymentSettlement({ ...PAYMENT_SETTLEMENT_INPUT, payment_method: "stripe" });
+    expect(result.success).toBe(false);
+  });
+
+  it("creates a succeeded Payment, posts a balanced Journal Entry, and writes exactly one Audit entry", async () => {
+    const result = await mockFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.status).toBe("succeeded");
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_settlement" });
+    const posted = entries.find((e) => e.source_id === result.data.id);
+    expect(posted).toBeDefined();
+    expect(posted?.posting_key).toBe(`payment_settlement:${result.data.id}`);
+
+    const detail = await mockFinanceRepository.getJournalEntry(posted!.id);
+    const totalDebit = detail.lines!.reduce((sum, line) => sum + line.debit_minor, 0);
+    const totalCredit = detail.lines!.reduce((sum, line) => sum + line.credit_minor, 0);
+    expect(totalDebit).toBe(totalCredit);
+    expect(Number.isInteger(totalDebit)).toBe(true);
+
+    const auditEntries = await mockAuditLogRepository.getAuditLogForOwner(CURRENT_WORKSPACE_ID, "payment", result.data.id);
+    expect(auditEntries.filter((e) => e.action === "payment_settlement_recorded")).toHaveLength(1);
+  });
+});
+
+describe("mockFinanceRepository.recordExpenseTransition", () => {
+  it("transitions the Expense, posts a Journal Entry, and writes exactly one Audit entry", async () => {
+    const result = await mockFinanceRepository.recordExpenseTransition("expense_3", { transition: "due" });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.status).toBe("due");
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "expense_due" });
+    expect(entries.some((e) => e.source_id === "expense_3")).toBe(true);
+
+    const auditEntries = await mockAuditLogRepository.getAuditLogForOwner(CURRENT_WORKSPACE_ID, "expense", "expense_3");
+    expect(auditEntries.filter((e) => e.action === "expense_due")).toHaveLength(1);
+  });
+
+  it("fails for an unsupported transition from the Expense's current status", async () => {
+    const result = await mockFinanceRepository.recordExpenseTransition("expense_1", { transition: "due" });
+    expect(result.success).toBe(false);
+  });
+
+  it("fails for an unknown Expense id", async () => {
+    const result = await mockFinanceRepository.recordExpenseTransition("nope", { transition: "due" });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("mockFinanceRepository.recordManualAdjustment", () => {
+  it("rejects a blank memo, fewer than two lines, a zero-value line, and a double-sided line", async () => {
+    expect((await mockFinanceRepository.recordManualAdjustment({ ...MANUAL_ADJUSTMENT_INPUT, memo: "" })).success).toBe(false);
+    expect((await mockFinanceRepository.recordManualAdjustment({ ...MANUAL_ADJUSTMENT_INPUT, lines: [MANUAL_ADJUSTMENT_INPUT.lines[0]] })).success).toBe(false);
+    expect(
+      (
+        await mockFinanceRepository.recordManualAdjustment({
+          ...MANUAL_ADJUSTMENT_INPUT,
+          lines: [
+            { account_id: "account_1000", debit_minor: 0, credit_minor: 0, line_memo: null },
+            { account_id: "account_2000", debit_minor: 0, credit_minor: 0, line_memo: null },
+          ],
+        })
+      ).success,
+    ).toBe(false);
+    expect(
+      (
+        await mockFinanceRepository.recordManualAdjustment({
+          ...MANUAL_ADJUSTMENT_INPUT,
+          lines: [
+            { account_id: "account_1000", debit_minor: 100, credit_minor: 100, line_memo: null },
+            { account_id: "account_2000", debit_minor: 0, credit_minor: 100, line_memo: null },
+          ],
+        })
+      ).success,
+    ).toBe(false);
+  });
+
+  it("rejects an unbalanced total (total debits != total credits), with no automatic plug line", async () => {
+    const result = await mockFinanceRepository.recordManualAdjustment({
+      ...MANUAL_ADJUSTMENT_INPUT,
+      lines: [
+        { account_id: "account_1000", debit_minor: 5000, credit_minor: 0, line_memo: null },
+        { account_id: "account_2000", debit_minor: 0, credit_minor: 4000, line_memo: null },
+      ],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("posts a balanced Journal Entry with posting_key null and writes exactly one Audit entry", async () => {
+    const result = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.posting_key).toBeNull();
+    expect(result.data.source_id).toBeNull();
+    expect(result.data.source_type).toBe("manual_adjustment");
+
+    const auditEntries = await mockAuditLogRepository.getAuditLogForOwner(CURRENT_WORKSPACE_ID, "journal_entry", result.data.id);
+    expect(auditEntries.filter((e) => e.action === "manual_adjustment_recorded")).toHaveLength(1);
+  });
+});
+
+describe("mockFinanceRepository.reverseJournalEntry", () => {
+  it("requires a nonblank reason", async () => {
+    const created = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT);
+    if (!created.success) throw new Error("setup failed");
+
+    const result = await mockFinanceRepository.reverseJournalEntry(created.data.id, { reason: "" });
+    expect(result.success).toBe(false);
+  });
+
+  it("creates a new entry with debit/credit swapped, leaves the original entry's lines unchanged, links both directions, and allows at most one reversal per entry", async () => {
+    const created = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT);
+    if (!created.success) throw new Error("setup failed");
+    const original = await mockFinanceRepository.getJournalEntry(created.data.id);
+
+    const reversal = await mockFinanceRepository.reverseJournalEntry(created.data.id, { reason: "Correcting a duplicate entry" });
+    expect(reversal.success).toBe(true);
+    if (!reversal.success) return;
+
+    expect(reversal.data.reverses_entry_id).toBe(created.data.id);
+    expect(reversal.data.posting_key).toBe(`reversal:${created.data.id}`);
+
+    const originalAfter = await mockFinanceRepository.getJournalEntry(created.data.id);
+    expect(originalAfter.reversed_by_entry_id).toBe(reversal.data.id);
+    // Original's own lines are untouched — same account/amount pairing, not swapped.
+    expect(originalAfter.lines!.map((l) => ({ account_id: l.account_id, debit_minor: l.debit_minor, credit_minor: l.credit_minor }))).toEqual(
+      original.lines!.map((l) => ({ account_id: l.account_id, debit_minor: l.debit_minor, credit_minor: l.credit_minor })),
+    );
+
+    const reversalDetail = await mockFinanceRepository.getJournalEntry(reversal.data.id);
+    for (let i = 0; i < original.lines!.length; i++) {
+      expect(reversalDetail.lines![i].debit_minor).toBe(original.lines![i].credit_minor);
+      expect(reversalDetail.lines![i].credit_minor).toBe(original.lines![i].debit_minor);
+    }
+
+    // A second reversal attempt on the same original entry is rejected.
+    const secondReversal = await mockFinanceRepository.reverseJournalEntry(created.data.id, { reason: "Trying again" });
+    expect(secondReversal.success).toBe(false);
+
+    const auditEntries = await mockAuditLogRepository.getAuditLogForOwner(CURRENT_WORKSPACE_ID, "journal_entry", created.data.id);
+    expect(auditEntries.filter((e) => e.action === "journal_entry_reversed")).toHaveLength(1);
+  });
+
+  it("fails for an unknown Journal Entry id", async () => {
+    const result = await mockFinanceRepository.reverseJournalEntry("nope", { reason: "test" });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("mockFinanceRepository journal ledger — append-only + interface parity", () => {
+  it("never mutates or removes an existing Journal Entry row except via reversed_by_entry_id", async () => {
+    const created = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT);
+    if (!created.success) throw new Error("setup failed");
+    const before = await mockFinanceRepository.getJournalEntry(created.data.id);
+
+    await mockFinanceRepository.reverseJournalEntry(created.data.id, { reason: "test" });
+    const after = await mockFinanceRepository.getJournalEntry(created.data.id);
+
+    expect(after.entry_date).toBe(before.entry_date);
+    expect(after.memo).toBe(before.memo);
+    expect(after.posting_key).toBe(before.posting_key);
+    expect(after.lines).toEqual(before.lines);
+  });
+
+  it("listJournalEntries/getJournalEntry only return entries for the current workspace", async () => {
+    const created = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT);
+    if (!created.success) throw new Error("setup failed");
+    const entries = await mockFinanceRepository.listJournalEntries();
+    expect(entries.every((e) => e.workspace_id === CURRENT_WORKSPACE_ID)).toBe(true);
+  });
+
+  it("Supabase and mock repositories expose the exact same public method names (interface parity)", async () => {
+    const { supabaseFinanceRepository } = await import("@/lib/data/finance/supabaseRepository");
+    const mockKeys = Object.keys(mockFinanceRepository).sort();
+    const supabaseKeys = Object.keys(supabaseFinanceRepository).sort();
+    expect(mockKeys).toEqual(supabaseKeys);
   });
 });

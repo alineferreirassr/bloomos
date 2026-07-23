@@ -4,7 +4,11 @@ import type { Payment } from "@/types/payment";
 import type { Expense } from "@/types/expense";
 import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
+import type { ChartOfAccount } from "@/types/chartOfAccount";
+import type { JournalEntry } from "@/types/journalEntry";
+import type { AccountingPeriod } from "@/types/accountingPeriod";
 import type { EntityType } from "@/core/enums/entityType";
+import type { AccountType } from "@/core/enums/accountType";
 import { NotFoundError, UnauthorizedError, ForbiddenError } from "@/core/errors";
 import { INVOICE_STATUS_LABELS } from "@/core/enums/invoiceStatus";
 import { PAYMENT_STATUS_LABELS } from "@/core/enums/paymentStatus";
@@ -17,14 +21,53 @@ import {
   getPaymentNextRecommendedAction,
 } from "@/core/workflows/paymentWorkflow";
 import { canTransitionExpenseStatus, isExpenseTerminal, getExpenseNextRecommendedAction } from "@/core/workflows/expenseWorkflow";
-import { invoiceSchema, paymentSchema, expenseSchema, type InvoiceInput, type PaymentInput, type ExpenseInput } from "@/modules/finance/schema";
+import {
+  invoiceSchema,
+  paymentSchema,
+  expenseSchema,
+  manualAdjustmentInputSchema,
+  journalEntryReversalInputSchema,
+  expenseTransitionInputSchema,
+  accountingPeriodCreateInputSchema,
+  type InvoiceInput,
+  type PaymentInput,
+  type ExpenseInput,
+  type ManualAdjustmentInput,
+  type PaymentSettlementInput,
+  type ExpenseTransitionInput,
+  type JournalEntryReversalInput,
+  type AccountingPeriodCreateInput,
+} from "@/modules/finance/schema";
 import { noteFormSchema, type NoteFormInput } from "@/modules/notes/schema";
 import { type DataResult, ok, fail } from "@/lib/data/result";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import { normalizeSupabaseError } from "@/lib/supabase/errors";
-import { mapInvoiceRow, mapPaymentRow, mapExpenseRow, mapClientRow, mapNoteRow, mapTimelineActivityRow } from "@/lib/supabase/mappers";
+import {
+  mapInvoiceRow,
+  mapPaymentRow,
+  mapExpenseRow,
+  mapClientRow,
+  mapNoteRow,
+  mapTimelineActivityRow,
+  mapChartOfAccountRow,
+  mapJournalEntryRow,
+  mapJournalLineRow,
+  mapAccountingPeriodRow,
+} from "@/lib/supabase/mappers";
 import { getClientWorkspaceSession, type WorkspaceSession } from "@/lib/auth/workspaceSessionClient";
-import type { InvoiceFilters, PaymentFilters, ExpenseFilters, FinanceRepository } from "@/lib/data/finance/repository";
+import { getCoreAuditLogService } from "@/core/audit";
+import { handleFinanceRpcError } from "@/lib/data/finance/errors";
+import type {
+  InvoiceFilters,
+  PaymentFilters,
+  ExpenseFilters,
+  ChartOfAccountFilters,
+  JournalEntryFilters,
+  AccountingPeriodFilters,
+  FinanceRepository,
+} from "@/lib/data/finance/repository";
+
+const DEFAULT_JOURNAL_ENTRY_PAGE_SIZE = 50;
 
 type SupabaseClient = ReturnType<typeof createSupabaseClient>;
 type InvoiceRow = Database["public"]["Tables"]["invoices"]["Row"];
@@ -1590,6 +1633,400 @@ async function getTimelineByExpenseId(expenseId: string): Promise<TimelineActivi
   return fetchTimelineForOwner("expense", expense.workspace_id, expenseId);
 }
 
+// ---------------------------------------------------------------------------
+// Finance Ledger (Repository Layer phase). Consumes the already-approved
+// Finance Posting Engine RPCs — no accounting logic (balance checks,
+// account resolution, idempotency) is re-derived here, only shape
+// validation, error translation, result mapping, and one Core Audit entry
+// per successful write. See core/audit's own doc comment for the same
+// mock-only-this-phase disclosure Purchases/Inventory already carry:
+// getCoreAuditLogService() writes to an in-memory store regardless of data
+// mode, so a Supabase-backed session's Audit entries are not currently
+// durable — an existing, disclosed Core limitation, not something this
+// phase attempts to fix.
+// ---------------------------------------------------------------------------
+
+async function fetchChartOfAccountRow(id: string): Promise<Database["public"]["Tables"]["chart_of_accounts"]["Row"] | null> {
+  const supabase = createSupabaseClient();
+  const { data, error } = await supabase.from("chart_of_accounts").select("*").eq("id", id).maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  return data;
+}
+
+async function listChartOfAccounts(filters: ChartOfAccountFilters = {}): Promise<ChartOfAccount[]> {
+  const session = await requireWorkspaceSession();
+  const { includeArchived = false, accountType } = filters;
+  const supabase = createSupabaseClient();
+  let query = supabase.from("chart_of_accounts").select("*").eq("workspace_id", session.workspace.id);
+  if (!includeArchived) query = query.is("archived_at", null);
+  if (accountType && accountType !== "all") query = query.eq("account_type", accountType);
+  const { data, error } = await query.order("account_number", { ascending: true });
+  if (error) throw normalizeSupabaseError(error);
+  return (data ?? []).map(mapChartOfAccountRow);
+}
+
+async function getChartOfAccount(id: string): Promise<ChartOfAccount> {
+  const row = await fetchChartOfAccountRow(id);
+  if (!row) {
+    throw new NotFoundError(`Chart of Accounts entry ${id} was not found`);
+  }
+  return mapChartOfAccountRow(row);
+}
+
+async function fetchJournalEntryRow(id: string): Promise<Database["public"]["Tables"]["journal_entries"]["Row"] | null> {
+  const supabase = createSupabaseClient();
+  const { data, error } = await supabase.from("journal_entries").select("*").eq("id", id).maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  return data;
+}
+
+/**
+ * accountId filtering is a real two-step query (journal_lines -> matching
+ * entry ids -> journal_entries), not a client-side filter, so it stays
+ * efficient regardless of ledger volume. Pagination uses Postgrest's
+ * native .range() — no cursor/page-token scheme exists elsewhere in this
+ * codebase to match, so this is the smallest addition rather than a new
+ * convention every other list method would need to adopt too. Ordering by
+ * (entry_date desc, id desc) is fully deterministic even when multiple
+ * entries share the same entry_date.
+ */
+async function listJournalEntries(filters: JournalEntryFilters = {}): Promise<JournalEntry[]> {
+  const session = await requireWorkspaceSession();
+  const { dateFrom, dateTo, sourceType, postingStatus, accountId, limit = DEFAULT_JOURNAL_ENTRY_PAGE_SIZE, offset = 0 } = filters;
+  const supabase = createSupabaseClient();
+
+  let entryIdsForAccount: string[] | null = null;
+  if (accountId) {
+    const { data, error } = await supabase
+      .from("journal_lines")
+      .select("journal_entry_id")
+      .eq("workspace_id", session.workspace.id)
+      .eq("account_id", accountId);
+    if (error) throw normalizeSupabaseError(error);
+    entryIdsForAccount = Array.from(new Set((data ?? []).map((row) => row.journal_entry_id)));
+    if (entryIdsForAccount.length === 0) return [];
+  }
+
+  let query = supabase.from("journal_entries").select("*").eq("workspace_id", session.workspace.id);
+  if (dateFrom) query = query.gte("entry_date", dateFrom);
+  if (dateTo) query = query.lte("entry_date", dateTo);
+  if (sourceType && sourceType !== "all") query = query.eq("source_type", sourceType);
+  if (postingStatus && postingStatus !== "all") query = query.eq("posting_status", postingStatus);
+  if (entryIdsForAccount) query = query.in("id", entryIdsForAccount);
+
+  const { data, error } = await query
+    .order("entry_date", { ascending: false })
+    .order("id", { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (error) throw normalizeSupabaseError(error);
+  return (data ?? []).map(mapJournalEntryRow);
+}
+
+/** Attaches lines + a chart_of_accounts join (account_number/name/account_type per line) — two queries, not an embedded Postgrest join, since chart_of_accounts/journal_lines carry no Relationships metadata in database.types.ts for the typed client to infer one from. */
+async function getJournalEntry(id: string): Promise<JournalEntry> {
+  const row = await fetchJournalEntryRow(id);
+  if (!row) {
+    throw new NotFoundError(`Journal entry ${id} was not found`);
+  }
+  const entry = mapJournalEntryRow(row);
+
+  const supabase = createSupabaseClient();
+  const { data: lineRows, error: lineError } = await supabase
+    .from("journal_lines")
+    .select("*")
+    .eq("journal_entry_id", id)
+    .order("line_order", { ascending: true });
+  if (lineError) throw normalizeSupabaseError(lineError);
+
+  const lines = (lineRows ?? []).map(mapJournalLineRow);
+  const accountIds = Array.from(new Set(lines.map((line) => line.account_id)));
+  const accountsById = new Map<string, { account_number: number; name: string; account_type: AccountType }>();
+  if (accountIds.length > 0) {
+    const { data: accountRows, error: accountError } = await supabase
+      .from("chart_of_accounts")
+      .select("id, account_number, name, account_type")
+      .in("id", accountIds);
+    if (accountError) throw normalizeSupabaseError(accountError);
+    for (const account of accountRows ?? []) {
+      accountsById.set(account.id, { account_number: account.account_number, name: account.name, account_type: account.account_type as AccountType });
+    }
+  }
+
+  entry.lines = lines.map((line) => ({ ...line, account: accountsById.get(line.account_id) }));
+  return entry;
+}
+
+async function fetchAccountingPeriodRow(id: string): Promise<Database["public"]["Tables"]["accounting_periods"]["Row"] | null> {
+  const supabase = createSupabaseClient();
+  const { data, error } = await supabase.from("accounting_periods").select("*").eq("id", id).maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  return data;
+}
+
+async function listAccountingPeriods(filters: AccountingPeriodFilters = {}): Promise<AccountingPeriod[]> {
+  const session = await requireWorkspaceSession();
+  const { status } = filters;
+  const supabase = createSupabaseClient();
+  let query = supabase.from("accounting_periods").select("*").eq("workspace_id", session.workspace.id);
+  if (status && status !== "all") query = query.eq("status", status);
+  const { data, error } = await query.order("period_start", { ascending: true });
+  if (error) throw normalizeSupabaseError(error);
+  return (data ?? []).map(mapAccountingPeriodRow);
+}
+
+async function getAccountingPeriod(id: string): Promise<AccountingPeriod> {
+  const row = await fetchAccountingPeriodRow(id);
+  if (!row) {
+    throw new NotFoundError(`Accounting period ${id} was not found`);
+  }
+  return mapAccountingPeriodRow(row);
+}
+
+/** Calls record_payment_settlement. payment_method='stripe' is rejected here, at the Repository boundary, independent of and before the RPC's own P1117 rejection — Stripe remains deferred at every layer. */
+async function recordPaymentSettlement(input: PaymentSettlementInput): Promise<DataResult<Payment>> {
+  if (input.payment_method === "stripe") {
+    return fail("Stripe payments are not supported in this phase — record only manual/internal payment methods.");
+  }
+
+  const parsed = paymentSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  const session = await requireWorkspaceSession();
+  const actor = resolveActorName(session);
+  const supabase = createSupabaseClient();
+
+  const { data, error } = await supabase.rpc("record_payment_settlement", {
+    p_workspace_id: session.workspace.id,
+    p_invoice_id: parsed.data.invoice_id,
+    p_client_id: parsed.data.client_id,
+    p_event_id: parsed.data.event_id,
+    p_contract_id: parsed.data.contract_id,
+    p_payment_type: parsed.data.payment_type,
+    p_amount_minor: parsed.data.amount_minor,
+    p_currency: parsed.data.currency,
+    p_payment_method: parsed.data.payment_method,
+    p_reference: parsed.data.reference,
+    p_transaction_date: parsed.data.transaction_date,
+    p_notes: parsed.data.notes,
+    p_actor: actor,
+  });
+  if (error) return handleFinanceRpcError<Payment>(error);
+
+  const payment = mapPaymentRow(data as Database["public"]["Tables"]["payments"]["Row"]);
+
+  await getCoreAuditLogService().recordAuditEvent(payment.workspace_id, {
+    actor,
+    action: "payment_settlement_recorded",
+    ownerType: "payment",
+    ownerId: payment.id,
+    before: null,
+    after: { amount_minor: payment.amount_minor, payment_method: payment.payment_method, invoice_id: payment.invoice_id },
+  });
+
+  return ok(payment);
+}
+
+async function recordExpenseTransition(expenseId: string, input: ExpenseTransitionInput): Promise<DataResult<Expense>> {
+  const parsed = expenseTransitionInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  const existing = await fetchExpenseRow(expenseId);
+  if (!existing) {
+    return fail("Expense not found.");
+  }
+
+  const session = await requireWorkspaceSession();
+  const actor = resolveActorName(session);
+  const supabase = createSupabaseClient();
+
+  const { data, error } = await supabase.rpc("record_expense_transition", {
+    p_expense_id: expenseId,
+    p_transition: parsed.data.transition,
+    p_actor: actor,
+  });
+  if (error) return handleFinanceRpcError<Expense>(error);
+
+  const expense = mapExpenseRow(data as Database["public"]["Tables"]["expenses"]["Row"]);
+
+  await getCoreAuditLogService().recordAuditEvent(expense.workspace_id, {
+    actor,
+    action: `expense_${parsed.data.transition}`,
+    ownerType: "expense",
+    ownerId: expense.id,
+    before: { status: existing.status },
+    after: { status: expense.status },
+  });
+
+  return ok(expense);
+}
+
+/** Balance equality (total debits = total credits) is validated by record_manual_adjustment's own P1106 check, not re-checked here — see modules/finance/schema.ts's manualAdjustmentInputSchema doc comment. */
+async function recordManualAdjustment(input: ManualAdjustmentInput): Promise<DataResult<JournalEntry>> {
+  const parsed = manualAdjustmentInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  const session = await requireWorkspaceSession();
+  const actor = resolveActorName(session);
+  const supabase = createSupabaseClient();
+
+  const { data, error } = await supabase.rpc("record_manual_adjustment", {
+    p_workspace_id: session.workspace.id,
+    p_entry_date: parsed.data.entry_date,
+    p_memo: parsed.data.memo,
+    p_lines: parsed.data.lines.map((line, index) => ({
+      account_id: line.account_id,
+      debit_minor: line.debit_minor,
+      credit_minor: line.credit_minor,
+      line_memo: line.line_memo ?? null,
+      line_order: index,
+    })),
+    p_actor: actor,
+  });
+  if (error) return handleFinanceRpcError<JournalEntry>(error);
+
+  const entry = mapJournalEntryRow(data as Database["public"]["Tables"]["journal_entries"]["Row"]);
+
+  await getCoreAuditLogService().recordAuditEvent(entry.workspace_id, {
+    actor,
+    action: "manual_adjustment_recorded",
+    ownerType: "journal_entry",
+    ownerId: entry.id,
+    before: null,
+    after: { memo: entry.memo, line_count: parsed.data.lines.length },
+  });
+
+  return ok(entry);
+}
+
+/** Never updates the original entry directly — reverse_journal_entry sets reversed_by_entry_id on it itself, inside the same RPC transaction; this repository only reads/maps the RPC's result. */
+async function reverseJournalEntry(journalEntryId: string, input: JournalEntryReversalInput): Promise<DataResult<JournalEntry>> {
+  const parsed = journalEntryReversalInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  const original = await fetchJournalEntryRow(journalEntryId);
+  if (!original) {
+    return fail("Journal entry not found.");
+  }
+
+  const session = await requireWorkspaceSession();
+  const actor = resolveActorName(session);
+  const supabase = createSupabaseClient();
+
+  const { data, error } = await supabase.rpc("reverse_journal_entry", {
+    p_journal_entry_id: journalEntryId,
+    p_reason: parsed.data.reason,
+    p_actor: actor,
+  });
+  if (error) return handleFinanceRpcError<JournalEntry>(error);
+
+  const reversal = mapJournalEntryRow(data as Database["public"]["Tables"]["journal_entries"]["Row"]);
+
+  await getCoreAuditLogService().recordAuditEvent(reversal.workspace_id, {
+    actor,
+    action: "journal_entry_reversed",
+    ownerType: "journal_entry",
+    ownerId: journalEntryId,
+    before: { reversed_by_entry_id: null },
+    after: { reversed_by_entry_id: reversal.id },
+  });
+
+  return ok(reversal);
+}
+
+async function createAccountingPeriod(input: AccountingPeriodCreateInput): Promise<DataResult<AccountingPeriod>> {
+  const parsed = accountingPeriodCreateInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  const session = await requireWorkspaceSession();
+  const actor = resolveActorName(session);
+  const supabase = createSupabaseClient();
+
+  const { data, error } = await supabase.rpc("create_accounting_period", {
+    p_workspace_id: session.workspace.id,
+    p_period_start: parsed.data.period_start,
+    p_period_end: parsed.data.period_end,
+    p_actor: actor,
+  });
+  if (error) return handleFinanceRpcError<AccountingPeriod>(error);
+
+  const period = mapAccountingPeriodRow(data as Database["public"]["Tables"]["accounting_periods"]["Row"]);
+
+  await getCoreAuditLogService().recordAuditEvent(period.workspace_id, {
+    actor,
+    action: "accounting_period_created",
+    ownerType: "accounting_period",
+    ownerId: period.id,
+    before: null,
+    after: { period_start: period.period_start, period_end: period.period_end },
+  });
+
+  return ok(period);
+}
+
+async function closeAccountingPeriod(id: string): Promise<DataResult<AccountingPeriod>> {
+  const existing = await fetchAccountingPeriodRow(id);
+  if (!existing) {
+    return fail("Accounting period not found.");
+  }
+
+  const session = await requireWorkspaceSession();
+  const actor = resolveActorName(session);
+  const supabase = createSupabaseClient();
+
+  const { data, error } = await supabase.rpc("close_period", { p_period_id: id, p_actor: actor });
+  if (error) return handleFinanceRpcError<AccountingPeriod>(error);
+
+  const period = mapAccountingPeriodRow(data as Database["public"]["Tables"]["accounting_periods"]["Row"]);
+
+  await getCoreAuditLogService().recordAuditEvent(period.workspace_id, {
+    actor,
+    action: "accounting_period_closed",
+    ownerType: "accounting_period",
+    ownerId: period.id,
+    before: { status: existing.status },
+    after: { status: period.status },
+  });
+
+  return ok(period);
+}
+
+async function lockAccountingPeriod(id: string): Promise<DataResult<AccountingPeriod>> {
+  const existing = await fetchAccountingPeriodRow(id);
+  if (!existing) {
+    return fail("Accounting period not found.");
+  }
+
+  const session = await requireWorkspaceSession();
+  const actor = resolveActorName(session);
+  const supabase = createSupabaseClient();
+
+  const { data, error } = await supabase.rpc("lock_period", { p_period_id: id, p_actor: actor });
+  if (error) return handleFinanceRpcError<AccountingPeriod>(error);
+
+  const period = mapAccountingPeriodRow(data as Database["public"]["Tables"]["accounting_periods"]["Row"]);
+
+  await getCoreAuditLogService().recordAuditEvent(period.workspace_id, {
+    actor,
+    action: "accounting_period_locked",
+    ownerType: "accounting_period",
+    ownerId: period.id,
+    before: { status: existing.status },
+    after: { status: period.status },
+  });
+
+  return ok(period);
+}
+
 export const supabaseFinanceRepository: FinanceRepository = {
   getInvoices,
   getInvoiceById,
@@ -1640,4 +2077,17 @@ export const supabaseFinanceRepository: FinanceRepository = {
   createExpenseNote,
   togglePinExpenseNote,
   getTimelineByExpenseId,
+  listChartOfAccounts,
+  getChartOfAccount,
+  listJournalEntries,
+  getJournalEntry,
+  listAccountingPeriods,
+  getAccountingPeriod,
+  recordPaymentSettlement,
+  recordExpenseTransition,
+  recordManualAdjustment,
+  reverseJournalEntry,
+  createAccountingPeriod,
+  closeAccountingPeriod,
+  lockAccountingPeriod,
 };

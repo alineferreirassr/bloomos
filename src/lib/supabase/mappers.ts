@@ -27,6 +27,9 @@ import type { InventoryItem } from "@/types/inventoryItem";
 import type { InventoryMovement } from "@/types/inventoryMovement";
 import type { Purchase } from "@/types/purchase";
 import type { PurchaseItem } from "@/types/purchaseItem";
+import type { ChartOfAccount } from "@/types/chartOfAccount";
+import type { JournalEntry, JournalLine } from "@/types/journalEntry";
+import type { AccountingPeriod } from "@/types/accountingPeriod";
 import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 import type { WorkspaceMemberStatus } from "@/core/enums/workspaceMemberStatus";
 import type { Permission } from "@/core/enums/permission";
@@ -58,6 +61,10 @@ import type { SignatureStatus } from "@/core/enums/signatureStatus";
 import type { ContractTemplateCategory } from "@/core/enums/contractTemplateCategory";
 import type { InvoiceStatus } from "@/core/enums/invoiceStatus";
 import type { PaymentType } from "@/core/enums/paymentType";
+import type { AccountType } from "@/core/enums/accountType";
+import type { NormalBalance } from "@/core/enums/normalBalance";
+import type { PostingStatus } from "@/core/enums/postingStatus";
+import type { AccountingPeriodStatus } from "@/core/enums/accountingPeriodStatus";
 import type { PaymentStatus } from "@/core/enums/paymentStatus";
 import type { PaymentMethod } from "@/core/enums/paymentMethod";
 import type { ExpenseCategory } from "@/core/enums/expenseCategory";
@@ -94,6 +101,10 @@ type PurchaseRow = Database["public"]["Tables"]["purchases"]["Row"];
 type PurchaseItemRow = Database["public"]["Tables"]["purchase_items"]["Row"];
 type InventoryItemRow = Database["public"]["Tables"]["inventory_items"]["Row"];
 type InventoryMovementRow = Database["public"]["Tables"]["inventory_movements"]["Row"];
+type ChartOfAccountRow = Database["public"]["Tables"]["chart_of_accounts"]["Row"];
+type JournalEntryRow = Database["public"]["Tables"]["journal_entries"]["Row"];
+type JournalLineRow = Database["public"]["Tables"]["journal_lines"]["Row"];
+type AccountingPeriodRow = Database["public"]["Tables"]["accounting_periods"]["Row"];
 
 /**
  * Deliberate seam between raw database rows and domain types, even though
@@ -738,6 +749,76 @@ export function mapPurchaseItemRow(row: PurchaseItemRow): PurchaseItem {
     unit_cost_minor: row.unit_cost_minor,
     line_subtotal_minor: row.line_subtotal_minor,
     display_order: row.display_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapChartOfAccountRow(row: ChartOfAccountRow): ChartOfAccount {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    account_number: row.account_number,
+    name: row.name,
+    account_type: row.account_type as AccountType,
+    normal_balance: row.normal_balance as NormalBalance,
+    parent_account_id: row.parent_account_id,
+    description: row.description,
+    is_system: row.is_system,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    archived_at: row.archived_at,
+  };
+}
+
+/** lines/account enrichment is deliberately not set here — getJournalEntry attaches them separately after its own join, matching JournalEntry's own doc comment. */
+export function mapJournalEntryRow(row: JournalEntryRow): JournalEntry {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    entry_date: row.entry_date,
+    accounting_period_id: row.accounting_period_id,
+    source_type: row.source_type,
+    source_id: row.source_id,
+    posting_key: row.posting_key,
+    memo: row.memo,
+    currency: row.currency,
+    reversed_by_entry_id: row.reversed_by_entry_id,
+    reverses_entry_id: row.reverses_entry_id,
+    posting_status: row.posting_status as PostingStatus,
+    failure_reason: row.failure_reason,
+    posted_by: row.posted_by,
+    created_at: row.created_at,
+  };
+}
+
+export function mapJournalLineRow(row: JournalLineRow): JournalLine {
+  return {
+    id: row.id,
+    journal_entry_id: row.journal_entry_id,
+    workspace_id: row.workspace_id,
+    account_id: row.account_id,
+    debit_minor: row.debit_minor,
+    credit_minor: row.credit_minor,
+    currency: row.currency,
+    amount_in_base_currency_minor: row.amount_in_base_currency_minor,
+    line_memo: row.line_memo,
+    line_order: row.line_order,
+    created_at: row.created_at,
+  };
+}
+
+export function mapAccountingPeriodRow(row: AccountingPeriodRow): AccountingPeriod {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    period_start: row.period_start,
+    period_end: row.period_end,
+    status: row.status as AccountingPeriodStatus,
+    closed_at: row.closed_at,
+    closed_by: row.closed_by,
+    locked_at: row.locked_at,
+    locked_by: row.locked_by,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };

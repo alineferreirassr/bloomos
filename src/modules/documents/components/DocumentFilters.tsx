@@ -38,6 +38,8 @@ export const OWNER_TYPE_LABELS: Record<EntityType, string> = {
   inventory_item: "Inventory Item",
   vendor: "Vendor",
   purchase: "Purchase",
+  journal_entry: "Journal Entry",
+  accounting_period: "Accounting Period",
 };
 
 export type DocumentSortField = "title" | "uploaded_at" | "updated_at" | "size_bytes" | "expires_at" | "version";
