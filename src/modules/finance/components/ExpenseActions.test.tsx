@@ -33,9 +33,7 @@ vi.mock("@/lib/data", () => ({
   archiveExpense: vi.fn(),
   cancelExpense: vi.fn(),
   duplicateExpense: vi.fn(),
-  markExpenseDue: vi.fn(),
-  markExpensePaid: vi.fn(),
-  markExpenseReimbursed: vi.fn(),
+  recordExpenseTransition: vi.fn(),
   restoreExpense: vi.fn(),
 }));
 
@@ -96,7 +94,7 @@ describe("ExpenseActions", () => {
 
   it("marks paid directly, without a confirmation modal", async () => {
     const user = userEvent.setup();
-    vi.mocked(dataLayer.markExpensePaid).mockResolvedValue({
+    vi.mocked(dataLayer.recordExpenseTransition).mockResolvedValue({
       success: true,
       data: makeExpense({ status: "paid" }),
     });
@@ -105,13 +103,15 @@ describe("ExpenseActions", () => {
 
     await user.click(screen.getByRole("button", { name: /mark paid/i }));
 
-    await waitFor(() => expect(dataLayer.markExpensePaid).toHaveBeenCalledWith("expense_1"));
+    await waitFor(() =>
+      expect(dataLayer.recordExpenseTransition).toHaveBeenCalledWith("expense_1", { transition: "paid" }),
+    );
     expect(onChanged).toHaveBeenCalled();
   });
 
   it("marks reimbursed directly, without a confirmation modal", async () => {
     const user = userEvent.setup();
-    vi.mocked(dataLayer.markExpenseReimbursed).mockResolvedValue({
+    vi.mocked(dataLayer.recordExpenseTransition).mockResolvedValue({
       success: true,
       data: makeExpense({ status: "reimbursed" }),
     });
@@ -123,7 +123,9 @@ describe("ExpenseActions", () => {
 
     await user.click(screen.getByRole("button", { name: /mark reimbursed/i }));
 
-    await waitFor(() => expect(dataLayer.markExpenseReimbursed).toHaveBeenCalledWith("expense_1"));
+    await waitFor(() =>
+      expect(dataLayer.recordExpenseTransition).toHaveBeenCalledWith("expense_1", { transition: "reimbursed" }),
+    );
     expect(onChanged).toHaveBeenCalled();
   });
 
@@ -186,6 +188,21 @@ describe("ExpenseActions", () => {
     await user.click(screen.getByRole("button", { name: /^approve$/i }));
 
     expect(await screen.findByText(/cannot approve an expense that is already cancelled/i)).toBeInTheDocument();
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a translated Posting Engine error from a transition without calling onChanged", async () => {
+    const user = userEvent.setup();
+    vi.mocked(dataLayer.recordExpenseTransition).mockResolvedValue({
+      success: false,
+      error: "This accounting period is locked and cannot receive new postings.",
+    });
+    const onChanged = vi.fn();
+    renderExpenseActions({ expense: makeExpense({ id: "expense_1", status: "due" }), onChanged });
+
+    await user.click(screen.getByRole("button", { name: /mark paid/i }));
+
+    expect(await screen.findByText(/this accounting period is locked/i)).toBeInTheDocument();
     expect(onChanged).not.toHaveBeenCalled();
   });
 });

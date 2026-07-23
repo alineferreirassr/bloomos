@@ -112,9 +112,14 @@ export function PaymentsListView() {
           </p>
         </div>
         {canCreate ? (
-          <Link href="/finance/payments/new">
-            <Button>Record Payment</Button>
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/finance/payments/settle">
+              <Button variant="secondary">Record Settlement</Button>
+            </Link>
+            <Link href="/finance/payments/new">
+              <Button>Record Payment</Button>
+            </Link>
+          </div>
         ) : null}
       </div>
 

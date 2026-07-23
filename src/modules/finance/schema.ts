@@ -300,3 +300,55 @@ export function expenseFormToInput(data: ExpenseFormInput): ExpenseInput {
     notes: data.notes === "" ? null : data.notes,
   };
 }
+
+/**
+ * Manual Adjustment form schema — validates shape only (account required,
+ * exactly one nonzero side, memo required, at least two lines), the same
+ * scope manualAdjustmentInputSchema (lib/data layer) already covers.
+ * Deliberately does NOT check total debit = total credit here — that
+ * balance invariant is left to record_manual_adjustment's own P1106 check,
+ * matching the Repository layer's own documented reason for not
+ * duplicating it in TypeScript. The form still computes and displays the
+ * live totals (see ManualAdjustmentForm) and disables submission while
+ * unbalanced, but that's a UX guard around the same arithmetic, not a
+ * second copy of the accounting rule.
+ */
+const majorAmountOrBlank = z.string().trim().refine((v) => v === "" || !Number.isNaN(Number(v)), { message: "Enter a valid amount" });
+
+export const manualAdjustmentLineFormSchema = z
+  .object({
+    account_id: z.string().trim().min(1, "An account is required"),
+    debit: majorAmountOrBlank,
+    credit: majorAmountOrBlank,
+    line_memo: z.string().trim(),
+  })
+  .refine((line) => (line.debit !== "" && Number(line.debit) > 0) !== (line.credit !== "" && Number(line.credit) > 0), {
+    message: "Enter an amount on exactly one side (debit or credit), not both or neither",
+    path: ["debit"],
+  });
+
+export type ManualAdjustmentLineFormInput = z.infer<typeof manualAdjustmentLineFormSchema>;
+
+export const manualAdjustmentFormSchema = z.object({
+  entry_date: z.string().trim().min(1, "Entry date is required"),
+  memo: z.string().trim().min(1, "A memo is required"),
+  lines: z.array(manualAdjustmentLineFormSchema).min(2, "A manual adjustment requires at least two lines"),
+});
+
+export type ManualAdjustmentFormInput = z.infer<typeof manualAdjustmentFormSchema>;
+
+export function manualAdjustmentFormToInput(data: ManualAdjustmentFormInput): ManualAdjustmentInput {
+  return {
+    entry_date: data.entry_date,
+    memo: data.memo,
+    lines: data.lines.map((line) => ({
+      account_id: line.account_id,
+      debit_minor: line.debit === "" ? 0 : majorToMinor(Number(line.debit)),
+      credit_minor: line.credit === "" ? 0 : majorToMinor(Number(line.credit)),
+      line_memo: line.line_memo === "" ? null : line.line_memo,
+    })),
+  };
+}
+
+/** Accounting Period create has no money field, so the authoritative accountingPeriodCreateInputSchema (lib/data layer) doubles as the form schema directly — no major-unit conversion needed. */
+export type AccountingPeriodFormInput = AccountingPeriodCreateInput;

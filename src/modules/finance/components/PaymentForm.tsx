@@ -17,7 +17,7 @@ import type { Invoice } from "@/types/invoice";
 import type { Payment } from "@/types/payment";
 import { paymentFormSchema, type PaymentFormInput } from "@/modules/finance/schema";
 import { PAYMENT_TYPE_LABELS, PAYMENT_TYPES } from "@/core/enums/paymentType";
-import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS } from "@/core/enums/paymentMethod";
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS, type PaymentMethod } from "@/core/enums/paymentMethod";
 import { formatMoney } from "@/lib/money";
 import type { DataResult } from "@/lib/data/result";
 
@@ -26,6 +26,8 @@ interface PaymentFormProps {
   onSubmit: (input: PaymentFormInput) => Promise<DataResult<Payment>>;
   submitLabel: string;
   cancelHref: string;
+  /** Hides specific payment methods from the picker — used by the Settlement flow to hide "stripe" since no provider integration exists. */
+  excludeMethods?: PaymentMethod[];
 }
 
 const emptyDefaults: PaymentFormInput = {
@@ -42,7 +44,13 @@ const emptyDefaults: PaymentFormInput = {
   notes: "",
 };
 
-export function PaymentForm({ defaultValues, onSubmit, submitLabel, cancelHref }: PaymentFormProps) {
+export function PaymentForm({
+  defaultValues,
+  onSubmit,
+  submitLabel,
+  cancelHref,
+  excludeMethods,
+}: PaymentFormProps) {
   const router = useRouter();
   const [formError, setFormError] = useState<string | null>(null);
   const [clients, setClients] = useState<Client[] | null>(null);
@@ -257,7 +265,7 @@ export function PaymentForm({ defaultValues, onSubmit, submitLabel, cancelHref }
           </FormField>
           <FormField label="Payment method" htmlFor="payment_method" required error={errors.payment_method?.message}>
             <Select id="payment_method" invalid={!!errors.payment_method} {...register("payment_method")}>
-              {PAYMENT_METHODS.map((method) => (
+              {PAYMENT_METHODS.filter((method) => !excludeMethods?.includes(method)).map((method) => (
                 <option key={method} value={method}>
                   {PAYMENT_METHOD_LABELS[method]}
                 </option>

@@ -99,4 +99,20 @@ describe("PaymentForm", () => {
 
     expect(await screen.findByText(/would exceed the invoice's remaining balance/i)).toBeInTheDocument();
   });
+
+  it("hides excluded payment methods from the picker", async () => {
+    mockClients();
+    render(
+      <PaymentForm
+        submitLabel="Record Settlement"
+        cancelHref="/finance/payments"
+        excludeMethods={["stripe"]}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    const methodSelect = await screen.findByLabelText(/payment method/i);
+    expect(within(methodSelect).queryByRole("option", { name: /stripe/i })).not.toBeInTheDocument();
+    expect(within(methodSelect).getByRole("option", { name: /cash/i })).toBeInTheDocument();
+  });
 });

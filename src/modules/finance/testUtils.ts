@@ -1,6 +1,9 @@
 import type { Invoice } from "@/types/invoice";
 import type { Payment } from "@/types/payment";
 import type { Expense } from "@/types/expense";
+import type { ChartOfAccount } from "@/types/chartOfAccount";
+import type { JournalEntry, JournalLine } from "@/types/journalEntry";
+import type { AccountingPeriod } from "@/types/accountingPeriod";
 
 /** Test-only fixture factory — not imported by any app code. */
 export function makeInvoice(overrides: Partial<Invoice> = {}): Invoice {
@@ -89,6 +92,83 @@ export function makeExpense(overrides: Partial<Expense> = {}): Expense {
     created_at: "2026-01-01T00:00:00.000Z",
     updated_at: "2026-01-01T00:00:00.000Z",
     archived_at: null,
+    ...overrides,
+  };
+}
+
+/** Test-only fixture factory — not imported by any app code. */
+export function makeChartOfAccount(overrides: Partial<ChartOfAccount> = {}): ChartOfAccount {
+  return {
+    id: "account_test",
+    workspace_id: "ws_test",
+    account_number: 1000,
+    name: "Cash",
+    account_type: "asset",
+    normal_balance: "debit",
+    parent_account_id: null,
+    description: null,
+    is_system: true,
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+    archived_at: null,
+    ...overrides,
+  };
+}
+
+/** Test-only fixture factory — not imported by any app code. */
+export function makeJournalLine(overrides: Partial<JournalLine> = {}): JournalLine {
+  return {
+    id: "line_test",
+    journal_entry_id: "entry_test",
+    workspace_id: "ws_test",
+    account_id: "account_test",
+    debit_minor: 10000,
+    credit_minor: 0,
+    currency: "USD",
+    amount_in_base_currency_minor: 10000,
+    line_memo: null,
+    line_order: 0,
+    created_at: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+/** Test-only fixture factory — not imported by any app code. */
+export function makeJournalEntry(overrides: Partial<JournalEntry> = {}): JournalEntry {
+  return {
+    id: "entry_test",
+    workspace_id: "ws_test",
+    entry_date: "2026-01-01",
+    accounting_period_id: "period_test",
+    source_type: "manual_adjustment",
+    source_id: null,
+    posting_key: null,
+    memo: "Test Journal Entry",
+    currency: "USD",
+    reversed_by_entry_id: null,
+    reverses_entry_id: null,
+    posting_status: "posted",
+    failure_reason: null,
+    posted_by: "user_test",
+    created_at: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+/** Test-only fixture factory — not imported by any app code. */
+export function makeAccountingPeriod(overrides: Partial<AccountingPeriod> = {}): AccountingPeriod {
+  return {
+    id: "period_test",
+    workspace_id: "ws_test",
+    period_start: "2026-01-01",
+    period_end: "2026-01-31",
+    status: "open",
+    closed_at: null,
+    closed_by: null,
+    locked_at: null,
+    locked_by: null,
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
     ...overrides,
   };
 }

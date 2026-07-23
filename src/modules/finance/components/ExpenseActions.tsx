@@ -9,9 +9,7 @@ import {
   archiveExpense,
   cancelExpense,
   duplicateExpense,
-  markExpenseDue,
-  markExpensePaid,
-  markExpenseReimbursed,
+  recordExpenseTransition,
   restoreExpense,
 } from "@/lib/data";
 import type { Expense } from "@/types/expense";
@@ -27,13 +25,13 @@ interface ExpenseActionsProps {
 type ModalKind = "cancel" | "archive" | null;
 
 /**
- * Every transition goes through the existing dedicated data-layer action —
- * approveExpense/markExpenseDue/markExpensePaid/markExpenseReimbursed/
- * cancelExpense/archiveExpense/restoreExpense/duplicateExpense, the set
- * built in the Finance domain foundation. Confirmation modals gate only
- * Cancel/Archive (terminal-or-destructive); Approve/Mark Due/Mark Paid/Mark
- * Reimbursed are procedural forward-motion steps, Restore is reversible,
- * and Duplicate is purely additive — same reasoning as InvoiceActions.
+ * Due/Paid/Reimbursed post through the ledger via recordExpenseTransition
+ * (Posting Engine), while Approve/Cancel/Archive/Restore/Duplicate stay on
+ * their pre-existing dedicated data-layer actions — those five don't post
+ * a journal entry. Confirmation modals gate only Cancel/Archive
+ * (terminal-or-destructive); Approve/Mark Due/Mark Paid/Mark Reimbursed are
+ * procedural forward-motion steps, Restore is reversible, and Duplicate is
+ * purely additive — same reasoning as InvoiceActions.
  */
 export function ExpenseActions({ expense, onChanged }: ExpenseActionsProps) {
   const { can } = useMemberSession();
@@ -137,7 +135,7 @@ export function ExpenseActions({ expense, onChanged }: ExpenseActionsProps) {
         {canMarkDue && canUpdate ? (
           <Button
             variant="secondary"
-            onClick={() => runAction("due", () => markExpenseDue(expense.id))}
+            onClick={() => runAction("due", () => recordExpenseTransition(expense.id, { transition: "due" }))}
             disabled={busyAction === "due"}
           >
             {busyAction === "due" ? "Marking…" : "Mark Due"}
@@ -145,7 +143,7 @@ export function ExpenseActions({ expense, onChanged }: ExpenseActionsProps) {
         ) : null}
         {canMarkPaid && canUpdate ? (
           <Button
-            onClick={() => runAction("paid", () => markExpensePaid(expense.id))}
+            onClick={() => runAction("paid", () => recordExpenseTransition(expense.id, { transition: "paid" }))}
             disabled={busyAction === "paid"}
           >
             {busyAction === "paid" ? "Marking…" : "Mark Paid"}
@@ -154,7 +152,9 @@ export function ExpenseActions({ expense, onChanged }: ExpenseActionsProps) {
         {canMarkReimbursed && canUpdate ? (
           <Button
             variant="secondary"
-            onClick={() => runAction("reimbursed", () => markExpenseReimbursed(expense.id))}
+            onClick={() =>
+              runAction("reimbursed", () => recordExpenseTransition(expense.id, { transition: "reimbursed" }))
+            }
             disabled={busyAction === "reimbursed"}
           >
             {busyAction === "reimbursed" ? "Marking…" : "Mark Reimbursed"}
