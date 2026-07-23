@@ -1804,6 +1804,225 @@ export interface Database {
         };
         Relationships: [];
       };
+      chart_of_accounts: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          account_number: number;
+          name: string;
+          account_type: string;
+          normal_balance: string;
+          parent_account_id: string | null;
+          description: string | null;
+          is_system: boolean;
+          created_at: string;
+          updated_at: string;
+          archived_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          account_number: number;
+          name: string;
+          account_type: string;
+          normal_balance: string;
+          parent_account_id?: string | null;
+          description?: string | null;
+          is_system?: boolean;
+          created_at?: string;
+          updated_at?: string;
+          archived_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          account_number?: number;
+          name?: string;
+          account_type?: string;
+          normal_balance?: string;
+          parent_account_id?: string | null;
+          description?: string | null;
+          is_system?: boolean;
+          created_at?: string;
+          updated_at?: string;
+          archived_at?: string | null;
+        };
+        Relationships: [];
+      };
+      accounting_periods: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          period_start: string;
+          period_end: string;
+          status: string;
+          closed_at: string | null;
+          closed_by: string | null;
+          locked_at: string | null;
+          locked_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          period_start: string;
+          period_end: string;
+          status?: string;
+          closed_at?: string | null;
+          closed_by?: string | null;
+          locked_at?: string | null;
+          locked_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          period_start?: string;
+          period_end?: string;
+          status?: string;
+          closed_at?: string | null;
+          closed_by?: string | null;
+          locked_at?: string | null;
+          locked_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      journal_entries: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          entry_date: string;
+          accounting_period_id: string;
+          source_type: string;
+          source_id: string | null;
+          memo: string | null;
+          currency: string;
+          reversed_by_entry_id: string | null;
+          reverses_entry_id: string | null;
+          posting_status: string;
+          failure_reason: string | null;
+          posted_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          entry_date: string;
+          accounting_period_id: string;
+          source_type: string;
+          source_id?: string | null;
+          memo?: string | null;
+          currency?: string;
+          reversed_by_entry_id?: string | null;
+          reverses_entry_id?: string | null;
+          posting_status?: string;
+          failure_reason?: string | null;
+          posted_by: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          entry_date?: string;
+          accounting_period_id?: string;
+          source_type?: string;
+          source_id?: string | null;
+          memo?: string | null;
+          currency?: string;
+          reversed_by_entry_id?: string | null;
+          reverses_entry_id?: string | null;
+          posting_status?: string;
+          failure_reason?: string | null;
+          posted_by?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      journal_lines: {
+        Row: {
+          id: string;
+          journal_entry_id: string;
+          workspace_id: string;
+          account_id: string;
+          debit_minor: number;
+          credit_minor: number;
+          currency: string;
+          amount_in_base_currency_minor: number;
+          line_memo: string | null;
+          line_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          journal_entry_id: string;
+          workspace_id: string;
+          account_id: string;
+          debit_minor?: number;
+          credit_minor?: number;
+          currency?: string;
+          amount_in_base_currency_minor?: number;
+          line_memo?: string | null;
+          line_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          journal_entry_id?: string;
+          workspace_id?: string;
+          account_id?: string;
+          debit_minor?: number;
+          credit_minor?: number;
+          currency?: string;
+          amount_in_base_currency_minor?: number;
+          line_memo?: string | null;
+          line_order?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      stripe_webhook_events: {
+        Row: {
+          id: string;
+          stripe_event_id: string;
+          event_type: string;
+          workspace_id: string | null;
+          payload: Json;
+          posting_status: string;
+          journal_entry_id: string | null;
+          failure_reason: string | null;
+          received_at: string;
+          processed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          stripe_event_id: string;
+          event_type: string;
+          workspace_id?: string | null;
+          payload: Json;
+          posting_status?: string;
+          journal_entry_id?: string | null;
+          failure_reason?: string | null;
+          received_at?: string;
+          processed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          stripe_event_id?: string;
+          event_type?: string;
+          workspace_id?: string | null;
+          payload?: Json;
+          posting_status?: string;
+          journal_entry_id?: string | null;
+          failure_reason?: string | null;
+          received_at?: string;
+          processed_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

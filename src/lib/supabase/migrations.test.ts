@@ -23,9 +23,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function migrations, in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database migrations, in chronological (execution) order", () => {
     const files = migrationFiles();
-    expect(files).toHaveLength(111);
+    expect(files).toHaveLength(122);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -829,5 +829,250 @@ describe("Purchases Receiving RPC migration", () => {
     const recomputeIndex = sql.indexOf("coalesce(sum(line_subtotal_minor)");
     expect(purchaseLockIndex).toBeGreaterThan(-1);
     expect(recomputeIndex).toBeGreaterThan(purchaseLockIndex);
+  });
+});
+
+describe("Finance Ledger Database migrations", () => {
+  const FINANCE_FILES = [
+    "20260803100000_finance_chart_of_accounts.sql",
+    "20260803100100_finance_accounting_periods.sql",
+    "20260803100200_finance_journal_entries.sql",
+    "20260803100300_finance_journal_lines.sql",
+    "20260803100400_finance_stripe_webhook_events.sql",
+    "20260803100500_finance_timeline_activity_types.sql",
+    "20260803100600_finance_updated_at_triggers.sql",
+    "20260803100700_finance_posting_invariant_triggers.sql",
+    "20260803100800_finance_rls.sql",
+    "20260803100900_finance_indexes_and_constraints.sql",
+    "20260803101000_finance_seed_chart_of_accounts.sql",
+  ];
+
+  it("creates chart_of_accounts with an account_type CHECK, a normal_balance CHECK, and no float money columns", () => {
+    const sql = readMigration("20260803100000_finance_chart_of_accounts.sql");
+    const code = stripSqlComments(sql);
+    expect(sql).toMatch(/create table if not exists public\.chart_of_accounts/);
+    expect(sql).toMatch(
+      /constraint chart_of_accounts_account_type_check check \(\s*account_type in \(\s*'asset', 'liability', 'equity', 'revenue', 'contra_revenue',\s*'cost_of_goods_sold', 'operating_expense', 'other_income', 'other_expense'\s*\)\s*\)/,
+    );
+    expect(sql).toMatch(/constraint chart_of_accounts_normal_balance_check check \(normal_balance in \('debit', 'credit'\)\)/);
+    expect(code).not.toMatch(/\bfloat\b|\bnumeric\b|\breal\b|\bdouble precision\b/i);
+  });
+
+  it("creates accounting_periods with a status CHECK and a period_end > period_start CHECK", () => {
+    const sql = readMigration("20260803100100_finance_accounting_periods.sql");
+    expect(sql).toMatch(/create table if not exists public\.accounting_periods/);
+    expect(sql).toMatch(/constraint accounting_periods_status_check check \(status in \('open', 'closed', 'locked'\)\)/);
+    expect(sql).toMatch(/constraint accounting_periods_date_range_check check \(period_end > period_start\)/);
+  });
+
+  it("creates journal_entries with source_id as text (not uuid), a polymorphic reference with no FK, and the manual-adjustment-only memo/source-consistency CHECKs", () => {
+    const sql = readMigration("20260803100200_finance_journal_entries.sql");
+    expect(sql).toMatch(/create table if not exists public\.journal_entries/);
+    expect(sql).toMatch(/source_id text/);
+    expect(sql).not.toMatch(/source_id uuid/);
+    expect(sql).not.toMatch(/source_id.*references/);
+    expect(sql).toMatch(/accounting_period_id uuid not null references public\.accounting_periods \(id\)/);
+    expect(sql).toMatch(
+      /constraint journal_entries_adjustment_memo_check check \(\s*source_type <> 'manual_adjustment' or \(memo is not null and btrim\(memo\) <> ''\)\s*\)/,
+    );
+    expect(sql).toMatch(
+      /constraint journal_entries_source_consistency_check check \(\s*\(source_id is null\) = \(source_type = 'manual_adjustment'\)\s*\)/,
+    );
+    expect(stripSqlComments(sql)).not.toMatch(/updated_at/);
+  });
+
+  it("does not encode a hard CHECK linking debit/credit direction to an account's normal_balance", () => {
+    const sql = stripSqlComments(readMigration("20260803100200_finance_journal_entries.sql"));
+    expect(sql).not.toMatch(/normal_balance/);
+  });
+
+  it("creates journal_lines with integer (not bigint/float) debit_minor/credit_minor, a nonnegative CHECK, and an exactly-one-side CHECK", () => {
+    const sql = readMigration("20260803100300_finance_journal_lines.sql");
+    const code = stripSqlComments(sql);
+    expect(sql).toMatch(/create table if not exists public\.journal_lines/);
+    expect(sql).toMatch(/debit_minor integer not null default 0/);
+    expect(sql).toMatch(/credit_minor integer not null default 0/);
+    expect(sql).toMatch(/amount_in_base_currency_minor integer not null default 0/);
+    expect(code).not.toMatch(/\bbigint\b|\bfloat\b|\bnumeric\b|\breal\b|\bdouble precision\b/i);
+    expect(sql).toMatch(/constraint journal_lines_debit_minor_check check \(debit_minor >= 0\)/);
+    expect(sql).toMatch(/constraint journal_lines_credit_minor_check check \(credit_minor >= 0\)/);
+    expect(sql).toMatch(
+      /constraint journal_lines_one_side_check check \(\s*\(debit_minor > 0 and credit_minor = 0\) or \(debit_minor = 0 and credit_minor > 0\)\s*\)/,
+    );
+    expect(sql).toMatch(/journal_entry_id uuid not null references public\.journal_entries \(id\) on delete restrict/);
+  });
+
+  it("creates stripe_webhook_events with a nullable workspace_id and a unique stripe_event_id (uniqueness itself lives in the indexes migration)", () => {
+    const sql = readMigration("20260803100400_finance_stripe_webhook_events.sql");
+    expect(sql).toMatch(/create table if not exists public\.stripe_webhook_events/);
+    expect(sql).toMatch(/workspace_id uuid references public\.workspaces \(id\)/);
+    expect(sql).not.toMatch(/workspace_id uuid not null/);
+    expect(sql).toMatch(/payload jsonb not null/);
+    expect(sql).toMatch(/constraint stripe_webhook_events_posting_status_check check \(posting_status in \('pending', 'posted', 'failed'\)\)/);
+  });
+
+  it("widens only timeline_activities_type_check to add the 4 new Finance activity types, touching no owner_type constraint", () => {
+    const sql = readMigration("20260803100500_finance_timeline_activity_types.sql");
+    const code = stripSqlComments(sql);
+    expect(sql).toMatch(/alter table public\.timeline_activities drop constraint timeline_activities_type_check/);
+    expect(code).not.toMatch(/owner_type_check/);
+    expect(code).not.toMatch(/media_assets/);
+    expect(code).not.toMatch(/public\.notes\b/);
+    for (const activityType of [
+      "journal_entry_posted",
+      "journal_entry_reversed",
+      "accounting_period_closed",
+      "accounting_period_locked",
+    ]) {
+      expect(sql).toMatch(new RegExp(activityType));
+    }
+    // Every prior activity type must still be present — this is a widening, never a narrowing.
+    for (const priorType of ["purchase_item_received", "vendor_preferred_status_changed", "invoice_paid", "expense_reimbursed"]) {
+      expect(sql).toMatch(new RegExp(priorType));
+    }
+  });
+
+  it("attaches the shared updated_at trigger to chart_of_accounts and accounting_periods only, not to the append-only Finance tables", () => {
+    const sql = readMigration("20260803100600_finance_updated_at_triggers.sql");
+    expect(sql).toMatch(/before update on public\.chart_of_accounts/);
+    expect(sql).toMatch(/before update on public\.accounting_periods/);
+    expect(sql).not.toMatch(/on public\.journal_entries/);
+    expect(sql).not.toMatch(/on public\.journal_lines/);
+    expect(sql).not.toMatch(/on public\.stripe_webhook_events/);
+    expect(sql.match(/execute function public\.set_updated_at\(\)/g)).toHaveLength(2);
+  });
+
+  it("defines a deferred constraint trigger that sums journal_lines by journal_entry_id and raises P1000 when debits and credits disagree", () => {
+    const sql = stripSqlComments(readMigration("20260803100700_finance_posting_invariant_triggers.sql"));
+    expect(sql).toMatch(/create constraint trigger trg_journal_lines_balanced/);
+    expect(sql).toMatch(/deferrable initially deferred/);
+    expect(sql).toMatch(/after insert or update or delete on public\.journal_lines/);
+    expect(sql).toMatch(/coalesce\(sum\(debit_minor\), 0\), coalesce\(sum\(credit_minor\), 0\)/);
+    expect(sql).toMatch(/errcode = 'P1000'/);
+  });
+
+  it("makes journal_entries reject DELETE unconditionally and reject UPDATE except to the three status-tracking columns", () => {
+    const sql = stripSqlComments(readMigration("20260803100700_finance_posting_invariant_triggers.sql"));
+    expect(sql).toMatch(/before update or delete on public\.journal_entries/);
+    expect(sql).toMatch(/if TG_OP = 'DELETE' then/);
+    expect(sql).toMatch(/errcode = 'P1001'/);
+    expect(sql).toMatch(/errcode = 'P1002'/);
+    // The permitted-columns guard must NOT compare posting_status/failure_reason/reversed_by_entry_id themselves.
+    const updateGuard = sql.match(/if TG_OP = 'UPDATE' then([\s\S]*?)end if;/)?.[1] ?? "";
+    expect(updateGuard).not.toMatch(/new\.posting_status <> old\.posting_status/);
+    expect(updateGuard).not.toMatch(/new\.failure_reason/);
+    expect(updateGuard).not.toMatch(/new\.reversed_by_entry_id/);
+  });
+
+  it("makes journal_lines reject every UPDATE and DELETE unconditionally", () => {
+    const sql = stripSqlComments(readMigration("20260803100700_finance_posting_invariant_triggers.sql"));
+    expect(sql).toMatch(/before update or delete on public\.journal_lines/);
+    expect(sql).toMatch(/errcode = 'P1003'/);
+  });
+
+  it("rejects posting to a locked period unconditionally, and rejects a non-reversal posting to a closed period", () => {
+    const sql = stripSqlComments(readMigration("20260803100700_finance_posting_invariant_triggers.sql"));
+    expect(sql).toMatch(/if v_status = 'locked' then/);
+    expect(sql).toMatch(/errcode = 'P1004'/);
+    expect(sql).toMatch(/if v_status = 'closed' and new\.reverses_entry_id is null then/);
+    expect(sql).toMatch(/errcode = 'P1005'/);
+  });
+
+  it("keeps reversed_by_entry_id and reverses_entry_id mutually consistent via an AFTER trigger", () => {
+    const sql = stripSqlComments(readMigration("20260803100700_finance_posting_invariant_triggers.sql"));
+    expect(sql).toMatch(/after insert or update on public\.journal_entries/);
+    expect(sql).toMatch(/errcode = 'P1006'/);
+    expect(sql).toMatch(/errcode = 'P1007'/);
+  });
+
+  it("checks journal_lines.workspace_id against its parent journal_entries.workspace_id on insert", () => {
+    const sql = stripSqlComments(readMigration("20260803100700_finance_posting_invariant_triggers.sql"));
+    expect(sql).toMatch(/before insert on public\.journal_lines/);
+    expect(sql).toMatch(/errcode = 'P1008'/);
+  });
+
+  it("uses a fresh P1000-P1008 error code range, colliding with no existing errcode in this schema", () => {
+    const sql = readMigration("20260803100700_finance_posting_invariant_triggers.sql");
+    for (const code of ["P1000", "P1001", "P1002", "P1003", "P1004", "P1005", "P1006", "P1007", "P1008"]) {
+      expect(sql).toMatch(new RegExp(`errcode = '${code}'`));
+    }
+    for (const otherFile of migrationFiles().filter((f) => !FINANCE_FILES.includes(f))) {
+      expect(readMigration(otherFile)).not.toMatch(/errcode = 'P10\d\d'/);
+    }
+  });
+
+  it("does not define any business-logic posting RPC yet — only constraint-enforcement trigger functions exist", () => {
+    for (const file of FINANCE_FILES) {
+      const sql = stripSqlComments(readMigration(file));
+      for (const forbidden of [
+        "post_purchase_receipt",
+        "post_payment_settlement",
+        "post_expense_transition",
+        "reverse_journal_entry",
+        "record_manual_adjustment",
+        "close_period",
+        "lock_period",
+        "retry_failed_posting",
+        "stripe_webhook_received",
+      ]) {
+        expect(sql).not.toMatch(new RegExp(`function public\\.${forbidden}`));
+      }
+    }
+  });
+
+  it("gives chart_of_accounts/accounting_periods/journal_entries/journal_lines select/insert/update policies but no delete policy, and gives stripe_webhook_events only a select policy", () => {
+    const sql = readMigration("20260803100800_finance_rls.sql");
+    for (const table of ["chart_of_accounts", "accounting_periods", "journal_entries", "journal_lines"]) {
+      expect(sql).toMatch(new RegExp(`alter table public\\.${table} enable row level security`));
+    }
+    expect(sql).not.toMatch(/for delete/);
+    expect(sql.match(/for insert/g)?.length).toBe(4); // not stripe_webhook_events
+    for (const block of sql.split(/create policy/i).slice(1)) {
+      expect(block).toMatch(/is_workspace_member\(workspace_id\)/);
+    }
+  });
+
+  it("never uses a bare permissive `using (true)` policy in the Finance RLS migration", () => {
+    expect(stripSqlComments(readMigration("20260803100800_finance_rls.sql"))).not.toMatch(/using\s*\(\s*true\s*\)/i);
+  });
+
+  it("enables btree_gist and prevents overlapping accounting_periods per workspace via an EXCLUDE constraint", () => {
+    const sql = readMigration("20260803100900_finance_indexes_and_constraints.sql");
+    expect(sql).toMatch(/create extension if not exists btree_gist/);
+    expect(sql).toMatch(/exclude using gist \(\s*workspace_id with =,\s*daterange\(period_start, period_end, '\[\]'\) with &&\s*\)/);
+  });
+
+  it("creates the posting_key partial unique index, excluding purchase_receipt and manual_adjustment", () => {
+    const sql = readMigration("20260803100900_finance_indexes_and_constraints.sql");
+    expect(sql).toMatch(/create unique index if not exists journal_entries_posting_key_unique/);
+    expect(sql).toMatch(/where source_id is not null and source_type not in \('purchase_receipt', 'manual_adjustment'\)/);
+  });
+
+  it("creates a unique index on stripe_webhook_events.stripe_event_id — the entire webhook idempotency mechanism", () => {
+    const sql = readMigration("20260803100900_finance_indexes_and_constraints.sql");
+    expect(sql).toMatch(
+      /create unique index if not exists stripe_webhook_events_stripe_event_id_unique\s*\n\s*on public\.stripe_webhook_events \(stripe_event_id\);/,
+    );
+  });
+
+  it("seeds the same 41 accounts for every existing workspace, relying on the workspace/account_number unique index for idempotency", () => {
+    const sql = readMigration("20260803101000_finance_seed_chart_of_accounts.sql");
+    expect(sql).toMatch(/cross join \(/);
+    expect(sql).toMatch(/from public\.workspaces w/);
+    expect(sql).toMatch(/on conflict \(workspace_id, account_number\) do nothing/);
+    const rowMatches = sql.match(/^\s*\(\d{4}, '(?:[^']|'')*', '\w+', '(?:debit|credit)'\),?$/gm) ?? [];
+    expect(rowMatches).toHaveLength(41);
+    expect(sql).toMatch(/\(1000, 'Cash', 'asset', 'debit'\)/);
+    expect(sql).toMatch(/\(2000, 'Accounts Payable', 'liability', 'credit'\)/);
+    expect(sql).toMatch(/\(4000, 'Service Revenue', 'revenue', 'credit'\)/);
+    expect(sql).toMatch(/\(5000, 'Cost of Goods Sold', 'cost_of_goods_sold', 'debit'\)/);
+  });
+
+  it("does not modify any existing Purchases/Inventory/Vendors/Finance-business-object table shape, only widening the shared timeline_activities_type_check", () => {
+    for (const file of FINANCE_FILES) {
+      const sql = stripSqlComments(readMigration(file));
+      if (file.includes("timeline_activity_types")) continue;
+      expect(sql).not.toMatch(/alter table public\.(purchases|purchase_items|inventory_items|inventory_movements|vendors|invoices|payments|expenses)\b/);
+    }
   });
 });
