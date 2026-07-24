@@ -84,26 +84,30 @@ export function ScheduleItemForm({ eventId, item, open, onClose, onSaved }: Sche
     setFormError(null);
     const input = scheduleFormToInput(values);
 
-    const result = item ? await updateScheduleItem(item.id, input) : await createScheduleItem(eventId, input);
-    if (!result.success) {
-      setFormError(result.error);
-      if (result.fieldErrors) {
-        for (const [field, message] of Object.entries(result.fieldErrors)) {
-          setError(field as keyof ScheduleItemFormInput, { message });
+    try {
+      const result = item ? await updateScheduleItem(item.id, input) : await createScheduleItem(eventId, input);
+      if (!result.success) {
+        setFormError(result.error);
+        if (result.fieldErrors) {
+          for (const [field, message] of Object.entries(result.fieldErrors)) {
+            setError(field as keyof ScheduleItemFormInput, { message });
+          }
         }
-      }
-      return;
-    }
-
-    if (item && status !== item.status) {
-      const statusResult = await updateScheduleItemStatus(item.id, status);
-      if (!statusResult.success) {
-        setFormError(statusResult.error);
         return;
       }
-    }
 
-    onSaved();
+      if (item && status !== item.status) {
+        const statusResult = await updateScheduleItemStatus(item.id, status);
+        if (!statusResult.success) {
+          setFormError(statusResult.error);
+          return;
+        }
+      }
+
+      onSaved();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Could not save this schedule item. Please try again.");
+    }
   });
 
   return (

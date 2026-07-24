@@ -112,12 +112,16 @@ export function EventChecklistView({ eventId }: { eventId: string }) {
 
     const reordered = [...checklist];
     [reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]];
-    const result = await reorderChecklistItems(eventId, reordered.map((item) => item.id));
-    if (!result.success) {
-      setReorderError(result.error);
-      return;
+    try {
+      const result = await reorderChecklistItems(eventId, reordered.map((item) => item.id));
+      if (!result.success) {
+        setReorderError(result.error);
+        return;
+      }
+      refetch();
+    } catch (err) {
+      setReorderError(err instanceof Error ? err.message : "Could not reorder the checklist. Please try again.");
     }
-    refetch();
   };
 
   const renderRow = (item: ChecklistItem) => (

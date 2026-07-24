@@ -42,13 +42,18 @@ export function EventActions({ event, onChanged }: EventActionsProps) {
   const handleRestore = async () => {
     setRestoring(true);
     setRestoreError(null);
-    const result = await restoreEvent(event.id);
-    setRestoring(false);
-    if (!result.success) {
-      setRestoreError(result.error);
-      return;
+    try {
+      const result = await restoreEvent(event.id);
+      if (!result.success) {
+        setRestoreError(result.error);
+        return;
+      }
+      onChanged();
+    } catch (err) {
+      setRestoreError(err instanceof Error ? err.message : "Could not restore this event. Please try again.");
+    } finally {
+      setRestoring(false);
     }
-    onChanged();
   };
 
   if (isArchived) {

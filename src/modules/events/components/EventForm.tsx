@@ -114,14 +114,18 @@ export function EventForm({ defaultValues, onSubmit, submitLabel, cancelHref }: 
 
   const submit = handleSubmit(async (values) => {
     setFormError(null);
-    const result = await onSubmit(values);
-    if (!result.success) {
-      setFormError(result.error);
-      if (result.fieldErrors) {
-        for (const [field, message] of Object.entries(result.fieldErrors)) {
-          setError(field as keyof EventFormInput, { message });
+    try {
+      const result = await onSubmit(values);
+      if (!result.success) {
+        setFormError(result.error);
+        if (result.fieldErrors) {
+          for (const [field, message] of Object.entries(result.fieldErrors)) {
+            setError(field as keyof EventFormInput, { message });
+          }
         }
       }
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Could not save this event. Please try again.");
     }
   });
 

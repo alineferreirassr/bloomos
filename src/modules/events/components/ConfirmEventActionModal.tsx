@@ -36,21 +36,31 @@ export function ConfirmEventActionModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleConfirm = async () => {
-    setSubmitting(true);
-    setError(null);
-    const result = await onConfirm();
-    setSubmitting(false);
-    if (!result.success) {
-      setError(result.error);
-      return;
-    }
-    onConfirmed(result.data);
+  const handleClose = () => {
+    if (submitting) return;
     onClose();
   };
 
+  const handleConfirm = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await onConfirm();
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      onConfirmed(result.data);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <Modal open={open} onClose={onClose} title={title}>
+    <Modal open={open} onClose={handleClose} title={title}>
       <p className="text-sm text-text-muted">{description}</p>
       {error ? (
         <p role="alert" className="mt-3 text-sm text-rose-600 dark:text-rose-400">

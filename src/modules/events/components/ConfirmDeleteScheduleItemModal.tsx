@@ -23,21 +23,31 @@ export function ConfirmDeleteScheduleItemModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleConfirm = async () => {
-    setSubmitting(true);
-    setError(null);
-    const result = await deleteScheduleItem(itemId);
-    setSubmitting(false);
-    if (!result.success) {
-      setError(result.error);
-      return;
-    }
-    onDeleted();
+  const handleClose = () => {
+    if (submitting) return;
     onClose();
   };
 
+  const handleConfirm = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await deleteScheduleItem(itemId);
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      onDeleted();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete this item. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <Modal open={open} onClose={onClose} title="Delete Schedule Item">
+    <Modal open={open} onClose={handleClose} title="Delete Schedule Item">
       <p className="text-sm text-text-muted">
         This permanently removes <strong className="text-text">&quot;{itemTitle}&quot;</strong>{" "}
         from the schedule. This can&apos;t be undone.

@@ -84,9 +84,19 @@ async function loadEventDetail(eventId: string): Promise<LoadState> {
       ]);
 
     const checklistStats = computeChecklistStats(checklist);
-    const now = Date.now();
+    // event_date is a "YYYY-MM-DD" date-only string — new Date(event_date)
+    // parses as UTC midnight, so comparing it against Date.now() shifts the
+    // result by a day for any user in a timezone behind UTC (same class of
+    // bug as dateFormat.ts's formatEventDate). Both sides are constructed
+    // from local calendar components instead, so this always compares
+    // "local midnight of the event date" to "local midnight of today."
     const daysUntilEvent = event.event_date
-      ? Math.floor((new Date(event.event_date).getTime() - now) / (1000 * 60 * 60 * 24))
+      ? (() => {
+          const [year, month, day] = event.event_date.split("-").map(Number);
+          const eventMidnight = new Date(year, month - 1, day).getTime();
+          const todayMidnight = new Date().setHours(0, 0, 0, 0);
+          return Math.round((eventMidnight - todayMidnight) / (1000 * 60 * 60 * 24));
+        })()
       : null;
     const health = getEventHealthDetails(
       {

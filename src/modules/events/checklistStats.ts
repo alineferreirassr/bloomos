@@ -14,14 +14,24 @@ export interface ChecklistStats {
   nextDueItem: ChecklistItem | null;
 }
 
-/** Single source of truth for "is this item overdue" — used by both the summary count here and per-item badges on the Checklist page, so they never disagree. */
+/**
+ * Single source of truth for "is this item overdue" — used by both the
+ * summary count here and per-item badges on the Checklist page, so they
+ * never disagree.
+ *
+ * due_date is a "YYYY-MM-DD" date-only string — new Date(due_date) parses
+ * as UTC midnight, so comparing it directly against `now` (a real instant)
+ * would flag an item overdue up to a day early for anyone in a timezone
+ * behind UTC. Both sides are compared as local calendar midnights instead,
+ * so an item due "today" is never overdue until the day has actually
+ * elapsed locally.
+ */
 export function isChecklistItemOverdue(item: ChecklistItem, now: Date = new Date()): boolean {
-  return (
-    item.status !== "completed" &&
-    item.status !== "cancelled" &&
-    item.due_date !== null &&
-    new Date(item.due_date).getTime() < now.getTime()
-  );
+  if (item.status === "completed" || item.status === "cancelled" || item.due_date === null) return false;
+  const [year, month, day] = item.due_date.split("-").map(Number);
+  const dueMidnight = new Date(year, month - 1, day).getTime();
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  return todayMidnight > dueMidnight;
 }
 
 /**

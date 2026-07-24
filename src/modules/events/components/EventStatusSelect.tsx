@@ -35,14 +35,20 @@ export function EventStatusSelect({ eventId, status, onChanged }: EventStatusSel
     setOptimisticStatus(next);
     setPending(true);
     setError(null);
-    const result = await updateEventStatus(eventId, next);
-    setPending(false);
-    if (!result.success) {
+    try {
+      const result = await updateEventStatus(eventId, next);
+      if (!result.success) {
+        setOptimisticStatus(previous);
+        setError(result.error);
+        return;
+      }
+      onChanged(next);
+    } catch (err) {
       setOptimisticStatus(previous);
-      setError(result.error);
-      return;
+      setError(err instanceof Error ? err.message : "Could not update status. Please try again.");
+    } finally {
+      setPending(false);
     }
-    onChanged(next);
   };
 
   return (

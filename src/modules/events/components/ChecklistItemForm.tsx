@@ -87,27 +87,31 @@ export function ChecklistItemForm({ eventId, item, open, onClose, onSaved }: Che
     setFormError(null);
     const input = checklistFormToInput(values);
 
-    const result = item ? await updateChecklistItem(item.id, input) : await createChecklistItem(eventId, input);
-    if (!result.success) {
-      setFormError(result.error);
-      if (result.fieldErrors) {
-        for (const [field, message] of Object.entries(result.fieldErrors)) {
-          setError(field as keyof ChecklistItemFormInput, { message });
+    try {
+      const result = item ? await updateChecklistItem(item.id, input) : await createChecklistItem(eventId, input);
+      if (!result.success) {
+        setFormError(result.error);
+        if (result.fieldErrors) {
+          for (const [field, message] of Object.entries(result.fieldErrors)) {
+            setError(field as keyof ChecklistItemFormInput, { message });
+          }
         }
-      }
-      return;
-    }
-
-    if (item && status !== item.status) {
-      const statusResult =
-        status === "completed" ? await completeChecklistItem(item.id) : await updateChecklistItemStatus(item.id, status);
-      if (!statusResult.success) {
-        setFormError(statusResult.error);
         return;
       }
-    }
 
-    onSaved();
+      if (item && status !== item.status) {
+        const statusResult =
+          status === "completed" ? await completeChecklistItem(item.id) : await updateChecklistItemStatus(item.id, status);
+        if (!statusResult.success) {
+          setFormError(statusResult.error);
+          return;
+        }
+      }
+
+      onSaved();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Could not save this checklist item. Please try again.");
+    }
   });
 
   return (

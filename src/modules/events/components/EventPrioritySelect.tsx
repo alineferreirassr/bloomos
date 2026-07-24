@@ -23,14 +23,20 @@ export function EventPrioritySelect({ eventId, priority, onChanged }: EventPrior
     setOptimisticPriority(next);
     setPending(true);
     setError(null);
-    const result = await updateEventPriority(eventId, next);
-    setPending(false);
-    if (!result.success) {
+    try {
+      const result = await updateEventPriority(eventId, next);
+      if (!result.success) {
+        setOptimisticPriority(previous);
+        setError(result.error);
+        return;
+      }
+      onChanged(next);
+    } catch (err) {
       setOptimisticPriority(previous);
-      setError(result.error);
-      return;
+      setError(err instanceof Error ? err.message : "Could not update priority. Please try again.");
+    } finally {
+      setPending(false);
     }
-    onChanged(next);
   };
 
   return (

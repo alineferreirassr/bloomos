@@ -34,14 +34,20 @@ export function EventLifecycleSelect({ eventId, stage, onChanged }: EventLifecyc
     setOptimisticStage(next);
     setPending(true);
     setError(null);
-    const result = await updateEventLifecycleStage(eventId, next);
-    setPending(false);
-    if (!result.success) {
+    try {
+      const result = await updateEventLifecycleStage(eventId, next);
+      if (!result.success) {
+        setOptimisticStage(previous);
+        setError(result.error);
+        return;
+      }
+      onChanged(next);
+    } catch (err) {
       setOptimisticStage(previous);
-      setError(result.error);
-      return;
+      setError(err instanceof Error ? err.message : "Could not update lifecycle stage. Please try again.");
+    } finally {
+      setPending(false);
     }
-    onChanged(next);
   };
 
   return (

@@ -135,12 +135,16 @@ export function EventScheduleView({ eventId }: { eventId: string }) {
 
     const reordered = [...chronological];
     [reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]];
-    const result = await reorderScheduleItems(eventId, reordered.map((item) => item.id));
-    if (!result.success) {
-      setReorderError(result.error);
-      return;
+    try {
+      const result = await reorderScheduleItems(eventId, reordered.map((item) => item.id));
+      if (!result.success) {
+        setReorderError(result.error);
+        return;
+      }
+      refetch();
+    } catch (err) {
+      setReorderError(err instanceof Error ? err.message : "Could not reorder the schedule. Please try again.");
     }
-    refetch();
   };
 
   return (
