@@ -30,7 +30,7 @@ import type { ComponentType, SVGProps } from "react";
  *   child leaf.
  *
  * `disabled` marks a module/leaf whose module hasn't shipped yet (Inventory,
- * Vendors, Services, Bloom AI, Settings, the future Operational Pipeline) —
+ * Vendors, Services, Bloom AI, Settings) —
  * it renders in the permanent structure so the sidebar's shape doesn't shift
  * again when that module ships, but isn't a real link (no `href`, or an
  * `href` that intentionally has no page behind it yet — see `settings`
@@ -85,7 +85,7 @@ export const navigationModules: NavModule[] = [
     defaultExpanded: true,
     children: [
       { id: "events-list", label: "Events", href: "/events" },
-      { id: "operational-pipeline", label: "Operational Pipeline", disabled: true },
+      { id: "operational-pipeline", label: "Operational Pipeline", href: "/pipeline/operational" },
     ],
   },
   { id: "inventory", label: "Inventory", icon: InventoryIcon, href: "/inventory" },

@@ -1,0 +1,92 @@
+"use client";
+
+import { useDraggable } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
+import { Card } from "@/components/ui/Card";
+import { ActionMenu, type ActionMenuAction } from "@/components/ui/ActionMenu";
+import { EventPriorityBadge } from "@/modules/events/components/EventPriorityBadge";
+import { OperationalHealthBadge } from "@/modules/pipeline/components/OperationalHealthBadge";
+import { formatEventDate } from "@/modules/events/dateFormat";
+import { isEventTerminal } from "@/core/workflows/eventWorkflow";
+import { isLifecycleStageTerminal } from "@/core/workflows/eventWorkflow";
+import type { OperationalCardData } from "@/modules/pipeline/operationalLogic";
+
+interface OperationalPipelineCardProps {
+  data: OperationalCardData;
+  actions: ActionMenuAction[];
+  /** false on mobile — dragging is desktop-only, matching CommercialPipelineCard's own mobile rule. */
+  draggable?: boolean;
+  /** Mirrors the `events.update` gate `buildActionsFor` already applies to the ActionMenu — without it, a view-only member could drag a card even though its menu correctly hides every "Move to" option. */
+  canUpdate: boolean;
+}
+
+export function OperationalPipelineCard({ data, actions, draggable = true, canUpdate }: OperationalPipelineCardProps) {
+  const { event, client, checklistTotal, checklistCompleted, checklistOverdue, nextAction, healthStatus, daysUntilEvent } = data;
+
+  // A closed lifecycle stage can't be left (isLifecycleStageTerminal), and a
+  // completed/cancelled/archived Event's status is also locked — either one
+  // means this card shouldn't be draggable, matching EventLifecycleSelect's
+  // own rule that a terminal stage/status only ever renders as plain text.
+  const isLocked = isLifecycleStageTerminal(event.lifecycle_stage) || isEventTerminal(event.status);
+  const canDrag = draggable && !isLocked && canUpdate;
+
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: event.id,
+    disabled: !canDrag,
+  });
+
+  const clientName = client ? `${client.first_name} ${client.last_name}` : "Unknown client";
+  const isOverdue = daysUntilEvent !== null && daysUntilEvent < 0;
+  const isUpcoming = daysUntilEvent !== null && daysUntilEvent >= 0 && daysUntilEvent <= 7;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={transform ? { transform: CSS.Translate.toString(transform) } : undefined}
+      className={isDragging ? "opacity-50" : undefined}
+    >
+      <Card className="transition-colors duration-150 hover:border-accent/50">
+        <div className="flex items-start justify-between gap-2">
+          <div
+            {...(canDrag ? { ...attributes, ...listeners } : {})}
+            role={canDrag ? "button" : undefined}
+            tabIndex={canDrag ? 0 : undefined}
+            aria-label={canDrag ? `Drag ${event.title}'s card` : undefined}
+            className={canDrag ? "cursor-grab touch-none active:cursor-grabbing" : undefined}
+          >
+            <p className="font-medium tracking-tight text-text">{event.title}</p>
+            <p className="text-xs text-text-muted">{clientName}</p>
+          </div>
+          <ActionMenu actions={actions} />
+        </div>
+
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <EventPriorityBadge priority={event.priority} />
+          <OperationalHealthBadge status={healthStatus} />
+          {isOverdue ? (
+            <span className="rounded-[3px] border border-danger/40 bg-danger/10 px-2.5 py-0.5 text-[11px] tracking-wide text-danger">
+              Overdue
+            </span>
+          ) : isUpcoming ? (
+            <span className="rounded-[3px] border border-border px-2.5 py-0.5 text-[11px] tracking-wide text-text-muted">
+              {daysUntilEvent === 0 ? "Today" : `In ${daysUntilEvent}d`}
+            </span>
+          ) : null}
+        </div>
+
+        <div className="mt-3 space-y-1 text-xs text-text-muted">
+          <p>{event.event_date ? formatEventDate(event.event_date) : "No date set"}</p>
+          <p>
+            Checklist: {checklistCompleted}/{checklistTotal}
+            {checklistOverdue > 0 ? ` · ${checklistOverdue} overdue` : ""}
+          </p>
+          <p>{event.assigned_owner ? `Owner: ${event.assigned_owner}` : "Unassigned"}</p>
+        </div>
+
+        {nextAction ? (
+          <p className="mt-3 border-t border-border pt-2 text-xs font-medium text-accent">{nextAction}</p>
+        ) : null}
+      </Card>
+    </div>
+  );
+}

@@ -23,6 +23,10 @@ describe("getRouteAccessRequirement", () => {
     expect(getRouteAccessRequirement("/team")).toEqual({ kind: "permission", permission: "team.view" });
   });
 
+  it("requires events.view for the Operational Pipeline, matching the Events module it visualizes", () => {
+    expect(getRouteAccessRequirement("/pipeline/operational")).toEqual({ kind: "permission", permission: "events.view" });
+  });
+
   it("requires clients.portal_view for the Client Portal admin section, including its sub-routes", () => {
     expect(getRouteAccessRequirement("/client-portal")).toEqual({ kind: "permission", permission: "clients.portal_view" });
     expect(getRouteAccessRequirement("/client-portal/accounts")).toEqual({ kind: "permission", permission: "clients.portal_view" });
