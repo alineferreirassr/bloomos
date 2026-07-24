@@ -41,6 +41,7 @@ import { ChecklistSummaryCard } from "@/modules/events/components/ChecklistSumma
 import { ScheduleSummaryCard } from "@/modules/events/components/ScheduleSummaryCard";
 import { EventFinancialSummaryCard } from "@/modules/finance/components/EventFinancialSummaryCard";
 import { DocumentsSummarySection } from "@/modules/documents/components/DocumentsSummarySection";
+import { EventOperationsBriefSection } from "@/modules/ai/components/EventOperationsBriefSection";
 import type { EventFinancialSummary } from "@/modules/finance/financialSummary";
 import type { EventFinancialStatus } from "@/modules/finance/eventFinancialStatus";
 
@@ -327,6 +328,8 @@ export function EventDetailView({ eventId }: { eventId: string }) {
             <h3 className="font-serif text-[17px] font-semibold text-text">Internal Summary</h3>
             <p className="mt-2 text-sm text-text">{event.internal_summary || "—"}</p>
           </Card>
+
+          <EventOperationsBriefSection eventId={event.id} />
 
           <Card>
             <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>

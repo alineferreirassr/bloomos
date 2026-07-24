@@ -39,6 +39,18 @@ vi.mock("@/lib/data", () => ({
   getDocumentOwnerSummary: vi.fn(),
 }));
 
+// `generateEventOperationsBrief` is a `"use server"` action whose real
+// module graph reaches `fetchEventContext.server.ts` (guarded by the
+// `server-only` package) — Next's real RSC build compiles a `"use server"`
+// export into a client-safe reference and never bundles that graph into the
+// client at all, but Vitest has no equivalent transform and would naively
+// try to load the real server-only chain into this jsdom test. Mocking it
+// here (exactly like `@/lib/data` above) is the same "don't load the real
+// implementation into a UI test" pattern already used throughout this file.
+vi.mock("@/modules/ai/generateEventOperationsBrief", () => ({
+  generateEventOperationsBrief: vi.fn(),
+}));
+
 import * as dataLayer from "@/lib/data";
 
 function mockReady(overrides: Partial<ReturnType<typeof makeEvent>> = {}) {
