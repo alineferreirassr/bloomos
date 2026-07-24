@@ -8,6 +8,7 @@ const TABS = [
   { href: "/finance/accounts", label: "Chart of Accounts" },
   { href: "/finance/journal", label: "Journal Entries" },
   { href: "/finance/periods", label: "Accounting Periods" },
+  { href: "/finance/reports", label: "Reports" },
 ] as const;
 
 /**

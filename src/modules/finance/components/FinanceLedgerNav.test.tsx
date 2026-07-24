@@ -8,14 +8,14 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("FinanceLedgerNav", () => {
-  it("renders all four tabs with no Reports or Stripe links", () => {
+  it("renders all five tabs including Reports, with no Stripe link", () => {
     pathname = "/finance";
     render(<FinanceLedgerNav />);
     expect(screen.getByRole("link", { name: "Overview" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Chart of Accounts" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Journal Entries" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Accounting Periods" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /report/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Reports" })).toHaveAttribute("href", "/finance/reports");
     expect(screen.queryByRole("link", { name: /stripe/i })).not.toBeInTheDocument();
   });
 
@@ -30,6 +30,13 @@ describe("FinanceLedgerNav", () => {
     pathname = "/finance/journal/entry_123";
     render(<FinanceLedgerNav />);
     expect(screen.getByRole("link", { name: "Journal Entries" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Overview" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("marks Reports active on any report sub-route via prefix match", () => {
+    pathname = "/finance/reports/general-ledger";
+    render(<FinanceLedgerNav />);
+    expect(screen.getByRole("link", { name: "Reports" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Overview" })).not.toHaveAttribute("aria-current");
   });
 });
