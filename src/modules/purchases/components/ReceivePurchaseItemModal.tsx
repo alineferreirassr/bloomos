@@ -28,7 +28,19 @@ export function ReceivePurchaseItemModal({ item, open, onClose, onReceived }: Re
   const isValidQuantity = Number.isInteger(parsedQuantity) && parsedQuantity > 0 && parsedQuantity <= remaining;
   const resultingReceived = isValidQuantity ? item.quantity_received + parsedQuantity : item.quantity_received;
 
+  /**
+   * Guarded against `submitting` — this modal is conditionally rendered by
+   * its caller (PurchaseItemsSection), so closing it unmounts it entirely
+   * rather than just hiding it. The Cancel button already disables itself
+   * while submitting, but Modal's own backdrop/X close buttons call this
+   * function directly with no such gate; without the guard, dismissing
+   * mid-request would unmount the component while receivePurchaseItem is
+   * still in flight, silently discarding whatever success/error state that
+   * request resolves to. The intentional close-on-success in handleSubmit
+   * resets `submitting` itself first, so it's never blocked by this guard.
+   */
   const handleClose = () => {
+    if (submitting) return;
     setQuantity(String(Math.max(remaining, 0)));
     setReason("");
     setError(null);
@@ -42,14 +54,20 @@ export function ReceivePurchaseItemModal({ item, open, onClose, onReceived }: Re
     }
     setSubmitting(true);
     setError(null);
-    const result = await receivePurchaseItem(item.id, { quantity_received: parsedQuantity, reason: reason.trim() || null });
-    setSubmitting(false);
-    if (!result.success) {
-      setError(result.error);
-      return;
+    try {
+      const result = await receivePurchaseItem(item.id, { quantity_received: parsedQuantity, reason: reason.trim() || null });
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      onReceived();
+      setSubmitting(false);
+      handleClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not receive this item. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
-    onReceived();
-    handleClose();
   };
 
   return (
