@@ -78,20 +78,25 @@ export function InventoryMovementActionsSection({ item, onChanged }: InventoryMo
     if (!activeAction || !isValidQuantity || isSubmitting) return;
     setIsSubmitting(true);
     setError(null);
-    const result = await recordInventoryMovement(item.id, {
-      movement_type: activeAction.type,
-      quantity: parsedQuantity,
-      reason: reason.trim() || null,
-      reference_type: referenceType.trim() || null,
-      reference_id: referenceId.trim() || null,
-    });
-    setIsSubmitting(false);
-    if (!result.success) {
-      setError(result.error);
-      return;
+    try {
+      const result = await recordInventoryMovement(item.id, {
+        movement_type: activeAction.type,
+        quantity: parsedQuantity,
+        reason: reason.trim() || null,
+        reference_type: referenceType.trim() || null,
+        reference_id: referenceId.trim() || null,
+      });
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      setActiveAction(null);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not record this movement. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
-    setActiveAction(null);
-    onChanged();
   };
 
   return (
