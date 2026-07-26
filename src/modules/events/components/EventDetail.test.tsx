@@ -3,6 +3,8 @@ import { render, screen } from "@testing-library/react";
 import { EventDetailView } from "@/modules/events/components/EventDetailView";
 import { makeEvent } from "@/modules/events/testUtils";
 import { makeClient } from "@/modules/clients/testUtils";
+import { makeContract } from "@/modules/contracts/testUtils";
+import { makeEventService } from "@/modules/services/testUtils";
 import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
 import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 
@@ -37,6 +39,8 @@ vi.mock("@/lib/data", () => ({
   getEventFinancialSummary: vi.fn(),
   getEventFinancialStatus: vi.fn(),
   getDocumentOwnerSummary: vi.fn(),
+  getContracts: vi.fn(),
+  listEventServicesByEvent: vi.fn(),
 }));
 
 // `generateEventOperationsBrief` is a `"use server"` action whose real
@@ -102,6 +106,8 @@ function mockReady(overrides: Partial<ReturnType<typeof makeEvent>> = {}) {
     byCategory: {} as never,
     latestUploads: [],
   });
+  vi.mocked(dataLayer.getContracts).mockResolvedValue([]);
+  vi.mocked(dataLayer.listEventServicesByEvent).mockResolvedValue([]);
   return event;
 }
 
@@ -244,5 +250,39 @@ describe("EventDetailView", () => {
     renderEventDetail("event_1");
     await screen.findByText("Notes");
     expect(screen.getByRole("button", { name: /add note/i })).toBeInTheDocument();
+  });
+
+  it("shows the EventArchivedBanner for an archived event, and never for any other status", async () => {
+    mockReady({ status: "archived" });
+    renderEventDetail("event_1");
+    expect(await screen.findByText(/This Event is archived/)).toBeInTheDocument();
+  });
+
+  it("never shows the EventArchivedBanner for a confirmed event", async () => {
+    mockReady({ status: "confirmed" });
+    renderEventDetail("event_1");
+    await screen.findByText("Malibu Sunset Proposal");
+    expect(screen.queryByText(/This Event is archived/)).not.toBeInTheDocument();
+  });
+
+  it("renders linked Contracts and Assigned Services, each pointing at its own detail/workspace route", async () => {
+    mockReady();
+    vi.mocked(dataLayer.getContracts).mockResolvedValue([
+      makeContract({ id: "contract_9", event_id: "event_1", title: "Wedding Agreement", status: "signed" }),
+    ]);
+    vi.mocked(dataLayer.listEventServicesByEvent).mockResolvedValue([
+      makeEventService({ id: "es_9", event_id: "event_1", service_id: "service_9", name: "Live Music", status: "confirmed" }),
+    ]);
+
+    renderEventDetail("event_1");
+
+    expect(await screen.findByText("Contracts")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Wedding Agreement" })).toHaveAttribute("href", "/contracts/contract_9");
+
+    expect(screen.getByText("Assigned Services")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Live Music" })).toHaveAttribute(
+      "href",
+      "/services/service_9/assignments/es_9",
+    );
   });
 });

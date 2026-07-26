@@ -1,6 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/Input";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Select } from "@/components/ui/Select";
 import { PAYMENT_TYPE_LABELS, PAYMENT_TYPES, type PaymentType } from "@/core/enums/paymentType";
 import { PAYMENT_STATUS_LABELS, PAYMENT_STATUSES, type PaymentStatus } from "@/core/enums/paymentStatus";
@@ -96,11 +97,9 @@ export function PaymentFilters({ value, onChange }: PaymentFiltersProps) {
       </div>
 
       <label className="flex items-center gap-2 text-sm text-text-muted">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={value.refundsOnly}
           onChange={(event) => onChange({ ...value, refundsOnly: event.target.checked })}
-          className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
         />
         Refunds only
       </label>

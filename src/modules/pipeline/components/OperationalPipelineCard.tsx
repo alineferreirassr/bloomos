@@ -10,6 +10,7 @@ import { formatEventDate } from "@/modules/events/dateFormat";
 import { isEventTerminal } from "@/core/workflows/eventWorkflow";
 import { isLifecycleStageTerminal } from "@/core/workflows/eventWorkflow";
 import type { OperationalCardData } from "@/modules/pipeline/operationalLogic";
+import { getFullName } from "@/lib/personName";
 
 interface OperationalPipelineCardProps {
   data: OperationalCardData;
@@ -35,7 +36,7 @@ export function OperationalPipelineCard({ data, actions, draggable = true, canUp
     disabled: !canDrag,
   });
 
-  const clientName = client ? `${client.first_name} ${client.last_name}` : "Unknown client";
+  const clientName = client ? getFullName(client) : "Unknown client";
   const isOverdue = daysUntilEvent !== null && daysUntilEvent < 0;
   const isUpcoming = daysUntilEvent !== null && daysUntilEvent >= 0 && daysUntilEvent <= 7;
 

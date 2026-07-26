@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ClientDetailView } from "@/modules/clients/components/ClientDetailView";
 import { makeClient } from "@/modules/clients/testUtils";
+import { makeEvent } from "@/modules/events/testUtils";
 import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
 import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 
@@ -37,6 +38,8 @@ vi.mock("@/lib/data", () => ({
   updateClientContactPreference: vi.fn(),
   updateClientTags: vi.fn(),
   getDocumentOwnerSummary: vi.fn(),
+  getEvents: vi.fn(),
+  getClientFinancialSummary: vi.fn(),
 }));
 
 import * as dataLayer from "@/lib/data";
@@ -54,9 +57,27 @@ const EMPTY_DOCUMENT_SUMMARY = {
   latestUploads: [],
 };
 
+const EMPTY_FINANCIAL_SUMMARY = {
+  contracted_value_minor: 0,
+  invoiced_total_minor: 0,
+  collected_minor: 0,
+  refunded_minor: 0,
+  outstanding_minor: 0,
+  expense_total_minor: 0,
+  gross_profit_minor: 0,
+  net_profit_minor: 0,
+  deposit_required_minor: 0,
+  deposit_paid_minor: 0,
+  deposit_balance_minor: 0,
+  payment_completion_percentage: 0,
+  expense_percentage_of_revenue: 0,
+};
+
 describe("ClientDetailView", () => {
   beforeEach(() => {
     vi.mocked(dataLayer.getDocumentOwnerSummary).mockResolvedValue(EMPTY_DOCUMENT_SUMMARY);
+    vi.mocked(dataLayer.getEvents).mockResolvedValue([]);
+    vi.mocked(dataLayer.getClientFinancialSummary).mockResolvedValue(EMPTY_FINANCIAL_SUMMARY);
   });
 
   it("renders header, contact, and internal sections once the client loads", async () => {
@@ -94,5 +115,30 @@ describe("ClientDetailView", () => {
     renderClientDetail("does_not_exist");
 
     expect(await screen.findByText(/could not load this client/i)).toBeInTheDocument();
+  });
+
+  it("renders linked Events and a Finance summary sourced from getEvents/getClientFinancialSummary", async () => {
+    const client = makeClient({ id: "client_1", first_name: "Naomi", last_name: "Whitfield" });
+    vi.mocked(dataLayer.getClientById).mockResolvedValue(client);
+    vi.mocked(dataLayer.getNotesByClientId).mockResolvedValue([]);
+    vi.mocked(dataLayer.getTimelineByClientId).mockResolvedValue([]);
+    vi.mocked(dataLayer.getClientNextAction).mockResolvedValue(null);
+    vi.mocked(dataLayer.getEvents).mockResolvedValue([
+      makeEvent({ id: "event_9", client_id: "client_1", title: "Naomi's Proposal", status: "confirmed" }),
+    ]);
+    vi.mocked(dataLayer.getClientFinancialSummary).mockResolvedValue({
+      ...EMPTY_FINANCIAL_SUMMARY,
+      invoiced_total_minor: 500000,
+      collected_minor: 250000,
+    });
+
+    renderClientDetail("client_1");
+
+    expect(await screen.findByText("Events")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Naomi's Proposal" })).toHaveAttribute("href", "/events/event_9");
+
+    expect(screen.getByText("Finance")).toBeInTheDocument();
+    expect(screen.getByText("$5,000.00")).toBeInTheDocument();
+    expect(screen.getByText("$2,500.00")).toBeInTheDocument();
   });
 });

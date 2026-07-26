@@ -1,6 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/Input";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Select } from "@/components/ui/Select";
 import { PURCHASE_STATUS_LABELS, PURCHASE_STATUSES, type PurchaseStatus } from "@/core/enums/purchaseStatus";
 
@@ -50,30 +51,24 @@ export function PurchaseFilters({ value, onChange }: PurchaseFiltersProps) {
       </Select>
       <div className="flex flex-wrap items-center gap-4">
         <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={value.openOnly}
             onChange={(event) => onChange({ ...value, openOnly: event.target.checked, overdueOnly: false })}
-            className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
           />
           Open only
         </label>
         <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={value.overdueOnly}
             onChange={(event) => onChange({ ...value, overdueOnly: event.target.checked, openOnly: false })}
-            className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
           />
           Overdue only
         </label>
       </div>
       <label className="flex items-center gap-2 text-sm text-text-muted lg:col-span-4">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={value.includeArchived}
           onChange={(event) => onChange({ ...value, includeArchived: event.target.checked })}
-          className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
         />
         Show archived purchases
       </label>

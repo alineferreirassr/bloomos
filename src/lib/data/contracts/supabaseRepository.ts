@@ -26,6 +26,7 @@ import type {
   ContractTemplateFilters,
   ContractsRepository,
 } from "@/lib/data/contracts/repository";
+import { getFullName } from "@/lib/personName";
 
 type SupabaseClient = ReturnType<typeof createSupabaseClient>;
 type ContractRow = Database["public"]["Tables"]["contracts"]["Row"];
@@ -188,7 +189,7 @@ async function getContracts(filters: ContractFilters = {}): Promise<Contract[]> 
 
   return contracts.filter((contract) => {
     const client = clientsById.get(contract.client_id);
-    const clientName = client ? `${client.first_name} ${client.last_name}` : "";
+    const clientName = client ? getFullName(client) : "";
     const eventTitle = contract.event_id ? (eventTitlesById.get(contract.event_id) ?? "") : "";
     const haystack = `${contract.contract_number} ${contract.title} ${clientName} ${eventTitle}`.toLowerCase();
     return haystack.includes(q);

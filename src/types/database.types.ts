@@ -753,6 +753,8 @@ export interface Database {
           assigned_id: string | null;
           assigned_name: string | null;
           sort_order: number;
+          source_event_service_id: string | null;
+          template_snapshot: Json | null;
           created_at: string;
           updated_at: string;
         };
@@ -772,6 +774,8 @@ export interface Database {
           assigned_id?: string | null;
           assigned_name?: string | null;
           sort_order?: number;
+          source_event_service_id?: string | null;
+          template_snapshot?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -791,6 +795,8 @@ export interface Database {
           assigned_id?: string | null;
           assigned_name?: string | null;
           sort_order?: number;
+          source_event_service_id?: string | null;
+          template_snapshot?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -811,6 +817,8 @@ export interface Database {
           category: string;
           status: string;
           sort_order: number;
+          source_event_service_id: string | null;
+          template_snapshot: Json | null;
           created_at: string;
           updated_at: string;
         };
@@ -828,6 +836,8 @@ export interface Database {
           category: string;
           status?: string;
           sort_order?: number;
+          source_event_service_id?: string | null;
+          template_snapshot?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -845,6 +855,8 @@ export interface Database {
           category?: string;
           status?: string;
           sort_order?: number;
+          source_event_service_id?: string | null;
+          template_snapshot?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -2026,6 +2038,342 @@ export interface Database {
         };
         Relationships: [];
       };
+      service_categories: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          name: string;
+          description: string | null;
+          display_order: number;
+          created_at: string;
+          updated_at: string;
+          archived_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          name: string;
+          description?: string | null;
+          display_order?: number;
+          created_at?: string;
+          updated_at?: string;
+          archived_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          name?: string;
+          description?: string | null;
+          display_order?: number;
+          created_at?: string;
+          updated_at?: string;
+          archived_at?: string | null;
+        };
+        Relationships: [];
+      };
+      services: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          category_id: string | null;
+          name: string;
+          description: string | null;
+          status: string;
+          draft_version_id: string | null;
+          current_published_version_id: string | null;
+          created_at: string;
+          updated_at: string;
+          archived_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          category_id?: string | null;
+          name: string;
+          description?: string | null;
+          status?: string;
+          draft_version_id?: string | null;
+          current_published_version_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          archived_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          category_id?: string | null;
+          name?: string;
+          description?: string | null;
+          status?: string;
+          draft_version_id?: string | null;
+          current_published_version_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          archived_at?: string | null;
+        };
+        Relationships: [];
+      };
+      service_versions: {
+        Row: {
+          id: string;
+          service_id: string;
+          workspace_id: string;
+          version_number: number | null;
+          status: string;
+          name_snapshot: string | null;
+          description_snapshot: string | null;
+          base_price_minor: number;
+          currency: string;
+          setup_duration_minutes: number | null;
+          breakdown_duration_minutes: number | null;
+          difficulty_score: number | null;
+          experience_level_required: string | null;
+          weather_sensitivity: string;
+          surprise_friendly: boolean;
+          estimated_profit_minor: number | null;
+          change_summary: string | null;
+          published_at: string | null;
+          published_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          service_id: string;
+          workspace_id: string;
+          version_number?: number | null;
+          status?: string;
+          name_snapshot?: string | null;
+          description_snapshot?: string | null;
+          base_price_minor?: number;
+          currency?: string;
+          setup_duration_minutes?: number | null;
+          breakdown_duration_minutes?: number | null;
+          difficulty_score?: number | null;
+          experience_level_required?: string | null;
+          weather_sensitivity?: string;
+          surprise_friendly?: boolean;
+          estimated_profit_minor?: number | null;
+          change_summary?: string | null;
+          published_at?: string | null;
+          published_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          service_id?: string;
+          workspace_id?: string;
+          version_number?: number | null;
+          status?: string;
+          name_snapshot?: string | null;
+          description_snapshot?: string | null;
+          base_price_minor?: number;
+          currency?: string;
+          setup_duration_minutes?: number | null;
+          breakdown_duration_minutes?: number | null;
+          difficulty_score?: number | null;
+          experience_level_required?: string | null;
+          weather_sensitivity?: string;
+          surprise_friendly?: boolean;
+          estimated_profit_minor?: number | null;
+          change_summary?: string | null;
+          published_at?: string | null;
+          published_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      service_included_items: {
+        Row: { id: string; workspace_id: string; service_version_id: string; label: string; description: string | null; display_order: number; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; service_version_id: string; label: string; description?: string | null; display_order?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; service_version_id?: string; label?: string; description?: string | null; display_order?: number; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      service_addons: {
+        Row: { id: string; workspace_id: string; service_version_id: string; label: string; description: string | null; price_delta_minor: number; display_order: number; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; service_version_id: string; label: string; description?: string | null; price_delta_minor?: number; display_order?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; service_version_id?: string; label?: string; description?: string | null; price_delta_minor?: number; display_order?: number; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      service_checklist_template_items: {
+        Row: { id: string; workspace_id: string; service_version_id: string; title: string; description: string | null; category: string; priority: string; due_offset_days: number | null; display_order: number; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; service_version_id: string; title: string; description?: string | null; category: string; priority: string; due_offset_days?: number | null; display_order?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; service_version_id?: string; title?: string; description?: string | null; category?: string; priority?: string; due_offset_days?: number | null; display_order?: number; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      service_timeline_template_items: {
+        Row: { id: string; workspace_id: string; service_version_id: string; title: string; description: string | null; category: string; offset_minutes_from_event_start: number; duration_minutes: number | null; display_order: number; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; service_version_id: string; title: string; description?: string | null; category: string; offset_minutes_from_event_start: number; duration_minutes?: number | null; display_order?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; service_version_id?: string; title?: string; description?: string | null; category?: string; offset_minutes_from_event_start?: number; duration_minutes?: number | null; display_order?: number; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      service_questionnaire_questions: {
+        Row: { id: string; workspace_id: string; service_version_id: string; question_text: string; question_type: string; is_required: boolean; options: string[] | null; display_order: number; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; service_version_id: string; question_text: string; question_type: string; is_required?: boolean; options?: string[] | null; display_order?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; service_version_id?: string; question_text?: string; question_type?: string; is_required?: boolean; options?: string[] | null; display_order?: number; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      service_budget_template_lines: {
+        Row: { id: string; workspace_id: string; service_version_id: string; label: string; category: string | null; estimated_revenue_minor: number; estimated_cost_minor: number; display_order: number; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; service_version_id: string; label: string; category?: string | null; estimated_revenue_minor?: number; estimated_cost_minor?: number; display_order?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; service_version_id?: string; label?: string; category?: string | null; estimated_revenue_minor?: number; estimated_cost_minor?: number; display_order?: number; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      service_approval_template_items: {
+        Row: { id: string; workspace_id: string; service_version_id: string; label: string; description: string | null; days_before_event_deadline: number | null; required_role: string | null; display_order: number; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; service_version_id: string; label: string; description?: string | null; days_before_event_deadline?: number | null; required_role?: string | null; display_order?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; service_version_id?: string; label?: string; description?: string | null; days_before_event_deadline?: number | null; required_role?: string | null; display_order?: number; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      service_travel_template_items: {
+        Row: { id: string; workspace_id: string; service_version_id: string; label: string; description: string | null; requires_equipment_transport: boolean; drive_time_buffer_minutes: number | null; mileage_estimate: number | null; display_order: number; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; service_version_id: string; label: string; description?: string | null; requires_equipment_transport?: boolean; drive_time_buffer_minutes?: number | null; mileage_estimate?: number | null; display_order?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; service_version_id?: string; label?: string; description?: string | null; requires_equipment_transport?: boolean; drive_time_buffer_minutes?: number | null; mileage_estimate?: number | null; display_order?: number; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      service_required_documents: {
+        Row: { id: string; workspace_id: string; service_version_id: string; label: string; category: string | null; is_required: boolean; display_order: number; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; service_version_id: string; label: string; category?: string | null; is_required?: boolean; display_order?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; service_version_id?: string; label?: string; category?: string | null; is_required?: boolean; display_order?: number; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      service_ai_knowledge_items: {
+        Row: { id: string; workspace_id: string; service_version_id: string; knowledge_type: string; content: string; severity: string; display_order: number; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; service_version_id: string; knowledge_type: string; content: string; severity?: string; display_order?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; service_version_id?: string; knowledge_type?: string; content?: string; severity?: string; display_order?: number; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      service_inventory_template_items: {
+        Row: { id: string; workspace_id: string; service_version_id: string; inventory_item_id: string | null; item_name: string; quantity: number; display_order: number; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; service_version_id: string; inventory_item_id?: string | null; item_name: string; quantity?: number; display_order?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; service_version_id?: string; inventory_item_id?: string | null; item_name?: string; quantity?: number; display_order?: number; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      service_purchase_template_items: {
+        Row: { id: string; workspace_id: string; service_version_id: string; item_name: string; estimated_unit_cost_minor: number; estimated_quantity: number; typical_vendor_id: string | null; display_order: number; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; service_version_id: string; item_name: string; estimated_unit_cost_minor?: number; estimated_quantity?: number; typical_vendor_id?: string | null; display_order?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; service_version_id?: string; item_name?: string; estimated_unit_cost_minor?: number; estimated_quantity?: number; typical_vendor_id?: string | null; display_order?: number; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      service_vendor_suggestions: {
+        Row: { id: string; workspace_id: string; service_version_id: string; vendor_id: string; note: string | null; display_order: number; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; service_version_id: string; vendor_id: string; note?: string | null; display_order?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; service_version_id?: string; vendor_id?: string; note?: string | null; display_order?: number; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      service_team_role_requirements: {
+        Row: { id: string; workspace_id: string; service_version_id: string; role_label: string; quantity: number; note: string | null; display_order: number; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; service_version_id: string; role_label: string; quantity?: number; note?: string | null; display_order?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; service_version_id?: string; role_label?: string; quantity?: number; note?: string | null; display_order?: number; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      service_seasonal_windows: {
+        Row: { id: string; workspace_id: string; service_version_id: string; start_month: number; end_month: number; note: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; service_version_id: string; start_month: number; end_month: number; note?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; service_version_id?: string; start_month?: number; end_month?: number; note?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      service_capability_requirements: {
+        Row: { id: string; workspace_id: string; service_version_id: string; capability_type: string; label: string; display_order: number; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; service_version_id: string; capability_type: string; label: string; display_order?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; service_version_id?: string; capability_type?: string; label?: string; display_order?: number; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      event_services: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          event_id: string;
+          service_id: string;
+          service_version_id: string;
+          name: string;
+          name_template_value: string;
+          price_minor: number;
+          price_template_value: number;
+          currency: string;
+          selected_add_on_ids: string[];
+          status: string;
+          assigned_at: string;
+          assigned_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          event_id: string;
+          service_id: string;
+          service_version_id: string;
+          name: string;
+          name_template_value: string;
+          price_minor?: number;
+          price_template_value?: number;
+          currency?: string;
+          selected_add_on_ids?: string[];
+          status?: string;
+          assigned_at?: string;
+          assigned_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          event_id?: string;
+          service_id?: string;
+          service_version_id?: string;
+          name?: string;
+          name_template_value?: string;
+          price_minor?: number;
+          price_template_value?: number;
+          currency?: string;
+          selected_add_on_ids?: string[];
+          status?: string;
+          assigned_at?: string;
+          assigned_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      event_service_inventory_requirements: {
+        Row: { id: string; workspace_id: string; event_service_id: string; inventory_item_id: string | null; item_name: string; quantity: number; is_fulfilled: boolean; note: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; event_service_id: string; inventory_item_id?: string | null; item_name: string; quantity?: number; is_fulfilled?: boolean; note?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; event_service_id?: string; inventory_item_id?: string | null; item_name?: string; quantity?: number; is_fulfilled?: boolean; note?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      event_service_purchase_requirements: {
+        Row: { id: string; workspace_id: string; event_service_id: string; item_name: string; estimated_unit_cost_minor: number; estimated_quantity: number; typical_vendor_id: string | null; fulfilled_purchase_id: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; event_service_id: string; item_name: string; estimated_unit_cost_minor?: number; estimated_quantity?: number; typical_vendor_id?: string | null; fulfilled_purchase_id?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; event_service_id?: string; item_name?: string; estimated_unit_cost_minor?: number; estimated_quantity?: number; typical_vendor_id?: string | null; fulfilled_purchase_id?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      event_service_budget_lines: {
+        Row: { id: string; workspace_id: string; event_service_id: string; label: string; category: string | null; estimated_revenue_minor: number; estimated_cost_minor: number; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; event_service_id: string; label: string; category?: string | null; estimated_revenue_minor?: number; estimated_cost_minor?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; event_service_id?: string; label?: string; category?: string | null; estimated_revenue_minor?: number; estimated_cost_minor?: number; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      event_service_team_requirements: {
+        Row: { id: string; workspace_id: string; event_service_id: string; role_label: string; quantity: number; note: string | null; assigned_member_id: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; event_service_id: string; role_label: string; quantity?: number; note?: string | null; assigned_member_id?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; event_service_id?: string; role_label?: string; quantity?: number; note?: string | null; assigned_member_id?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      event_service_vendor_assignments: {
+        Row: { id: string; workspace_id: string; event_service_id: string; vendor_id: string; status: string; note: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; event_service_id: string; vendor_id: string; status?: string; note?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; event_service_id?: string; vendor_id?: string; status?: string; note?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      event_service_questionnaire_responses: {
+        Row: { id: string; workspace_id: string; event_service_id: string; question_id: string; response_text: string | null; response_options: string[] | null; response_boolean: boolean | null; response_date: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; event_service_id: string; question_id: string; response_text?: string | null; response_options?: string[] | null; response_boolean?: boolean | null; response_date?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; event_service_id?: string; question_id?: string; response_text?: string | null; response_options?: string[] | null; response_boolean?: boolean | null; response_date?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -2350,6 +2698,14 @@ export interface Database {
           storage_bucket: string;
           storage_path: string;
         }[];
+      };
+      publish_service_version: {
+        Args: { p_service_id: string; p_change_summary: string | null; p_actor: string };
+        Returns: Database["public"]["Tables"]["service_versions"]["Row"];
+      };
+      assign_service_to_event: {
+        Args: { p_event_id: string; p_service_id: string; p_selected_add_on_ids: string[]; p_actor: string };
+        Returns: Database["public"]["Tables"]["event_services"]["Row"];
       };
     };
     Enums: Record<string, never>;

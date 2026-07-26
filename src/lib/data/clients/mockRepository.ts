@@ -13,6 +13,7 @@ import { getCoreAuditLogService } from "@/core/audit";
 import { generateId, nowIso, delay } from "@/lib/data/utils";
 import { type DataResult, ok, fail } from "@/lib/data/result";
 import { readClients, writeClients } from "@/lib/data/mock/clientsStore";
+import { getFullName } from "@/lib/personName";
 import { readNotes, writeNotes } from "@/lib/data/mock/notesStore";
 import { recordTimelineActivity } from "@/lib/data/mock/timelineStore";
 import { getNotesByOwner, createNoteForOwner, getTimelineByOwner } from "@/lib/data/mock/notesTimelineShared";
@@ -49,7 +50,7 @@ async function getClients(filters: ClientFilters = {}): Promise<Client[]> {
     if (search) {
       const q = search.trim().toLowerCase();
       if (!q) return true;
-      const haystack = `${client.first_name} ${client.last_name} ${client.email} ${client.phone ?? ""} ${client.partner_name ?? ""}`.toLowerCase();
+      const haystack = `${getFullName(client)} ${client.email} ${client.phone ?? ""} ${client.partner_name ?? ""}`.toLowerCase();
       if (!haystack.includes(q)) return false;
     }
     return true;

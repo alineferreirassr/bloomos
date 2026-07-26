@@ -62,47 +62,46 @@ export interface EventFinancialSummary {
  *   a standalone Payment (no invoice_id) that isn't tied to any Invoice
  *   would otherwise be double-counted as "collected but not invoiced".
  */
-export function computeEventFinancialSummary(
-  eventId: string,
+/**
+ * Pure — the shared arithmetic behind both computeEventFinancialSummary and
+ * computeClientFinancialSummary. Takes arrays already scoped (to one Event,
+ * or to one Client across all of their Events/standalone Contracts) and
+ * already filtered to "currently active" rows by the caller — this function
+ * only does the summation, never the scoping.
+ */
+function summarizeFinancials(
   contracts: Contract[],
   invoices: Invoice[],
   payments: Payment[],
   expenses: Expense[],
 ): EventFinancialSummary {
-  const eventContracts = contracts.filter(
-    (c) => c.event_id === eventId && !INACTIVE_CONTRACT_STATUSES.includes(c.status),
-  );
-  const eventInvoices = invoices.filter((i) => i.event_id === eventId && i.status !== "voided");
-  const eventPayments = payments.filter((p) => p.event_id === eventId);
-  const eventExpenses = expenses.filter((e) => e.event_id === eventId && e.status !== "cancelled");
-
-  const contracted_value_minor = sumMinor(eventContracts.map((c) => contractMoneyToMinor(c.total_value)));
-  const invoiced_total_minor = sumMinor(eventInvoices.map((i) => i.total_minor));
-  const outstanding_minor = sumMinor(eventInvoices.map((i) => i.balance_minor));
+  const contracted_value_minor = sumMinor(contracts.map((c) => contractMoneyToMinor(c.total_value)));
+  const invoiced_total_minor = sumMinor(invoices.map((i) => i.total_minor));
+  const outstanding_minor = sumMinor(invoices.map((i) => i.balance_minor));
 
   const grossCollected = sumMinor(
-    eventPayments.filter((p) => paymentCounts(p) && p.payment_type !== "refund").map((p) => p.amount_minor),
+    payments.filter((p) => paymentCounts(p) && p.payment_type !== "refund").map((p) => p.amount_minor),
   );
   const refunded_minor = sumMinor(
-    eventPayments.filter((p) => paymentCounts(p) && p.payment_type === "refund").map((p) => p.amount_minor),
+    payments.filter((p) => paymentCounts(p) && p.payment_type === "refund").map((p) => p.amount_minor),
   );
   const collected_minor = Math.max(0, subtractMinor(grossCollected, refunded_minor));
 
-  const expense_total_minor = sumMinor(eventExpenses.map((e) => e.amount_minor));
+  const expense_total_minor = sumMinor(expenses.map((e) => e.amount_minor));
 
   const gross_profit_minor = subtractMinor(invoiced_total_minor, expense_total_minor);
   const net_profit_minor = subtractMinor(collected_minor, expense_total_minor);
 
-  const depositRequiringContracts = eventContracts.filter((c) => c.deposit_required);
+  const depositRequiringContracts = contracts.filter((c) => c.deposit_required);
   const deposit_required_minor = sumMinor(
     depositRequiringContracts.map((c) => contractMoneyToMinor(c.deposit_amount)),
   );
-  // Deposit-specific refunds aren't separately distinguishable from any other refund on this
-  // Event (Payment has no structured link back to "the deposit it refunds") — deposit_paid_minor
+  // Deposit-specific refunds aren't separately distinguishable from any other refund in this
+  // scope (Payment has no structured link back to "the deposit it refunds") — deposit_paid_minor
   // is deliberately gross (uncorrected for refunds) rather than guessing which refund applies.
-  // A full refund of a deposit-only Event still shows up correctly in refunded_minor/collected_minor above.
+  // A full refund of a deposit-only scope still shows up correctly in refunded_minor/collected_minor above.
   const deposit_paid_minor = sumMinor(
-    eventPayments.filter((p) => paymentCounts(p) && p.payment_type === "deposit").map((p) => p.amount_minor),
+    payments.filter((p) => paymentCounts(p) && p.payment_type === "deposit").map((p) => p.amount_minor),
   );
   const deposit_balance_minor = Math.max(0, subtractMinor(deposit_required_minor, deposit_paid_minor));
 
@@ -124,6 +123,49 @@ export function computeEventFinancialSummary(
     payment_completion_percentage,
     expense_percentage_of_revenue,
   };
+}
+
+export function computeEventFinancialSummary(
+  eventId: string,
+  contracts: Contract[],
+  invoices: Invoice[],
+  payments: Payment[],
+  expenses: Expense[],
+): EventFinancialSummary {
+  const eventContracts = contracts.filter(
+    (c) => c.event_id === eventId && !INACTIVE_CONTRACT_STATUSES.includes(c.status),
+  );
+  const eventInvoices = invoices.filter((i) => i.event_id === eventId && i.status !== "voided");
+  const eventPayments = payments.filter((p) => p.event_id === eventId);
+  const eventExpenses = expenses.filter((e) => e.event_id === eventId && e.status !== "cancelled");
+
+  return summarizeFinancials(eventContracts, eventInvoices, eventPayments, eventExpenses);
+}
+
+/**
+ * Same shape as EventFinancialSummary, scoped to a Client across every one
+ * of their Events plus any Contract/Invoice/Expense attached to them
+ * directly with no Event at all — filters by `client_id` rather than
+ * enumerating the Client's Events first, since Contract/Invoice/Payment all
+ * carry `client_id` regardless of whether an Event is involved.
+ */
+export type ClientFinancialSummary = EventFinancialSummary;
+
+export function computeClientFinancialSummary(
+  clientId: string,
+  contracts: Contract[],
+  invoices: Invoice[],
+  payments: Payment[],
+  expenses: Expense[],
+): ClientFinancialSummary {
+  const clientContracts = contracts.filter(
+    (c) => c.client_id === clientId && !INACTIVE_CONTRACT_STATUSES.includes(c.status),
+  );
+  const clientInvoices = invoices.filter((i) => i.client_id === clientId && i.status !== "voided");
+  const clientPayments = payments.filter((p) => p.client_id === clientId);
+  const clientExpenses = expenses.filter((e) => e.client_id === clientId && e.status !== "cancelled");
+
+  return summarizeFinancials(clientContracts, clientInvoices, clientPayments, clientExpenses);
 }
 
 export interface WorkspaceFinancialSummary {

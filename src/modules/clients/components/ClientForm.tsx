@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { FormField } from "@/components/forms/FormField";
 import { Input } from "@/components/ui/Input";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
@@ -365,17 +366,13 @@ export function ClientForm({ defaultValues, onSubmit, submitLabel, cancelHref }:
         </div>
         <div className="mt-3 space-y-2">
           <label className="flex items-center gap-2 text-sm text-text">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
+            <Checkbox
               {...register("do_not_call")}
             />
             Do not call
           </label>
           <label className="flex items-center gap-2 text-sm text-text">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
+            <Checkbox
               {...register("surprise_event_confidentiality")}
             />
             Surprise-event confidentiality (keep outreach private from this client)

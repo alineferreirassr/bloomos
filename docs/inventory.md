@@ -1,6 +1,6 @@
 # Inventory
 
-**Status: foundation only.** Types, workflow, mock repository, and Core integration exist; no UI, no Supabase migration, no Vendors/Events/Finance integration. See `CHANGELOG.md` for the phase this shipped in.
+**Status: live.** Types, workflow, mock + Supabase repositories, Core integration, full list/detail/create-edit UI, and Vendor integration (linked-Vendor display both directions) are all built and live on `/inventory`. Applied via 7 SQL migrations (`supabase/migrations/20260729100000` onward). See `CHANGELOG.md` for the phase this shipped in.
 
 ## InventoryItem
 
@@ -48,15 +48,13 @@ Invariants enforced on every movement (`core/workflows/inventoryWorkflow.ts`):
 - **Notes, Timeline, Tags, Attachments, Audit Log** — all accept `owner_type: "inventory_item"` automatically, since each is typed generically by `EntityType`. No Inventory-specific wrapper methods were added to `InventoryRepository` for these — call the Core front doors directly (`@/core/notes`, `@/core/timeline`, `@/core/tags`, `@/core/files`) with `"inventory_item"` as the owner type.
 - **Timeline activity types** — registered via `registerTimelineActivityType` (`@/core/timeline`) at repository module-init time, not added to `core/enums/timelineActivityType.ts`. This is the extensible-registry path Core's Timeline generalization exists for.
 - **Audit Log** — wired into every state-changing mutation (`createInventoryItem`, `updateInventoryItem`, `archiveInventoryItem`, `restoreInventoryItem`, `recordInventoryMovement`), matching the Clients Core-integration precedent.
-- **Search** — `"inventory_item"` is registered in `core/search/defaultRegistrations.ts` with no route (module unbuilt).
-- **Media Library** — `"inventory_item"` is in `MEDIA_ASSET_OWNER_TYPES` (aspirational) but not yet in `LIVE_MEDIA_ASSET_OWNER_TYPES` — real Attachments support arrives with the Inventory migration, matching how every other module widened this list.
+- **Search** — `"inventory_item"` is registered in `core/search/defaultRegistrations.ts` with a real route (`/inventory/${id}`).
+- **Media Library** — `"inventory_item"` is live in `LIVE_MEDIA_ASSET_OWNER_TYPES` — Attachments are fully supported on Inventory items.
 - **Notifications** — deliberately not wired to any Inventory event; no policy exists yet for who should be notified about low stock or damage.
+- **Vendors integration** — live: `primary_vendor_id` is wired through the item form/filters, with a reverse linked-Inventory list on Vendor Detail (see `CHANGELOG.md`).
 
 ## Deferred to later phases
 
-- **UI** — list/detail/create/edit views, movement history display, low-stock/damaged dashboards.
-- **Supabase migration** — `inventory_items`/`inventory_movements` tables, RLS, triggers. `lib/data/inventory/supabaseRepository.ts` is a typed placeholder that throws rather than querying a table that doesn't exist.
-- **Vendors integration** — `primary_vendor_id` is a plain nullable string today, no FK, no Vendor record to point at yet.
 - **Events integration** — `event_checkout`/`event_return` movement types and `reference_type`/`reference_id` exist as generic extension points but nothing populates them; reserving/checking out stock for a specific Event is future work.
 - **Finance integration** — `unit_cost`/`replacement_cost`/`rental_value` are stored but not yet connected to Expense tracking or rental invoicing.
 - **Bloom AI** — no AI integration of any kind this phase.

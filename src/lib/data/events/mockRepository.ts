@@ -31,6 +31,7 @@ import { writeNotes } from "@/lib/data/mock/notesStore";
 import { recordTimelineActivity } from "@/lib/data/mock/timelineStore";
 import { getNotesByOwner, createNoteForOwner, getTimelineByOwner } from "@/lib/data/mock/notesTimelineShared";
 import type { EventFilters, EventsRepository } from "@/lib/data/events/repository";
+import { getFullName } from "@/lib/personName";
 
 function fieldErrorsFromZod(error: {
   issues: { path: PropertyKey[]; message: string }[];
@@ -76,7 +77,7 @@ async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
       const q = search.trim().toLowerCase();
       if (!q) return true;
       const client = clientsById.get(event.client_id);
-      const clientName = client ? `${client.first_name} ${client.last_name}` : "";
+      const clientName = client ? getFullName(client) : "";
       const haystack = `${event.title} ${clientName} ${event.location_name ?? ""} ${event.city ?? ""}`.toLowerCase();
       if (!haystack.includes(q)) return false;
     }

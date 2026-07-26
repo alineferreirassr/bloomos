@@ -1,6 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/Input";
+import { Checkbox } from "@/components/ui/Checkbox";
 
 export interface ProfitAndLossFiltersValue {
   startDate: string;
@@ -35,11 +36,9 @@ export function ProfitAndLossFilters({ value, onChange }: ProfitAndLossFiltersPr
         />
       </div>
       <label className="flex items-center gap-2 text-sm text-text-muted">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={value.compareEnabled}
           onChange={(event) => onChange({ ...value, compareEnabled: event.target.checked })}
-          className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
         />
         Compare to another period
       </label>

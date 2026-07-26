@@ -3,6 +3,7 @@ import { InvoiceStatusBadge } from "@/modules/finance/components/InvoiceStatusBa
 import { formatMoney } from "@/lib/money";
 import { formatEventDate } from "@/modules/events/dateFormat";
 import type { InvoiceListRow } from "@/modules/finance/components/InvoicesListView";
+import { getFullName } from "@/lib/personName";
 
 export function InvoiceListTable({ rows }: { rows: InvoiceListRow[] }) {
   return (
@@ -42,7 +43,7 @@ export function InvoiceListTable({ rows }: { rows: InvoiceListRow[] }) {
                 <div className="text-xs text-text-muted">{invoice.title}</div>
               </td>
               <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
-                {client ? `${client.first_name} ${client.last_name}` : "—"}
+                {client ? getFullName(client) : "—"}
               </td>
               <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
                 {event ? event.title : "—"}

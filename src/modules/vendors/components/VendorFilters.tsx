@@ -1,6 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/Input";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Select } from "@/components/ui/Select";
 import { VENDOR_STATUS_LABELS, VENDOR_STATUSES, type VendorStatus } from "@/core/enums/vendorStatus";
 import type { VendorSort } from "@/lib/data/vendors/repository";
@@ -80,20 +81,16 @@ export function VendorFilters({ value, onChange }: VendorFiltersProps) {
         <option value="is_preferred:desc">Preferred first</option>
       </Select>
       <label className="flex items-center gap-2 text-sm text-text-muted">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={value.preferredOnly}
           onChange={(event) => onChange({ ...value, preferredOnly: event.target.checked })}
-          className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
         />
         Preferred only
       </label>
       <label className="flex items-center gap-2 text-sm text-text-muted lg:col-span-6">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={value.includeArchived}
           onChange={(event) => onChange({ ...value, includeArchived: event.target.checked })}
-          className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
         />
         Show archived vendors
       </label>

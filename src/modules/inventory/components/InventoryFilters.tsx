@@ -1,6 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/Input";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Select } from "@/components/ui/Select";
 import { INVENTORY_STATUS_LABELS, INVENTORY_STATUSES, type InventoryStatus } from "@/core/enums/inventoryStatus";
 import { INVENTORY_ITEM_TYPE_LABELS, INVENTORY_ITEM_TYPES, type InventoryItemType } from "@/core/enums/inventoryItemType";
@@ -74,11 +75,9 @@ export function InventoryFilters({ value, onChange }: InventoryFiltersProps) {
         ))}
       </Select>
       <label className="flex items-center gap-2 text-sm text-text-muted lg:col-span-5">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={value.includeArchived}
           onChange={(event) => onChange({ ...value, includeArchived: event.target.checked })}
-          className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
         />
         Show archived items
       </label>

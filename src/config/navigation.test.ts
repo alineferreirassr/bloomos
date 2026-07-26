@@ -40,10 +40,15 @@ describe("getVisibleNavigationModules", () => {
     expect(visible.find((m) => m.id === "crm")).toBeUndefined();
   });
 
-  it("keeps disabled placeholder modules with no href (Inventory, Vendors, Services, Bloom AI) visible regardless of permission", () => {
+  it("keeps disabled placeholder modules with no href (Bloom AI) visible regardless of permission", () => {
+    const visible = getVisibleNavigationModules(() => false);
+    expect(visible.map((m) => m.id)).toEqual(expect.arrayContaining(["bloom-ai"]));
+  });
+
+  it("shows Inventory/Vendors/Purchases/Services regardless of permission — none of their routes has a ROUTE_ACCESS_MAP entry yet, so canAccessRoute treats them as active-membership-only", () => {
     const visible = getVisibleNavigationModules(() => false);
     expect(visible.map((m) => m.id)).toEqual(
-      expect.arrayContaining(["inventory", "vendors", "services", "bloom-ai"]),
+      expect.arrayContaining(["inventory", "vendors", "purchases", "services"]),
     );
   });
 

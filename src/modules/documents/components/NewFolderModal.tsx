@@ -22,6 +22,7 @@ import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 import type { EntityType } from "@/core/enums/entityType";
 import { VALID_DOCUMENT_OWNER_TYPES, documentFolderFormSchema, type DocumentFolderFormInput } from "@/modules/documents/schema";
 import { OWNER_TYPE_LABELS } from "@/modules/documents/components/DocumentFilters";
+import { getFullName } from "@/lib/personName";
 
 interface NewFolderModalProps {
   open: boolean;
@@ -74,7 +75,7 @@ export function NewFolderModal({ open, onClose }: NewFolderModalProps) {
 
   const ownerOptions: { id: string; label: string }[] =
     ownerType === "client"
-      ? clients.map((c) => ({ id: c.id, label: `${c.first_name} ${c.last_name}` }))
+      ? clients.map((c) => ({ id: c.id, label: getFullName(c) }))
       : ownerType === "event"
         ? events.map((e) => ({ id: e.id, label: e.title }))
         : ownerType === "contract"

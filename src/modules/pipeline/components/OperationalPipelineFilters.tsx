@@ -1,6 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/Input";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Select } from "@/components/ui/Select";
 import { EVENT_TYPE_LABELS, EVENT_TYPES } from "@/core/enums/eventType";
 import { EVENT_PRIORITIES, EVENT_PRIORITY_LABELS } from "@/core/enums/eventPriority";
@@ -88,20 +89,16 @@ export function OperationalPipelineFilters({ value, onChange, owners }: Operatio
           ))}
         </Select>
         <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={value.overdueOnly}
             onChange={(event) => onChange({ ...value, overdueOnly: event.target.checked })}
-            className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
           />
           Overdue checklist only
         </label>
         <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={value.upcomingOnly}
             onChange={(event) => onChange({ ...value, upcomingOnly: event.target.checked })}
-            className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
           />
           Upcoming (next 7 days) only
         </label>

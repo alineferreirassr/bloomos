@@ -3,6 +3,7 @@ import type { PurchaseItem } from "@/types/purchaseItem";
 import type { PurchaseFormValues } from "@/modules/purchases/components/PurchaseForm";
 import type { PurchaseItemFormValues } from "@/modules/purchases/components/PurchaseItemForm";
 import { minorToMajor } from "@/lib/money";
+import { formatDateOnly } from "@/lib/dateFormat";
 
 /** Converts a Purchase record's null/numeric fields into the plain-string shape the form works with — mirrors inventoryItemToFormInput/vendorToFormInput. vendor_id is included but only ever rendered on the create form — it's immutable after creation, so the edit form never reads it back out. */
 export function purchaseToFormInput(purchase: Purchase): PurchaseFormValues {
@@ -29,10 +30,5 @@ export function purchaseItemToFormInput(item: PurchaseItem): PurchaseItemFormVal
   };
 }
 
-/** Same slice-then-toLocaleDateString approach as formatInventoryDate — handles both a plain "YYYY-MM-DD" and a full ISO timestamp. */
-export function formatPurchaseDate(value: string | null): string {
-  if (!value) return "—";
-  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
-  if (!year || !month || !day) return "—";
-  return new Date(year, month - 1, day).toLocaleDateString();
-}
+/** Re-exported under this module's name so existing `formatPurchaseDate` imports don't need to change — see `@/lib/dateFormat` for the shared implementation. */
+export const formatPurchaseDate = formatDateOnly;

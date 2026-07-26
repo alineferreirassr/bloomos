@@ -1,6 +1,7 @@
 import type { InventoryItem } from "@/types/inventoryItem";
 import type { InventoryItemFormValues } from "@/modules/inventory/components/InventoryItemForm";
 import { minorToMajor } from "@/lib/money";
+import { formatDateOnly } from "@/lib/dateFormat";
 
 /** Converts an InventoryItem record's null/numeric fields into the plain-string shape the form works with — mirrors vendorToFormInput. */
 export function inventoryItemToFormInput(item: InventoryItem): InventoryItemFormValues {
@@ -29,10 +30,5 @@ export function inventoryItemToFormInput(item: InventoryItem): InventoryItemForm
   };
 }
 
-/** Same slice-then-toLocaleDateString approach as formatDocumentDate — handles both a plain "YYYY-MM-DD" and a full ISO timestamp. */
-export function formatInventoryDate(value: string | null): string {
-  if (!value) return "—";
-  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
-  if (!year || !month || !day) return "—";
-  return new Date(year, month - 1, day).toLocaleDateString();
-}
+/** Re-exported under this module's name so existing `formatInventoryDate` imports don't need to change — see `@/lib/dateFormat` for the shared implementation. */
+export const formatInventoryDate = formatDateOnly;

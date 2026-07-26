@@ -165,6 +165,19 @@ A scoped audit confirming the already-shipped My Events/Contracts/Invoices/Docum
 - [x] Live verification against the real Owner session (internal admin regression, external invitation page, blocked-state brand qualifier)
 - [x] Update documentation (`docs/workflows.md`, `docs/permissions.md`, `CHANGELOG.md`, `TODO.md`)
 
+## Phase 2 — Operational depth (in progress)
+
+Core cross-module infrastructure, then the remaining Operational-depth business modules from `ROADMAP.md`'s Phase 2 list (Inventory, Suppliers). Services was not itself on that original list but is included here as the largest single module built in this phase.
+
+- [x] Core foundation — shared Notes/Timeline/Tags/Comments/Files/Audit Log/Search/Notifications/AI-provider architecture every subsequent module builds on, rather than each reinventing its own (`docs/database.md`, `core/`)
+- [x] Inventory module — full catalog (items, movements, condition/status workflow), list/detail/create-edit UI, Notes/Timeline/Attachments, linked-Vendor display, live on `/inventory` (`docs/inventory.md`)
+- [x] Vendors (ROADMAP.md's "Suppliers") — full CRUD, preferred-vendor flag, reverse Inventory list on Vendor Detail, live on `/vendors`
+- [x] Purchases module — Purchase/PurchaseItem lifecycle, atomic receiving RPC (`record_purchase_receipt`), full list/detail/create-edit UI, live on `/purchases` (`docs/purchases.md`)
+- [x] Finance Reports — General Ledger, Trial Balance, Profit & Loss, Balance Sheet, backed by dedicated RPCs, live under `/finance/reports` (`docs/finance-reports.md`)
+- [x] Services module — Service/ServiceVersion catalog, 16 normalized Template categories, EventService assignment instance layer, full React Query-backed UI (catalog, detail, template builder, health dashboard, version history, Event Assignment Workspace), live on `/services` (`docs/services.md`)
+- [ ] Calendar (ROADMAP.md's Phase 2 list) — not started
+- [ ] Booking Workflow's Operational Pipeline board + Booking Dashboard — see the dedicated section below, still in progress
+
 ## Phase 2 — Booking Workflow (in progress, `feature/client-access`)
 
 Connects Leads/Clients/Events into one Booking Pipeline — reuses `Lead.status` (Commercial Pipeline) and `Event.lifecycle_stage` (future Operational Pipeline) rather than a new "Booking" entity. Repository foundation, generic recovery infrastructure, and the Commercial Pipeline UI are complete; the Operational Pipeline board and Booking Dashboard are not started.

@@ -5,6 +5,7 @@ import { EventStatusBadge } from "@/modules/events/components/EventStatusBadge";
 import { EventPriorityBadge } from "@/modules/events/components/EventPriorityBadge";
 import { formatEventDate } from "@/modules/events/dateFormat";
 import type { EventListRow } from "@/modules/events/components/EventsListView";
+import { getFullName } from "@/lib/personName";
 
 export function EventListCards({ rows }: { rows: EventListRow[] }) {
   return (
@@ -16,7 +17,7 @@ export function EventListCards({ rows }: { rows: EventListRow[] }) {
               <div>
                 <p className="font-medium tracking-tight text-text">{event.title}</p>
                 <p className="mt-0.5 text-xs text-text-muted">
-                  {client ? `${client.first_name} ${client.last_name}` : "No client"}
+                  {client ? getFullName(client) : "No client"}
                 </p>
               </div>
               <div className="flex flex-col items-end gap-1">

@@ -145,8 +145,11 @@ describe("Finance Reports UI structural guardrails", () => {
     const migrationsDir = path.resolve(__dirname, "../../../../supabase/migrations");
     const files = readdirSync(migrationsDir).filter((f) => f.endsWith(".sql"));
     // The last migration committed in the Finance Reports Foundation checkpoint remains the
-    // newest file — the Reports UI phase adds zero new .sql files.
+    // newest FINANCE file — the Reports UI phase adds zero new .sql files of its own. Scoped to
+    // files with a "finance" prefix (rather than "no file at all sorts after it") since later,
+    // unrelated modules (e.g. Services) are expected to add their own migrations afterward.
     expect(files).toContain("20260805100000_finance_report_rpcs.sql");
-    expect(files.filter((f) => f > "20260805100000_finance_report_rpcs.sql")).toHaveLength(0);
+    const financeFilesAfter = files.filter((f) => f > "20260805100000_finance_report_rpcs.sql" && f.includes("finance"));
+    expect(financeFilesAfter).toHaveLength(0);
   });
 });

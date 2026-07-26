@@ -12,6 +12,7 @@ import { isChecklistItemOverdue } from "@/modules/events/checklistStats";
 import { detectOperationalRisks } from "@/modules/ai/riskEngine";
 import { computeContextConfidence } from "@/modules/ai/confidence";
 import type { EventOperationsBriefContext } from "@/modules/ai/types";
+import { getFullName } from "@/lib/personName";
 
 /**
  * Whole days from `event_date` to `now` — duplicated in miniature from
@@ -133,7 +134,7 @@ export function buildEventOperationsBriefContext(
       assignedOwner: event.assigned_owner,
       updatedAt: event.updated_at,
     },
-    client: client ? { name: `${client.first_name} ${client.last_name}` } : null,
+    client: client ? { name: getFullName(client) } : null,
     health: {
       status: healthStatus,
       score: healthDetails.score,

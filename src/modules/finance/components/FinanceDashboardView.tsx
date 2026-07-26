@@ -13,6 +13,7 @@ import {
 import { getDataPersistenceMessage } from "@/lib/dataModeCopy";
 import type { Client } from "@/types/client";
 import type { AccountingPeriod } from "@/types/accountingPeriod";
+import { getFullName } from "@/lib/personName";
 import type { JournalEntry } from "@/types/journalEntry";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -91,7 +92,7 @@ async function loadLedgerSummary(): Promise<LedgerSummaryState> {
 function clientName(clientsById: Map<string, Client>, clientId: string | null): string {
   if (!clientId) return "—";
   const client = clientsById.get(clientId);
-  return client ? `${client.first_name} ${client.last_name}` : "—";
+  return client ? getFullName(client) : "—";
 }
 
 /**

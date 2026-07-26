@@ -1,6 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/Input";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Select } from "@/components/ui/Select";
 import { SCHEDULE_CATEGORY_LABELS, SCHEDULE_CATEGORIES, type ScheduleCategory } from "@/core/enums/scheduleCategory";
 import { SCHEDULE_STATUS_LABELS, SCHEDULE_STATUSES, type ScheduleStatus } from "@/core/enums/scheduleStatus";
@@ -86,20 +87,16 @@ export function ScheduleFilters({ value, onChange, assignedOptions }: ScheduleFi
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
         <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={value.delayedOnly}
             onChange={(event) => onChange({ ...value, delayedOnly: event.target.checked })}
-            className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
           />
           Delayed only
         </label>
         <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={value.showCompleted}
             onChange={(event) => onChange({ ...value, showCompleted: event.target.checked })}
-            className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
           />
           Show completed
         </label>

@@ -46,6 +46,43 @@
 
   --shadow-sm-val: 0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent);
   --shadow-md-val: 0 3px 10px color-mix(in srgb, #2d2b2b 16%, transparent);
+  /* Reserved for large, edge-anchored surfaces (Drawer) that sit above
+     Modal's own shadow-md — same warm color-mix family, just a longer
+     throw, never Tailwind's default cool-gray shadow-lg. */
+  --shadow-lg-val: 0 8px 24px color-mix(in srgb, #2d2b2b 22%, transparent);
+
+  /* Semantic spacing steps for component authoring (e.g. a Drawer's own
+     padding/gap), layered on top of Tailwind's own numeric spacing scale
+     rather than replacing it — reach for these only when a size needs a
+     name, not a number. */
+  --spacing-xs-px: 8px;
+  --spacing-sm-px: 12px;
+  --spacing-md-px: 16px;
+  --spacing-lg-px: 24px;
+  --spacing-xl-px: 32px;
+
+  /* Motion — one shared timing/easing vocabulary so every future
+     transition (Drawer slide, Tooltip fade, Modal backdrop) reads as the
+     same system instead of each component picking its own duration. */
+  --duration-fast-ms: 120ms;
+  --duration-base-ms: 200ms;
+  --duration-slow-ms: 320ms;
+  --easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --easing-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --easing-accelerate: cubic-bezier(0.4, 0, 1, 1);
+
+  --icon-size-sm-px: 14px;
+  --icon-size-md-px: 16px;
+  --icon-size-lg-px: 20px;
+
+  /* A shared stacking order so a Tooltip can always render above a Drawer,
+     which always renders above a Modal's own backdrop, etc., regardless of
+     DOM insertion order. */
+  --z-index-dropdown: 10;
+  --z-index-sticky: 20;
+  --z-index-overlay: 40;
+  --z-index-modal: 50;
+  --z-index-tooltip: 60;
 }
 
 @theme inline {
@@ -74,6 +111,14 @@
   --radius-sm: var(--radius-sm-px);
   --radius-md: var(--radius-md-px);
   --radius-lg: var(--radius-lg-px);
+  /* Wires the shadow-sm/md/lg utilities to the warm color-mix values above
+     instead of Tailwind's generic cool-gray defaults — shadow-sm/md were
+     previously defined but never actually consumed by the utility classes
+     of the same name; this makes every existing shadow-sm/shadow-md call
+     site (ActionMenu, Modal, MobileNav) resolve correctly too. */
+  --shadow-sm: var(--shadow-sm-val);
+  --shadow-md: var(--shadow-md-val);
+  --shadow-lg: var(--shadow-lg-val);
 }
 
 body {

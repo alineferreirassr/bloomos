@@ -23,6 +23,7 @@ import {
 import { ScheduleItemRow } from "@/modules/events/components/ScheduleItemRow";
 import { ScheduleItemForm } from "@/modules/events/components/ScheduleItemForm";
 import { ConfirmDeleteScheduleItemModal } from "@/modules/events/components/ConfirmDeleteScheduleItemModal";
+import { getFullName } from "@/lib/personName";
 
 type LoadState =
   | { status: "loading" }
@@ -159,7 +160,7 @@ export function EventScheduleView({ eventId }: { eventId: string }) {
         </div>
         <p className="mt-1 text-sm text-text-muted">
           {event.title}
-          {client ? ` · ${client.first_name} ${client.last_name}` : ""}
+          {client ? ` · ${getFullName(client)}` : ""}
           {event.event_date ? ` · ${formatEventDate(event.event_date)}` : ""}
           {" · "}
           {stats.total} item{stats.total === 1 ? "" : "s"}

@@ -1,6 +1,7 @@
 import type { Lead } from "@/types/lead";
 import type { LeadFormInput } from "@/modules/leads/schema";
 import { COMMERCIAL_COLUMNS, columnForStatus, type CommercialColumnId } from "@/modules/pipeline/constants";
+import { getFullName } from "@/lib/personName";
 
 export interface CommercialPipelineFilterValues {
   search: string;
@@ -46,7 +47,7 @@ export function filterCommercialLeads(leads: Lead[], filters: CommercialPipeline
 
   return leads.filter((lead) => {
     if (search) {
-      const haystack = `${lead.first_name} ${lead.last_name} ${lead.email} ${lead.event_type ?? ""}`.toLowerCase();
+      const haystack = `${getFullName(lead)} ${lead.email} ${lead.event_type ?? ""}`.toLowerCase();
       if (!haystack.includes(search)) return false;
     }
     if (filters.assignedTo !== "all" && lead.assigned_to !== filters.assignedTo) return false;

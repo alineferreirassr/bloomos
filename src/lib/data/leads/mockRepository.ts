@@ -13,6 +13,7 @@ import { readNotes, writeNotes } from "@/lib/data/mock/notesStore";
 import { recordTimelineActivity } from "@/lib/data/mock/timelineStore";
 import { getNotesByOwner, createNoteForOwner, getTimelineByOwner } from "@/lib/data/mock/notesTimelineShared";
 import type { LeadFilters, LeadsRepository } from "@/lib/data/leads/repository";
+import { getFullName } from "@/lib/personName";
 
 function fieldErrorsFromZod(error: {
   issues: { path: PropertyKey[]; message: string }[];
@@ -39,7 +40,7 @@ async function getLeads(filters: LeadFilters = {}): Promise<Lead[]> {
     if (search) {
       const q = search.trim().toLowerCase();
       if (!q) return true;
-      const haystack = `${lead.first_name} ${lead.last_name} ${lead.email}`.toLowerCase();
+      const haystack = `${getFullName(lead)} ${lead.email}`.toLowerCase();
       if (!haystack.includes(q)) return false;
     }
     return true;

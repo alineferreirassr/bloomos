@@ -1,6 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/Input";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Select } from "@/components/ui/Select";
 import { DOCUMENT_CATEGORIES, DOCUMENT_CATEGORY_LABELS, type DocumentCategory } from "@/core/enums/documentCategory";
 import { DOCUMENT_STATUSES, DOCUMENT_STATUS_LABELS, type DocumentStatus } from "@/core/enums/documentStatus";
@@ -19,6 +20,7 @@ import type { Invoice } from "@/types/invoice";
 import type { Payment } from "@/types/payment";
 import type { Expense } from "@/types/expense";
 import type { DocumentFolder } from "@/types/documentFolder";
+import { getFullName } from "@/lib/personName";
 
 export const OWNER_TYPE_LABELS: Record<EntityType, string> = {
   lead: "Lead",
@@ -40,6 +42,8 @@ export const OWNER_TYPE_LABELS: Record<EntityType, string> = {
   purchase: "Purchase",
   journal_entry: "Journal Entry",
   accounting_period: "Accounting Period",
+  service: "Service",
+  event_service: "Assigned Service",
 };
 
 export type DocumentSortField = "title" | "uploaded_at" | "updated_at" | "size_bytes" | "expires_at" | "version";
@@ -100,7 +104,7 @@ interface DocumentFiltersProps {
 function ownerOptionsFor(ownerType: EntityType | "all", props: DocumentFiltersProps): { id: string; label: string }[] {
   switch (ownerType) {
     case "client":
-      return props.clients.map((c) => ({ id: c.id, label: `${c.first_name} ${c.last_name}` }));
+      return props.clients.map((c) => ({ id: c.id, label: getFullName(c) }));
     case "event":
       return props.events.map((e) => ({ id: e.id, label: e.title }));
     case "contract":
@@ -281,29 +285,23 @@ export function DocumentFilters(props: DocumentFiltersProps) {
 
       <div className="flex flex-wrap items-center gap-4">
         <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={value.latestVersionOnly}
             onChange={(event) => onChange({ ...value, latestVersionOnly: event.target.checked })}
-            className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
           />
           Latest version only
         </label>
         <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={value.includeArchived}
             onChange={(event) => onChange({ ...value, includeArchived: event.target.checked })}
-            className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
           />
           Show archived
         </label>
         <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={value.includeDeleted}
             onChange={(event) => onChange({ ...value, includeDeleted: event.target.checked })}
-            className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
           />
           Show deleted
         </label>

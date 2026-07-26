@@ -16,6 +16,7 @@ import { normalizeSupabaseError } from "@/lib/supabase/errors";
 import { mapClientRow, mapNoteRow, mapTimelineActivityRow } from "@/lib/supabase/mappers";
 import { getClientWorkspaceSession, type WorkspaceSession } from "@/lib/auth/workspaceSessionClient";
 import { getClientExtensionSummary } from "@/lib/data/clients/extensions";
+import { getFullName } from "@/lib/personName";
 import { getCoreAuditLogService } from "@/core/audit";
 import type {
   ClientFilters,
@@ -116,7 +117,7 @@ async function getClients(filters: ClientFilters = {}): Promise<Client[]> {
   const q = search?.trim().toLowerCase();
   if (!q) return clients;
   return clients.filter((client) => {
-    const haystack = `${client.first_name} ${client.last_name} ${client.email} ${client.phone ?? ""} ${client.partner_name ?? ""}`.toLowerCase();
+    const haystack = `${getFullName(client)} ${client.email} ${client.phone ?? ""} ${client.partner_name ?? ""}`.toLowerCase();
     return haystack.includes(q);
   });
 }

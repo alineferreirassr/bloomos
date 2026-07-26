@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+Nothing yet — v1.0.0 is the current release.
+
+## [1.0.0] - 2026-07-26
+
+BloomOS's first tagged release. Six MVP modules (Leads, Clients, Events, Contracts, Finance, Documents) plus Phase 2's operational depth (Team, Client Portal, Inventory, Vendors, Purchases, Finance Reports, Services, Commercial Pipeline) and Bloom AI's first shipped feature (Event Operations Brief) are all live on the connected Supabase project. See `ROADMAP.md` for phase-by-phase detail and `RELEASE_NOTES.md` for the v1.0.0 release summary.
+
+### Checkpoint 13 — v1.0.0 release finalization
+
+- **Removed**: 4 dead Services hooks with zero importers (`useServiceSearch`, `useHealthDashboard`, `useAssignmentWorkspace`, `useServiceCategoryMutations`) — remainder of the Checkpoint 12 dead-hooks cleanup that was missed.
+- **Removed**: unused `_STATUSES`/`_LABELS` const exports from 3 enum files (`normalBalance.ts`, `eventServiceVendorAssignmentStatus.ts`, `serviceVersionStatus.ts`) — only the derived TS type was ever consumed; each is now a plain string-literal union type.
+- **Docs**: fixed two stale "not yet live" status claims in `docs/services.md` (top status line, migration-push clause) left over from before its Foundation/Migrations phases shipped; fixed a stale "Deferred to later phases" section in `docs/inventory.md` that still claimed no UI/migration/Vendor-integration existed, all three of which have since shipped; named the specific deferred Bloom AI items (context builders beyond Event, Operational Graph, retry/fallback, tool registry) explicitly in `docs/ai.md`.
+- **Versioning**: bumped to `1.0.0`.
+
+### Checkpoint 12 — Release Candidate hardening
+
+- **Fixed**: 5 Client/Contract status-select components (`ClientStatusSelect`, `ContactMethodSelect`, `TagsEditor`, `VipToggle`, `ContractStatusSelect`) were missing a `try/catch` around their optimistic-update mutation call — a thrown error (not just a `{success:false}` result) left the component's `pending` flag stuck `true` forever with no error shown and the optimistic value never rolled back. Now wrapped in the same `try { ...; if (!result.success) {...} } catch (err) {...} finally { setPending(false) }` pattern already used correctly elsewhere in the codebase.
+- **Fixed**: `DocumentsSummarySection` and `PendingInvitationsCard` silently swallowed fetch failures with no `.catch()` at all; both now surface (or gracefully no-op, matching each component's severity) on failure.
+- **Fixed**: `PROTECTED_ROUTE_PREFIXES` (`lib/middleware/routeProtection.ts`) was missing `/pipeline`, `/inventory`, `/vendors`, `/purchases`, `/services` — a hygiene gap versus `ROUTE_ACCESS_MAP`, not exploitable in practice since the `(app)` layout catches unauthenticated requests one layer down regardless.
+- **Fixed**: applied the one pending migration (`20260807100000_media_event_service_owner_type.sql`) that Checkpoint 11 had incorrectly documented as already live — the live Supabase project's migration history is now fully synchronized (154/154).
+- **Removed**: 3 confirmed-zero-importer dead files (`core/constants/index.ts`, `core/enums/index.ts`, `modules/services/hooks/index.ts`).
+- **Refactored**: consolidated ~39 inline `` `${x.first_name} ${x.last_name}` `` template-literal occurrences across ~30 files into a shared `getFullName()` helper (`lib/personName.ts`); consolidated 3 byte-identical date-formatting functions (`formatInventoryDate`/`formatPurchaseDate`/`formatDocumentDate`) into a shared `formatDateOnly()` (`lib/dateFormat.ts`), each original name kept as a one-line delegating export so no call site changed.
+- **Docs**: corrected stale claims in `docs/services.md` and `docs/inventory.md` (services repository/UI status, inventory migration status); fixed a stale `.env.example` comment; added a consolidated "Known limitations — Release Candidate" section to `ROADMAP.md`.
+
 ### Added
 
 - **Supabase Foundation** (`feature/supabase-foundation`, infrastructure only at the time this phase shipped — Leads became the first business module to read/write live Supabase in a later phase, see below):

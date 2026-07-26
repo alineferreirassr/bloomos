@@ -5,6 +5,7 @@ import { EventLifecycleBadge } from "@/modules/events/components/EventLifecycleB
 import { EventPriorityBadge } from "@/modules/events/components/EventPriorityBadge";
 import { formatEventDate } from "@/modules/events/dateFormat";
 import type { EventListRow } from "@/modules/events/components/EventsListView";
+import { getFullName } from "@/lib/personName";
 
 function formatTime(start: string | null, end: string | null): string {
   if (!start && !end) return "—";
@@ -49,7 +50,7 @@ export function EventListTable({ rows }: { rows: EventListRow[] }) {
                 </Link>
               </td>
               <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
-                {client ? `${client.first_name} ${client.last_name}` : "—"}
+                {client ? getFullName(client) : "—"}
               </td>
               <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
                 {formatEventDate(event.event_date)}

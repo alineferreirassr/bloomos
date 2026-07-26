@@ -33,6 +33,58 @@ import type { CreateVendorInput, UpdateVendorInput } from "@/modules/vendors/sch
 import type { Purchase } from "@/types/purchase";
 import type { PurchaseItem } from "@/types/purchaseItem";
 import type { CreatePurchaseInput, PurchaseInput, PurchaseItemInput, ReceivePurchaseItemInput } from "@/modules/purchases/schema";
+import type { ServiceCategory } from "@/types/serviceCategory";
+import type { Service } from "@/types/service";
+import type { ServiceVersion } from "@/types/serviceVersion";
+import type { ServiceIncludedItem } from "@/types/serviceIncludedItem";
+import type { ServiceAddOn } from "@/types/serviceAddOn";
+import type { ServiceChecklistTemplateItem } from "@/types/serviceChecklistTemplateItem";
+import type { ServiceTimelineTemplateItem } from "@/types/serviceTimelineTemplateItem";
+import type { ServiceQuestionnaireQuestion } from "@/types/serviceQuestionnaireQuestion";
+import type { ServiceBudgetTemplateLine } from "@/types/serviceBudgetTemplateLine";
+import type { ServiceApprovalTemplateItem } from "@/types/serviceApprovalTemplateItem";
+import type { ServiceTravelTemplateItem } from "@/types/serviceTravelTemplateItem";
+import type { ServiceAiKnowledgeItem } from "@/types/serviceAiKnowledgeItem";
+import type { ServiceRequiredDocument } from "@/types/serviceRequiredDocument";
+import type { ServiceInventoryTemplateItem } from "@/types/serviceInventoryTemplateItem";
+import type { ServicePurchaseTemplateItem } from "@/types/servicePurchaseTemplateItem";
+import type { ServiceVendorSuggestion } from "@/types/serviceVendorSuggestion";
+import type { ServiceTeamRoleRequirement } from "@/types/serviceTeamRoleRequirement";
+import type { ServiceSeasonalWindow } from "@/types/serviceSeasonalWindow";
+import type { ServiceCapabilityRequirement } from "@/types/serviceCapabilityRequirement";
+import type { EventService } from "@/types/eventService";
+import type { EventServiceInventoryRequirement } from "@/types/eventServiceInventoryRequirement";
+import type { EventServicePurchaseRequirement } from "@/types/eventServicePurchaseRequirement";
+import type { EventServiceBudgetLine } from "@/types/eventServiceBudgetLine";
+import type { EventServiceTeamRequirement } from "@/types/eventServiceTeamRequirement";
+import type { EventServiceVendorAssignment } from "@/types/eventServiceVendorAssignment";
+import type { EventServiceQuestionnaireResponse } from "@/types/eventServiceQuestionnaireResponse";
+import type { EventServiceStatus } from "@/core/enums/eventServiceStatus";
+import type {
+  ServiceCategoryInput,
+  ServiceInput,
+  ServiceVersionInput,
+  PublishServiceVersionInput,
+  ServiceIncludedItemInput,
+  ServiceAddOnInput,
+  ServiceChecklistTemplateItemInput,
+  ServiceTimelineTemplateItemInput,
+  ServiceQuestionnaireQuestionInput,
+  ServiceBudgetTemplateLineInput,
+  ServiceApprovalTemplateItemInput,
+  ServiceTravelTemplateItemInput,
+  ServiceAiKnowledgeItemInput,
+  ServiceRequiredDocumentInput,
+  ServiceInventoryTemplateItemInput,
+  ServicePurchaseTemplateItemInput,
+  ServiceVendorSuggestionInput,
+  ServiceTeamRoleRequirementInput,
+  ServiceSeasonalWindowInput,
+  ServiceCapabilityRequirementInput,
+  AssignServiceToEventInput,
+  EventServiceQuestionnaireResponseInput,
+  UpdateEventServiceOverridesInput,
+} from "@/modules/services/schema";
 import type { TeamMember } from "@/types/teamMember";
 import type { WorkspaceInvitation, WorkspaceInvitationWithToken, InvitationPreview } from "@/types/workspaceInvitation";
 import type { ClientAccount, ClientAccountContext } from "@/types/clientAccount";
@@ -95,9 +147,11 @@ import {
 import type { FolderTemplateKind } from "@/modules/documents/constants/folderTemplates";
 import {
   computeEventFinancialSummary,
+  computeClientFinancialSummary,
   computeWorkspaceFinancialSummary,
   computeAllTimeFinancialTotals,
   type EventFinancialSummary,
+  type ClientFinancialSummary,
   type WorkspaceFinancialSummary,
 } from "@/modules/finance/financialSummary";
 import {
@@ -175,6 +229,9 @@ import { supabaseVendorsRepository } from "@/lib/data/vendors/supabaseRepository
 import type { PurchaseFilters, PurchaseReceiptSummary } from "@/lib/data/purchases/repository";
 import { mockPurchasesRepository } from "@/lib/data/purchases/mockRepository";
 import { supabasePurchasesRepository } from "@/lib/data/purchases/supabaseRepository";
+import type { ServiceFilters } from "@/lib/data/services/repository";
+import { mockServicesRepository } from "@/lib/data/services/mockRepository";
+import { supabaseServicesRepository } from "@/lib/data/services/supabaseRepository";
 import {
   readLeads,
   resetLeadsStore,
@@ -205,6 +262,10 @@ import { resetInventoryMovementsStore } from "@/lib/data/mock/inventoryMovements
 import { resetVendorsStore } from "@/lib/data/mock/vendorsStore";
 import { resetPurchasesStore } from "@/lib/data/mock/purchasesStore";
 import { resetPurchaseItemsStore } from "@/lib/data/mock/purchaseItemsStore";
+import { resetServicesStore } from "@/lib/data/mock/servicesStore";
+import { resetServiceTemplatesStore } from "@/lib/data/mock/serviceTemplatesStore";
+import { resetEventServicesStore } from "@/lib/data/mock/eventServicesStore";
+import { getFullName } from "@/lib/personName";
 
 // ---------------------------------------------------------------------------
 // Leads
@@ -323,12 +384,12 @@ async function finishBooking(
       await markClientRecoveryPending(client.id, { workflow: BOOKING_WORKFLOW, reason, payload });
       await createClientNote(client.id, {
         title: "Booking Incomplete",
-        content: `Converting Lead "${lead.first_name} ${lead.last_name}" to Client succeeded, but ${reason.toLowerCase()}. Resume booking from this Client instead of starting over.`,
+        content: `Converting Lead "${getFullName(lead)}" to Client succeeded, but ${reason.toLowerCase()}. Resume booking from this Client instead of starting over.`,
         category: "internal_alert",
         priority: "critical",
       });
       return fail(
-        `The Lead was converted to Client "${client.first_name} ${client.last_name}", but ${reason.toLowerCase()}. This is recorded as a pending recovery on the Client (see Needs Attention) — resume booking from there instead of starting over.`,
+        `The Lead was converted to Client "${getFullName(client)}", but ${reason.toLowerCase()}. This is recorded as a pending recovery on the Client (see Needs Attention) — resume booking from there instead of starting over.`,
       );
     }
     eventId = created.data.id;
@@ -1251,6 +1312,16 @@ export async function getEventFinancialSummary(eventId: string): Promise<EventFi
     getExpenses({ includeArchived: true }),
   ]);
   return computeEventFinancialSummary(eventId, contracts, invoices, payments, expenses);
+}
+
+export async function getClientFinancialSummary(clientId: string): Promise<ClientFinancialSummary> {
+  const [contracts, invoices, payments, expenses] = await Promise.all([
+    getContracts({ includeArchived: true }),
+    getInvoices({ includeArchived: true }),
+    getPayments(),
+    getExpenses({ includeArchived: true }),
+  ]);
+  return computeClientFinancialSummary(clientId, contracts, invoices, payments, expenses);
 }
 
 export async function getWorkspaceFinancialSummary(): Promise<WorkspaceFinancialSummary> {
@@ -2630,6 +2701,375 @@ export async function getDashboardMetrics(): Promise<DashboardMetric[]> {
 }
 
 // ---------------------------------------------------------------------------
+// Services — Foundation phase (Phase 2a). Service/ServiceVersion (the
+// versioned Blueprint), 17 normalized Template tables, and EventService
+// (the Instance layer generated on assignment). Blueprint (Phase 2b) and
+// Dependencies/Conflicts/Resource Packages/Service Health (Phase 2c) are
+// not part of this contract yet — see docs/services.md.
+// ---------------------------------------------------------------------------
+
+function servicesRepository() {
+  return selectRepository({ mock: mockServicesRepository, supabase: supabaseServicesRepository });
+}
+
+export async function listServiceCategories(includeArchived = false): Promise<ServiceCategory[]> {
+  return servicesRepository().listServiceCategories(includeArchived);
+}
+export async function createServiceCategory(input: ServiceCategoryInput): Promise<DataResult<ServiceCategory>> {
+  return servicesRepository().createServiceCategory(input);
+}
+export async function updateServiceCategory(id: string, input: ServiceCategoryInput): Promise<DataResult<ServiceCategory>> {
+  return servicesRepository().updateServiceCategory(id, input);
+}
+export async function archiveServiceCategory(id: string): Promise<DataResult<ServiceCategory>> {
+  return servicesRepository().archiveServiceCategory(id);
+}
+
+export async function listServices(filters: ServiceFilters = {}): Promise<Service[]> {
+  return servicesRepository().listServices(filters);
+}
+export async function getService(id: string): Promise<Service> {
+  return servicesRepository().getService(id);
+}
+export async function createService(input: ServiceInput): Promise<DataResult<Service>> {
+  return servicesRepository().createService(input);
+}
+export async function updateService(id: string, input: ServiceInput): Promise<DataResult<Service>> {
+  return servicesRepository().updateService(id, input);
+}
+export async function activateService(id: string): Promise<DataResult<Service>> {
+  return servicesRepository().activateService(id);
+}
+export async function deactivateService(id: string): Promise<DataResult<Service>> {
+  return servicesRepository().deactivateService(id);
+}
+export async function archiveService(id: string): Promise<DataResult<Service>> {
+  return servicesRepository().archiveService(id);
+}
+export async function restoreService(id: string): Promise<DataResult<Service>> {
+  return servicesRepository().restoreService(id);
+}
+
+export async function listServiceVersions(serviceId: string): Promise<ServiceVersion[]> {
+  return servicesRepository().listServiceVersions(serviceId);
+}
+export async function getServiceVersion(id: string): Promise<ServiceVersion> {
+  return servicesRepository().getServiceVersion(id);
+}
+export async function updateServiceVersionDraft(serviceId: string, input: ServiceVersionInput): Promise<DataResult<ServiceVersion>> {
+  return servicesRepository().updateServiceVersionDraft(serviceId, input);
+}
+export async function publishServiceVersion(serviceId: string, input: PublishServiceVersionInput): Promise<DataResult<ServiceVersion>> {
+  return servicesRepository().publishServiceVersion(serviceId, input);
+}
+
+export async function listServiceIncludedItems(serviceVersionId: string): Promise<ServiceIncludedItem[]> {
+  return servicesRepository().listServiceIncludedItems(serviceVersionId);
+}
+export async function createServiceIncludedItem(serviceVersionId: string, input: ServiceIncludedItemInput): Promise<DataResult<ServiceIncludedItem>> {
+  return servicesRepository().createServiceIncludedItem(serviceVersionId, input);
+}
+export async function updateServiceIncludedItem(id: string, input: ServiceIncludedItemInput): Promise<DataResult<ServiceIncludedItem>> {
+  return servicesRepository().updateServiceIncludedItem(id, input);
+}
+export async function removeServiceIncludedItem(id: string): Promise<DataResult<null>> {
+  return servicesRepository().removeServiceIncludedItem(id);
+}
+
+export async function listServiceAddOns(serviceVersionId: string): Promise<ServiceAddOn[]> {
+  return servicesRepository().listServiceAddOns(serviceVersionId);
+}
+export async function createServiceAddOn(serviceVersionId: string, input: ServiceAddOnInput): Promise<DataResult<ServiceAddOn>> {
+  return servicesRepository().createServiceAddOn(serviceVersionId, input);
+}
+export async function updateServiceAddOn(id: string, input: ServiceAddOnInput): Promise<DataResult<ServiceAddOn>> {
+  return servicesRepository().updateServiceAddOn(id, input);
+}
+export async function removeServiceAddOn(id: string): Promise<DataResult<null>> {
+  return servicesRepository().removeServiceAddOn(id);
+}
+
+export async function listServiceChecklistTemplateItems(serviceVersionId: string): Promise<ServiceChecklistTemplateItem[]> {
+  return servicesRepository().listServiceChecklistTemplateItems(serviceVersionId);
+}
+export async function createServiceChecklistTemplateItem(serviceVersionId: string, input: ServiceChecklistTemplateItemInput): Promise<DataResult<ServiceChecklistTemplateItem>> {
+  return servicesRepository().createServiceChecklistTemplateItem(serviceVersionId, input);
+}
+export async function updateServiceChecklistTemplateItem(id: string, input: ServiceChecklistTemplateItemInput): Promise<DataResult<ServiceChecklistTemplateItem>> {
+  return servicesRepository().updateServiceChecklistTemplateItem(id, input);
+}
+export async function removeServiceChecklistTemplateItem(id: string): Promise<DataResult<null>> {
+  return servicesRepository().removeServiceChecklistTemplateItem(id);
+}
+
+export async function listServiceTimelineTemplateItems(serviceVersionId: string): Promise<ServiceTimelineTemplateItem[]> {
+  return servicesRepository().listServiceTimelineTemplateItems(serviceVersionId);
+}
+export async function createServiceTimelineTemplateItem(serviceVersionId: string, input: ServiceTimelineTemplateItemInput): Promise<DataResult<ServiceTimelineTemplateItem>> {
+  return servicesRepository().createServiceTimelineTemplateItem(serviceVersionId, input);
+}
+export async function updateServiceTimelineTemplateItem(id: string, input: ServiceTimelineTemplateItemInput): Promise<DataResult<ServiceTimelineTemplateItem>> {
+  return servicesRepository().updateServiceTimelineTemplateItem(id, input);
+}
+export async function removeServiceTimelineTemplateItem(id: string): Promise<DataResult<null>> {
+  return servicesRepository().removeServiceTimelineTemplateItem(id);
+}
+
+export async function listServiceQuestionnaireQuestions(serviceVersionId: string): Promise<ServiceQuestionnaireQuestion[]> {
+  return servicesRepository().listServiceQuestionnaireQuestions(serviceVersionId);
+}
+export async function createServiceQuestionnaireQuestion(serviceVersionId: string, input: ServiceQuestionnaireQuestionInput): Promise<DataResult<ServiceQuestionnaireQuestion>> {
+  return servicesRepository().createServiceQuestionnaireQuestion(serviceVersionId, input);
+}
+export async function updateServiceQuestionnaireQuestion(id: string, input: ServiceQuestionnaireQuestionInput): Promise<DataResult<ServiceQuestionnaireQuestion>> {
+  return servicesRepository().updateServiceQuestionnaireQuestion(id, input);
+}
+export async function removeServiceQuestionnaireQuestion(id: string): Promise<DataResult<null>> {
+  return servicesRepository().removeServiceQuestionnaireQuestion(id);
+}
+
+export async function listServiceBudgetTemplateLines(serviceVersionId: string): Promise<ServiceBudgetTemplateLine[]> {
+  return servicesRepository().listServiceBudgetTemplateLines(serviceVersionId);
+}
+export async function createServiceBudgetTemplateLine(serviceVersionId: string, input: ServiceBudgetTemplateLineInput): Promise<DataResult<ServiceBudgetTemplateLine>> {
+  return servicesRepository().createServiceBudgetTemplateLine(serviceVersionId, input);
+}
+export async function updateServiceBudgetTemplateLine(id: string, input: ServiceBudgetTemplateLineInput): Promise<DataResult<ServiceBudgetTemplateLine>> {
+  return servicesRepository().updateServiceBudgetTemplateLine(id, input);
+}
+export async function removeServiceBudgetTemplateLine(id: string): Promise<DataResult<null>> {
+  return servicesRepository().removeServiceBudgetTemplateLine(id);
+}
+
+export async function listServiceApprovalTemplateItems(serviceVersionId: string): Promise<ServiceApprovalTemplateItem[]> {
+  return servicesRepository().listServiceApprovalTemplateItems(serviceVersionId);
+}
+export async function createServiceApprovalTemplateItem(serviceVersionId: string, input: ServiceApprovalTemplateItemInput): Promise<DataResult<ServiceApprovalTemplateItem>> {
+  return servicesRepository().createServiceApprovalTemplateItem(serviceVersionId, input);
+}
+export async function updateServiceApprovalTemplateItem(id: string, input: ServiceApprovalTemplateItemInput): Promise<DataResult<ServiceApprovalTemplateItem>> {
+  return servicesRepository().updateServiceApprovalTemplateItem(id, input);
+}
+export async function removeServiceApprovalTemplateItem(id: string): Promise<DataResult<null>> {
+  return servicesRepository().removeServiceApprovalTemplateItem(id);
+}
+
+export async function listServiceTravelTemplateItems(serviceVersionId: string): Promise<ServiceTravelTemplateItem[]> {
+  return servicesRepository().listServiceTravelTemplateItems(serviceVersionId);
+}
+export async function createServiceTravelTemplateItem(serviceVersionId: string, input: ServiceTravelTemplateItemInput): Promise<DataResult<ServiceTravelTemplateItem>> {
+  return servicesRepository().createServiceTravelTemplateItem(serviceVersionId, input);
+}
+export async function updateServiceTravelTemplateItem(id: string, input: ServiceTravelTemplateItemInput): Promise<DataResult<ServiceTravelTemplateItem>> {
+  return servicesRepository().updateServiceTravelTemplateItem(id, input);
+}
+export async function removeServiceTravelTemplateItem(id: string): Promise<DataResult<null>> {
+  return servicesRepository().removeServiceTravelTemplateItem(id);
+}
+
+export async function listServiceAiKnowledgeItems(serviceVersionId: string): Promise<ServiceAiKnowledgeItem[]> {
+  return servicesRepository().listServiceAiKnowledgeItems(serviceVersionId);
+}
+export async function createServiceAiKnowledgeItem(serviceVersionId: string, input: ServiceAiKnowledgeItemInput): Promise<DataResult<ServiceAiKnowledgeItem>> {
+  return servicesRepository().createServiceAiKnowledgeItem(serviceVersionId, input);
+}
+export async function updateServiceAiKnowledgeItem(id: string, input: ServiceAiKnowledgeItemInput): Promise<DataResult<ServiceAiKnowledgeItem>> {
+  return servicesRepository().updateServiceAiKnowledgeItem(id, input);
+}
+export async function removeServiceAiKnowledgeItem(id: string): Promise<DataResult<null>> {
+  return servicesRepository().removeServiceAiKnowledgeItem(id);
+}
+
+export async function listServiceRequiredDocuments(serviceVersionId: string): Promise<ServiceRequiredDocument[]> {
+  return servicesRepository().listServiceRequiredDocuments(serviceVersionId);
+}
+export async function createServiceRequiredDocument(serviceVersionId: string, input: ServiceRequiredDocumentInput): Promise<DataResult<ServiceRequiredDocument>> {
+  return servicesRepository().createServiceRequiredDocument(serviceVersionId, input);
+}
+export async function updateServiceRequiredDocument(id: string, input: ServiceRequiredDocumentInput): Promise<DataResult<ServiceRequiredDocument>> {
+  return servicesRepository().updateServiceRequiredDocument(id, input);
+}
+export async function removeServiceRequiredDocument(id: string): Promise<DataResult<null>> {
+  return servicesRepository().removeServiceRequiredDocument(id);
+}
+
+export async function listServiceInventoryTemplateItems(serviceVersionId: string): Promise<ServiceInventoryTemplateItem[]> {
+  return servicesRepository().listServiceInventoryTemplateItems(serviceVersionId);
+}
+export async function createServiceInventoryTemplateItem(serviceVersionId: string, input: ServiceInventoryTemplateItemInput): Promise<DataResult<ServiceInventoryTemplateItem>> {
+  return servicesRepository().createServiceInventoryTemplateItem(serviceVersionId, input);
+}
+export async function updateServiceInventoryTemplateItem(id: string, input: ServiceInventoryTemplateItemInput): Promise<DataResult<ServiceInventoryTemplateItem>> {
+  return servicesRepository().updateServiceInventoryTemplateItem(id, input);
+}
+export async function removeServiceInventoryTemplateItem(id: string): Promise<DataResult<null>> {
+  return servicesRepository().removeServiceInventoryTemplateItem(id);
+}
+
+export async function listServicePurchaseTemplateItems(serviceVersionId: string): Promise<ServicePurchaseTemplateItem[]> {
+  return servicesRepository().listServicePurchaseTemplateItems(serviceVersionId);
+}
+export async function createServicePurchaseTemplateItem(serviceVersionId: string, input: ServicePurchaseTemplateItemInput): Promise<DataResult<ServicePurchaseTemplateItem>> {
+  return servicesRepository().createServicePurchaseTemplateItem(serviceVersionId, input);
+}
+export async function updateServicePurchaseTemplateItem(id: string, input: ServicePurchaseTemplateItemInput): Promise<DataResult<ServicePurchaseTemplateItem>> {
+  return servicesRepository().updateServicePurchaseTemplateItem(id, input);
+}
+export async function removeServicePurchaseTemplateItem(id: string): Promise<DataResult<null>> {
+  return servicesRepository().removeServicePurchaseTemplateItem(id);
+}
+
+export async function listServiceVendorSuggestions(serviceVersionId: string): Promise<ServiceVendorSuggestion[]> {
+  return servicesRepository().listServiceVendorSuggestions(serviceVersionId);
+}
+export async function createServiceVendorSuggestion(serviceVersionId: string, input: ServiceVendorSuggestionInput): Promise<DataResult<ServiceVendorSuggestion>> {
+  return servicesRepository().createServiceVendorSuggestion(serviceVersionId, input);
+}
+export async function updateServiceVendorSuggestion(id: string, input: ServiceVendorSuggestionInput): Promise<DataResult<ServiceVendorSuggestion>> {
+  return servicesRepository().updateServiceVendorSuggestion(id, input);
+}
+export async function removeServiceVendorSuggestion(id: string): Promise<DataResult<null>> {
+  return servicesRepository().removeServiceVendorSuggestion(id);
+}
+
+export async function listServiceTeamRoleRequirements(serviceVersionId: string): Promise<ServiceTeamRoleRequirement[]> {
+  return servicesRepository().listServiceTeamRoleRequirements(serviceVersionId);
+}
+export async function createServiceTeamRoleRequirement(serviceVersionId: string, input: ServiceTeamRoleRequirementInput): Promise<DataResult<ServiceTeamRoleRequirement>> {
+  return servicesRepository().createServiceTeamRoleRequirement(serviceVersionId, input);
+}
+export async function updateServiceTeamRoleRequirement(id: string, input: ServiceTeamRoleRequirementInput): Promise<DataResult<ServiceTeamRoleRequirement>> {
+  return servicesRepository().updateServiceTeamRoleRequirement(id, input);
+}
+export async function removeServiceTeamRoleRequirement(id: string): Promise<DataResult<null>> {
+  return servicesRepository().removeServiceTeamRoleRequirement(id);
+}
+
+export async function listServiceSeasonalWindows(serviceVersionId: string): Promise<ServiceSeasonalWindow[]> {
+  return servicesRepository().listServiceSeasonalWindows(serviceVersionId);
+}
+export async function createServiceSeasonalWindow(serviceVersionId: string, input: ServiceSeasonalWindowInput): Promise<DataResult<ServiceSeasonalWindow>> {
+  return servicesRepository().createServiceSeasonalWindow(serviceVersionId, input);
+}
+export async function updateServiceSeasonalWindow(id: string, input: ServiceSeasonalWindowInput): Promise<DataResult<ServiceSeasonalWindow>> {
+  return servicesRepository().updateServiceSeasonalWindow(id, input);
+}
+export async function removeServiceSeasonalWindow(id: string): Promise<DataResult<null>> {
+  return servicesRepository().removeServiceSeasonalWindow(id);
+}
+
+export async function listServiceCapabilityRequirements(serviceVersionId: string): Promise<ServiceCapabilityRequirement[]> {
+  return servicesRepository().listServiceCapabilityRequirements(serviceVersionId);
+}
+export async function createServiceCapabilityRequirement(serviceVersionId: string, input: ServiceCapabilityRequirementInput): Promise<DataResult<ServiceCapabilityRequirement>> {
+  return servicesRepository().createServiceCapabilityRequirement(serviceVersionId, input);
+}
+export async function updateServiceCapabilityRequirement(id: string, input: ServiceCapabilityRequirementInput): Promise<DataResult<ServiceCapabilityRequirement>> {
+  return servicesRepository().updateServiceCapabilityRequirement(id, input);
+}
+export async function removeServiceCapabilityRequirement(id: string): Promise<DataResult<null>> {
+  return servicesRepository().removeServiceCapabilityRequirement(id);
+}
+
+export async function listEventServicesByEvent(eventId: string): Promise<EventService[]> {
+  return servicesRepository().listEventServicesByEvent(eventId);
+}
+export async function listEventServicesByService(serviceId: string): Promise<EventService[]> {
+  return servicesRepository().listEventServicesByService(serviceId);
+}
+export async function getEventService(id: string): Promise<EventService> {
+  return servicesRepository().getEventService(id);
+}
+export async function assignServiceToEvent(eventId: string, input: AssignServiceToEventInput): Promise<DataResult<EventService>> {
+  return servicesRepository().assignServiceToEvent(eventId, input);
+}
+export async function removeEventService(id: string): Promise<DataResult<null>> {
+  return servicesRepository().removeEventService(id);
+}
+export async function transitionEventServiceStatus(id: string, to: EventServiceStatus): Promise<DataResult<EventService>> {
+  return servicesRepository().transitionEventServiceStatus(id, to);
+}
+export async function updateEventServiceOverrides(id: string, input: UpdateEventServiceOverridesInput): Promise<DataResult<EventService>> {
+  return servicesRepository().updateEventServiceOverrides(id, input);
+}
+export async function getServiceUsageCounts(serviceIds: string[]): Promise<Record<string, number>> {
+  return servicesRepository().getServiceUsageCounts(serviceIds);
+}
+
+export async function listEventServiceInventoryRequirements(eventServiceId: string): Promise<EventServiceInventoryRequirement[]> {
+  return servicesRepository().listEventServiceInventoryRequirements(eventServiceId);
+}
+export async function fulfillEventServiceInventoryRequirement(id: string): Promise<DataResult<EventServiceInventoryRequirement>> {
+  return servicesRepository().fulfillEventServiceInventoryRequirement(id);
+}
+
+export async function listEventServicePurchaseRequirements(eventServiceId: string): Promise<EventServicePurchaseRequirement[]> {
+  return servicesRepository().listEventServicePurchaseRequirements(eventServiceId);
+}
+export async function linkEventServicePurchaseRequirementToPurchase(id: string, purchaseId: string): Promise<DataResult<EventServicePurchaseRequirement>> {
+  return servicesRepository().linkEventServicePurchaseRequirementToPurchase(id, purchaseId);
+}
+
+export async function listEventServiceBudgetLines(eventServiceId: string): Promise<EventServiceBudgetLine[]> {
+  return servicesRepository().listEventServiceBudgetLines(eventServiceId);
+}
+export async function listEventServiceTeamRequirements(eventServiceId: string): Promise<EventServiceTeamRequirement[]> {
+  return servicesRepository().listEventServiceTeamRequirements(eventServiceId);
+}
+
+export async function listEventServiceVendorAssignments(eventServiceId: string): Promise<EventServiceVendorAssignment[]> {
+  return servicesRepository().listEventServiceVendorAssignments(eventServiceId);
+}
+export async function confirmEventServiceVendorAssignment(id: string): Promise<DataResult<EventServiceVendorAssignment>> {
+  return servicesRepository().confirmEventServiceVendorAssignment(id);
+}
+export async function declineEventServiceVendorAssignment(id: string): Promise<DataResult<EventServiceVendorAssignment>> {
+  return servicesRepository().declineEventServiceVendorAssignment(id);
+}
+
+export async function listEventServiceQuestionnaireResponses(eventServiceId: string): Promise<EventServiceQuestionnaireResponse[]> {
+  return servicesRepository().listEventServiceQuestionnaireResponses(eventServiceId);
+}
+export async function submitEventServiceQuestionnaireResponse(eventServiceId: string, input: EventServiceQuestionnaireResponseInput): Promise<DataResult<EventServiceQuestionnaireResponse>> {
+  return servicesRepository().submitEventServiceQuestionnaireResponse(eventServiceId, input);
+}
+
+export async function getTimelineByServiceId(serviceId: string): Promise<TimelineActivity[]> {
+  return servicesRepository().getTimelineByServiceId(serviceId);
+}
+export async function getNotesByServiceId(serviceId: string): Promise<Note[]> {
+  return servicesRepository().getNotesByServiceId(serviceId);
+}
+export async function createServiceNote(serviceId: string, input: NoteFormInput): Promise<DataResult<Note>> {
+  return servicesRepository().createServiceNote(serviceId, input);
+}
+export async function updateServiceNote(noteId: string, input: NoteFormInput): Promise<DataResult<Note> | null> {
+  return servicesRepository().updateServiceNote(noteId, input);
+}
+export async function toggleServiceNotePin(noteId: string): Promise<DataResult<Note> | null> {
+  return servicesRepository().toggleServiceNotePin(noteId);
+}
+
+export async function getTimelineByEventServiceId(eventServiceId: string): Promise<TimelineActivity[]> {
+  return servicesRepository().getTimelineByEventServiceId(eventServiceId);
+}
+export async function getNotesByEventServiceId(eventServiceId: string): Promise<Note[]> {
+  return servicesRepository().getNotesByEventServiceId(eventServiceId);
+}
+export async function createEventServiceNote(eventServiceId: string, input: NoteFormInput): Promise<DataResult<Note>> {
+  return servicesRepository().createEventServiceNote(eventServiceId, input);
+}
+/** Normalizes the repository's "no note with this id" `null` into a DataResult failure, matching updatePurchaseNote's/updateVendorNote's exact shape. */
+export async function updateEventServiceNote(noteId: string, input: NoteFormInput): Promise<DataResult<Note>> {
+  const result = await servicesRepository().updateEventServiceNote(noteId, input);
+  return result ?? fail("Note not found.");
+}
+export async function toggleEventServiceNotePin(noteId: string): Promise<DataResult<Note>> {
+  const result = await servicesRepository().toggleEventServiceNotePin(noteId);
+  return result ?? fail("Note not found.");
+}
+
+// ---------------------------------------------------------------------------
 // Test-only helpers
 // ---------------------------------------------------------------------------
 
@@ -2659,6 +3099,9 @@ export function resetAllMockData(): void {
   resetVendorsStore();
   resetPurchasesStore();
   resetPurchaseItemsStore();
+  resetServicesStore();
+  resetServiceTemplatesStore();
+  resetEventServicesStore();
 }
 
 /**

@@ -23,9 +23,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation migrations, in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation + 20 Services Foundation schema migrations + 1 Event Service Workspace media owner_type widening migration, in chronological (execution) order", () => {
     const files = migrationFiles();
-    expect(files).toHaveLength(133);
+    expect(files).toHaveLength(154);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -682,6 +682,19 @@ describe("Purchases migrations", () => {
     expect(sql).toMatch(/before update on public\.purchases\b/);
     expect(sql).toMatch(/before update on public\.purchase_items/);
     expect(sql.match(/execute function public\.set_updated_at\(\)/g)).toHaveLength(2);
+  });
+
+  it("widens media_assets owner_type to add event_service (Event Service Workspace Attachments), preserving every prior value and not adding service speculatively", () => {
+    const sql = readMigration("20260807100000_media_event_service_owner_type.sql");
+    const code = stripSqlComments(sql);
+    for (const priorOwnerType of ["lead", "client", "event", "document", "inventory_item", "vendor", "purchase"]) {
+      expect(sql).toMatch(new RegExp(`'${priorOwnerType}'`));
+    }
+    expect(sql).toMatch(/'event_service'/);
+    expect(code).not.toMatch(/'service'(?!_)/);
+    expect(sql).toMatch(/alter table public\.media_assets drop constraint media_assets_owner_type_check/);
+    expect(sql).not.toMatch(/alter table public\.notes/);
+    expect(sql).not.toMatch(/alter table public\.timeline_activities/);
   });
 
   it("gives purchases select/insert/update policies but no delete policy", () => {
@@ -1723,5 +1736,84 @@ describe("Finance Reports Foundation migration", () => {
     const reportsIndex = files.indexOf(FILE);
     const lastPostingEngineIndex = files.indexOf("20260804100800_finance_accounting_period_rpcs.sql");
     expect(reportsIndex).toBeGreaterThan(lastPostingEngineIndex);
+  });
+});
+
+describe("Services Foundation schema migrations", () => {
+  const servicesFiles = () => migrationFiles().filter((f) => f.startsWith("20260806"));
+
+  it("contains exactly 20 migrations", () => {
+    expect(servicesFiles()).toHaveLength(20);
+  });
+
+  it("orders services before service_versions, and both before the circular-FK-resolving alter inside the service_versions migration", () => {
+    const files = migrationFiles();
+    const servicesIndex = files.indexOf("20260806100100_services.sql");
+    const versionsIndex = files.indexOf("20260806100200_service_versions.sql");
+    expect(servicesIndex).toBeLessThan(versionsIndex);
+
+    const versionsSql = stripSqlComments(readMigration("20260806100200_service_versions.sql"));
+    expect(versionsSql).toMatch(/alter table public\.services\s*\n\s*add constraint services_draft_version_id_fkey/);
+  });
+
+  it("orders every template table migration before the immutability triggers migration", () => {
+    const files = migrationFiles();
+    const templateFiles = [
+      "20260806100300_service_catalog_display_templates.sql",
+      "20260806100400_service_operational_templates.sql",
+      "20260806100500_service_readiness_templates.sql",
+      "20260806100600_service_resource_templates.sql",
+      "20260806100700_service_metadata_templates.sql",
+    ];
+    const triggersIndex = files.indexOf("20260806101500_service_immutability_triggers.sql");
+    for (const f of templateFiles) {
+      expect(files.indexOf(f)).toBeLessThan(triggersIndex);
+    }
+  });
+
+  it("orders event_services before its 6 Instance-layer child tables", () => {
+    const files = migrationFiles();
+    const eventServicesIndex = files.indexOf("20260806100800_event_services.sql");
+    expect(eventServicesIndex).toBeLessThan(files.indexOf("20260806100900_event_service_requirements.sql"));
+    expect(eventServicesIndex).toBeLessThan(files.indexOf("20260806101000_event_service_engagement.sql"));
+  });
+
+  it("orders RLS before indexes/constraints, and both before the RPC migrations", () => {
+    const files = migrationFiles();
+    const rlsIndex = files.indexOf("20260806101400_service_rls.sql");
+    const indexesIndex = files.indexOf("20260806101600_service_indexes_and_constraints.sql");
+    const publishRpcIndex = files.indexOf("20260806101700_service_publish_version_function.sql");
+    const assignRpcIndex = files.indexOf("20260806101900_service_assign_to_event_function.sql");
+    expect(rlsIndex).toBeLessThan(indexesIndex);
+    expect(indexesIndex).toBeLessThan(publishRpcIndex);
+    expect(publishRpcIndex).toBeLessThan(assignRpcIndex);
+  });
+
+  it("service_versions enforces the versioning-concurrency locked decision with a partial unique index on (service_id, version_number)", () => {
+    const sql = stripSqlComments(readMigration("20260806100200_service_versions.sql"));
+    expect(sql).toMatch(/create unique index if not exists service_versions_workspace_number_unique\s*\n\s*on public\.service_versions \(service_id, version_number\)\s*\n\s*where version_number is not null/);
+  });
+
+  it("publish_service_version row-locks the parent services row before computing the next version_number", () => {
+    const sql = stripSqlComments(readMigration("20260806101700_service_publish_version_function.sql"));
+    expect(sql).toMatch(/select \* into v_service from public\.services where id = p_service_id for update/);
+  });
+
+  it("assign_service_to_event row-locks the target events row and performs every insert inside one function body (one transaction)", () => {
+    const sql = stripSqlComments(readMigration("20260806101900_service_assign_to_event_function.sql"));
+    expect(sql).toMatch(/select \* into v_event from public\.events where id = p_event_id for update/);
+    const insertCount = (sql.match(/insert into public\./g) ?? []).length;
+    expect(insertCount).toBeGreaterThanOrEqual(8);
+  });
+
+  it("does not widen media_assets_owner_type_check — no Attachments front door exists yet for Services", () => {
+    const sql = stripSqlComments(readMigration("20260806101100_service_owner_type_widening.sql"));
+    expect(sql).not.toMatch(/alter table public\.media_assets/);
+  });
+
+  it("every template table migration includes the immutability-trigger comment rationale, except the ones that don't get a trigger", () => {
+    const sql = stripSqlComments(readMigration("20260806101500_service_immutability_triggers.sql"));
+    const triggerCount = (sql.match(/create trigger trg_service_\w+_reject_published_write/g) ?? []).length;
+    expect(triggerCount).toBe(16);
   });
 });

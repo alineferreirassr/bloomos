@@ -29,8 +29,8 @@ import type { ComponentType, SVGProps } from "react";
  *   it only toggles expand/collapse; every actual destination lives in a
  *   child leaf.
  *
- * `disabled` marks a module/leaf whose module hasn't shipped yet (Inventory,
- * Vendors, Services, Bloom AI, Settings) —
+ * `disabled` marks a module/leaf whose module hasn't shipped yet (currently
+ * Bloom AI and Settings) —
  * it renders in the permanent structure so the sidebar's shape doesn't shift
  * again when that module ships, but isn't a real link (no `href`, or an
  * `href` that intentionally has no page behind it yet — see `settings`
@@ -94,7 +94,7 @@ export const navigationModules: NavModule[] = [
   { id: "finance", label: "Finance", icon: FinanceIcon, href: "/finance" },
   { id: "documents", label: "Documents", icon: DocumentsIcon, href: "/documents" },
   { id: "team", label: "Team", icon: TeamIcon, href: "/team" },
-  { id: "services", label: "Services", icon: ServicesIcon, disabled: true },
+  { id: "services", label: "Services", icon: ServicesIcon, href: "/services" },
   { id: "bloom-ai", label: "Bloom AI", icon: BloomAiIcon, disabled: true },
   // `/settings` is already reserved in core/permissions/routeAccess.ts (workspace.manage)
   // ahead of the page existing, so its href is kept here too — permission

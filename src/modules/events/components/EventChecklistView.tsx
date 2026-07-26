@@ -22,6 +22,7 @@ import { ChecklistGroup } from "@/modules/events/components/ChecklistGroup";
 import { ChecklistItemRow } from "@/modules/events/components/ChecklistItemRow";
 import { ChecklistItemForm } from "@/modules/events/components/ChecklistItemForm";
 import { ConfirmDeleteChecklistItemModal } from "@/modules/events/components/ConfirmDeleteChecklistItemModal";
+import { getFullName } from "@/lib/personName";
 
 type LoadState =
   | { status: "loading" }
@@ -159,7 +160,7 @@ export function EventChecklistView({ eventId }: { eventId: string }) {
         </div>
         <p className="mt-1 text-sm text-text-muted">
           {event.title}
-          {client ? ` · ${client.first_name} ${client.last_name}` : ""}
+          {client ? ` · ${getFullName(client)}` : ""}
           {event.event_date ? ` · ${formatEventDate(event.event_date)}` : ""}
           {" · "}
           {stats.completed}/{stats.total} complete

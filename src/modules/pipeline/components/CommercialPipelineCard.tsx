@@ -10,6 +10,7 @@ import { DueStateBadge } from "@/modules/pipeline/components/DueStateBadge";
 import { getNextRecommendedAction } from "@/core/workflows/leadWorkflow";
 import { getDueState } from "@/core/workflows/dueState";
 import type { Lead } from "@/types/lead";
+import { getFullName } from "@/lib/personName";
 
 interface CommercialPipelineCardProps {
   lead: Lead;
@@ -43,7 +44,7 @@ export function CommercialPipelineCard({ lead, actions, draggable = true }: Comm
             {...(draggable ? { ...attributes, ...listeners } : {})}
             role={draggable ? "button" : undefined}
             tabIndex={draggable ? 0 : undefined}
-            aria-label={draggable ? `Drag ${lead.first_name} ${lead.last_name}'s card` : undefined}
+            aria-label={draggable ? `Drag ${getFullName(lead)}'s card` : undefined}
             className={draggable ? "cursor-grab touch-none active:cursor-grabbing" : undefined}
           >
             <p className="font-medium tracking-tight text-text">

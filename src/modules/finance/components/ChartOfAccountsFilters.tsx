@@ -1,6 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/Input";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Select } from "@/components/ui/Select";
 import { ACCOUNT_TYPE_LABELS, ACCOUNT_TYPES, type AccountType } from "@/core/enums/accountType";
 
@@ -45,11 +46,9 @@ export function ChartOfAccountsFilters({ value, onChange }: ChartOfAccountsFilte
         ))}
       </Select>
       <label className="flex items-center gap-2 text-sm text-text-muted">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={value.includeArchived}
           onChange={(event) => onChange({ ...value, includeArchived: event.target.checked })}
-          className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
         />
         Include inactive
       </label>

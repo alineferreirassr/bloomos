@@ -13,6 +13,7 @@ import { normalizeSupabaseError } from "@/lib/supabase/errors";
 import { mapLeadRow, mapNoteRow, mapTimelineActivityRow } from "@/lib/supabase/mappers";
 import { getClientWorkspaceSession, type WorkspaceSession } from "@/lib/auth/workspaceSessionClient";
 import type { LeadFilters, LeadsRepository } from "@/lib/data/leads/repository";
+import { getFullName } from "@/lib/personName";
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
@@ -114,7 +115,7 @@ async function getLeads(filters: LeadFilters = {}): Promise<Lead[]> {
   const q = search?.trim().toLowerCase();
   if (!q) return leads;
   return leads.filter((lead) => {
-    const haystack = `${lead.first_name} ${lead.last_name} ${lead.email}`.toLowerCase();
+    const haystack = `${getFullName(lead)} ${lead.email}`.toLowerCase();
     return haystack.includes(q);
   });
 }

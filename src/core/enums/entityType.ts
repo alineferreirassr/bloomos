@@ -41,6 +41,16 @@ export const ENTITY_TYPES = [
   // writes a Timeline row owned by one yet, only Audit entries.
   "journal_entry",
   "accounting_period",
+  // Services Foundation phase (Phase 2a) — "service" is the catalog/
+  // blueprint identity (Notes/Timeline about the general offering);
+  // "event_service" is one specific booking instance (Notes/Timeline about
+  // this Service on this Event specifically) — same "parent gets its own
+  // owner type, subordinate child rows don't" precedent as
+  // purchase/purchase_item: every service_* template table and every
+  // event_service_* instance-child table stays subordinate, never its own
+  // EntityType.
+  "service",
+  "event_service",
 ] as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[number];

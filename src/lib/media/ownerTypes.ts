@@ -20,6 +20,7 @@ export const MEDIA_ASSET_OWNER_TYPES: EntityType[] = [
   "notification",
   "automation",
   "inventory_item",
+  "event_service",
 ];
 
 /**
@@ -44,4 +45,5 @@ export const LIVE_MEDIA_ASSET_OWNER_TYPES = [
   "vendor",
   "inventory_item",
   "purchase",
+  "event_service",
 ] as const satisfies readonly EntityType[];

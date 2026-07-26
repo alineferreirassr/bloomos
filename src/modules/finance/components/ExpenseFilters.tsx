@@ -1,6 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/Input";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Select } from "@/components/ui/Select";
 import { EXPENSE_STATUS_LABELS, EXPENSE_STATUSES, type ExpenseStatus } from "@/core/enums/expenseStatus";
 import { EXPENSE_CATEGORY_LABELS, EXPENSE_CATEGORIES, type ExpenseCategory } from "@/core/enums/expenseCategory";
@@ -68,38 +69,30 @@ export function ExpenseFilters({ value, onChange }: ExpenseFiltersProps) {
 
       <div className="flex flex-wrap items-center gap-4">
         <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={value.dueOnly}
             onChange={(event) => onChange({ ...value, dueOnly: event.target.checked })}
-            className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
           />
           Due only
         </label>
         <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={value.unpaidOnly}
             onChange={(event) => onChange({ ...value, unpaidOnly: event.target.checked })}
-            className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
           />
           Unpaid only
         </label>
         <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={value.reimbursableOnly}
             onChange={(event) => onChange({ ...value, reimbursableOnly: event.target.checked })}
-            className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
           />
           Reimbursable only
         </label>
         <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={value.includeArchived}
             onChange={(event) => onChange({ ...value, includeArchived: event.target.checked })}
-            className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
           />
           Show archived expenses
         </label>

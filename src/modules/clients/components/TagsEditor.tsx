@@ -22,14 +22,20 @@ export function TagsEditor({ clientId, tags, onChanged }: TagsEditorProps) {
     setOptimisticTags(next);
     setPending(true);
     setError(null);
-    const result = await updateClientTags(clientId, next);
-    setPending(false);
-    if (!result.success) {
+    try {
+      const result = await updateClientTags(clientId, next);
+      if (!result.success) {
+        setOptimisticTags(previous);
+        setError(result.error);
+        return;
+      }
+      onChanged(next);
+    } catch (err) {
       setOptimisticTags(previous);
-      setError(result.error);
-      return;
+      setError(err instanceof Error ? err.message : "Could not update tags. Please try again.");
+    } finally {
+      setPending(false);
     }
-    onChanged(next);
   };
 
   const addTag = () => {

@@ -81,6 +81,7 @@ import type {
 } from "@/types/financeReport";
 import type { NormalBalance } from "@/core/enums/normalBalance";
 import { validateTrialBalance, buildProfitAndLossSections, buildBalanceSheetSections, validateAccountingEquation } from "@/lib/data/finance/reportCalculations";
+import { getFullName } from "@/lib/personName";
 
 const DEFAULT_JOURNAL_ENTRY_PAGE_SIZE = 50;
 
@@ -302,7 +303,7 @@ async function getInvoices(filters: InvoiceFilters = {}): Promise<Invoice[]> {
 
   return invoices.filter((invoice) => {
     const client = clientsById.get(invoice.client_id);
-    const clientName = client ? `${client.first_name} ${client.last_name}` : "";
+    const clientName = client ? getFullName(client) : "";
     const eventTitle = invoice.event_id ? (eventTitlesById.get(invoice.event_id) ?? "") : "";
     const contractNumber = invoice.contract_id ? (contractNumbersById.get(invoice.contract_id) ?? "") : "";
     const haystack = `${invoice.invoice_number} ${invoice.title} ${clientName} ${eventTitle} ${contractNumber}`.toLowerCase();
@@ -719,7 +720,7 @@ async function getPayments(filters: PaymentFilters = {}): Promise<Payment[]> {
 
   return payments.filter((payment) => {
     const client = clientsById.get(payment.client_id);
-    const clientName = client ? `${client.first_name} ${client.last_name}` : "";
+    const clientName = client ? getFullName(client) : "";
     const eventTitle = payment.event_id ? (eventTitlesById.get(payment.event_id) ?? "") : "";
     const haystack = `${clientName} ${eventTitle} ${payment.reference ?? ""}`.toLowerCase();
     return haystack.includes(q);

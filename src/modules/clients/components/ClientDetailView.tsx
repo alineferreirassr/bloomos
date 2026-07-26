@@ -9,10 +9,14 @@ import {
   getNotesByClientId,
   getTimelineByClientId,
   togglePinNote,
+  getEvents,
+  getClientFinancialSummary,
 } from "@/lib/data";
 import type { Client } from "@/types/client";
 import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
+import type { Event } from "@/types/event";
+import type { ClientFinancialSummary } from "@/modules/finance/financialSummary";
 import { NotFoundError } from "@/core/errors";
 import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -25,6 +29,8 @@ import { ClientActions } from "@/modules/clients/components/ClientActions";
 import { TagsEditor } from "@/modules/clients/components/TagsEditor";
 import { DocumentsSummarySection } from "@/modules/documents/components/DocumentsSummarySection";
 import { ClientAccessSection } from "@/modules/clientAccess/components/ClientAccessSection";
+import { ClientEventsSummaryCard } from "@/modules/events/components/ClientEventsSummaryCard";
+import { ClientFinancialSummaryCard } from "@/modules/finance/components/ClientFinancialSummaryCard";
 import { CONTACT_METHOD_LABELS } from "@/core/enums/contactMethod";
 
 type LoadState =
@@ -37,17 +43,21 @@ type LoadState =
       notes: Note[];
       timeline: TimelineActivity[];
       nextAction: string | null;
+      events: Event[];
+      financialSummary: ClientFinancialSummary;
     };
 
 async function loadClientDetail(clientId: string): Promise<LoadState> {
   try {
-    const [client, notes, timeline, nextAction] = await Promise.all([
+    const [client, notes, timeline, nextAction, events, financialSummary] = await Promise.all([
       getClientById(clientId),
       getNotesByClientId(clientId),
       getTimelineByClientId(clientId),
       getClientNextAction(clientId),
+      getEvents({ clientId }),
+      getClientFinancialSummary(clientId),
     ]);
-    return { status: "ready", client, notes, timeline, nextAction };
+    return { status: "ready", client, notes, timeline, nextAction, events, financialSummary };
   } catch (err) {
     return { status: err instanceof NotFoundError ? "not-found" : "error" };
   }
@@ -91,7 +101,7 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
     return <ErrorState message="Could not load this client." onRetry={refetch} />;
   }
 
-  const { client, notes, timeline, nextAction } = state;
+  const { client, notes, timeline, nextAction, events, financialSummary } = state;
 
   return (
     <div className="space-y-6">
@@ -267,6 +277,10 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
               ) : null}
             </dl>
           </Card>
+
+          <ClientEventsSummaryCard events={events} />
+
+          <ClientFinancialSummaryCard clientId={client.id} summary={financialSummary} />
 
           <DocumentsSummarySection ownerType="client" ownerId={client.id} newDocumentParams={{ clientId: client.id }} />
 

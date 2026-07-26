@@ -5,6 +5,7 @@ import type { EventType } from "@/core/enums/eventType";
 import type { EventPriority } from "@/core/enums/eventPriority";
 import type { EventHealthStatus } from "@/core/workflows/eventHealth";
 import { OPERATIONAL_COLUMNS } from "@/modules/pipeline/operationalConstants";
+import { getFullName } from "@/lib/personName";
 
 /**
  * One card's worth of already-aggregated data — event plus everything the
@@ -71,7 +72,7 @@ export function filterOperationalCards(cards: OperationalCardData[], filters: Op
 
   return cards.filter((card) => {
     if (search) {
-      const haystack = `${card.event.title} ${card.client ? `${card.client.first_name} ${card.client.last_name}` : ""}`.toLowerCase();
+      const haystack = `${card.event.title} ${card.client ? getFullName(card.client) : ""}`.toLowerCase();
       if (!haystack.includes(search)) return false;
     }
     if (filters.eventType !== "all" && card.event.event_type !== filters.eventType) return false;

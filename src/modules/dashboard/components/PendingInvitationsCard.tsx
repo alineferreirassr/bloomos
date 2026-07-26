@@ -18,9 +18,14 @@ export function PendingInvitationsCard() {
   useEffect(() => {
     if (!can("team.invite")) return;
     let cancelled = false;
-    getWorkspaceInvitations({ status: "pending" }).then((invitations) => {
-      if (!cancelled) setCount(invitations.length);
-    });
+    getWorkspaceInvitations({ status: "pending" })
+      .then((invitations) => {
+        if (!cancelled) setCount(invitations.length);
+      })
+      .catch(() => {
+        // Best-effort metric card — on failure it simply stays hidden
+        // (count remains null), same as a member without team.invite.
+      });
     return () => {
       cancelled = true;
     };

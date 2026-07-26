@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeEventFinancialSummary,
+  computeClientFinancialSummary,
   computeWorkspaceFinancialSummary,
   computeAllTimeFinancialTotals,
 } from "@/modules/finance/financialSummary";
@@ -174,6 +175,45 @@ describe("computeWorkspaceFinancialSummary", () => {
     const payments = [makePayment({ contract_id: "c1", payment_type: "deposit", amount_minor: 30000, status: "succeeded" })];
     const summary = computeWorkspaceFinancialSummary(contracts, [], payments, [], reference);
     expect(summary.deposits_pending_minor).toBe(20000);
+  });
+});
+
+describe("computeClientFinancialSummary", () => {
+  it("aggregates across every Contract/Invoice/Payment/Expense scoped to the client_id directly, regardless of which Event (if any) each belongs to", () => {
+    const contracts = [
+      makeContract({ id: "c1", client_id: "client_1", event_id: "event_1", total_value: 1000, status: "signed" }),
+      makeContract({ id: "c2", client_id: "client_1", event_id: null, total_value: 500, status: "signed" }),
+      makeContract({ id: "c3", client_id: "client_other", event_id: "event_2", total_value: 9999, status: "signed" }),
+    ];
+    const invoices = [
+      makeInvoice({ client_id: "client_1", event_id: "event_1", total_minor: 100000, status: "sent" }),
+      makeInvoice({ client_id: "client_other", event_id: "event_2", total_minor: 999999, status: "sent" }),
+    ];
+    const payments = [
+      makePayment({ client_id: "client_1", event_id: "event_1", amount_minor: 50000, status: "succeeded" }),
+      makePayment({ client_id: "client_other", event_id: "event_2", amount_minor: 999999, status: "succeeded" }),
+    ];
+    const expenses = [
+      makeExpense({ client_id: "client_1", event_id: "event_1", amount_minor: 10000, status: "paid" }),
+      makeExpense({ client_id: null, event_id: null, amount_minor: 999999, status: "paid" }),
+    ];
+
+    const summary = computeClientFinancialSummary("client_1", contracts, invoices, payments, expenses);
+
+    expect(summary.contracted_value_minor).toBe(150000);
+    expect(summary.invoiced_total_minor).toBe(100000);
+    expect(summary.collected_minor).toBe(50000);
+    expect(summary.expense_total_minor).toBe(10000);
+  });
+
+  it("excludes cancelled/declined/expired/archived Contracts and voided Invoices, same as computeEventFinancialSummary", () => {
+    const contracts = [makeContract({ client_id: "client_1", total_value: 1000, status: "cancelled" })];
+    const invoices = [makeInvoice({ client_id: "client_1", total_minor: 100000, status: "voided" })];
+
+    const summary = computeClientFinancialSummary("client_1", contracts, invoices, [], []);
+
+    expect(summary.contracted_value_minor).toBe(0);
+    expect(summary.invoiced_total_minor).toBe(0);
   });
 });
 

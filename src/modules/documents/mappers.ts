@@ -1,5 +1,6 @@
 import type { Document } from "@/types/document";
 import type { DocumentEditMetadataFormInput, DocumentMetadataFormInput } from "@/modules/documents/schema";
+import { formatDateOnly } from "@/lib/dateFormat";
 
 const BYTES_PER_MB = 1024 * 1024;
 
@@ -21,13 +22,12 @@ export function formatBytes(sizeBytes: number): string {
  * (seed data, or any *_at set by the data layer), so this always takes just
  * the date portion before formatting rather than assuming one shape like
  * modules/events/dateFormat.ts's formatEventDate does.
+ *
+ * Re-exported under this module's name so existing `formatDocumentDate`
+ * imports don't need to change — see `@/lib/dateFormat` for the shared
+ * implementation.
  */
-export function formatDocumentDate(value: string | null): string {
-  if (!value) return "—";
-  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
-  if (!year || !month || !day) return "—";
-  return new Date(year, month - 1, day).toLocaleDateString();
-}
+export const formatDocumentDate = formatDateOnly;
 
 /** Prefills the "Add Document" form when arriving from a Client/Event/Contract/etc.'s "Add Document Metadata" quick action. */
 export function documentDefaultFormValues(

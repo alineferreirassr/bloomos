@@ -41,6 +41,7 @@ import { DocumentListTable } from "@/modules/documents/components/DocumentListTa
 import { DocumentListCards } from "@/modules/documents/components/DocumentListCards";
 import { NewFolderModal } from "@/modules/documents/components/NewFolderModal";
 import { useMemberSession } from "@/components/providers/MemberSessionProvider";
+import { getFullName } from "@/lib/personName";
 
 export interface DocumentListRow {
   document: Document;
@@ -82,7 +83,7 @@ function ownerLabelFor(document: Document, lookups: Lookups): string {
   switch (document.owner_type) {
     case "client": {
       const client = lookups.clients.find((c) => c.id === document.owner_id);
-      return client ? `${client.first_name} ${client.last_name}` : typeLabel;
+      return client ? getFullName(client) : typeLabel;
     }
     case "event": {
       const event = lookups.events.find((e) => e.id === document.owner_id);

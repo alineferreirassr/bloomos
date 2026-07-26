@@ -30,6 +30,32 @@ import type { PurchaseItem } from "@/types/purchaseItem";
 import type { ChartOfAccount } from "@/types/chartOfAccount";
 import type { JournalEntry, JournalLine } from "@/types/journalEntry";
 import type { AccountingPeriod } from "@/types/accountingPeriod";
+import type { ServiceCategory } from "@/types/serviceCategory";
+import type { Service } from "@/types/service";
+import type { ServiceVersion } from "@/types/serviceVersion";
+import type { ServiceIncludedItem } from "@/types/serviceIncludedItem";
+import type { ServiceAddOn } from "@/types/serviceAddOn";
+import type { ServiceChecklistTemplateItem } from "@/types/serviceChecklistTemplateItem";
+import type { ServiceTimelineTemplateItem } from "@/types/serviceTimelineTemplateItem";
+import type { ServiceQuestionnaireQuestion } from "@/types/serviceQuestionnaireQuestion";
+import type { ServiceBudgetTemplateLine } from "@/types/serviceBudgetTemplateLine";
+import type { ServiceApprovalTemplateItem } from "@/types/serviceApprovalTemplateItem";
+import type { ServiceTravelTemplateItem } from "@/types/serviceTravelTemplateItem";
+import type { ServiceAiKnowledgeItem } from "@/types/serviceAiKnowledgeItem";
+import type { ServiceRequiredDocument } from "@/types/serviceRequiredDocument";
+import type { ServiceInventoryTemplateItem } from "@/types/serviceInventoryTemplateItem";
+import type { ServicePurchaseTemplateItem } from "@/types/servicePurchaseTemplateItem";
+import type { ServiceVendorSuggestion } from "@/types/serviceVendorSuggestion";
+import type { ServiceTeamRoleRequirement } from "@/types/serviceTeamRoleRequirement";
+import type { ServiceSeasonalWindow } from "@/types/serviceSeasonalWindow";
+import type { ServiceCapabilityRequirement } from "@/types/serviceCapabilityRequirement";
+import type { EventService } from "@/types/eventService";
+import type { EventServiceInventoryRequirement } from "@/types/eventServiceInventoryRequirement";
+import type { EventServicePurchaseRequirement } from "@/types/eventServicePurchaseRequirement";
+import type { EventServiceBudgetLine } from "@/types/eventServiceBudgetLine";
+import type { EventServiceTeamRequirement } from "@/types/eventServiceTeamRequirement";
+import type { EventServiceVendorAssignment } from "@/types/eventServiceVendorAssignment";
+import type { EventServiceQuestionnaireResponse } from "@/types/eventServiceQuestionnaireResponse";
 import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 import type { WorkspaceMemberStatus } from "@/core/enums/workspaceMemberStatus";
 import type { Permission } from "@/core/enums/permission";
@@ -72,6 +98,16 @@ import type { ExpenseStatus } from "@/core/enums/expenseStatus";
 import type { DocumentCategory } from "@/core/enums/documentCategory";
 import type { DocumentStatus } from "@/core/enums/documentStatus";
 import type { DocumentVisibility } from "@/core/enums/documentVisibility";
+import type { ServiceStatus } from "@/core/enums/serviceStatus";
+import type { ServiceVersionStatus } from "@/core/enums/serviceVersionStatus";
+import type { ServiceExperienceLevel } from "@/core/enums/serviceExperienceLevel";
+import type { ServiceWeatherSensitivity } from "@/core/enums/serviceWeatherSensitivity";
+import type { ServiceQuestionType } from "@/core/enums/serviceQuestionType";
+import type { ServiceAiKnowledgeType } from "@/core/enums/serviceAiKnowledgeType";
+import type { ServiceAiKnowledgeSeverity } from "@/core/enums/serviceAiKnowledgeSeverity";
+import type { ServiceCapabilityType } from "@/core/enums/serviceCapabilityType";
+import type { EventServiceStatus } from "@/core/enums/eventServiceStatus";
+import type { EventServiceVendorAssignmentStatus } from "@/core/enums/eventServiceVendorAssignmentStatus";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
@@ -105,6 +141,32 @@ type ChartOfAccountRow = Database["public"]["Tables"]["chart_of_accounts"]["Row"
 type JournalEntryRow = Database["public"]["Tables"]["journal_entries"]["Row"];
 type JournalLineRow = Database["public"]["Tables"]["journal_lines"]["Row"];
 type AccountingPeriodRow = Database["public"]["Tables"]["accounting_periods"]["Row"];
+type ServiceCategoryRow = Database["public"]["Tables"]["service_categories"]["Row"];
+type ServiceRow = Database["public"]["Tables"]["services"]["Row"];
+type ServiceVersionRow = Database["public"]["Tables"]["service_versions"]["Row"];
+type ServiceIncludedItemRow = Database["public"]["Tables"]["service_included_items"]["Row"];
+type ServiceAddOnRow = Database["public"]["Tables"]["service_addons"]["Row"];
+type ServiceChecklistTemplateItemRow = Database["public"]["Tables"]["service_checklist_template_items"]["Row"];
+type ServiceTimelineTemplateItemRow = Database["public"]["Tables"]["service_timeline_template_items"]["Row"];
+type ServiceQuestionnaireQuestionRow = Database["public"]["Tables"]["service_questionnaire_questions"]["Row"];
+type ServiceBudgetTemplateLineRow = Database["public"]["Tables"]["service_budget_template_lines"]["Row"];
+type ServiceApprovalTemplateItemRow = Database["public"]["Tables"]["service_approval_template_items"]["Row"];
+type ServiceTravelTemplateItemRow = Database["public"]["Tables"]["service_travel_template_items"]["Row"];
+type ServiceAiKnowledgeItemRow = Database["public"]["Tables"]["service_ai_knowledge_items"]["Row"];
+type ServiceRequiredDocumentRow = Database["public"]["Tables"]["service_required_documents"]["Row"];
+type ServiceInventoryTemplateItemRow = Database["public"]["Tables"]["service_inventory_template_items"]["Row"];
+type ServicePurchaseTemplateItemRow = Database["public"]["Tables"]["service_purchase_template_items"]["Row"];
+type ServiceVendorSuggestionRow = Database["public"]["Tables"]["service_vendor_suggestions"]["Row"];
+type ServiceTeamRoleRequirementRow = Database["public"]["Tables"]["service_team_role_requirements"]["Row"];
+type ServiceSeasonalWindowRow = Database["public"]["Tables"]["service_seasonal_windows"]["Row"];
+type ServiceCapabilityRequirementRow = Database["public"]["Tables"]["service_capability_requirements"]["Row"];
+type EventServiceRow = Database["public"]["Tables"]["event_services"]["Row"];
+type EventServiceInventoryRequirementRow = Database["public"]["Tables"]["event_service_inventory_requirements"]["Row"];
+type EventServicePurchaseRequirementRow = Database["public"]["Tables"]["event_service_purchase_requirements"]["Row"];
+type EventServiceBudgetLineRow = Database["public"]["Tables"]["event_service_budget_lines"]["Row"];
+type EventServiceTeamRequirementRow = Database["public"]["Tables"]["event_service_team_requirements"]["Row"];
+type EventServiceVendorAssignmentRow = Database["public"]["Tables"]["event_service_vendor_assignments"]["Row"];
+type EventServiceQuestionnaireResponseRow = Database["public"]["Tables"]["event_service_questionnaire_responses"]["Row"];
 
 /**
  * Deliberate seam between raw database rows and domain types, even though
@@ -330,6 +392,8 @@ export function mapChecklistItemRow(row: ChecklistItemRow): ChecklistItem {
     assigned_id: row.assigned_id,
     assigned_name: row.assigned_name,
     sort_order: row.sort_order,
+    source_event_service_id: row.source_event_service_id,
+    template_snapshot: row.template_snapshot as unknown as ChecklistItem["template_snapshot"],
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -350,6 +414,8 @@ export function mapEventScheduleItemRow(row: EventScheduleItemRow): EventSchedul
     category: row.category as ScheduleCategory,
     status: row.status as ScheduleStatus,
     sort_order: row.sort_order,
+    source_event_service_id: row.source_event_service_id,
+    template_snapshot: row.template_snapshot as unknown as EventScheduleItem["template_snapshot"],
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -819,6 +885,398 @@ export function mapAccountingPeriodRow(row: AccountingPeriodRow): AccountingPeri
     closed_by: row.closed_by,
     locked_at: row.locked_at,
     locked_by: row.locked_by,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapServiceCategoryRow(row: ServiceCategoryRow): ServiceCategory {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    name: row.name,
+    description: row.description,
+    display_order: row.display_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    archived_at: row.archived_at,
+  };
+}
+
+export function mapServiceRow(row: ServiceRow): Service {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    category_id: row.category_id,
+    name: row.name,
+    description: row.description,
+    status: row.status as ServiceStatus,
+    draft_version_id: row.draft_version_id,
+    current_published_version_id: row.current_published_version_id,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    archived_at: row.archived_at,
+  };
+}
+
+export function mapServiceVersionRow(row: ServiceVersionRow): ServiceVersion {
+  return {
+    id: row.id,
+    service_id: row.service_id,
+    workspace_id: row.workspace_id,
+    version_number: row.version_number,
+    status: row.status as ServiceVersionStatus,
+    name_snapshot: row.name_snapshot,
+    description_snapshot: row.description_snapshot,
+    base_price_minor: row.base_price_minor,
+    currency: row.currency,
+    setup_duration_minutes: row.setup_duration_minutes,
+    breakdown_duration_minutes: row.breakdown_duration_minutes,
+    difficulty_score: row.difficulty_score,
+    experience_level_required: row.experience_level_required as ServiceExperienceLevel | null,
+    weather_sensitivity: row.weather_sensitivity as ServiceWeatherSensitivity,
+    surprise_friendly: row.surprise_friendly,
+    estimated_profit_minor: row.estimated_profit_minor,
+    change_summary: row.change_summary,
+    published_at: row.published_at,
+    published_by: row.published_by,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapServiceIncludedItemRow(row: ServiceIncludedItemRow): ServiceIncludedItem {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    service_version_id: row.service_version_id,
+    label: row.label,
+    description: row.description,
+    display_order: row.display_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapServiceAddOnRow(row: ServiceAddOnRow): ServiceAddOn {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    service_version_id: row.service_version_id,
+    label: row.label,
+    description: row.description,
+    price_delta_minor: row.price_delta_minor,
+    display_order: row.display_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapServiceChecklistTemplateItemRow(row: ServiceChecklistTemplateItemRow): ServiceChecklistTemplateItem {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    service_version_id: row.service_version_id,
+    title: row.title,
+    description: row.description,
+    category: row.category as ChecklistCategory,
+    priority: row.priority as NotePriority,
+    due_offset_days: row.due_offset_days,
+    display_order: row.display_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapServiceTimelineTemplateItemRow(row: ServiceTimelineTemplateItemRow): ServiceTimelineTemplateItem {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    service_version_id: row.service_version_id,
+    title: row.title,
+    description: row.description,
+    category: row.category as ScheduleCategory,
+    offset_minutes_from_event_start: row.offset_minutes_from_event_start,
+    duration_minutes: row.duration_minutes,
+    display_order: row.display_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapServiceQuestionnaireQuestionRow(row: ServiceQuestionnaireQuestionRow): ServiceQuestionnaireQuestion {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    service_version_id: row.service_version_id,
+    question_text: row.question_text,
+    question_type: row.question_type as ServiceQuestionType,
+    is_required: row.is_required,
+    options: row.options,
+    display_order: row.display_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapServiceBudgetTemplateLineRow(row: ServiceBudgetTemplateLineRow): ServiceBudgetTemplateLine {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    service_version_id: row.service_version_id,
+    label: row.label,
+    category: row.category,
+    estimated_revenue_minor: row.estimated_revenue_minor,
+    estimated_cost_minor: row.estimated_cost_minor,
+    display_order: row.display_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapServiceApprovalTemplateItemRow(row: ServiceApprovalTemplateItemRow): ServiceApprovalTemplateItem {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    service_version_id: row.service_version_id,
+    label: row.label,
+    description: row.description,
+    days_before_event_deadline: row.days_before_event_deadline,
+    required_role: row.required_role,
+    display_order: row.display_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapServiceTravelTemplateItemRow(row: ServiceTravelTemplateItemRow): ServiceTravelTemplateItem {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    service_version_id: row.service_version_id,
+    label: row.label,
+    description: row.description,
+    requires_equipment_transport: row.requires_equipment_transport,
+    drive_time_buffer_minutes: row.drive_time_buffer_minutes,
+    mileage_estimate: row.mileage_estimate,
+    display_order: row.display_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapServiceAiKnowledgeItemRow(row: ServiceAiKnowledgeItemRow): ServiceAiKnowledgeItem {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    service_version_id: row.service_version_id,
+    knowledge_type: row.knowledge_type as ServiceAiKnowledgeType,
+    content: row.content,
+    severity: row.severity as ServiceAiKnowledgeSeverity,
+    display_order: row.display_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapServiceRequiredDocumentRow(row: ServiceRequiredDocumentRow): ServiceRequiredDocument {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    service_version_id: row.service_version_id,
+    label: row.label,
+    category: row.category,
+    is_required: row.is_required,
+    display_order: row.display_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapServiceInventoryTemplateItemRow(row: ServiceInventoryTemplateItemRow): ServiceInventoryTemplateItem {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    service_version_id: row.service_version_id,
+    inventory_item_id: row.inventory_item_id,
+    item_name: row.item_name,
+    quantity: row.quantity,
+    display_order: row.display_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapServicePurchaseTemplateItemRow(row: ServicePurchaseTemplateItemRow): ServicePurchaseTemplateItem {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    service_version_id: row.service_version_id,
+    item_name: row.item_name,
+    estimated_unit_cost_minor: row.estimated_unit_cost_minor,
+    estimated_quantity: row.estimated_quantity,
+    typical_vendor_id: row.typical_vendor_id,
+    display_order: row.display_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapServiceVendorSuggestionRow(row: ServiceVendorSuggestionRow): ServiceVendorSuggestion {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    service_version_id: row.service_version_id,
+    vendor_id: row.vendor_id,
+    note: row.note,
+    display_order: row.display_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapServiceTeamRoleRequirementRow(row: ServiceTeamRoleRequirementRow): ServiceTeamRoleRequirement {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    service_version_id: row.service_version_id,
+    role_label: row.role_label,
+    quantity: row.quantity,
+    note: row.note,
+    display_order: row.display_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapServiceSeasonalWindowRow(row: ServiceSeasonalWindowRow): ServiceSeasonalWindow {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    service_version_id: row.service_version_id,
+    start_month: row.start_month,
+    end_month: row.end_month,
+    note: row.note,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapServiceCapabilityRequirementRow(row: ServiceCapabilityRequirementRow): ServiceCapabilityRequirement {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    service_version_id: row.service_version_id,
+    capability_type: row.capability_type as ServiceCapabilityType,
+    label: row.label,
+    display_order: row.display_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapEventServiceRow(row: EventServiceRow): EventService {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    event_id: row.event_id,
+    service_id: row.service_id,
+    service_version_id: row.service_version_id,
+    name: row.name,
+    name_template_value: row.name_template_value,
+    price_minor: row.price_minor,
+    price_template_value: row.price_template_value,
+    currency: row.currency,
+    selected_add_on_ids: row.selected_add_on_ids,
+    status: row.status as EventServiceStatus,
+    assigned_at: row.assigned_at,
+    assigned_by: row.assigned_by,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapEventServiceInventoryRequirementRow(row: EventServiceInventoryRequirementRow): EventServiceInventoryRequirement {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    event_service_id: row.event_service_id,
+    inventory_item_id: row.inventory_item_id,
+    item_name: row.item_name,
+    quantity: row.quantity,
+    is_fulfilled: row.is_fulfilled,
+    note: row.note,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapEventServicePurchaseRequirementRow(row: EventServicePurchaseRequirementRow): EventServicePurchaseRequirement {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    event_service_id: row.event_service_id,
+    item_name: row.item_name,
+    estimated_unit_cost_minor: row.estimated_unit_cost_minor,
+    estimated_quantity: row.estimated_quantity,
+    typical_vendor_id: row.typical_vendor_id,
+    fulfilled_purchase_id: row.fulfilled_purchase_id,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapEventServiceBudgetLineRow(row: EventServiceBudgetLineRow): EventServiceBudgetLine {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    event_service_id: row.event_service_id,
+    label: row.label,
+    category: row.category,
+    estimated_revenue_minor: row.estimated_revenue_minor,
+    estimated_cost_minor: row.estimated_cost_minor,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapEventServiceTeamRequirementRow(row: EventServiceTeamRequirementRow): EventServiceTeamRequirement {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    event_service_id: row.event_service_id,
+    role_label: row.role_label,
+    quantity: row.quantity,
+    note: row.note,
+    assigned_member_id: row.assigned_member_id,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapEventServiceVendorAssignmentRow(row: EventServiceVendorAssignmentRow): EventServiceVendorAssignment {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    event_service_id: row.event_service_id,
+    vendor_id: row.vendor_id,
+    status: row.status as EventServiceVendorAssignmentStatus,
+    note: row.note,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapEventServiceQuestionnaireResponseRow(row: EventServiceQuestionnaireResponseRow): EventServiceQuestionnaireResponse {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    event_service_id: row.event_service_id,
+    question_id: row.question_id,
+    response_text: row.response_text,
+    response_options: row.response_options,
+    response_boolean: row.response_boolean,
+    response_date: row.response_date,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };

@@ -26,6 +26,7 @@ import type {
   CreateClientInvitationInput,
   ClientInvitationFilters,
 } from "@/lib/data/clientAccess/repository";
+import { getFullName } from "@/lib/personName";
 
 export { resetClientAccountsStore, resetClientInvitationsStore };
 
@@ -67,7 +68,7 @@ async function getCurrentClientAccountContext(): Promise<ClientAccountContext | 
   const client = readClients().find((c) => c.id === account.client_id);
   return {
     account,
-    clientName: client ? `${client.first_name} ${client.last_name}`.trim() : "",
+    clientName: client ? getFullName(client).trim() : "",
     workspaceName: "Amoré Bloom",
   };
 }
@@ -316,7 +317,7 @@ async function getClientInvitationByToken(token: string): Promise<ClientInvitati
   const client = readClients().find((c) => c.id === invitation.client_id);
   return {
     workspace_name: "Amoré Bloom",
-    client_name: client ? `${client.first_name} ${client.last_name}`.trim() : "",
+    client_name: client ? getFullName(client).trim() : "",
     email: invitation.email,
     status: invitation.status,
     expires_at: invitation.expires_at,

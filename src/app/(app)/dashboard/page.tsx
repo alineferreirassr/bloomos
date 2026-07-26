@@ -1,5 +1,4 @@
 import { DashboardMetrics } from "@/modules/dashboard/components/DashboardMetrics";
-import { WorkspaceSessionPanel } from "@/modules/dashboard/components/WorkspaceSessionPanel";
 
 export default function DashboardPage() {
   return (
@@ -10,7 +9,6 @@ export default function DashboardPage() {
         module ships.
       </p>
       <div className="mt-6">
-        <WorkspaceSessionPanel />
         <DashboardMetrics />
       </div>
     </div>

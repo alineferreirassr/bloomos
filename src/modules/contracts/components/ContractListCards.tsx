@@ -5,6 +5,7 @@ import { SignatureStatusBadge } from "@/modules/contracts/components/SignatureSt
 import { formatContractValue } from "@/modules/contracts/mappers";
 import { formatEventDate } from "@/modules/events/dateFormat";
 import type { ContractListRow } from "@/modules/contracts/components/ContractsListView";
+import { getFullName } from "@/lib/personName";
 
 export function ContractListCards({ rows }: { rows: ContractListRow[] }) {
   return (
@@ -17,7 +18,7 @@ export function ContractListCards({ rows }: { rows: ContractListRow[] }) {
                 <p className="font-medium tracking-tight text-text">{contract.title}</p>
                 <p className="mt-0.5 text-xs text-text-muted">{contract.contract_number}</p>
                 <p className="mt-0.5 text-xs text-text-muted">
-                  {client ? `${client.first_name} ${client.last_name}` : "No client"}
+                  {client ? getFullName(client) : "No client"}
                   {event ? ` · ${event.title}` : ""}
                 </p>
               </div>

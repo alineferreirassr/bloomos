@@ -5,6 +5,7 @@ import { PaymentMethodBadge } from "@/modules/finance/components/PaymentMethodBa
 import { formatMoney } from "@/lib/money";
 import { formatEventDate } from "@/modules/events/dateFormat";
 import type { PaymentListRow } from "@/modules/finance/components/PaymentsListView";
+import { getFullName } from "@/lib/personName";
 
 export function PaymentListTable({ rows }: { rows: PaymentListRow[] }) {
   return (
@@ -33,7 +34,7 @@ export function PaymentListTable({ rows }: { rows: PaymentListRow[] }) {
                 </Link>
               </td>
               <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
-                {client ? `${client.first_name} ${client.last_name}` : "—"}
+                {client ? getFullName(client) : "—"}
               </td>
               <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
                 {invoice ? invoice.invoice_number : "—"}

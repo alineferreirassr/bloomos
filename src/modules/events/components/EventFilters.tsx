@@ -1,6 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/Input";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Select } from "@/components/ui/Select";
 import { EVENT_STATUS_LABELS, EVENT_STATUSES, type EventStatus } from "@/core/enums/eventStatus";
 import {
@@ -110,11 +111,9 @@ export function EventFilters({ value, onChange }: EventFiltersProps) {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={value.includeArchived}
             onChange={(event) => onChange({ ...value, includeArchived: event.target.checked })}
-            className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
           />
           Show archived events
         </label>

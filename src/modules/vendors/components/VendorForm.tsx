@@ -7,6 +7,7 @@ import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { FormField } from "@/components/forms/FormField";
 import { Input } from "@/components/ui/Input";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
@@ -151,7 +152,7 @@ export function VendorForm({ defaultValues, onSubmit, submitLabel, cancelHref }:
           </FormField>
         </div>
         <label className="mt-4 flex items-center gap-2 text-sm text-text">
-          <input type="checkbox" className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40" {...register("is_preferred")} />
+          <Checkbox {...register("is_preferred")} />
           Preferred vendor
         </label>
       </section>

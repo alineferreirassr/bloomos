@@ -34,6 +34,7 @@ import { DOCUMENT_VISIBILITIES, DOCUMENT_VISIBILITY_LABELS } from "@/core/enums/
 import { documentMetadataFormSchema, VALID_DOCUMENT_OWNER_TYPES, type DocumentMetadataFormInput } from "@/modules/documents/schema";
 import { OWNER_TYPE_LABELS } from "@/modules/documents/components/DocumentFilters";
 import { documentDefaultFormValues } from "@/modules/documents/mappers";
+import { getFullName } from "@/lib/personName";
 import type { DataResult } from "@/lib/data/result";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 
@@ -141,7 +142,7 @@ export function DocumentForm({ defaultValues, onSubmit }: DocumentFormProps) {
 
   const ownerOptions: { id: string; label: string }[] =
     ownerType === "client"
-      ? (clients ?? []).map((c) => ({ id: c.id, label: `${c.first_name} ${c.last_name}` }))
+      ? (clients ?? []).map((c) => ({ id: c.id, label: getFullName(c) }))
       : ownerType === "event"
         ? (events ?? []).map((e) => ({ id: e.id, label: e.title }))
         : ownerType === "contract"

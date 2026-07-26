@@ -21,14 +21,20 @@ export function VipToggle({ clientId, isVip, onChanged }: VipToggleProps) {
     setOptimisticVip(next);
     setPending(true);
     setError(null);
-    const result = await setClientVipStatus(clientId, next);
-    setPending(false);
-    if (!result.success) {
+    try {
+      const result = await setClientVipStatus(clientId, next);
+      if (!result.success) {
+        setOptimisticVip(previous);
+        setError(result.error);
+        return;
+      }
+      onChanged(next);
+    } catch (err) {
       setOptimisticVip(previous);
-      setError(result.error);
-      return;
+      setError(err instanceof Error ? err.message : "Could not update VIP status. Please try again.");
+    } finally {
+      setPending(false);
     }
-    onChanged(next);
   };
 
   return (

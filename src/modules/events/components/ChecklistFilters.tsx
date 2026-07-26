@@ -1,6 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/Input";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Select } from "@/components/ui/Select";
 import { CHECKLIST_CATEGORY_LABELS, CHECKLIST_CATEGORIES, type ChecklistCategory } from "@/core/enums/checklistCategory";
 import { CHECKLIST_STATUS_LABELS, CHECKLIST_STATUSES, type ChecklistStatus } from "@/core/enums/checklistStatus";
@@ -100,29 +101,23 @@ export function ChecklistFilters({ value, onChange }: ChecklistFiltersProps) {
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
         <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={value.overdueOnly}
             onChange={(event) => onChange({ ...value, overdueOnly: event.target.checked })}
-            className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
           />
           Overdue only
         </label>
         <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={value.showCompleted}
             onChange={(event) => onChange({ ...value, showCompleted: event.target.checked })}
-            className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
           />
           Show completed
         </label>
         <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={value.groupByCategory}
             onChange={(event) => onChange({ ...value, groupByCategory: event.target.checked })}
-            className="h-4 w-4 rounded border-border text-accent focus:ring-accent/40"
           />
           Group by category
         </label>

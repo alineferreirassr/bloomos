@@ -29,4 +29,12 @@ export function registerDefaultTimelineActivityTypes(): void {
   registerTimelineActivityType("purchase_item_updated", "Purchase item updated");
   registerTimelineActivityType("purchase_item_removed", "Purchase item removed");
   registerTimelineActivityType("purchase_item_received", "Purchase item received");
+
+  registerTimelineActivityType("service_created", "Service created");
+  registerTimelineActivityType("service_updated", "Service updated");
+  registerTimelineActivityType("service_status_changed", "Service status changed");
+  registerTimelineActivityType("service_version_published", "Service version published");
+  registerTimelineActivityType("event_service_assigned", "Service assigned to Event");
+  registerTimelineActivityType("event_service_status_changed", "Assigned Service status changed");
+  registerTimelineActivityType("event_service_removed", "Service removed from Event");
 }

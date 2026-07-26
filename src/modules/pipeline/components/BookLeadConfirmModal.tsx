@@ -9,6 +9,7 @@ import { bookLead, getClientsWithPendingRecovery, type BookLeadInput } from "@/l
 import { EVENT_TYPES, EVENT_TYPE_LABELS, type EventType } from "@/core/enums/eventType";
 import type { Lead } from "@/types/lead";
 import type { Client } from "@/types/client";
+import { getFullName } from "@/lib/personName";
 
 interface BookLeadConfirmModalProps {
   lead: Lead;
@@ -25,7 +26,7 @@ function guessEventType(lead: Lead): EventType | "" {
 }
 
 export function BookLeadConfirmModal({ lead, open, onClose, onBooked, onPendingRecovery }: BookLeadConfirmModalProps) {
-  const [title, setTitle] = useState(() => `${lead.first_name} ${lead.last_name}'s Event`);
+  const [title, setTitle] = useState(() => `${getFullName(lead)}'s Event`);
   const [eventType, setEventType] = useState<EventType | "">(() => guessEventType(lead));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);

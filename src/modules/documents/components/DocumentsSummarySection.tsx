@@ -27,12 +27,20 @@ interface DocumentsSummarySectionProps {
  */
 export function DocumentsSummarySection({ ownerType, ownerId, newDocumentParams = {} }: DocumentsSummarySectionProps) {
   const [summary, setSummary] = useState<DocumentOwnerSummary | null>(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    getDocumentOwnerSummary(ownerType, ownerId).then((result) => {
-      if (!cancelled) setSummary(result);
-    });
+    getDocumentOwnerSummary(ownerType, ownerId)
+      .then((result) => {
+        if (!cancelled) {
+          setSummary(result);
+          setError(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -40,6 +48,15 @@ export function DocumentsSummarySection({ ownerType, ownerId, newDocumentParams 
 
   const viewParams = new URLSearchParams({ ownerType, ownerId }).toString();
   const newParams = new URLSearchParams({ ownerType, ownerId, ...newDocumentParams }).toString();
+
+  if (error) {
+    return (
+      <Card>
+        <h3 className="font-serif text-[17px] font-semibold text-text">Documents</h3>
+        <p className="mt-2 text-sm text-text-muted">Could not load the document summary.</p>
+      </Card>
+    );
+  }
 
   if (!summary) {
     return (

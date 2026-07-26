@@ -23,6 +23,7 @@ import { readPayments } from "@/lib/data/mock/paymentsStore";
 import { readDocuments } from "@/lib/data/mock/documentsStore";
 import { mockClientAccessRepository } from "@/lib/data/clientAccess/mockRepository";
 import type { ClientPortalRepository } from "@/lib/data/clientPortal/repository";
+import { getFullName } from "@/lib/personName";
 
 /** Mock mode has no real per-session identity — the seeded current client account (see clientAccountsStore.ts) stands in for "the signed-in client," the same precedent as MOCK_CURRENT_MEMBER_ID/MOCK_CURRENT_CLIENT_ACCOUNT_ID. */
 async function currentClientId(): Promise<string> {
@@ -266,7 +267,7 @@ async function getClientPortalOverview(): Promise<ClientPortalOverview> {
   }
 
   return {
-    clientName: client ? `${client.first_name} ${client.last_name}`.trim() : "",
+    clientName: client ? getFullName(client).trim() : "",
     upcomingEvent: upcoming ? toClientPortalEvent(upcoming) : null,
     contractsInProgress,
     totalOutstandingBalanceMinor,

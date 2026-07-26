@@ -23,6 +23,7 @@ import type {
   ContractTemplateFilters,
   ContractsRepository,
 } from "@/lib/data/contracts/repository";
+import { getFullName } from "@/lib/personName";
 
 function fieldErrorsFromZod(error: {
   issues: { path: PropertyKey[]; message: string }[];
@@ -71,7 +72,7 @@ async function getContracts(filters: ContractFilters = {}): Promise<Contract[]> 
       const q = search.trim().toLowerCase();
       if (!q) return true;
       const client = clientsById.get(contract.client_id);
-      const clientName = client ? `${client.first_name} ${client.last_name}` : "";
+      const clientName = client ? getFullName(client) : "";
       const event = contract.event_id ? eventsById.get(contract.event_id) : undefined;
       const haystack = `${contract.contract_number} ${contract.title} ${clientName} ${event?.title ?? ""}`.toLowerCase();
       if (!haystack.includes(q)) return false;

@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { getFullName } from "@/lib/personName";
 
 type LoadState =
   | { status: "loading" }
@@ -29,7 +30,7 @@ function formatDate(iso: string | null): string {
 }
 
 function clientName(client: Client | undefined): string {
-  return client ? `${client.first_name} ${client.last_name}`.trim() : "Unknown client";
+  return client ? getFullName(client).trim() : "Unknown client";
 }
 
 /**

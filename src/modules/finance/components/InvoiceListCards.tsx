@@ -4,6 +4,7 @@ import { InvoiceStatusBadge } from "@/modules/finance/components/InvoiceStatusBa
 import { formatMoney } from "@/lib/money";
 import { formatEventDate } from "@/modules/events/dateFormat";
 import type { InvoiceListRow } from "@/modules/finance/components/InvoicesListView";
+import { getFullName } from "@/lib/personName";
 
 export function InvoiceListCards({ rows }: { rows: InvoiceListRow[] }) {
   return (
@@ -16,7 +17,7 @@ export function InvoiceListCards({ rows }: { rows: InvoiceListRow[] }) {
                 <p className="font-medium tracking-tight text-text">{invoice.title}</p>
                 <p className="mt-0.5 text-xs text-text-muted">{invoice.invoice_number}</p>
                 <p className="mt-0.5 text-xs text-text-muted">
-                  {client ? `${client.first_name} ${client.last_name}` : "No client"}
+                  {client ? getFullName(client) : "No client"}
                   {event ? ` · ${event.title}` : ""}
                 </p>
               </div>

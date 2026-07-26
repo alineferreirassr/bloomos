@@ -22,6 +22,11 @@ export const PROTECTED_ROUTE_PREFIXES = [
   "/team",
   "/client-portal",
   "/client-access",
+  "/pipeline",
+  "/inventory",
+  "/vendors",
+  "/purchases",
+  "/services",
 ] as const;
 
 /** Never redirect these — doing so would create a redirect loop. Invitation acceptance is intentionally an auth route: the page must render (and offer sign-up/sign-in) before the visitor has any session at all. */

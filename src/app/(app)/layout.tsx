@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/AppShell";
 import { AccessBlockedPage } from "@/components/layout/AccessBlockedPage";
 import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
+import { QueryProvider } from "@/components/providers/QueryProvider";
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
@@ -35,8 +36,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <MemberSessionProvider snapshot={snapshot}>
-      <AppShell workspaceDisplayName={snapshot.workspaceDisplayName}>{children}</AppShell>
-    </MemberSessionProvider>
+    <QueryProvider>
+      <MemberSessionProvider snapshot={snapshot}>
+        <AppShell workspaceDisplayName={snapshot.workspaceDisplayName}>{children}</AppShell>
+      </MemberSessionProvider>
+    </QueryProvider>
   );
 }

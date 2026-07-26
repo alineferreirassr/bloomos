@@ -5,6 +5,7 @@ import { PaymentTypeBadge } from "@/modules/finance/components/PaymentTypeBadge"
 import { formatMoney } from "@/lib/money";
 import { formatEventDate } from "@/modules/events/dateFormat";
 import type { PaymentListRow } from "@/modules/finance/components/PaymentsListView";
+import { getFullName } from "@/lib/personName";
 
 export function PaymentListCards({ rows }: { rows: PaymentListRow[] }) {
   return (
@@ -19,7 +20,7 @@ export function PaymentListCards({ rows }: { rows: PaymentListRow[] }) {
                 </p>
                 <p className="mt-0.5 text-xs text-text-muted">{formatEventDate(payment.transaction_date)}</p>
                 <p className="mt-0.5 text-xs text-text-muted">
-                  {client ? `${client.first_name} ${client.last_name}` : "No client"}
+                  {client ? getFullName(client) : "No client"}
                   {event ? ` · ${event.title}` : ""}
                   {invoice ? ` · ${invoice.invoice_number}` : ""}
                 </p>

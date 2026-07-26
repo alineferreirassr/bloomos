@@ -43,6 +43,7 @@ import { DocumentActions } from "@/modules/documents/components/DocumentActions"
 import { DocumentVersionHistorySection } from "@/modules/documents/components/DocumentVersionHistorySection";
 import { formatBytes, formatDocumentDate } from "@/modules/documents/mappers";
 import { OWNER_TYPE_LABELS } from "@/modules/documents/components/DocumentFilters";
+import { getFullName } from "@/lib/personName";
 
 type LoadState =
   | { status: "loading" }
@@ -72,7 +73,7 @@ async function resolveOwner(document: Document): Promise<{ label: string; href: 
     switch (document.owner_type) {
       case "client": {
         const client = await getClientById(document.owner_id);
-        return { label: `${client.first_name} ${client.last_name}`, href: `/clients/${client.id}` };
+        return { label: getFullName(client), href: `/clients/${client.id}` };
       }
       case "event": {
         const event = await getEventById(document.owner_id);

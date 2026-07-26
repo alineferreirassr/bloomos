@@ -6,6 +6,7 @@ import {
   createEventNote,
   getChecklistByEventId,
   getClientById,
+  getContracts,
   getEventById,
   getEventFinancialStatus,
   getEventFinancialSummary,
@@ -13,6 +14,7 @@ import {
   getNotesByEventId,
   getScheduleByEventId,
   getTimelineByEventId,
+  listEventServicesByEvent,
   togglePinNote,
 } from "@/lib/data";
 import type { Event } from "@/types/event";
@@ -21,6 +23,8 @@ import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
 import type { ChecklistItem } from "@/types/checklistItem";
 import type { EventScheduleItem } from "@/types/eventScheduleItem";
+import type { Contract } from "@/types/contract";
+import type { EventService } from "@/types/eventService";
 import { NotFoundError } from "@/core/errors";
 import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -36,10 +40,13 @@ import { EventStatusBadge } from "@/modules/events/components/EventStatusBadge";
 import { EventLifecycleBadge } from "@/modules/events/components/EventLifecycleBadge";
 import { EventPriorityBadge } from "@/modules/events/components/EventPriorityBadge";
 import { EventActions } from "@/modules/events/components/EventActions";
+import { EventArchivedBanner } from "@/modules/events/components/EventArchivedBanner";
 import { EventHealthCard } from "@/modules/events/components/EventHealthCard";
 import { ChecklistSummaryCard } from "@/modules/events/components/ChecklistSummaryCard";
 import { ScheduleSummaryCard } from "@/modules/events/components/ScheduleSummaryCard";
 import { EventFinancialSummaryCard } from "@/modules/finance/components/EventFinancialSummaryCard";
+import { EventContractsSummaryCard } from "@/modules/contracts/components/EventContractsSummaryCard";
+import { EventAssignedServicesCard } from "@/modules/services/components/EventAssignedServicesCard";
 import { DocumentsSummarySection } from "@/modules/documents/components/DocumentsSummarySection";
 import { EventOperationsBriefSection } from "@/modules/ai/components/EventOperationsBriefSection";
 import type { EventFinancialSummary } from "@/modules/finance/financialSummary";
@@ -61,6 +68,8 @@ type LoadState =
       health: EventHealthDetails;
       financialSummary: EventFinancialSummary;
       financialStatus: EventFinancialStatus;
+      contracts: Contract[];
+      assignedServices: EventService[];
     };
 
 /**
@@ -72,7 +81,7 @@ type LoadState =
 async function loadEventDetail(eventId: string): Promise<LoadState> {
   try {
     const event = await getEventById(eventId);
-    const [client, notes, timeline, checklist, schedule, nextAction, financialSummary, financialStatus] =
+    const [client, notes, timeline, checklist, schedule, nextAction, financialSummary, financialStatus, contracts, assignedServices] =
       await Promise.all([
         getClientById(event.client_id).catch(() => null),
         getNotesByEventId(eventId),
@@ -82,6 +91,8 @@ async function loadEventDetail(eventId: string): Promise<LoadState> {
         getEventNextAction(eventId),
         getEventFinancialSummary(eventId),
         getEventFinancialStatus(eventId),
+        getContracts({ eventId }),
+        listEventServicesByEvent(eventId),
       ]);
 
     const checklistStats = computeChecklistStats(checklist);
@@ -129,6 +140,8 @@ async function loadEventDetail(eventId: string): Promise<LoadState> {
       health,
       financialSummary,
       financialStatus,
+      contracts,
+      assignedServices,
     };
   } catch (err) {
     return { status: err instanceof NotFoundError ? "not-found" : "error" };
@@ -173,7 +186,7 @@ export function EventDetailView({ eventId }: { eventId: string }) {
     return <ErrorState message="Could not load this event." onRetry={refetch} />;
   }
 
-  const { event, client, notes, timeline, checklist, schedule, nextAction, health, financialSummary, financialStatus } =
+  const { event, client, notes, timeline, checklist, schedule, nextAction, health, financialSummary, financialStatus, contracts, assignedServices } =
     state;
 
   const checklistStats = computeChecklistStats(checklist);
@@ -210,6 +223,8 @@ export function EventDetailView({ eventId }: { eventId: string }) {
           <EventActions event={event} onChanged={refetch} />
         </div>
       </div>
+
+      {event.status === "archived" ? <EventArchivedBanner /> : null}
 
       {nextAction ? (
         <Card className="border-accent/40 bg-accent/5">
@@ -358,6 +373,8 @@ export function EventDetailView({ eventId }: { eventId: string }) {
           />
           <ChecklistSummaryCard eventId={event.id} stats={checklistStats} />
           <ScheduleSummaryCard eventId={event.id} stats={scheduleStats} />
+          <EventContractsSummaryCard contracts={contracts} />
+          <EventAssignedServicesCard assignedServices={assignedServices} />
           <DocumentsSummarySection
             ownerType="event"
             ownerId={event.id}

@@ -35,6 +35,7 @@ import {
 } from "@/lib/supabase/mappers";
 import { getClientWorkspaceSession, type WorkspaceSession } from "@/lib/auth/workspaceSessionClient";
 import type { EventFilters, EventsRepository } from "@/lib/data/events/repository";
+import { getFullName } from "@/lib/personName";
 
 type SupabaseClient = ReturnType<typeof createSupabaseClient>;
 
@@ -157,7 +158,7 @@ async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
 
   return events.filter((event) => {
     const client = clientsById.get(event.client_id);
-    const clientName = client ? `${client.first_name} ${client.last_name}` : "";
+    const clientName = client ? getFullName(client) : "";
     const haystack = `${event.title} ${clientName} ${event.location_name ?? ""} ${event.city ?? ""}`.toLowerCase();
     return haystack.includes(q);
   });

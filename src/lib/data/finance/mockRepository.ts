@@ -87,6 +87,7 @@ import {
   buildBalanceSheetSections,
   validateAccountingEquation,
 } from "@/lib/data/finance/reportCalculations";
+import { getFullName } from "@/lib/personName";
 
 function fieldErrorsFromZod(error: {
   issues: { path: PropertyKey[]; message: string }[];
@@ -160,7 +161,7 @@ async function getInvoices(filters: InvoiceFilters = {}): Promise<Invoice[]> {
       const q = search.trim().toLowerCase();
       if (!q) return true;
       const client = clientsById.get(invoice.client_id);
-      const clientName = client ? `${client.first_name} ${client.last_name}` : "";
+      const clientName = client ? getFullName(client) : "";
       const event = invoice.event_id ? eventsById.get(invoice.event_id) : undefined;
       const contract = invoice.contract_id ? contractsById.get(invoice.contract_id) : undefined;
       const haystack = `${invoice.invoice_number} ${invoice.title} ${clientName} ${event?.title ?? ""} ${contract?.contract_number ?? ""}`.toLowerCase();
@@ -548,7 +549,7 @@ async function getPayments(filters: PaymentFilters = {}): Promise<Payment[]> {
       const q = search.trim().toLowerCase();
       if (!q) return true;
       const client = clientsById.get(payment.client_id);
-      const clientName = client ? `${client.first_name} ${client.last_name}` : "";
+      const clientName = client ? getFullName(client) : "";
       const event = payment.event_id ? eventsById.get(payment.event_id) : undefined;
       const haystack = `${clientName} ${event?.title ?? ""} ${payment.reference ?? ""}`.toLowerCase();
       if (!haystack.includes(q)) return false;

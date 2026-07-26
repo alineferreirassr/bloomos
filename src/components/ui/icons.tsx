@@ -20,6 +20,13 @@ import {
   Sparkles,
   Settings,
   ChevronRight,
+  Lock,
+  LayoutGrid,
+  List,
+  GripVertical,
+  ChevronDown,
+  Plus,
+  Check,
 } from "lucide-react";
 
 type IconProps = SVGProps<SVGSVGElement>;
@@ -108,4 +115,39 @@ export function MenuIcon(props: IconProps) {
 
 export function CloseIcon(props: IconProps) {
   return <X strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** A published (immutable) ServiceVersion or a locked/read-only row — e.g. TemplateItemRow's published-version lock state. */
+export function LockIcon(props: IconProps) {
+  return <Lock strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Grid/card view mode — e.g. the Services Catalog's ViewToggle. */
+export function GridViewIcon(props: IconProps) {
+  return <LayoutGrid strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** List/table view mode — e.g. the Services Catalog's ViewToggle. */
+export function ListViewIcon(props: IconProps) {
+  return <List strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** A drag handle affordance — e.g. TemplateItemRow's reorder grip. */
+export function GripIcon(props: IconProps) {
+  return <GripVertical strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Expand/collapse affordance — rotate via className for the collapsed state. */
+export function ChevronDownIcon(props: IconProps) {
+  return <ChevronDown strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Add-item affordance — e.g. a Template category's "Add item" button. */
+export function PlusIcon(props: IconProps) {
+  return <Plus strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** A success confirmation — e.g. the shared Toast's success tone. */
+export function CheckIcon(props: IconProps) {
+  return <Check strokeWidth={2} aria-hidden="true" {...props} />;
 }
