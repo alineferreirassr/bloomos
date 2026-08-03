@@ -82,7 +82,7 @@ export function Tooltip({ content, children, placement = "top" }: TooltipProps) 
         <span
           role="tooltip"
           id={id}
-          className={`pointer-events-none absolute left-1/2 z-[var(--z-index-tooltip)] w-max max-w-56 -translate-x-1/2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text shadow-[var(--shadow-md-val)] ${
+          className={`bloom-elevation-popover pointer-events-none absolute left-1/2 z-[var(--z-index-tooltip)] w-max max-w-56 -translate-x-1/2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text ${
             placement === "top" ? "bottom-full mb-1.5" : "top-full mt-1.5"
           }`}
         >

@@ -14,8 +14,10 @@ import {
   expireWorkspaceInvitations,
 } from "@/lib/data";
 import { getDataPersistenceMessage } from "@/lib/dataModeCopy";
+import { listTeamRoleLabelsAction, setTeamRoleLabelAction } from "@/modules/dashboard/teamRoleLabelActions";
 import type { TeamMember } from "@/types/teamMember";
 import type { WorkspaceInvitation } from "@/types/workspaceInvitation";
+import { TEAM_ROLE_LABELS, TEAM_ROLE_LABEL_NAMES, DEFAULT_TEAM_ROLE_LABEL, type TeamRoleLabel } from "@/types/teamRoleLabel";
 import { WORKSPACE_MEMBER_ROLES, WORKSPACE_MEMBER_ROLE_LABELS, type WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 import { INVITATION_STATUS_LABELS } from "@/core/enums/invitationStatus";
 import { Button } from "@/components/ui/Button";
@@ -24,6 +26,9 @@ import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { KpiCard } from "@/components/ui/KpiCard";
+import { TeamIcon, SettingsIcon, LockIcon, PipelineIcon, ClientsIcon } from "@/components/ui/icons";
 import { NewInvitationModal } from "@/modules/team/components/NewInvitationModal";
 import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
@@ -34,6 +39,7 @@ type LoadState =
       status: "ready";
       members: TeamMember[];
       invitations: WorkspaceInvitation[];
+      teamRoleLabels: Record<string, TeamRoleLabel>;
     };
 
 function formatDate(iso: string): string {
@@ -53,8 +59,13 @@ export function TeamView() {
   // The member's own role/permissions come from MemberSessionProvider (server-seeded,
   // see (app)/layout.tsx) — this only fetches the roster/invitations themselves.
   const fetchTeamData = (): Promise<LoadState> =>
-    Promise.all([expireWorkspaceInvitations().catch(() => undefined), getWorkspaceMembers(), getWorkspaceInvitations()])
-      .then(([, members, invitations]) => ({ status: "ready" as const, members, invitations }))
+    Promise.all([expireWorkspaceInvitations().catch(() => undefined), getWorkspaceMembers(), getWorkspaceInvitations(), listTeamRoleLabelsAction()])
+      .then(([, members, invitations, labelsResult]) => ({
+        status: "ready" as const,
+        members,
+        invitations,
+        teamRoleLabels: labelsResult.success ? labelsResult.data : {},
+      }))
       .catch(() => ({ status: "error" as const }));
 
   useEffect(() => {
@@ -85,7 +96,15 @@ export function TeamView() {
     return <ErrorState onRetry={load} />;
   }
 
-  const { members, invitations } = state;
+  const { members, invitations, teamRoleLabels } = state;
+
+  const kpis = {
+    total: members.length,
+    owner: members.filter((member) => member.role === "owner").length,
+    admin: members.filter((member) => member.role === "admin").length,
+    manager: members.filter((member) => member.role === "manager").length,
+    staff: members.filter((member) => member.role === "staff").length,
+  };
 
   const runAction = async (id: string, action: () => Promise<{ success: boolean; error?: string }>) => {
     setBusyId(id);
@@ -100,12 +119,21 @@ export function TeamView() {
   };
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="font-serif text-3xl font-semibold text-text">Team</h2>
-        <p className="mt-1 text-sm text-text-muted">Amoré Bloom&apos;s internal team members and invitations. {getDataPersistenceMessage()}</p>
+    <div>
+      <PageHeader
+        title="Team"
+        subtitle={`Amoré Bloom's internal team members and invitations. ${getDataPersistenceMessage()}`}
+      />
+
+      <div className="animate-fade-up stagger-1 mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+        <KpiCard icon={TeamIcon} label="Total Members" value={kpis.total.toLocaleString()} />
+        <KpiCard icon={SettingsIcon} label="Owner" value={kpis.owner.toLocaleString()} />
+        <KpiCard icon={LockIcon} label="Admin" value={kpis.admin.toLocaleString()} />
+        <KpiCard icon={PipelineIcon} label="Manager" value={kpis.manager.toLocaleString()} />
+        <KpiCard icon={ClientsIcon} label="Staff" value={kpis.staff.toLocaleString()} />
       </div>
 
+      <div className="space-y-8">
       {actionError ? (
         <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
           {actionError}
@@ -128,6 +156,7 @@ export function TeamView() {
                 <th className="pb-2 pr-3 font-normal">Name</th>
                 <th className="pb-2 pr-3 font-normal">Email</th>
                 <th className="pb-2 pr-3 font-normal">Role</th>
+                <th className="pb-2 pr-3 font-normal">Dashboard role</th>
                 <th className="pb-2 pr-3 font-normal">Status</th>
                 <th className="pb-2 pr-3 font-normal">Joined</th>
                 {canManageRoles ? <th className="pb-2 font-normal">Actions</th> : null}
@@ -157,6 +186,27 @@ export function TeamView() {
                       </select>
                     ) : (
                       <Badge tone="outline">{WORKSPACE_MEMBER_ROLE_LABELS[member.role]}</Badge>
+                    )}
+                  </td>
+                  <td className="py-2 pr-3">
+                    {canManageRoles ? (
+                      <select
+                        aria-label={`Dashboard role for ${member.email}`}
+                        value={teamRoleLabels[member.id] ?? DEFAULT_TEAM_ROLE_LABEL}
+                        disabled={busyId === member.id}
+                        onChange={(event) =>
+                          runAction(member.id, () => setTeamRoleLabelAction(member.id, event.target.value as TeamRoleLabel))
+                        }
+                        className="rounded-md border border-border bg-transparent px-1.5 py-1 text-xs text-text"
+                      >
+                        {TEAM_ROLE_LABELS.map((label) => (
+                          <option key={label} value={label}>
+                            {TEAM_ROLE_LABEL_NAMES[label]}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <Badge tone="outline">{TEAM_ROLE_LABEL_NAMES[teamRoleLabels[member.id] ?? DEFAULT_TEAM_ROLE_LABEL]}</Badge>
                     )}
                   </td>
                   <td className="py-2 pr-3">
@@ -275,6 +325,7 @@ export function TeamView() {
           </div>
         )}
       </Card>
+      </div>
 
       <NewInvitationModal
         open={newInvitationOpen}

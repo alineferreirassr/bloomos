@@ -1663,7 +1663,7 @@ async function reverseJournalEntry(journalEntryId: string, input: JournalEntryRe
 
   const reversal = insertMockJournalEntry({
     workspace_id: original.workspace_id,
-    entry_date: nowIso().slice(0, 10),
+    entry_date: original.entry_date,
     source_type: "reversal",
     source_id: journalEntryId,
     posting_key: `reversal:${journalEntryId}`,

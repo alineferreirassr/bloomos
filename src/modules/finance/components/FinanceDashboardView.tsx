@@ -11,6 +11,7 @@ import {
   type FinanceDashboardData,
 } from "@/lib/data";
 import { getDataPersistenceMessage } from "@/lib/dataModeCopy";
+import { PaymentForecastCard } from "@/modules/ai/copilot/assistants/PaymentForecastCard";
 import type { Client } from "@/types/client";
 import type { AccountingPeriod } from "@/types/accountingPeriod";
 import { getFullName } from "@/lib/personName";
@@ -19,6 +20,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { MetricCard } from "@/modules/dashboard/components/MetricCard";
 import { formatMoney } from "@/lib/money";
 import { formatEventDate } from "@/modules/events/dateFormat";
@@ -193,23 +195,23 @@ export function FinanceDashboardView() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="font-serif text-3xl font-semibold text-text">Finance</h2>
-        <p className="mt-1 text-sm text-text-muted">
-          Invoices, payments, and expenses across the workspace. {getDataPersistenceMessage()}
-        </p>
-      </div>
+      <PageHeader
+        title="Finance"
+        subtitle={`Invoices, payments, and expenses across the workspace. ${getDataPersistenceMessage()}`}
+      />
 
       <FinanceLedgerNav />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="animate-fade-up grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {metricCards.map((metric) => (
           <MetricCard key={metric.label} {...metric} />
         ))}
       </div>
 
+      <PaymentForecastCard />
+
       {alerts.length > 0 ? (
-        <div className="space-y-2">
+        <div className="animate-fade-up stagger-1 space-y-2">
           {alerts.map((alert) => (
             <Link key={alert.message} href={alert.href} className="block">
               <Card
@@ -226,7 +228,7 @@ export function FinanceDashboardView() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="animate-fade-up stagger-2 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <div className="flex items-center justify-between">
             <h3 className="font-serif text-[17px] font-semibold text-text">Recent Invoices</h3>

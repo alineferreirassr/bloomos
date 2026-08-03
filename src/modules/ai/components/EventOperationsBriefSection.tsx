@@ -1,12 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { registerSkillRunner, unregisterSkillRunner } from "@/core/ai/skills/runnerRegistry";
 import { generateEventOperationsBrief } from "@/modules/ai/generateEventOperationsBrief";
+import { EVENT_OPERATIONS_BRIEF_SKILL_ID } from "@/modules/ai/registerEventOperationsBriefSkill";
 import type { GeneratedEventOperationsBrief, DetectedRisk } from "@/modules/ai/types";
 
 const HEALTH_TONE = { ready: "success", waiting: "warning", blocked: "danger" } as const;
@@ -48,6 +50,22 @@ export function EventOperationsBriefSection({ eventId }: { eventId: string }) {
     setResult(outcome.data);
     setStatus("success");
   }
+
+  const handleGenerateRef = useRef(handleGenerate);
+  useEffect(() => {
+    handleGenerateRef.current = handleGenerate;
+  });
+
+  // Scoped to this Event Detail page's lifetime — registered on mount,
+  // removed on unmount, so the Bloom AI Skill Picker's "Event Operations
+  // Brief" card only actually runs anything while an Event with this
+  // section is open. The ref indirection lets the runner always call the
+  // current `handleGenerate` (closing over the latest `eventId`/`status`)
+  // without re-registering on every render.
+  useEffect(() => {
+    registerSkillRunner(EVENT_OPERATIONS_BRIEF_SKILL_ID, () => handleGenerateRef.current());
+    return () => unregisterSkillRunner(EVENT_OPERATIONS_BRIEF_SKILL_ID);
+  }, []);
 
   return (
     <Card>

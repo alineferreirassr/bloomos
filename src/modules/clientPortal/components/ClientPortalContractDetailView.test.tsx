@@ -6,6 +6,11 @@ vi.mock("@/lib/data", () => ({
   getClientPortalContractById: vi.fn(),
 }));
 
+vi.mock("@/modules/clientPortal/getClientPortalContract", () => ({
+  getClientPortalContractDocumentAction: vi.fn().mockResolvedValue({ success: false, error: "not available in this test" }),
+  compareClientPortalContractVersionsAction: vi.fn(),
+}));
+
 afterEach(() => {
   vi.clearAllMocks();
 });

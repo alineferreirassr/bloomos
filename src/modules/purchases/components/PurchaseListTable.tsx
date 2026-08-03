@@ -50,25 +50,25 @@ export function PurchaseListTable({ rows, onChanged }: PurchaseListTableProps) {
   };
 
   return (
-    <div className="hidden overflow-x-auto rounded-md border border-border md:block">
+    <div className="hidden overflow-x-auto rounded-lg border border-border bg-surface shadow-sm md:block">
       <table className="w-full border-collapse text-left text-sm">
-        <thead>
+        <thead className="sticky top-0 z-[var(--z-index-dropdown)] bg-surface">
           <tr>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Purchase #</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Vendor</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Status</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Order date</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Expected delivery</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Total</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Receipt</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Purchase #</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Vendor</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Status</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Order date</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Expected delivery</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Total</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Receipt</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">
               <span className="sr-only">Actions</span>
             </th>
           </tr>
         </thead>
         <tbody>
           {rows.map(({ purchase, vendor }) => (
-            <tr key={purchase.id} className="hover:bg-text/4">
+            <tr key={purchase.id} className="transition-colors duration-150 hover:bg-accent-100/40">
               <td className="border-b border-border px-2.5 py-2">
                 <Link href={`/purchases/${purchase.id}`} className="block max-w-[10rem] truncate font-medium text-text hover:text-accent">
                   {purchase.purchase_number}

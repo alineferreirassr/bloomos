@@ -10,10 +10,17 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { KpiCard } from "@/components/ui/KpiCard";
+import { ModuleInsightCard } from "@/components/ui/ModuleInsightCard";
+import { EventsIcon, PipelineIcon, AutomationIcon, CheckIcon } from "@/components/ui/icons";
 import { EventFilters, type EventFiltersValue } from "@/modules/events/components/EventFilters";
 import { EventListTable } from "@/modules/events/components/EventListTable";
 import { EventListCards } from "@/modules/events/components/EventListCards";
 import { useMemberSession } from "@/components/providers/MemberSessionProvider";
+import { useSetCopilotPageContext } from "@/modules/ai/copilot/CopilotPageContextProvider";
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface EventListRow {
   event: Event;
@@ -21,6 +28,20 @@ export interface EventListRow {
   checklistCompleted: number;
   checklistTotal: number;
   nextAction: string | null;
+}
+
+function buildEventsInsight(rows: EventListRow[]): string | null {
+  const now = Date.now();
+  const soon = rows.filter((row) => {
+    if (!row.event.event_date || row.event.status === "completed") return false;
+    const eventTime = new Date(row.event.event_date).getTime();
+    return eventTime >= now && eventTime - now <= SEVEN_DAYS_MS;
+  });
+  const incomplete = soon.filter((row) => row.checklistCompleted < row.checklistTotal);
+  if (incomplete.length === 0) return null;
+  return `${incomplete.length} event${incomplete.length === 1 ? "" : "s"} this week still ${
+    incomplete.length === 1 ? "has" : "have"
+  } an incomplete checklist.`;
 }
 
 const defaultFilters: EventFiltersValue = {
@@ -90,6 +111,7 @@ export function EventsListView() {
   const canCreate = can("events.create");
   const [filters, setFilters] = useState<EventFiltersValue>(defaultFilters);
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  useSetCopilotPageContext({ module: "events", entity: null });
 
   // Fetch once on mount with the default filters. Every subsequent fetch is
   // triggered directly from the user interaction that changes the filters
@@ -125,28 +147,54 @@ export function EventsListView() {
     filters.dateFrom !== "" ||
     filters.dateTo !== "";
 
+  const kpis =
+    state.status === "ready"
+      ? {
+          total: state.rows.length,
+          upcoming: state.rows.filter(
+            (row) => row.event.event_date !== null && new Date(row.event.event_date) >= new Date(),
+          ).length,
+          inProgress: state.rows.filter((row) => row.event.status === "in_progress").length,
+          completed: state.rows.filter((row) => row.event.status === "completed").length,
+        }
+      : null;
+
+  const insight = state.status === "ready" ? buildEventsInsight(state.rows) : null;
+
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-3xl font-semibold text-text">Events</h2>
-          <p className="mt-1 text-sm text-text-muted">
-            The operational center for every engagement Amoré Bloom is planning.
-            {" "}{getDataPersistenceMessage()}
-          </p>
-        </div>
-        {canCreate ? (
-          <Link href="/events/new">
-            <Button>New Event</Button>
-          </Link>
-        ) : null}
-      </div>
+      <PageHeader
+        title="Events"
+        subtitle={`The operational center for every engagement Amoré Bloom is planning. ${getDataPersistenceMessage()}`}
+        actions={
+          canCreate ? (
+            <Link href="/events/new">
+              <Button>New Event</Button>
+            </Link>
+          ) : null
+        }
+      />
 
-      <div className="mt-6">
+      {kpis ? (
+        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <KpiCard icon={EventsIcon} label="Total Events" value={kpis.total.toLocaleString()} />
+          <KpiCard icon={PipelineIcon} label="Upcoming" value={kpis.upcoming.toLocaleString()} />
+          <KpiCard icon={AutomationIcon} label="In Progress" value={kpis.inProgress.toLocaleString()} />
+          <KpiCard icon={CheckIcon} label="Completed" value={kpis.completed.toLocaleString()} />
+        </div>
+      ) : null}
+
+      {insight ? (
+        <div className="mb-6">
+          <ModuleInsightCard tone="warning" insight={insight} />
+        </div>
+      ) : null}
+
+      <div className="mb-6">
         <EventFilters value={filters} onChange={handleFiltersChange} />
       </div>
 
-      <div className="mt-6">
+      <div>
         {state.status === "loading" ? (
           <div className="space-y-3">
             {Array.from({ length: 4 }).map((_, index) => (
@@ -157,11 +205,12 @@ export function EventsListView() {
           <ErrorState message="Could not load events." onRetry={retry} />
         ) : state.rows.length === 0 ? (
           <EmptyState
+            illustration={hasActiveFilters ? undefined : "events"}
             title={hasActiveFilters ? "No events match these filters" : "No events yet"}
             description={
               hasActiveFilters
                 ? "Try adjusting or clearing your filters."
-                : "New events you create will show up here."
+                : "Every unforgettable celebration begins with a plan — create your first Event."
             }
             action={
               !hasActiveFilters && canCreate ? (

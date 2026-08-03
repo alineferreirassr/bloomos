@@ -44,6 +44,17 @@ vi.mock("@/lib/data", () => ({
   getDocumentOwnerSummary: vi.fn(),
 }));
 
+vi.mock("@/modules/contractPlatform/contractPlatformActions", () => ({
+  evaluateContractAction: vi.fn().mockResolvedValue({ success: false, error: "not available in this test" }),
+  listContractBuilderTemplatesAction: vi.fn().mockResolvedValue({ success: true, data: [] }),
+  createContractVersionAction: vi.fn(),
+  publishContractVersionAction: vi.fn(),
+  archiveContractDocumentAction: vi.fn(),
+  restoreContractVersionAction: vi.fn(),
+  compareContractVersionsAction: vi.fn(),
+  markContractReadyAction: vi.fn(),
+}));
+
 import * as dataLayer from "@/lib/data";
 
 function mockReady(overrides: Partial<ReturnType<typeof makeContract>> = {}) {

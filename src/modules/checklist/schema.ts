@@ -21,6 +21,8 @@ export const checklistItemSchema = z.object({
   assigned_type: z.enum(ASSIGNED_TYPES),
   assigned_id: z.string().trim().nullable(),
   assigned_name: z.string().trim().nullable(),
+  /** Checkpoint 36, Step 17 — whether this item appears in the client's own Task Center (`types/checklistItem.ts`). Gated by `client_portal.manage` in `ChecklistItemForm.tsx`; optional here since most callers never touch it. */
+  client_visible: z.boolean().optional(),
 });
 
 export type ChecklistItemInput = z.infer<typeof checklistItemSchema>;
@@ -42,6 +44,7 @@ export const checklistItemFormSchema = z.object({
   due_date: z.string().trim(),
   assigned_type: z.enum(ASSIGNED_TYPES),
   assigned_name: z.string().trim(),
+  client_visible: z.boolean(),
 });
 
 export type ChecklistItemFormInput = z.infer<typeof checklistItemFormSchema>;
@@ -57,5 +60,6 @@ export function checklistFormToInput(data: ChecklistItemFormInput): ChecklistIte
     assigned_type: data.assigned_type,
     assigned_id: null,
     assigned_name: data.assigned_name === "" ? null : data.assigned_name,
+    client_visible: data.client_visible,
   };
 }

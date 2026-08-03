@@ -31,6 +31,8 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { NotesSection } from "@/modules/notes/components/NotesSection";
 import { Timeline } from "@/modules/timeline/components/Timeline";
+import { EntityTimelinePanel } from "@/modules/communication/timeline/components/EntityTimelinePanel";
+import { CommentsPanel } from "@/modules/communication/comments/components/CommentsPanel";
 import { EVENT_TYPE_LABELS } from "@/core/enums/eventType";
 import { getEventHealthDetails, type EventHealthDetails } from "@/core/workflows/eventHealth";
 import { computeChecklistStats } from "@/modules/events/checklistStats";
@@ -49,6 +51,12 @@ import { EventContractsSummaryCard } from "@/modules/contracts/components/EventC
 import { EventAssignedServicesCard } from "@/modules/services/components/EventAssignedServicesCard";
 import { DocumentsSummarySection } from "@/modules/documents/components/DocumentsSummarySection";
 import { EventOperationsBriefSection } from "@/modules/ai/components/EventOperationsBriefSection";
+import { ProposalGeneratorPanel } from "@/modules/ai/proposal/components/ProposalGeneratorPanel";
+import { BloomAISkillPicker } from "@/modules/ai/components/BloomAISkillPicker";
+import { useSetCopilotPageContext } from "@/modules/ai/copilot/CopilotPageContextProvider";
+import { EventAssistantCard } from "@/modules/ai/copilot/assistants/EventAssistantCard";
+import { EventCommandCenter } from "@/modules/operations/components/EventCommandCenter";
+import { OperationsAssistantCard } from "@/modules/ai/copilot/assistants/OperationsAssistantCard";
 import type { EventFinancialSummary } from "@/modules/finance/financialSummary";
 import type { EventFinancialStatus } from "@/modules/finance/eventFinancialStatus";
 
@@ -150,6 +158,9 @@ async function loadEventDetail(eventId: string): Promise<LoadState> {
 
 export function EventDetailView({ eventId }: { eventId: string }) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  useSetCopilotPageContext(
+    state.status === "ready" ? { module: "events", entity: { type: "event", id: state.event.id, label: state.event.title } } : { module: "events", entity: null },
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -219,8 +230,9 @@ export function EventDetailView({ eventId }: { eventId: string }) {
           {event.location_name ? ` · ${event.location_name}` : event.city ? ` · ${event.city}` : ""}
         </p>
 
-        <div className="mt-4">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <EventActions event={event} onChanged={refetch} />
+          <BloomAISkillPicker />
         </div>
       </div>
 
@@ -232,6 +244,8 @@ export function EventDetailView({ eventId }: { eventId: string }) {
           <p className="mt-1 text-sm text-text">{nextAction}</p>
         </Card>
       ) : null}
+
+      <EventCommandCenter eventId={event.id} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
@@ -346,6 +360,12 @@ export function EventDetailView({ eventId }: { eventId: string }) {
 
           <EventOperationsBriefSection eventId={event.id} />
 
+          <EventAssistantCard eventId={event.id} />
+
+          <OperationsAssistantCard eventId={event.id} />
+
+          <ProposalGeneratorPanel eventId={event.id} />
+
           <Card>
             <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
             <div className="mt-3">
@@ -389,13 +409,18 @@ export function EventDetailView({ eventId }: { eventId: string }) {
           </Card>
 
           <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Future Integrations</h3>
-            <p className="mt-2 text-xs text-text-muted">Not built yet — reserved for upcoming modules.</p>
-            <ul className="mt-3 space-y-1.5 text-sm text-text-muted">
-              <li>Team assignments</li>
-              <li>Vendors</li>
-              <li>Inventory</li>
-            </ul>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Communication Timeline</h3>
+            <p className="mt-1 text-xs text-text-muted">Comments, notifications, and other activity for this event — v2 Checkpoint 24.</p>
+            <div className="mt-3">
+              <EntityTimelinePanel ownerType="event" ownerId={event.id} />
+            </div>
+          </Card>
+
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Comments</h3>
+            <div className="mt-3">
+              <CommentsPanel ownerType="event" ownerId={event.id} />
+            </div>
           </Card>
         </div>
       </div>

@@ -1,35 +1,21 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
-import { getAIProvider, isAIConfigured } from "@/core/ai";
-import { fetchEventContextRecord } from "@/modules/ai/fetchEventContext.server";
-import { buildEventOperationsBriefContext, EVENT_OPERATIONS_BRIEF_CONTEXT_VERSION } from "@/modules/ai/contextBuilder";
-import { buildEventOperationsBriefPrompt, EVENT_OPERATIONS_BRIEF_PROMPT_VERSION } from "@/modules/ai/promptBuilder";
-import { createMockAIProvider } from "@/modules/ai/mockProvider";
-import { eventOperationsBriefModelOutputSchema } from "@/modules/ai/schema";
+import { executeSkill } from "@/core/ai/skills/resolver";
+import { mapSkillErrorToMessage } from "@/core/ai/skills/errorMapping";
+import { registerEventOperationsBriefSkill, EVENT_OPERATIONS_BRIEF_SKILL_ID } from "@/modules/ai/registerEventOperationsBriefSkill";
+import { registerDefaultAIContextBuilders } from "@/modules/ai/contextBuilders/registerContextBuilders";
+import { EVENT_OPERATIONS_BRIEF_CONTEXT_VERSION } from "@/modules/ai/contextBuilder";
 import { assembleEventOperationsBrief } from "@/modules/ai/assembleBrief";
-import type { GenerateEventOperationsBriefResult } from "@/modules/ai/types";
+import type { EventOperationsBriefContext, EventOperationsBriefModelOutput, GenerateEventOperationsBriefResult } from "@/modules/ai/types";
 
 const GENERIC_ACCESS_ERROR = "This Event brief isn't available. It may not exist, or you may not have access to it.";
 const GENERIC_PROVIDER_ERROR = "Bloom AI couldn't generate a brief right now. Please try again.";
-const PROVIDER_TIMEOUT_MS = 20_000;
+const MALFORMED_OUTPUT_ERROR = "Bloom AI returned an unexpected response. Please try again.";
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("Bloom AI request timed out.")), ms);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-}
+// Registered once per process — idempotent, safe to call on every module load (see each function's own doc comment).
+registerEventOperationsBriefSkill();
+registerDefaultAIContextBuilders();
 
 /**
  * The only entry point the UI ever calls — everything from auth through
@@ -37,13 +23,19 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
  * raw Event data is ever exposed to the browser beyond the validated
  * structured result. Never trusts a client-supplied Workspace or
  * permission claim: both are re-resolved from the server session on every
- * call (`resolveMemberSessionSnapshot`), and the Event itself is re-fetched
- * server-side (`fetchEventContextRecord`) rather than accepting a
- * client-built context object. After Zod validates the model's raw output,
- * `assembleEventOperationsBrief` performs the additional *semantic*
- * cross-check schema validation alone can't express (risk kinds must match
- * ones BloomOS actually detected; action targets resolve only to real,
- * hardcoded routes).
+ * call (`resolveMemberSessionSnapshot`).
+ *
+ * Checkpoint 4: this is now a thin wrapper around the generic Bloom AI
+ * Skill pipeline (`executeSkill` → `runSkillCompletion`, see
+ * `registerEventOperationsBriefSkill.ts`) rather than its own
+ * prompt/provider/parsing plumbing — this feature's own contribution is
+ * only its early permission check and its post-processing
+ * (`assembleEventOperationsBrief`), never orchestration. Observable
+ * behavior (errors, versioning metadata, mock/live reporting) stays
+ * byte-for-byte what it was before the Skill layer existed, verified by
+ * this file's own pre-existing test suite (mock target updated to
+ * `@/core/ai/registry`, the module the Skill Resolver itself now calls,
+ * but every assertion unchanged).
  */
 export async function generateEventOperationsBrief(eventId: string): Promise<GenerateEventOperationsBriefResult> {
   const session = await resolveMemberSessionSnapshot();
@@ -54,73 +46,43 @@ export async function generateEventOperationsBrief(eventId: string): Promise<Gen
     return { success: false, error: GENERIC_ACCESS_ERROR };
   }
 
-  let record;
-  try {
-    record = await fetchEventContextRecord(eventId);
-  } catch {
-    return { success: false, error: GENERIC_PROVIDER_ERROR };
-  }
-  if (!record) {
-    return { success: false, error: GENERIC_ACCESS_ERROR };
-  }
-
-  const context = buildEventOperationsBriefContext(record.event, record.client, record.checklist, record.schedule);
-  const prompt = buildEventOperationsBriefPrompt(context);
-  const mock = !isAIConfigured();
-  const provider = getAIProvider() ?? createMockAIProvider();
-
-  const now = new Date().toISOString();
-  const conversation = {
-    id: randomUUID(),
+  const result = await executeSkill({
+    skillId: EVENT_OPERATIONS_BRIEF_SKILL_ID,
     workspaceId: session.workspace.id,
-    context: {
-      workspaceId: session.workspace.id,
-      ownerType: "event" as const,
-      ownerId: context.event.id,
-      facts: { eventOperationsBriefContext: context },
-    },
-    messages: prompt,
-    createdAt: now,
-    updatedAt: now,
-  };
+    workspaceName: session.workspace.name,
+    userId: session.user.id,
+    userName: session.profile.full_name ?? undefined,
+    permissions: session.permissions,
+    role: session.membership.role,
+    refs: { eventId },
+  });
 
-  let completion;
-  try {
-    completion = await withTimeout(provider.complete({ conversation, prompt: prompt[prompt.length - 1] }), PROVIDER_TIMEOUT_MS);
-  } catch {
-    return { success: false, error: GENERIC_PROVIDER_ERROR };
+  if (!result.success) {
+    return {
+      success: false,
+      error: mapSkillErrorToMessage(result.error, {
+        contextUnavailable: GENERIC_ACCESS_ERROR,
+        provider: GENERIC_PROVIDER_ERROR,
+        malformed: MALFORMED_OUTPUT_ERROR,
+      }),
+    };
   }
 
-  if (completion.finishReason === "error") {
-    return { success: false, error: GENERIC_PROVIDER_ERROR };
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(completion.content);
-  } catch {
-    return { success: false, error: "Bloom AI returned a response that couldn't be read. Please try again." };
-  }
-
-  const validated = eventOperationsBriefModelOutputSchema.safeParse(parsed);
-  if (!validated.success) {
-    return { success: false, error: "Bloom AI returned an unexpected response. Please try again." };
-  }
-
-  const brief = assembleEventOperationsBrief(validated.data, context);
+  const context = result.context as EventOperationsBriefContext;
+  const brief = assembleEventOperationsBrief(result.data as EventOperationsBriefModelOutput, context);
 
   return {
     success: true,
     data: {
       context,
       brief,
-      mock,
-      model: completion.model,
-      provider: provider.name,
-      promptVersion: EVENT_OPERATIONS_BRIEF_PROMPT_VERSION,
+      mock: result.metadata.mock,
+      model: result.metadata.model,
+      provider: result.metadata.provider,
+      promptVersion: result.metadata.promptVersion,
       contextVersion: EVENT_OPERATIONS_BRIEF_CONTEXT_VERSION,
       sourceEventUpdatedAt: context.event.updatedAt,
-      generatedAt: now,
+      generatedAt: result.metadata.generatedAt,
     },
   };
 }

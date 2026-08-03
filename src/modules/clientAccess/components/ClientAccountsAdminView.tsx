@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { getFullName } from "@/lib/personName";
 
 type LoadState =
@@ -116,12 +117,10 @@ export function ClientAccountsAdminView() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="font-serif text-3xl font-semibold text-text">Client Accounts</h2>
-        <p className="mt-1 text-sm text-text-muted">
-          Every Client Portal account across the Workspace. {getDataPersistenceMessage()}
-        </p>
-      </div>
+      <PageHeader
+        title="Client Accounts"
+        subtitle={`Every Client Portal account across the Workspace. ${getDataPersistenceMessage()}`}
+      />
 
       {actionError ? (
         <div

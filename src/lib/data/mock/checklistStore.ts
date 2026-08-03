@@ -182,6 +182,8 @@ const SEED_CHECKLIST_ITEMS: ChecklistItem[] = [
     sort_order: 1,
     created_at: "2026-06-20T11:31:00.000Z",
     updated_at: "2026-06-20T11:31:00.000Z",
+    // Checkpoint 14 — seeded client-visible for the Client Portal's own Checklist demo (Step 7).
+    client_visible: true,
   },
   {
     id: "checklist_10",
@@ -201,6 +203,7 @@ const SEED_CHECKLIST_ITEMS: ChecklistItem[] = [
     sort_order: 2,
     created_at: "2026-06-20T11:32:00.000Z",
     updated_at: "2026-07-02T10:00:00.000Z",
+    client_visible: true,
   },
 
   // event_4 — Whitfield In-Home Romantic Setup (completed — every item done)

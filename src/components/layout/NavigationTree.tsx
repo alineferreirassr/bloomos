@@ -51,12 +51,12 @@ export function NavigationTree({ modules, pathname, onNavigate }: NavigationTree
         const isExpanded = hasChildren && !collapsedIds.has(navModule.id);
         const active = isActive(pathname, navModule.href) && !navModule.disabled;
 
-        const rowClassName = `flex w-full items-center gap-2.5 rounded-md border-l-2 px-3 py-2 text-left text-[14.5px] transition-colors duration-150 ${
+        const rowClassName = `flex w-full items-center gap-2.5 rounded-full px-3.5 py-2.5 text-left text-[14.5px] transition-colors duration-150 ${
           active
-            ? "border-accent bg-accent/7 font-semibold text-text"
+            ? "bg-accent/12 font-semibold text-text"
             : navModule.disabled
-              ? "cursor-default border-transparent font-normal text-text/35"
-              : "border-transparent font-normal text-text hover:bg-accent/10"
+              ? "cursor-default font-normal text-text/35"
+              : "font-normal text-text hover:bg-accent/7"
         }`;
 
         const rowContent = (
@@ -120,12 +120,12 @@ function NavigationLeafRow({
   onNavigate?: () => void;
 }) {
   const active = isActive(pathname, leaf.href) && !leaf.disabled;
-  const className = `flex items-center justify-between gap-2 rounded-md px-3 py-1.5 text-[13.5px] transition-colors duration-150 ${
+  const className = `flex items-center justify-between gap-2 rounded-full px-3.5 py-1.5 text-[13.5px] transition-colors duration-150 ${
     active
-      ? "bg-accent/7 font-semibold text-text"
+      ? "bg-accent/12 font-semibold text-text"
       : leaf.disabled
         ? "cursor-default font-normal text-text/35"
-        : "font-normal text-text hover:bg-accent/10"
+        : "font-normal text-text hover:bg-accent/7"
   }`;
 
   if (leaf.href && !leaf.disabled) {

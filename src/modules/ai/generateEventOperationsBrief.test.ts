@@ -11,7 +11,7 @@ vi.mock("@/modules/ai/fetchEventContext.server", () => ({
   fetchEventContextRecord: vi.fn(),
 }));
 
-vi.mock("@/core/ai", () => ({
+vi.mock("@/core/ai/registry", () => ({
   getAIProvider: vi.fn(),
   isAIConfigured: vi.fn(),
 }));
@@ -19,7 +19,7 @@ vi.mock("@/core/ai", () => ({
 import { generateEventOperationsBrief } from "@/modules/ai/generateEventOperationsBrief";
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 import { fetchEventContextRecord } from "@/modules/ai/fetchEventContext.server";
-import { getAIProvider, isAIConfigured } from "@/core/ai";
+import { getAIProvider, isAIConfigured } from "@/core/ai/registry";
 import { EVENT_OPERATIONS_BRIEF_PROMPT_VERSION } from "@/modules/ai/promptBuilder";
 import { EVENT_OPERATIONS_BRIEF_CONTEXT_VERSION } from "@/modules/ai/contextBuilder";
 

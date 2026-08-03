@@ -6,6 +6,7 @@ import type {
   ClientPortalDocument,
   ClientPortalOverview,
 } from "@/types/clientPortal";
+import type { ClientPortalTimelineEntry } from "@/types/clientPortalTimeline";
 import type { DataResult } from "@/lib/data/result";
 
 /**
@@ -38,4 +39,7 @@ export interface ClientPortalRepository {
   getClientPortalDocumentById(id: string): Promise<ClientPortalDocument>;
   /** Exchanges `get_client_document_storage_ref` (Supabase mode) for an actual short-lived signed URL server-side — the UI never receives a raw bucket/path, only this URL. */
   getClientPortalDocumentDownloadUrl(id: string): Promise<DataResult<string>>;
+
+  /** Checkpoint 14, Step 6 — aggregates Proposals/Contracts/Invoices/Payments/Documents/Automation history into one sorted, read-only feed. Never a new source of truth. */
+  getClientPortalTimeline(): Promise<ClientPortalTimelineEntry[]>;
 }

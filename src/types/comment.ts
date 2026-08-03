@@ -23,4 +23,13 @@ export interface Comment {
   created_at: string;
   edited_at: string | null;
   deleted_at: string | null;
+  /**
+   * v2.0 Checkpoint 24, Step 6 — Team Member ids parsed out of `body`'s
+   * `@Name` tokens at create time (see `core/communication/mentionEngine.ts`).
+   * Stored denormalized so "my unread mentions"/"mention history" never has
+   * to re-parse every comment body on every read. `@Team` mentions (the
+   * whole roster) are NOT expanded into this array — see `mentions_team`.
+   */
+  mentioned_member_ids: string[];
+  mentions_team: boolean;
 }

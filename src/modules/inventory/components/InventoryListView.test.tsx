@@ -13,6 +13,8 @@ vi.mock("@/lib/data", () => ({
   getDamagedOrUnderRepairInventoryItems: vi.fn(),
   archiveInventoryItem: vi.fn(),
   restoreInventoryItem: vi.fn(),
+  // Bloom AI's InventoryAssistantCard (Checkpoint 20, Step 13) reads these directly.
+  getEvents: vi.fn(),
 }));
 
 import * as dataLayer from "@/lib/data";
@@ -22,6 +24,10 @@ describe("InventoryListView", () => {
     vi.resetAllMocks();
     vi.mocked(dataLayer.getLowStockInventoryItems).mockResolvedValue([]);
     vi.mocked(dataLayer.getDamagedOrUnderRepairInventoryItems).mockResolvedValue([]);
+    vi.mocked(dataLayer.getEvents).mockResolvedValue([]);
+    // InventoryAssistantCard also calls `listInventoryItems` independently of
+    // whatever value an individual test sets for the page's own main list.
+    vi.mocked(dataLayer.listInventoryItems).mockResolvedValue([]);
   });
 
   it("shows a loading state, then the populated list", async () => {

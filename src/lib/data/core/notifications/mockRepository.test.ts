@@ -83,4 +83,32 @@ describe("mockNotificationsRepository", () => {
     const forMember2 = await mockNotificationsRepository.getNotificationsForMember(WORKSPACE_A, "member_2");
     expect(forMember2).toEqual([]);
   });
+
+  // v2.0 Checkpoint 41 — markNotificationUnread, the read-state mirror of markNotificationRead.
+  it("marks a read notification back to unread, clearing read_at", async () => {
+    const created = await mockNotificationsRepository.createInAppNotification(WORKSPACE_A, {
+      recipientMemberId: "member_1",
+      title: "Test",
+      body: "Test body",
+    });
+    if (!created.success) throw new Error("setup failed");
+
+    const read = await mockNotificationsRepository.markNotificationRead(created.data.id);
+    expect(read.success && read.data.read_at).not.toBeNull();
+
+    const unread = await mockNotificationsRepository.markNotificationUnread(created.data.id);
+    expect(unread.success && unread.data.read_at).toBeNull();
+  });
+
+  it("marking an already-unread notification unread again is a harmless no-op", async () => {
+    const created = await mockNotificationsRepository.createInAppNotification(WORKSPACE_A, {
+      recipientMemberId: "member_1",
+      title: "Test",
+      body: "Test body",
+    });
+    if (!created.success) throw new Error("setup failed");
+
+    const result = await mockNotificationsRepository.markNotificationUnread(created.data.id);
+    expect(result.success && result.data.read_at).toBeNull();
+  });
 });

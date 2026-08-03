@@ -15,6 +15,8 @@ import { VendorTimelineSection } from "@/modules/vendors/components/VendorTimeli
 import { VendorNotesSection } from "@/modules/vendors/components/VendorNotesSection";
 import { VendorDocumentsSection } from "@/modules/vendors/components/VendorDocumentsSection";
 import { VendorInventorySection } from "@/modules/vendors/components/VendorInventorySection";
+import { BloomAvatar } from "@/components/ui/BloomAvatar";
+import { VendorOperationsCard } from "@/modules/operations/components/VendorOperationsCard";
 
 type LoadState = { status: "loading" } | { status: "not-found" } | { status: "error" } | { status: "ready"; vendor: Vendor };
 
@@ -68,9 +70,7 @@ export function VendorDetailView({ vendorId }: { vendorId: string }) {
     <div className="space-y-6">
       <div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent/10 text-sm font-semibold text-accent">
-            {vendor.company_name[0]}
-          </div>
+          <BloomAvatar name={vendor.company_name} />
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-3xl font-semibold text-text">{vendor.company_name}</h2>
@@ -136,6 +136,8 @@ export function VendorDetailView({ vendorId }: { vendorId: string }) {
               <VendorInventorySection vendorId={vendor.id} />
             </div>
           </Card>
+
+          <VendorOperationsCard vendorId={vendor.id} />
         </div>
 
         <div className="space-y-6">

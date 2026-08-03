@@ -11,9 +11,11 @@ interface CommercialPipelineColumnProps {
   column: CommercialColumnDefinition;
   leads: Lead[];
   buildActions: (lead: Lead) => ActionMenuAction[];
+  /** Checkpoint 19.2 — entrance-animation classes (e.g. "animate-fade-up stagger-2") applied by the board so columns cascade in sequence. */
+  className?: string;
 }
 
-export function CommercialPipelineColumn({ column, leads, buildActions }: CommercialPipelineColumnProps) {
+export function CommercialPipelineColumn({ column, leads, buildActions, className }: CommercialPipelineColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const value = columnPipelineValue(leads);
 
@@ -22,7 +24,7 @@ export function CommercialPipelineColumn({ column, leads, buildActions }: Commer
       ref={setNodeRef}
       className={`flex w-72 shrink-0 flex-col rounded-md border ${
         isOver ? "border-accent bg-accent/5" : "border-border"
-      }`}
+      }${className ? ` ${className}` : ""}`}
     >
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5">
         <div>

@@ -3,6 +3,7 @@
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
 import { ActionMenu, type ActionMenuAction } from "@/components/ui/ActionMenu";
 import { EventPriorityBadge } from "@/modules/events/components/EventPriorityBadge";
 import { OperationalHealthBadge } from "@/modules/pipeline/components/OperationalHealthBadge";
@@ -65,13 +66,9 @@ export function OperationalPipelineCard({ data, actions, draggable = true, canUp
           <EventPriorityBadge priority={event.priority} />
           <OperationalHealthBadge status={healthStatus} />
           {isOverdue ? (
-            <span className="rounded-[3px] border border-danger/40 bg-danger/10 px-2.5 py-0.5 text-[11px] tracking-wide text-danger">
-              Overdue
-            </span>
+            <Badge tone="danger">Overdue</Badge>
           ) : isUpcoming ? (
-            <span className="rounded-[3px] border border-border px-2.5 py-0.5 text-[11px] tracking-wide text-text-muted">
-              {daysUntilEvent === 0 ? "Today" : `In ${daysUntilEvent}d`}
-            </span>
+            <Badge tone="neutral">{daysUntilEvent === 0 ? "Today" : `In ${daysUntilEvent}d`}</Badge>
           ) : null}
         </div>
 

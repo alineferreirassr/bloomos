@@ -11,6 +11,7 @@ import type { DataMode } from "@/lib/env";
  * everything else here.
  */
 export const PROTECTED_ROUTE_PREFIXES = [
+  "/workspace",
   "/dashboard",
   "/account",
   "/leads",

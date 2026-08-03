@@ -6,7 +6,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-Nothing yet — v1.0.0 is the current release.
+### v2.0 Checkpoint 3 — AI Proposal Generator
+
+The Bloom AI platform's first genuinely new feature — a structured, human-reviewed proposal draft for one Event, built entirely on Checkpoint 2's infrastructure with no feature-specific provider calls. See `docs/proposal-generator.md` for the full architecture writeup and `docs/v2-checkpoint-3-proposal-generator.md` for the certification report.
+
+- **Added**: `proposal.generate` AI use case (`modules/ai/proposal/registerProposalUseCase.ts`) — versioned prompt, structured output schema, semantic validator, `humanApprovalPolicy: "always_required"`.
+- **Added**: a new Context Orchestrator section, `proposalContext` (Event/Venue/Timeline Summary/Consultation Notes/existing Contract payment terms), plus the platform's first real `client` and `eventServiceAssignment` builders (`modules/ai/contextBuilders/`) — both safe-fields-only, excluding every internal-only Client field.
+- **Added**: hallucination rejection in `validateProposalSemantics` — a draft is rejected outright if it references a service not actually assigned to the Event, or if its payment schedule doesn't sum to the real pricing total.
+- **Added**: `ProposalDraft` domain type + mock-only repository (`lib/data/proposals/`) with a version chain mirroring `Document`'s (supersede-on-regenerate, never overturning an already-accepted/rejected draft).
+- **Added**: `ProposalGeneratorPanel`, embedded in Event Detail below the Event Operations Brief — Generate Draft/Regenerate/Copy/Accept Draft/Reject Draft/View Missing Information, with a provider/latency/prompt-version/draft-version metadata strip and a "Development mock" badge.
+- **Added**: three Command Palette actions ("Generate Proposal", "Open Proposal Draft", "Search Proposal") registered while the panel is mounted.
+- **Added**: safe observability logging (useCaseId, promptVersion, estimated tokens, validation outcome) — never proposal content.
+- **Fixed**: a Supabase-mode crash found during this checkpoint's own mandated live browser verification — `getProposalsRepository()` was routing through the standard `selectRepository()` selector like an already-migrated module, but Proposals has no real table yet; every real Workspace's Event Detail page 500'd on load. Fixed by always returning the mock repository (matching the AI Memory Foundation's own unconditional-mock precedent), independent of `NEXT_PUBLIC_DATA_MODE`.
+
+### v2.0 Checkpoint 2 — Bloom AI Platform Foundation
+
+Bloom AI's provider/prompt/context/output plumbing moves from single-feature-specific code into reusable platform infrastructure. See `docs/v2-checkpoint-2-bloom-ai-platform.md` for the full architecture writeup and `docs/ai.md` for the updated feature-level description.
+
+- **Added**: multi-provider registry (`core/ai/providerRegistry.ts` — capability matching, health, ordered fallback selection); `core/ai/registry.ts`'s v1 surface now delegates to it with identical behavior.
+- **Added**: AI Runtime (`core/ai/runtime/` — `executeAIRequest`) — timeout, bounded exponential-backoff retry, provider-to-provider fallback, and safe structured logging behind one execution seam; a caught provider exception's own message is never logged or returned.
+- **Added**: Prompt Registry and Router (`core/ai/prompts/`) — `AIUseCaseDefinition` registration + `routeAIUseCase`.
+- **Added**: Context Orchestrator (`core/ai/context/`) — `assembleAIContext`, deterministic section ordering, provenance metadata; `workspace`/`user`/`event` builders implemented, six section keys reserved for future use.
+- **Added**: Token Budgeting (`core/ai/tokenBudget.ts`) — deterministic token estimation and priority-ordered, section-granularity truncation.
+- **Added**: Structured Output Pipeline (`core/ai/structuredOutput.ts`) — shared parse → schema-validate → optional semantic-validate stages, replacing each feature's own inline JSON parsing.
+- **Added**: AI Tool Registry foundation (`core/ai/tools/`) — `executeAITool` enforces permission and human-approval gates before any tool logic runs; no tool registered yet.
+- **Added**: AI Memory foundation (`core/ai/memory/`, `lib/data/core/aiMemory/`) — mock-only, propose/approve/reject workflow; a memory is never usable until a human explicitly approves it.
+- **Changed**: `modules/ai/generateEventOperationsBrief.ts` migrated onto the platform (Prompt Registry + Context Orchestrator + AI Runtime + structured-output pipeline) — its pre-existing 15-test suite passes unmodified, proving behavior is unchanged.
+- **Added**: one Command Palette action, "Ask Bloom", registered by `EventOperationsBriefSection` while mounted.
+- **Added**: safe observability logging (useCaseId, promptVersion, estimated tokens, validation outcome) around the migrated feature — never prompt text, context facts, or provider responses.
+
+### v2.0 Checkpoint 1 — Foundation, Developer Experience & Platform
+
+Infrastructure only, per this checkpoint's explicit scope — no AI features, no Automation Engine, no business logic. See `docs/v2-checkpoint-1-foundation.md` for the full architecture writeup.
+
+- **Added**: Command Palette foundation (`core/commandPalette/` — action registry, keyboard-shortcut infra, filter) and its shell UI (`components/ui/CommandPalette.tsx`, opens on mod+k, no business commands registered yet).
+- **Added**: Universal Search ranking pipeline (`core/search/pipeline.ts` — `runSearch`/`rankSearchResults`), extending v1's existing provider/registry architecture.
+- **Added**: Design System v2 documentation (`docs/design-system-v2.md`) and a typed, tested mirror of `globals.css`'s numeric tokens (`styles/designTokens.ts`).
+- **Added**: Calendar foundation — `CalendarEvent` domain type, `core/calendar/` event-source registry + pure date-math navigation, `CalendarNavigationBar` shell (no scheduling logic, no data grid yet).
+- **Added**: Notification infrastructure — a domain event bus (`core/events/`) and a `NotificationQueue` interface (`core/notifications/queue.ts`), extending v1's existing delivery-provider registry.
+- **Added**: Feature Flag infrastructure (`core/featureFlags/`, `lib/data/core/featureFlags/`) — mock-only this phase, matching the `core/tags`/`core/comments`/`core/audit` precedent; local dev override via `NEXT_PUBLIC_FEATURE_OVERRIDES`.
+- **Added**: Observability foundation (`core/observability/`) — `Logger`/`ErrorReportingProvider`/`MonitoringProvider` seams with safe defaults, plus a real, working `/api/health` endpoint.
+- **Added**: CI/CD — `.github/workflows/ci.yml` (lint/typecheck/test:coverage/build on every push/PR) and `release.yml` (same chain, re-run against a pushed `v*` tag, then publishes a GitHub Release).
 
 ## [1.0.0] - 2026-07-26
 

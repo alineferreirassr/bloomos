@@ -35,7 +35,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
         if (typeof forwardedRef === "function") forwardedRef(node);
         else if (forwardedRef) forwardedRef.current = node;
       }}
-      className={`h-4 w-4 shrink-0 rounded-sm border border-border text-accent accent-accent transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-45 ${className}`}
+      className={`h-4 w-4 shrink-0 rounded-[4px] border border-border text-accent accent-accent transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-45 ${className}`}
       {...props}
     />
   );

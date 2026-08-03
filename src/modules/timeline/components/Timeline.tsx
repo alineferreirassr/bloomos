@@ -27,9 +27,12 @@ export function Timeline({ activities, emptyTitle = "No activity yet", emptyDesc
 
   return (
     <ol className="space-y-4 border-l border-border pl-4">
-      {activities.map((activity) => (
-        <li key={activity.id} className="relative">
-          <span aria-hidden="true" className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-accent" />
+      {activities.map((activity, index) => (
+        <li
+          key={activity.id}
+          className={`animate-timeline-reveal stagger-${Math.min(index, 6)} relative`}
+        >
+          <span aria-hidden="true" className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-accent ring-4 ring-surface" />
           <p className="text-sm font-medium text-text">
             {getTimelineActivityLabel(activity.type)}
           </p>

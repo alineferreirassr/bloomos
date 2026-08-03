@@ -5,6 +5,8 @@ import { EventChecklistView } from "@/modules/events/components/EventChecklistVi
 import { makeChecklistItem, makeEvent } from "@/modules/events/testUtils";
 import { makeClient } from "@/modules/clients/testUtils";
 import type { ChecklistItem } from "@/types/checklistItem";
+import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
+import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 
 vi.mock("@/lib/data", () => ({
   getEventById: vi.fn(),
@@ -19,6 +21,24 @@ vi.mock("@/lib/data", () => ({
 }));
 
 import * as dataLayer from "@/lib/data";
+
+const fullPermissionSnapshot: MemberSessionSnapshot = {
+  kind: "active",
+  user: { id: "user_1", email: "owner@amorebloom.com" },
+  profile: { full_name: "Amoré Bloom Owner", avatar_url: null },
+  workspace: { id: "ws_amore_bloom", name: "Amoré Bloom" },
+  membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
+  permissions: ["client_portal.manage"],
+  workspaceDisplayName: "Amoré Bloom",
+};
+
+function renderChecklistView(eventId: string) {
+  return render(
+    <MemberSessionProvider snapshot={fullPermissionSnapshot}>
+      <EventChecklistView eventId={eventId} />
+    </MemberSessionProvider>,
+  );
+}
 
 function mockReady(items: ChecklistItem[], eventOverrides: Partial<ReturnType<typeof makeEvent>> = {}) {
   const event = makeEvent({
@@ -54,7 +74,7 @@ describe("EventChecklistView", () => {
       makeChecklistItem({ id: "c2", title: "Book photographer", category: "photography", status: "pending", sort_order: 1 }),
     ]);
 
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
 
     expect(await screen.findByText("Confirm ring")).toBeInTheDocument();
     expect(screen.getByText("Book photographer")).toBeInTheDocument();
@@ -69,7 +89,7 @@ describe("EventChecklistView", () => {
 
   it("shows an empty state when there are no checklist items yet", async () => {
     mockReady([]);
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
     expect(await screen.findByText("No checklist items yet")).toBeInTheDocument();
   });
 
@@ -78,7 +98,7 @@ describe("EventChecklistView", () => {
       makeChecklistItem({ id: "c1", title: "Confirm ring", category: "client", sort_order: 0 }),
       makeChecklistItem({ id: "c2", title: "Book photographer", category: "photography", sort_order: 1 }),
     ]);
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
     await screen.findByText("Confirm ring");
     // Category badges render as group headers ("Client", "Photography") —
     // "Client" also appears as a select option (assignment filter), so
@@ -93,7 +113,7 @@ describe("EventChecklistView", () => {
       makeChecklistItem({ id: "c1", title: "Confirm ring", sort_order: 0 }),
       makeChecklistItem({ id: "c2", title: "Book photographer", sort_order: 1 }),
     ]);
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
     await screen.findByText("Confirm ring");
 
     await user.type(screen.getByLabelText(/search checklist items/i), "photographer");
@@ -106,7 +126,7 @@ describe("EventChecklistView", () => {
     mockReady([
       makeChecklistItem({ id: "c1", title: "Late task", status: "pending", due_date: "2020-01-01", sort_order: 0 }),
     ]);
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
     expect(await screen.findByText("Late task")).toBeInTheDocument();
     expect(getRow("c1").getByText("Overdue")).toBeInTheDocument();
   });
@@ -117,7 +137,7 @@ describe("EventChecklistView", () => {
       makeChecklistItem({ id: "c1", title: "Late task", status: "pending", due_date: "2020-01-01", sort_order: 0 }),
       makeChecklistItem({ id: "c2", title: "On track task", status: "pending", due_date: "2099-01-01", sort_order: 1 }),
     ]);
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
     await screen.findByText("Late task");
 
     await user.click(screen.getByLabelText(/overdue only/i));
@@ -134,7 +154,7 @@ describe("EventChecklistView", () => {
       data: makeChecklistItem({ id: "new_1", title: "New task" }),
     });
 
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
     await screen.findByText("No checklist items yet");
 
     await user.click(screen.getAllByRole("button", { name: /add checklist item/i })[0]);
@@ -153,7 +173,7 @@ describe("EventChecklistView", () => {
     mockReady([item]);
     vi.mocked(dataLayer.updateChecklistItem).mockResolvedValue({ success: true, data: item });
 
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
     await screen.findByText("Confirm ring");
 
     await openMenu("c1", user);
@@ -176,7 +196,7 @@ describe("EventChecklistView", () => {
     mockReady([item]);
     vi.mocked(dataLayer.updateChecklistItem).mockResolvedValue({ success: true, data: item });
 
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
     await screen.findByText("Confirm ring");
 
     await openMenu("c1", user);
@@ -205,7 +225,7 @@ describe("EventChecklistView", () => {
     mockReady([item]);
     vi.mocked(dataLayer.updateChecklistItem).mockResolvedValue({ success: true, data: item });
 
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
     await screen.findByText("Confirm ring");
 
     await openMenu("c1", user);
@@ -223,7 +243,7 @@ describe("EventChecklistView", () => {
     mockReady([item]);
     vi.mocked(dataLayer.updateChecklistItemStatus).mockResolvedValue({ success: true, data: item });
 
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
     await screen.findByText("Confirm ring");
 
     await openMenu("c1", user);
@@ -238,7 +258,7 @@ describe("EventChecklistView", () => {
     mockReady([item]);
     vi.mocked(dataLayer.completeChecklistItem).mockResolvedValue({ success: true, data: item });
 
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
     await screen.findByText("Confirm ring");
 
     await openMenu("c1", user);
@@ -253,7 +273,7 @@ describe("EventChecklistView", () => {
     mockReady([item]);
     vi.mocked(dataLayer.updateChecklistItemStatus).mockResolvedValue({ success: true, data: item });
 
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
     await screen.findByText("Confirm ring");
 
     await openMenu("c1", user);
@@ -268,7 +288,7 @@ describe("EventChecklistView", () => {
     mockReady([item]);
     vi.mocked(dataLayer.updateChecklistItemStatus).mockResolvedValue({ success: true, data: item });
 
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
     await screen.findByText("Confirm ring");
 
     await openMenu("c1", user);
@@ -281,7 +301,7 @@ describe("EventChecklistView", () => {
   it("does not offer Delete for a completed item", async () => {
     const user = userEvent.setup();
     mockReady([makeChecklistItem({ id: "c1", title: "Confirm ring", status: "completed", sort_order: 0 })]);
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
     await screen.findByText("Confirm ring");
 
     await openMenu("c1", user);
@@ -293,7 +313,7 @@ describe("EventChecklistView", () => {
     mockReady([makeChecklistItem({ id: "c1", title: "Confirm ring", status: "pending", sort_order: 0 })]);
     vi.mocked(dataLayer.deleteChecklistItem).mockResolvedValue({ success: true, data: null });
 
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
     await screen.findByText("Confirm ring");
 
     await openMenu("c1", user);
@@ -314,7 +334,7 @@ describe("EventChecklistView", () => {
     mockReady(items);
     vi.mocked(dataLayer.reorderChecklistItems).mockResolvedValue({ success: true, data: items });
 
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
     await screen.findByText("First task");
 
     await user.click(getRow("c1").getByRole("button", { name: /move down/i }));
@@ -324,7 +344,7 @@ describe("EventChecklistView", () => {
 
   it("hides all mutation controls for an archived event", async () => {
     mockReady([makeChecklistItem({ id: "c1", title: "Confirm ring", sort_order: 0 })], { status: "archived" });
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
     await screen.findByText("Confirm ring");
 
     expect(screen.queryByRole("button", { name: /add checklist item/i })).not.toBeInTheDocument();
@@ -335,7 +355,7 @@ describe("EventChecklistView", () => {
 
   it("hides all mutation controls for a cancelled event", async () => {
     mockReady([makeChecklistItem({ id: "c1", title: "Confirm ring", sort_order: 0 })], { status: "cancelled" });
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
     await screen.findByText("Confirm ring");
 
     expect(screen.queryByRole("button", { name: /add checklist item/i })).not.toBeInTheDocument();
@@ -346,7 +366,7 @@ describe("EventChecklistView", () => {
     mockReady([makeChecklistItem({ id: "c1", title: "Confirm ring", status: "pending", sort_order: 0 })], {
       status: "completed",
     });
-    render(<EventChecklistView eventId="event_1" />);
+    renderChecklistView("event_1");
     await screen.findByText("Confirm ring");
 
     expect(screen.getAllByRole("button", { name: /add checklist item/i }).length).toBeGreaterThan(0);
@@ -354,7 +374,7 @@ describe("EventChecklistView", () => {
 
   it("shows an error state when the event fails to load", async () => {
     vi.mocked(dataLayer.getEventById).mockRejectedValue(new Error("network error"));
-    render(<EventChecklistView eventId="does_not_exist" />);
+    renderChecklistView("does_not_exist");
     expect(await screen.findByText(/could not load this checklist/i)).toBeInTheDocument();
   });
 });

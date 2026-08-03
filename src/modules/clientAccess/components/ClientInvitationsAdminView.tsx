@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { getFullName } from "@/lib/personName";
 
 type LoadState =
@@ -115,12 +116,10 @@ export function ClientInvitationsAdminView() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="font-serif text-3xl font-semibold text-text">Client Invitations</h2>
-        <p className="mt-1 text-sm text-text-muted">
-          Every Client Portal invitation across the Workspace. {getDataPersistenceMessage()}
-        </p>
-      </div>
+      <PageHeader
+        title="Client Invitations"
+        subtitle={`Every Client Portal invitation across the Workspace. ${getDataPersistenceMessage()}`}
+      />
 
       {actionError ? (
         <div

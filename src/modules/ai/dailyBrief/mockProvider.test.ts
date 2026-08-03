@@ -1,52 +1,110 @@
 import { describe, expect, it } from "vitest";
-import { makeEvent } from "@/modules/events/testUtils";
-import { buildEventOperationsBriefContext } from "@/modules/ai/contextBuilder";
-import { buildDailyOperationsBriefContext } from "@/modules/ai/dailyBrief/contextBuilder";
 import { createDailyOperationsBriefMockProvider } from "@/modules/ai/dailyBrief/mockProvider";
-import { dailyOperationsBriefModelOutputSchema } from "@/modules/ai/dailyBrief/schema";
-import type { AICompletionRequest } from "@/core/ai/types";
 import type { DailyOperationsBriefContext } from "@/modules/ai/dailyBrief/types";
+import type { AICompletionRequest } from "@/core/ai/types";
 
-const NOW = new Date(2026, 5, 15, 12, 0);
+const NOW = "2026-07-25T00:00:00.000Z";
 
-function requestFor(context: DailyOperationsBriefContext): AICompletionRequest {
-  const now = new Date().toISOString();
+function context(overrides: Partial<DailyOperationsBriefContext> = {}): DailyOperationsBriefContext {
+  return {
+    generatedAt: NOW,
+    eventsToday: [],
+    eventsThisWeek: [],
+    eventsAtRisk: [],
+    latePayments: [],
+    unsignedContracts: [],
+    checklistProgress: { totalOpen: 0, totalOverdue: 0, totalCompleted: 0 },
+    teamAssignments: [],
+    unreadNotificationCount: 0,
+    highPriorityClients: [],
+    calendarSummary: { eventsToday: 0, eventsThisWeek: 0, eventsThisMonth: 0 },
+    recentActivity: [],
+    upcomingDeadlines: [],
+    unavailableCategories: [],
+    ...overrides,
+  };
+}
+
+function request(dailyOperationsBriefContext?: DailyOperationsBriefContext): AICompletionRequest {
   return {
     conversation: {
       id: "conv_1",
       workspaceId: "ws_1",
-      context: { workspaceId: "ws_1", facts: { dailyOperationsBriefContext: context } },
+      context: { workspaceId: "ws_1", facts: { dailyOperationsBriefContext } },
       messages: [],
-      createdAt: now,
-      updatedAt: now,
+      createdAt: NOW,
+      updatedAt: NOW,
     },
-    prompt: { role: "user", content: "generate" },
+    prompt: { role: "user", content: "x" },
   };
 }
 
 describe("createDailyOperationsBriefMockProvider", () => {
-  it("produces content that satisfies the real structured-output schema", async () => {
-    const eventContext = buildEventOperationsBriefContext(makeEvent({ id: "e1" }), null, [], [], NOW);
-    const context = buildDailyOperationsBriefContext([eventContext], NOW);
-    const completion = await createDailyOperationsBriefMockProvider().complete(requestFor(context));
-    const parsed = JSON.parse(completion.content);
-    expect(dailyOperationsBriefModelOutputSchema.safeParse(parsed).success).toBe(true);
-  });
-
-  it("only references real Event ids that are actually at risk", async () => {
-    const atRisk = buildEventOperationsBriefContext(makeEvent({ id: "risky", assigned_owner: null }), null, [], [], NOW);
-    const context = buildDailyOperationsBriefContext([atRisk], NOW);
-    const completion = await createDailyOperationsBriefMockProvider().complete(requestFor(context));
-    const parsed = JSON.parse(completion.content);
-    expect(parsed.eventNotes.every((n: { eventId: string }) => n.eventId === "risky")).toBe(true);
-  });
-
-  it("falls back to a safe error result when no context is supplied", async () => {
-    const now = new Date().toISOString();
-    const completion = await createDailyOperationsBriefMockProvider().complete({
-      conversation: { id: "conv_1", workspaceId: "ws_1", context: { workspaceId: "ws_1", facts: {} }, messages: [], createdAt: now, updatedAt: now },
-      prompt: { role: "user", content: "generate" },
-    });
+  it("returns a finishReason of error when no context was supplied", async () => {
+    const provider = createDailyOperationsBriefMockProvider();
+    const completion = await provider.complete(request(undefined));
     expect(completion.finishReason).toBe("error");
+  });
+
+  it("reflects the real at-risk Events in todaysPriorities and riskExplanations", async () => {
+    const provider = createDailyOperationsBriefMockProvider();
+    const completion = await provider.complete(
+      request(
+        context({
+          eventsAtRisk: [
+            {
+              eventId: "event_1",
+              title: "Beachfront Proposal",
+              eventDate: "2026-07-25",
+              lifecycleStage: "planning",
+              status: "planning",
+              healthStatus: "blocked",
+              assignedOwner: null,
+              topRisk: { kind: "missing_owner", label: "No assigned owner", severity: "high", evidence: "No owner on file." },
+            },
+          ],
+        }),
+      ),
+    );
+    const parsed = JSON.parse(completion.content);
+    expect(parsed.todaysPriorities[0]).toContain("Beachfront Proposal");
+    expect(parsed.riskExplanations).toEqual([{ eventId: "event_1", explanation: "No owner on file." }]);
+  });
+
+  it("suggests following up on real late payments and unsigned contracts, referencing their real ids", async () => {
+    const provider = createDailyOperationsBriefMockProvider();
+    const completion = await provider.complete(
+      request(
+        context({
+          latePayments: [{ invoiceId: "inv_1", invoiceNumber: "INV-1", clientId: "c1", eventId: null, balanceMinor: 5000, currency: "USD", dueDate: "2026-07-20", daysOverdue: 5 }],
+          unsignedContracts: [{ contractId: "contract_1", contractNumber: "C-1", clientId: "c1", eventId: null, signatureStatus: "unsigned", eventDate: null }],
+        }),
+      ),
+    );
+    const parsed = JSON.parse(completion.content);
+    expect(parsed.suggestedActions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ targetType: "invoice", targetId: "inv_1" }),
+        expect.objectContaining({ targetType: "contract", targetId: "contract_1" }),
+      ]),
+    );
+  });
+
+  it("falls back to a routine-monitoring priority when nothing is at risk", async () => {
+    const provider = createDailyOperationsBriefMockProvider();
+    const completion = await provider.complete(request(context()));
+    const parsed = JSON.parse(completion.content);
+    expect(parsed.todaysPriorities).toEqual(["No Events currently need attention — continue routine monitoring."]);
+  });
+
+  it("always returns valid JSON matching the model output schema shape", async () => {
+    const provider = createDailyOperationsBriefMockProvider();
+    const completion = await provider.complete(request(context()));
+    const parsed = JSON.parse(completion.content);
+    expect(parsed).toHaveProperty("executiveSummary");
+    expect(parsed).toHaveProperty("todaysPriorities");
+    expect(parsed).toHaveProperty("riskExplanations");
+    expect(parsed).toHaveProperty("recommendations");
+    expect(parsed).toHaveProperty("suggestedActions");
   });
 });

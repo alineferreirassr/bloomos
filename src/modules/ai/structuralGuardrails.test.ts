@@ -8,7 +8,11 @@ import { join } from "node:path";
  * boundary that would still hold once one does: the UI component never
  * imports `@/core/ai` (the provider interface/registry) or the mock
  * provider directly. `generateEventOperationsBrief.ts` (the `"use server"`
- * boundary) is the only file allowed to touch either.
+ * boundary) is the only file allowed to touch either. The one deliberate
+ * exception is `@/core/ai/skills/runnerRegistry` (Checkpoint 4) — a plain,
+ * client-safe Map of "how to trigger myself" callbacks with zero provider/
+ * runtime code, whose entire purpose is being imported by UI components
+ * like this one (see its own doc comment).
  */
 describe("AI module structural guardrails", () => {
   it("EventOperationsBriefSection never imports the provider registry or a provider implementation directly", () => {
@@ -16,7 +20,8 @@ describe("AI module structural guardrails", () => {
       join(process.cwd(), "src/modules/ai/components/EventOperationsBriefSection.tsx"),
       "utf-8",
     );
-    expect(source).not.toMatch(/@\/core\/ai/);
+    expect(source).not.toMatch(/@\/core\/ai"/);
+    expect(source).not.toMatch(/@\/core\/ai\/(?!skills\/runnerRegistry)/);
     expect(source).not.toMatch(/@\/modules\/ai\/mockProvider/);
     expect(source).not.toMatch(/@\/modules\/ai\/fetchEventContext\.server/);
     expect(source).toMatch(/@\/modules\/ai\/generateEventOperationsBrief/);

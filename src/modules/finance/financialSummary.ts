@@ -4,6 +4,7 @@ import type { Payment } from "@/types/payment";
 import type { Expense } from "@/types/expense";
 import { PAYMENT_STATUSES_COUNTING_TOWARD_PAID } from "@/core/enums/paymentStatus";
 import { subtractMinor, sumMinor, calculatePercentage, majorToMinor } from "@/lib/money";
+import { clockNow } from "@/core/time/clock";
 
 /**
  * Contracts that no longer represent real, currently-owed commercial value —
@@ -224,7 +225,7 @@ export function computeWorkspaceFinancialSummary(
   invoices: Invoice[],
   payments: Payment[],
   expenses: Expense[],
-  referenceDate: Date = new Date(),
+  referenceDate: Date = clockNow(),
 ): WorkspaceFinancialSummary {
   const activeInvoices = invoices.filter((i) => i.status !== "voided");
 

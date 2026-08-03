@@ -3,42 +3,54 @@ import { dailyOperationsBriefModelOutputSchema } from "@/modules/ai/dailyBrief/s
 
 function validOutput(overrides: Record<string, unknown> = {}) {
   return {
-    overview: "Two Events need attention today.",
-    topPriorities: ["Follow up on the Beachfront Proposal"],
-    eventNotes: [{ eventId: "event_1", note: "Checklist is overdue." }],
+    executiveSummary: "Everything is on track today.",
+    todaysPriorities: ["Follow up on Invoice INV-1."],
+    riskExplanations: [],
+    recommendations: [],
+    suggestedActions: [],
     ...overrides,
   };
 }
 
 describe("dailyOperationsBriefModelOutputSchema", () => {
-  it("accepts a well-formed structured output", () => {
+  it("accepts a minimal valid output", () => {
     expect(dailyOperationsBriefModelOutputSchema.safeParse(validOutput()).success).toBe(true);
   });
 
-  it("accepts zero event notes", () => {
-    expect(dailyOperationsBriefModelOutputSchema.safeParse(validOutput({ eventNotes: [] })).success).toBe(true);
+  it("rejects an empty executiveSummary", () => {
+    expect(dailyOperationsBriefModelOutputSchema.safeParse(validOutput({ executiveSummary: "" })).success).toBe(false);
   });
 
-  it("rejects an empty overview", () => {
-    expect(dailyOperationsBriefModelOutputSchema.safeParse(validOutput({ overview: "" })).success).toBe(false);
+  it("requires at least one priority", () => {
+    expect(dailyOperationsBriefModelOutputSchema.safeParse(validOutput({ todaysPriorities: [] })).success).toBe(false);
   });
 
-  it("rejects zero top priorities", () => {
-    expect(dailyOperationsBriefModelOutputSchema.safeParse(validOutput({ topPriorities: [] })).success).toBe(false);
+  it("rejects more than 7 priorities", () => {
+    expect(dailyOperationsBriefModelOutputSchema.safeParse(validOutput({ todaysPriorities: Array(8).fill("x") })).success).toBe(false);
   });
 
-  it("rejects more than 5 top priorities", () => {
-    const result = dailyOperationsBriefModelOutputSchema.safeParse(validOutput({ topPriorities: ["1", "2", "3", "4", "5", "6"] }));
-    expect(result.success).toBe(false);
+  it("rejects more than 20 risk explanations", () => {
+    const riskExplanations = Array.from({ length: 21 }, (_, i) => ({ eventId: `event_${i}`, explanation: "x" }));
+    expect(dailyOperationsBriefModelOutputSchema.safeParse(validOutput({ riskExplanations })).success).toBe(false);
   });
 
-  it("rejects more than 15 event notes", () => {
-    const note = { eventId: "event_1", note: "x" };
-    const result = dailyOperationsBriefModelOutputSchema.safeParse(validOutput({ eventNotes: Array(16).fill(note) }));
-    expect(result.success).toBe(false);
+  it("rejects a suggestedAction with an invalid targetType", () => {
+    const suggestedActions = [{ label: "Do it", reason: "because", targetType: "client", targetId: "c1" }];
+    expect(dailyOperationsBriefModelOutputSchema.safeParse(validOutput({ suggestedActions })).success).toBe(false);
   });
 
-  it("rejects a completely different shape", () => {
-    expect(dailyOperationsBriefModelOutputSchema.safeParse("free text response").success).toBe(false);
+  it("accepts a suggestedAction with a null targetType and null targetId", () => {
+    const suggestedActions = [{ label: "Do it", reason: "because", targetType: null, targetId: null }];
+    expect(dailyOperationsBriefModelOutputSchema.safeParse(validOutput({ suggestedActions })).success).toBe(true);
+  });
+
+  it("rejects more than 10 suggested actions", () => {
+    const suggestedActions = Array.from({ length: 11 }, () => ({ label: "x", reason: "x", targetType: null, targetId: null }));
+    expect(dailyOperationsBriefModelOutputSchema.safeParse(validOutput({ suggestedActions })).success).toBe(false);
+  });
+
+  it("rejects a missing field entirely", () => {
+    const { executiveSummary: _executiveSummary, ...withoutSummary } = validOutput();
+    expect(dailyOperationsBriefModelOutputSchema.safeParse(withoutSummary).success).toBe(false);
   });
 });

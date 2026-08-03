@@ -755,6 +755,7 @@ export interface Database {
           sort_order: number;
           source_event_service_id: string | null;
           template_snapshot: Json | null;
+          client_visible: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -776,6 +777,7 @@ export interface Database {
           sort_order?: number;
           source_event_service_id?: string | null;
           template_snapshot?: Json | null;
+          client_visible?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -797,6 +799,7 @@ export interface Database {
           sort_order?: number;
           source_event_service_id?: string | null;
           template_snapshot?: Json | null;
+          client_visible?: boolean;
           created_at?: string;
           updated_at?: string;
         };

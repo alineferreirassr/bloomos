@@ -7,9 +7,9 @@ import { getFullName } from "@/lib/personName";
 
 export function InvoiceListTable({ rows }: { rows: InvoiceListRow[] }) {
   return (
-    <div className="hidden overflow-x-auto rounded-md border border-border md:block">
+    <div className="hidden overflow-x-auto rounded-lg border border-border bg-surface shadow-sm md:block">
       <table className="w-full border-collapse text-left text-sm">
-        <thead>
+        <thead className="sticky top-0 z-[var(--z-index-dropdown)] bg-surface">
           <tr>
             {[
               "Invoice number",
@@ -26,7 +26,7 @@ export function InvoiceListTable({ rows }: { rows: InvoiceListRow[] }) {
             ].map((heading) => (
               <th
                 key={heading}
-                className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
+                className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
               >
                 {heading}
               </th>
@@ -35,7 +35,7 @@ export function InvoiceListTable({ rows }: { rows: InvoiceListRow[] }) {
         </thead>
         <tbody>
           {rows.map(({ invoice, client, event, contract, nextAction }) => (
-            <tr key={invoice.id} className="hover:bg-text/4">
+            <tr key={invoice.id} className="transition-colors duration-150 hover:bg-accent-100/40">
               <td className="border-b border-border px-2.5 py-2 whitespace-nowrap">
                 <Link href={`/finance/invoices/${invoice.id}`} className="font-medium text-text hover:text-accent">
                   {invoice.invoice_number}

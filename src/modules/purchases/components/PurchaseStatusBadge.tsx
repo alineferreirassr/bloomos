@@ -6,7 +6,7 @@ const STATUS_TONES: Record<PurchaseStatus, BadgeTone> = {
   submitted: "outline",
   partially_received: "warning",
   fully_received: "success",
-  cancelled: "danger",
+  cancelled: "neutral",
   archived: "neutral",
 };
 

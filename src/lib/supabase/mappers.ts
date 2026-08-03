@@ -394,6 +394,7 @@ export function mapChecklistItemRow(row: ChecklistItemRow): ChecklistItem {
     sort_order: row.sort_order,
     source_event_service_id: row.source_event_service_id,
     template_snapshot: row.template_snapshot as unknown as ChecklistItem["template_snapshot"],
+    client_visible: row.client_visible,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -461,6 +462,22 @@ export function mapMediaAssetRow(row: MediaAssetRow): MediaAsset {
     created_at: row.created_at,
     updated_at: row.updated_at,
     archived_at: row.archived_at,
+    // v2 Checkpoint 25 — additive DAM fields have no column in `media_assets`
+    // yet (no migration applied this session, same precedent as every other
+    // checkpoint's Supabase-mode gaps). Defaulted here so a real row read
+    // through Supabase still type-checks as a complete `MediaAsset`, exactly
+    // as it behaved before these fields existed.
+    folder_id: null,
+    tags: [],
+    color_label: null,
+    priority: null,
+    ai_ready: false,
+    status: "pending",
+    approved_by: null,
+    approved_at: null,
+    rejection_reason: null,
+    version_notes: null,
+    metadata: { pages: null, author: null, license: null, brand: null, colorProfile: null, cameraData: null, location: null, custom: {} },
   };
 }
 

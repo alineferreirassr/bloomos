@@ -24,7 +24,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
         type="button"
         aria-label="Close dialog"
         onClick={onClose}
-        className="absolute inset-0 bg-neutral-800/50"
+        className="animate-fade-in absolute inset-0 bg-neutral-800/50"
       />
       <div
         ref={dialogRef}
@@ -32,7 +32,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="relative flex w-full max-w-[440px] flex-col gap-3.5 rounded-lg border border-border bg-surface p-4 shadow-md focus:outline-none"
+        className="animate-modal-in relative flex w-full max-w-[440px] flex-col gap-3.5 rounded-lg border border-border bg-surface p-4 shadow-md focus:outline-none"
       >
         <div className="flex items-start justify-between gap-4">
           <h2 className="font-serif text-xl font-semibold text-text">{title}</h2>

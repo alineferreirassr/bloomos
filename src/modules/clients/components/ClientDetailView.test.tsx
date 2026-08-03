@@ -24,6 +24,16 @@ function renderClientDetail(clientId: string) {
   );
 }
 
+vi.mock("@/modules/communication/timeline/components/EntityTimelinePanel", () => ({ EntityTimelinePanel: () => null }));
+vi.mock("@/modules/communication/comments/components/CommentsPanel", () => ({ CommentsPanel: () => null }));
+// v2.0 Checkpoint 32 — ClientJourneySummaryCard calls this "use server" action; mocked here the same way every other server-action dependency of this component already is, so the real module (and its own lib/data import chain) never loads under jsdom.
+vi.mock("@/modules/clientJourney/clientJourneyActions", () => ({ evaluateClientJourneyAction: vi.fn().mockResolvedValue({ success: false, error: "not available in this test" }) }));
+// v2 Checkpoint 44, Step 14 — DocumentBundlesSection calls these "use server" actions; mocked the same way clientJourneyActions is above, so the real module (and its own lib/data import chain) never loads under jsdom.
+vi.mock("@/modules/documentTemplates/documentBundleActions", () => ({
+  listDocumentBundlesForClientAction: vi.fn().mockResolvedValue({ success: true, data: [] }),
+  createDocumentBundleAction: vi.fn().mockResolvedValue({ success: false, error: "not available in this test" }),
+}));
+
 vi.mock("@/lib/data", () => ({
   getClientById: vi.fn(),
   getNotesByClientId: vi.fn(),

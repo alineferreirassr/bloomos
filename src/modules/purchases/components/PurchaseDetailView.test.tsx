@@ -33,6 +33,10 @@ vi.mock("@/lib/data", () => ({
   deleteMediaAsset: vi.fn(),
   restoreMediaAsset: vi.fn(),
   getVendorById: vi.fn(),
+  // PurchaseAssignedEventsCard (Checkpoint 21, Step 8) reads these directly.
+  getEvents: vi.fn(),
+  listEventServicesByEvent: vi.fn(),
+  listEventServicePurchaseRequirements: vi.fn(),
 }));
 
 import * as dataLayer from "@/lib/data";
@@ -48,6 +52,7 @@ describe("PurchaseDetailView", () => {
     vi.mocked(dataLayer.getTimelineByPurchaseId).mockResolvedValue([]);
     vi.mocked(dataLayer.getMediaAssetsByOwner).mockResolvedValue([]);
     vi.mocked(dataLayer.getVendorById).mockResolvedValue(makeVendor({ id: "vendor-1", company_name: "Bloom & Stem Florals" }));
+    vi.mocked(dataLayer.getEvents).mockResolvedValue([]);
   });
 
   it("shows a not-found state for a missing purchase", async () => {

@@ -100,6 +100,14 @@ async function getClientAccountsByClientId(clientId: string): Promise<ClientAcco
   return getClientAccounts(clientId);
 }
 
+/** No workspace session required — the Public API's own API-Key-authenticated callers never have one. Filters directly by `workspace_id`, unlike `getClientAccounts()` above which resolves the Workspace from an internal member session. */
+async function getClientAccountsForWorkspace(workspaceId: string): Promise<ClientAccount[]> {
+  const supabase = createSupabaseClient();
+  const { data, error } = await supabase.from("client_accounts").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: false });
+  if (error) throw normalizeSupabaseError(error);
+  return (data ?? []).map(mapAccountRow);
+}
+
 /**
  * No workspace session required or expected — a Client Portal caller
  * never has one. RLS's "select own row" policy is what actually scopes
@@ -343,6 +351,7 @@ export const supabaseClientAccessRepository: ClientAccessRepository = {
   getClientAccounts,
   getClientAccountById,
   getClientAccountsByClientId,
+  getClientAccountsForWorkspace,
   getCurrentClientAccount,
   getCurrentClientAccountContext,
   activateClientAccount,

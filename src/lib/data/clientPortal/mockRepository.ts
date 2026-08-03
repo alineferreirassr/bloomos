@@ -22,7 +22,10 @@ import { readInvoices } from "@/lib/data/mock/invoicesStore";
 import { readPayments } from "@/lib/data/mock/paymentsStore";
 import { readDocuments } from "@/lib/data/mock/documentsStore";
 import { mockClientAccessRepository } from "@/lib/data/clientAccess/mockRepository";
+import { getClientDocumentApproval } from "@/lib/data/clientPortal/clientDocumentApprovalStore";
+import { aggregateClientPortalTimeline } from "@/lib/data/clientPortal/timelineAggregator";
 import type { ClientPortalRepository } from "@/lib/data/clientPortal/repository";
+import type { ClientPortalTimelineEntry } from "@/types/clientPortalTimeline";
 import { getFullName } from "@/lib/personName";
 
 /** Mock mode has no real per-session identity — the seeded current client account (see clientAccountsStore.ts) stands in for "the signed-in client," the same precedent as MOCK_CURRENT_MEMBER_ID/MOCK_CURRENT_CLIENT_ACCOUNT_ID. */
@@ -30,6 +33,13 @@ async function currentClientId(): Promise<string> {
   const account = await mockClientAccessRepository.getCurrentClientAccount();
   if (!account) throw new NotFoundError("No active client account.");
   return account.client_id;
+}
+
+/** The signed-in client's own account id — distinct from `currentClientId()`'s CRM `client_id` — needed for anything scoped to the *account* (Activity, Approvals, Messages, Notifications), not the underlying Client record. */
+async function currentClientAccountId(): Promise<string> {
+  const account = await mockClientAccessRepository.getCurrentClientAccount();
+  if (!account) throw new NotFoundError("No active client account.");
+  return account.id;
 }
 
 function toClientPortalEvent(e: Event): ClientPortalEvent {
@@ -125,7 +135,8 @@ function toClientPortalPayment(p: Payment): ClientPortalPayment {
   };
 }
 
-function toClientPortalDocument(d: Document): ClientPortalDocument {
+function toClientPortalDocument(d: Document, clientAccountId: string): ClientPortalDocument {
+  const approval = getClientDocumentApproval(d.id, clientAccountId);
   return {
     id: d.id,
     title: d.title,
@@ -143,6 +154,8 @@ function toClientPortalDocument(d: Document): ClientPortalDocument {
     expires_at: d.expires_at,
     created_at: d.created_at,
     updated_at: d.updated_at,
+    approvalStatus: approval?.status ?? "pending",
+    approvalComment: approval?.comment ?? null,
   };
 }
 
@@ -210,17 +223,19 @@ async function getClientPortalInvoiceById(id: string): Promise<ClientPortalInvoi
 
 async function getClientPortalDocuments(): Promise<ClientPortalDocument[]> {
   const clientId = await currentClientId();
+  const clientAccountId = await currentClientAccountId();
   return [...readDocuments()]
     .filter((d) => isClientVisibleDocument(d, clientId))
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .map(toClientPortalDocument);
+    .map((d) => toClientPortalDocument(d, clientAccountId));
 }
 
 async function getClientPortalDocumentById(id: string): Promise<ClientPortalDocument> {
   const clientId = await currentClientId();
+  const clientAccountId = await currentClientAccountId();
   const document = readDocuments().find((d) => d.id === id && isClientVisibleDocument(d, clientId));
   if (!document) throw new NotFoundError(`Document ${id} was not found`);
-  return toClientPortalDocument(document);
+  return toClientPortalDocument(document, clientAccountId);
 }
 
 /** Mock mode has no real Storage — returns a clearly-fake placeholder URL, mirroring the existing Media Library mock repository's own "mock mode never has real signed URLs" precedent. */
@@ -234,6 +249,7 @@ async function getClientPortalDocumentDownloadUrl(id: string): Promise<DataResul
 
 async function getClientPortalOverview(): Promise<ClientPortalOverview> {
   const clientId = await currentClientId();
+  const clientAccountId = await currentClientAccountId();
   const client = readClients().find((c) => c.id === clientId);
   const events = readEvents().filter((e) => e.client_id === clientId && !e.archived_at);
   const contracts = readContracts().filter((c) => c.client_id === clientId && c.status !== "archived");
@@ -257,7 +273,7 @@ async function getClientPortalOverview(): Promise<ClientPortalOverview> {
   const recentDocuments = [...documents]
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .slice(0, 5)
-    .map(toClientPortalDocument);
+    .map((d) => toClientPortalDocument(d, clientAccountId));
 
   let nextRecommendedAction: string | null = null;
   if (nextDue) {
@@ -280,6 +296,48 @@ async function getClientPortalOverview(): Promise<ClientPortalOverview> {
   };
 }
 
+async function getClientPortalTimeline(): Promise<ClientPortalTimelineEntry[]> {
+  const account = await mockClientAccessRepository.getCurrentClientAccount();
+  if (!account) throw new NotFoundError("No active client account.");
+
+  const [events, contracts, invoices, documents] = await Promise.all([
+    getClientPortalEvents(),
+    getClientPortalContracts(),
+    getClientPortalInvoices(),
+    getClientPortalDocuments(),
+  ]);
+  const invoicesWithPayments = await Promise.all(invoices.map((invoice) => getClientPortalInvoiceById(invoice.id)));
+
+  return aggregateClientPortalTimeline({ workspaceId: account.workspace_id, events, contracts, invoicesWithPayments, documents });
+}
+
+/**
+ * Checkpoint 16, Step 9 — the Public API's own entry point into the same
+ * Timeline aggregate, for an explicit `clientAccountId` rather than "the
+ * current session's" account. Reuses every mapper this file already
+ * defines (`toClientPortalEvent` etc.) and the same `aggregateClientPortalTimeline`
+ * — only the account resolution differs. Rejects an account from a
+ * different Workspace as not-found, never distinguishing "wrong workspace"
+ * from "doesn't exist" (same boundary-leak rule `getClientPortalDocumentById`
+ * already follows for cross-client documents).
+ */
+export async function getClientPortalTimelineForAccount(workspaceId: string, clientAccountId: string): Promise<ClientPortalTimelineEntry[]> {
+  const account = await mockClientAccessRepository.getClientAccountById(clientAccountId);
+  if (account.workspace_id !== workspaceId) throw new NotFoundError(`Client account ${clientAccountId} was not found`);
+  const clientId = account.client_id;
+
+  const events = readEvents().filter((e) => e.client_id === clientId && !e.archived_at).map(toClientPortalEvent);
+  const contracts = readContracts().filter((c) => c.client_id === clientId && c.status !== "archived").map(toClientPortalContract);
+  const rawInvoices = readInvoices().filter((i) => i.client_id === clientId && !i.archived_at && !i.voided_at);
+  const invoicesWithPayments = rawInvoices.map((invoice) => ({
+    ...toClientPortalInvoice(invoice),
+    payments: readPayments().filter((p) => p.invoice_id === invoice.id && p.client_id === clientId).map(toClientPortalPayment),
+  }));
+  const documents = [...readDocuments()].filter((d) => isClientVisibleDocument(d, clientId)).map((d) => toClientPortalDocument(d, clientAccountId));
+
+  return aggregateClientPortalTimeline({ workspaceId, events, contracts, invoicesWithPayments, documents });
+}
+
 export const mockClientPortalRepository: ClientPortalRepository = {
   getClientPortalOverview,
   getClientPortalEvents,
@@ -291,4 +349,5 @@ export const mockClientPortalRepository: ClientPortalRepository = {
   getClientPortalDocuments,
   getClientPortalDocumentById,
   getClientPortalDocumentDownloadUrl,
+  getClientPortalTimeline,
 };

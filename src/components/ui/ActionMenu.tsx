@@ -55,7 +55,7 @@ export function ActionMenu({ actions }: { actions: ActionMenuAction[] }): ReactN
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-10 mt-1 w-48 rounded-md border border-border bg-surface py-1 shadow-md"
+          className="bloom-elevation-popover absolute right-0 z-10 mt-1 w-48 rounded-md border border-border bg-surface py-1"
         >
           {actions.map((action) => (
             <button

@@ -10,25 +10,25 @@ interface ClientListTableProps {
 
 export function ClientListTable({ clients, nextActionByClientId }: ClientListTableProps) {
   return (
-    <div className="hidden overflow-x-auto rounded-md border border-border md:block">
+    <div className="hidden overflow-x-auto rounded-lg border border-border bg-surface shadow-sm md:block">
       <table className="w-full border-collapse text-left text-sm">
-        <thead>
+        <thead className="sticky top-0 z-[var(--z-index-dropdown)] bg-surface">
           <tr>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Name</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Partner</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Email</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Phone</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Status</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">VIP</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Tags</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Source</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Created</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Next action</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Name</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Partner</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Email</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Phone</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Status</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">VIP</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Tags</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Source</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Created</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Next action</th>
           </tr>
         </thead>
         <tbody>
           {clients.map((client) => (
-            <tr key={client.id} className="hover:bg-text/4">
+            <tr key={client.id} className="transition-colors duration-150 hover:bg-accent-100/40">
               <td className="border-b border-border px-2.5 py-2">
                 <Link
                   href={`/clients/${client.id}`}

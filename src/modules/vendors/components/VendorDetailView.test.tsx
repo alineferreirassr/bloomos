@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { VendorDetailView } from "@/modules/vendors/components/VendorDetailView";
 import { makeVendor } from "@/modules/vendors/testUtils";
 import { makeInventoryItem } from "@/modules/inventory/testUtils";
+import { makePurchase } from "@/modules/purchases/testUtils";
 import { NotFoundError } from "@/core/errors";
 
 vi.mock("@/lib/data", () => ({
@@ -20,6 +21,11 @@ vi.mock("@/lib/data", () => ({
   deleteMediaAsset: vi.fn(),
   restoreMediaAsset: vi.fn(),
   listInventoryItems: vi.fn(),
+  // VendorOperationsCard (Checkpoint 21, Step 7) reads these directly.
+  getEvents: vi.fn(),
+  listEventServicesByEvent: vi.fn(),
+  listEventServiceVendorAssignments: vi.fn(),
+  getPurchasesByVendorId: vi.fn(),
 }));
 
 import * as dataLayer from "@/lib/data";
@@ -59,18 +65,19 @@ describe("VendorDetailView", () => {
     expect(await screen.findByText(/could not be found/i)).toBeInTheDocument();
   });
 
-  it("never references Purchases or Media (Inventory integration is intentional; Purchases doesn't exist yet)", async () => {
+  it("shows real Purchase History via VendorOperationsCard (Checkpoint 21, Step 7 — Purchases now exists and this integration is intentional)", async () => {
     vi.mocked(dataLayer.getVendorById).mockResolvedValue(makeVendor());
     vi.mocked(dataLayer.getTimelineByVendorId).mockResolvedValue([]);
     vi.mocked(dataLayer.getNotesByVendorId).mockResolvedValue([]);
     vi.mocked(dataLayer.getMediaAssetsByOwner).mockResolvedValue([]);
     vi.mocked(dataLayer.listInventoryItems).mockResolvedValue([]);
+    vi.mocked(dataLayer.getEvents).mockResolvedValue([]);
+    vi.mocked(dataLayer.getPurchasesByVendorId).mockResolvedValue([makePurchase({ id: "po_1", purchase_number: "PO-2026-0042" })]);
 
     render(<VendorDetailView vendorId="vendor_1" />);
 
     await screen.findByRole("heading", { name: "Test Vendor Co" });
-    expect(screen.queryByText(/purchase/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/\bmedia\b/i)).not.toBeInTheDocument();
+    expect(await screen.findByText("PO-2026-0042")).toBeInTheDocument();
   });
 
   it("includes a Timeline section that renders Vendor activity", async () => {
@@ -180,6 +187,17 @@ describe("VendorDetailView", () => {
         created_at: "2026-01-01T12:00:00.000Z",
         updated_at: "2026-01-01T12:00:00.000Z",
         archived_at: null,
+        folder_id: null,
+        tags: [],
+        color_label: null,
+        priority: null,
+        ai_ready: false,
+        status: "pending",
+        approved_by: null,
+        approved_at: null,
+        rejection_reason: null,
+        version_notes: null,
+        metadata: { pages: null, author: null, license: null, brand: null, colorProfile: null, cameraData: null, location: null, custom: {} },
       },
     ]);
 

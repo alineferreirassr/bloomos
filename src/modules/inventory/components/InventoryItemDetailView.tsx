@@ -21,6 +21,7 @@ import { InventoryMovementHistorySection } from "@/modules/inventory/components/
 import { InventoryItemVendorSection } from "@/modules/inventory/components/InventoryItemVendorSection";
 import { formatInventoryDate } from "@/modules/inventory/mappers";
 import { isInventoryItemLowStock } from "@/modules/inventory/inventoryStats";
+import { BloomAvatar } from "@/components/ui/BloomAvatar";
 
 type LoadState = { status: "loading" } | { status: "not-found" } | { status: "error" } | { status: "ready"; item: InventoryItem };
 
@@ -79,9 +80,7 @@ export function InventoryItemDetailView({ inventoryItemId }: { inventoryItemId: 
     <div className="space-y-6">
       <div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent/10 text-sm font-semibold text-accent">
-            {item.name[0]}
-          </div>
+          <BloomAvatar name={item.name} />
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-3xl font-semibold text-text">{item.name}</h2>

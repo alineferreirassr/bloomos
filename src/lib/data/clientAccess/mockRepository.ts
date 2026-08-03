@@ -57,6 +57,11 @@ async function getClientAccountsByClientId(clientId: string): Promise<ClientAcco
   return getClientAccounts(clientId);
 }
 
+async function getClientAccountsForWorkspace(workspaceId: string): Promise<ClientAccount[]> {
+  await delay(150);
+  return readClientAccounts().filter((a) => a.workspace_id === workspaceId);
+}
+
 /** Mock mode has no real Client Portal authentication — the seeded active account stands in for "the current user," the same precedent as getCurrentWorkspaceMember(). */
 async function getCurrentClientAccount(): Promise<ClientAccount | null> {
   return readClientAccounts().find((a) => a.id === MOCK_CURRENT_CLIENT_ACCOUNT_ID) ?? null;
@@ -338,6 +343,7 @@ export const mockClientAccessRepository: ClientAccessRepository = {
   getClientAccounts,
   getClientAccountById,
   getClientAccountsByClientId,
+  getClientAccountsForWorkspace,
   getCurrentClientAccount,
   getCurrentClientAccountContext,
   activateClientAccount,

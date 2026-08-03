@@ -7,7 +7,7 @@ describe("WorkspaceAvatar", () => {
     render(<WorkspaceAvatar />);
 
     const img = screen.getByRole("img", { name: "Amoré Bloom" });
-    expect(img).toHaveAttribute("src", expect.stringContaining("amore-bloom-logo.png"));
+    expect(img).toHaveAttribute("src", expect.stringContaining("amore-bloom-app-logo.png"));
     expect(screen.queryByText("AB")).not.toBeInTheDocument();
   });
 

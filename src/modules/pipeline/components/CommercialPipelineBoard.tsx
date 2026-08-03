@@ -14,6 +14,7 @@ import {
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 import { getLeads, updateLeadStatus, archiveLead } from "@/lib/data";
 import type { Lead } from "@/types/lead";
@@ -180,10 +181,10 @@ export function CommercialPipelineBoard() {
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      <div>
-        <h1 className="font-serif text-xl font-semibold text-text">Commercial Pipeline</h1>
-        <p className="text-sm text-text-muted">Leads move through this board — Booking creates a Client and Event.</p>
-      </div>
+      <PageHeader
+        title="Commercial Pipeline"
+        subtitle="Leads move through this board — Booking creates a Client and Event."
+      />
 
       {pendingRecovery ? (
         <PendingRecoveryAlert notice={pendingRecovery} onDismiss={() => setPendingRecovery(null)} />
@@ -218,12 +219,13 @@ export function CommercialPipelineBoard() {
           <div className="hidden md:block" data-testid="commercial-pipeline-desktop">
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <div className="flex gap-3 overflow-x-auto pb-2">
-                {COMMERCIAL_COLUMNS.map((column) => (
+                {COMMERCIAL_COLUMNS.map((column, index) => (
                   <CommercialPipelineColumn
                     key={column.id}
                     column={column}
                     leads={columns[column.id]}
                     buildActions={buildActionsFor}
+                    className={`animate-fade-up stagger-${Math.min(index, 6)}`}
                   />
                 ))}
               </div>

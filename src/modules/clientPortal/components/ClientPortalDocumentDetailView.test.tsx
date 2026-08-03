@@ -6,6 +6,15 @@ import { NotFoundError } from "@/core/errors";
 vi.mock("@/lib/data", () => ({
   getClientPortalDocumentById: vi.fn(),
   getClientPortalDocumentDownloadUrl: vi.fn(),
+  approveClientPortalDocument: vi.fn(),
+  rejectClientPortalDocument: vi.fn(),
+  logClientPortalActivityForCurrentSession: vi.fn(),
+}));
+vi.mock("@/modules/clientPortal/dispatchClientPortalTriggerActions", () => ({
+  dispatchDocumentDownloadedTrigger: vi.fn(),
+}));
+vi.mock("@/components/providers/ClientAccountSessionProvider", () => ({
+  useClientAccountSession: () => ({ workspaceId: "ws_1", clientId: "client_1", accountId: "account_1" }),
 }));
 
 afterEach(() => {
@@ -13,7 +22,8 @@ afterEach(() => {
 });
 
 import { ClientPortalDocumentDetailView } from "@/modules/clientPortal/components/ClientPortalDocumentDetailView";
-import { getClientPortalDocumentById, getClientPortalDocumentDownloadUrl } from "@/lib/data";
+import { getClientPortalDocumentById, getClientPortalDocumentDownloadUrl, approveClientPortalDocument, rejectClientPortalDocument } from "@/lib/data";
+import { dispatchDocumentDownloadedTrigger } from "@/modules/clientPortal/dispatchClientPortalTriggerActions";
 
 const DOCUMENT = {
   id: "doc_1",
@@ -32,6 +42,8 @@ const DOCUMENT = {
   expires_at: null,
   created_at: "2026-01-01T00:00:00.000Z",
   updated_at: "2026-01-01T00:00:00.000Z",
+  approvalStatus: "pending" as const,
+  approvalComment: null,
 };
 
 describe("ClientPortalDocumentDetailView", () => {
@@ -84,6 +96,18 @@ describe("ClientPortalDocumentDetailView", () => {
     );
   });
 
+  it("Step 10: dispatches the document.downloaded Workflow Trigger only after a successful download, never on failure", async () => {
+    vi.mocked(getClientPortalDocumentById).mockResolvedValue(DOCUMENT as never);
+    vi.mocked(getClientPortalDocumentDownloadUrl).mockResolvedValue({ success: true, data: "https://storage.example.com/signed/contract.pdf" } as never);
+    vi.spyOn(window, "open").mockImplementation(() => null);
+
+    render(<ClientPortalDocumentDetailView documentId="doc_1" />);
+    await waitFor(() => expect(screen.getByRole("button", { name: /download/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /download/i }));
+
+    await waitFor(() => expect(dispatchDocumentDownloadedTrigger).toHaveBeenCalledWith("doc_1"));
+  });
+
   it("surfaces the repository's failure message instead of opening a window when the download is rejected", async () => {
     vi.mocked(getClientPortalDocumentById).mockResolvedValue(DOCUMENT as never);
     vi.mocked(getClientPortalDocumentDownloadUrl).mockResolvedValue({
@@ -98,5 +122,28 @@ describe("ClientPortalDocumentDetailView", () => {
 
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("This document is not available."));
     expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it("Step 4: approving records a real decision, reflected immediately without a page reload", async () => {
+    vi.mocked(getClientPortalDocumentById).mockResolvedValue(DOCUMENT as never);
+    vi.mocked(approveClientPortalDocument).mockResolvedValue({ success: true, data: { ...DOCUMENT, approvalStatus: "approved" } } as never);
+
+    render(<ClientPortalDocumentDetailView documentId="doc_1" />);
+    await waitFor(() => expect(screen.getByRole("button", { name: /approve/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /approve/i }));
+
+    await waitFor(() => expect(screen.getByText("Approved")).toBeInTheDocument());
+    expect(approveClientPortalDocument).toHaveBeenCalledWith("doc_1", null);
+  });
+
+  it("Step 4: rejecting surfaces the repository's own validation error (e.g. a missing comment) instead of silently succeeding", async () => {
+    vi.mocked(getClientPortalDocumentById).mockResolvedValue(DOCUMENT as never);
+    vi.mocked(rejectClientPortalDocument).mockResolvedValue({ success: false, error: "Let us know why, so we can follow up" } as never);
+
+    render(<ClientPortalDocumentDetailView documentId="doc_1" />);
+    await waitFor(() => expect(screen.getByRole("button", { name: /reject/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /reject/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Let us know why, so we can follow up"));
   });
 });

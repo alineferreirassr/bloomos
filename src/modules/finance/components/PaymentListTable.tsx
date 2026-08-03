@@ -9,15 +9,15 @@ import { getFullName } from "@/lib/personName";
 
 export function PaymentListTable({ rows }: { rows: PaymentListRow[] }) {
   return (
-    <div className="hidden overflow-x-auto rounded-md border border-border md:block">
+    <div className="hidden overflow-x-auto rounded-lg border border-border bg-surface shadow-sm md:block">
       <table className="w-full border-collapse text-left text-sm">
-        <thead>
+        <thead className="sticky top-0 z-[var(--z-index-dropdown)] bg-surface">
           <tr>
             {["Date", "Client", "Invoice", "Event", "Type", "Method", "Status", "Amount", "Reference"].map(
               (heading) => (
                 <th
                   key={heading}
-                  className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
+                  className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
                 >
                   {heading}
                 </th>
@@ -27,7 +27,7 @@ export function PaymentListTable({ rows }: { rows: PaymentListRow[] }) {
         </thead>
         <tbody>
           {rows.map(({ payment, client, event, invoice }) => (
-            <tr key={payment.id} className="hover:bg-text/4">
+            <tr key={payment.id} className="transition-colors duration-150 hover:bg-accent-100/40">
               <td className="border-b border-border px-2.5 py-2 whitespace-nowrap">
                 <Link href={`/finance/payments/${payment.id}`} className="font-medium text-text hover:text-accent">
                   {formatEventDate(payment.transaction_date)}

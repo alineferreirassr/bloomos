@@ -7,6 +7,9 @@ import { signOut } from "@/lib/auth/actions";
 import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { BloomAvatar } from "@/components/ui/BloomAvatar";
+import { BloomWelcomeBanner } from "@/components/ui/BloomWelcomeBanner";
+import { BloomSectionDivider } from "@/components/ui/BloomSectionDivider";
 import { WORKSPACE_MEMBER_ROLE_LABELS } from "@/core/enums/workspaceRole";
 import { WORKSPACE_MEMBER_STATUS_LABELS } from "@/core/enums/workspaceMemberStatus";
 
@@ -39,18 +42,18 @@ export function AccountView() {
   };
 
   const displayName = session.profile?.full_name ?? session.user?.email ?? "";
-  const initials = displayName.trim().charAt(0).toUpperCase() || "?";
+  const firstName = session.profile?.full_name?.trim().split(/\s+/)[0];
 
   return (
     <div>
-      <h2 className="text-3xl font-semibold text-text">Account</h2>
-      <p className="mt-1 text-sm text-text-muted">Your profile and Workspace membership.</p>
+      <BloomWelcomeBanner
+        title={firstName ? `Welcome back, ${firstName}` : "Your Account"}
+        subtitle="Your profile and Workspace membership."
+      />
 
       <Card className="mt-6 max-w-md">
         <div className="flex items-center gap-3 border-b border-border pb-3.5">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent/10 font-serif text-lg font-semibold text-accent">
-            {initials}
-          </div>
+          <BloomAvatar name={displayName || "?"} />
           <div className="min-w-0">
             <div className="truncate font-serif text-base font-semibold text-text">
               {session.profile?.full_name ?? "—"}
@@ -86,6 +89,8 @@ export function AccountView() {
             {error}
           </div>
         ) : null}
+
+        <BloomSectionDivider className="mt-3.5" />
 
         <div className="mt-3.5 flex flex-col gap-2">
           <Link href="/update-password" className="text-center text-xs text-accent hover:underline">

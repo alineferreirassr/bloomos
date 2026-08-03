@@ -53,7 +53,7 @@ describe("CommercialPipelineBoard", () => {
         <CommercialPipelineBoard />
       </MemberSessionProvider>,
     );
-    expect(container.querySelectorAll(".animate-pulse").length).toBeGreaterThan(0);
+    expect(container.querySelectorAll(".luxury-shimmer").length).toBeGreaterThan(0);
   });
 
   it("shows an error state with retry when getLeads rejects", async () => {

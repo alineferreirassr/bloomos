@@ -10,6 +10,17 @@ import { resolveRouteProtectionDecision } from "@/lib/middleware/routeProtection
  * requires credentials or a login.
  */
 export async function middleware(request: NextRequest) {
+  // Checkpoint 16 — the Public API (`/api/v1/*`) authenticates via its own
+  // API Key scheme (`core/api/auth.ts`), never a member's Supabase auth
+  // cookie. Refreshing that cookie here would be wasted work (and touches
+  // cookies) for a stateless, API-key-authenticated request that never
+  // has one — `/api/health` already made `/api` implicitly unprotected
+  // via `routeProtection.ts`'s own prefix list, this just also skips the
+  // Supabase session-refresh call itself, not only the redirect decision.
+  if (request.nextUrl.pathname.startsWith("/api/")) {
+    return NextResponse.next();
+  }
+
   const dataMode = getDataMode();
 
   if (dataMode !== "supabase") {

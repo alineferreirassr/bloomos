@@ -5,7 +5,13 @@ vi.mock("@/lib/auth/actions", () => ({
   signOut: vi.fn(),
 }));
 
-let currentPathname = "/client-access";
+// Checkpoint 19 — `/client-access` itself (only) now renders bare, its own
+// full-page Luxury Client Dashboard shell taking over entirely (see
+// `LUXURY_CLIENT_SHELL_ROUTES` in ClientPortalShell.tsx). Every test below
+// that exercises this Classical top-nav chrome uses a sibling route
+// instead — the exact same route this file's own "highlights the active
+// route" test already used before this checkpoint.
+let currentPathname = "/client-access/events";
 const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
@@ -14,12 +20,25 @@ vi.mock("next/navigation", () => ({
 
 afterEach(() => {
   vi.clearAllMocks();
-  currentPathname = "/client-access";
+  currentPathname = "/client-access/events";
 });
 
 import { ClientPortalShell } from "@/components/layout/ClientPortalShell";
 
 describe("ClientPortalShell", () => {
+  it("renders bare (no Classical chrome) for /client-access — the Luxury Client Dashboard owns that route's own shell", () => {
+    currentPathname = "/client-access";
+    render(
+      <ClientPortalShell>
+        <div>Luxury dashboard content</div>
+      </ClientPortalShell>,
+    );
+
+    expect(screen.getByText("Luxury dashboard content")).toBeInTheDocument();
+    expect(screen.queryByText("Client Portal")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open navigation menu" })).not.toBeInTheDocument();
+  });
+
   it("renders Client Portal branding and every nav item, never internal Team Portal navigation", () => {
     render(
       <ClientPortalShell>

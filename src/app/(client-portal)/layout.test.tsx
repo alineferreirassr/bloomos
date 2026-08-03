@@ -9,9 +9,14 @@ vi.mock("@/lib/auth/actions", () => ({
 }));
 
 const pushMock = vi.fn();
+// Checkpoint 19 — `/client-access` itself now renders bare inside
+// `ClientPortalShell` (its own Luxury Dashboard shell takes over); this
+// file's own "renders children inside the Client Portal shell" test wants
+// the Classical top-nav chrome, so it uses a sibling route — the shell's
+// own bare-vs-chrome branching is covered directly in ClientPortalShell.test.tsx.
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
-  usePathname: () => "/client-access",
+  usePathname: () => "/client-access/events",
 }));
 
 afterEach(() => {

@@ -43,7 +43,22 @@ describe("ClientPortalInvoicesListView", () => {
     vi.mocked(getClientPortalInvoices).mockResolvedValue([INVOICE] as never);
     render(<ClientPortalInvoicesListView />);
     await waitFor(() => expect(screen.getByText("Deposit Invoice")).toBeInTheDocument());
-    expect(screen.getByText(/INV-1001/)).toBeInTheDocument();
+    // Appears twice — once in the new Upcoming Payments section (Step 5), once in the full list below it.
+    expect(screen.getAllByText(/INV-1001/).length).toBeGreaterThan(0);
+  });
+
+  it("Step 5: lists an outstanding, due invoice under its own Upcoming Payments section", async () => {
+    vi.mocked(getClientPortalInvoices).mockResolvedValue([INVOICE] as never);
+    render(<ClientPortalInvoicesListView />);
+    await waitFor(() => expect(screen.getByText("Upcoming Payments")).toBeInTheDocument());
+    expect(screen.getByText("$3,000.00")).toBeInTheDocument();
+  });
+
+  it("Step 5: omits the Upcoming Payments section entirely when nothing is outstanding", async () => {
+    vi.mocked(getClientPortalInvoices).mockResolvedValue([{ ...INVOICE, balance_minor: 0 }] as never);
+    render(<ClientPortalInvoicesListView />);
+    await waitFor(() => expect(screen.getByText("Deposit Invoice")).toBeInTheDocument());
+    expect(screen.queryByText("Upcoming Payments")).not.toBeInTheDocument();
   });
 
   it("shows an empty state when there are no invoices", async () => {

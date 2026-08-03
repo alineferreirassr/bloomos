@@ -3,6 +3,8 @@ import type { EntityType } from "@/core/enums/entityType";
 import { CURRENT_ACTOR } from "@/core/constants/actor";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 import { generateId, nowIso } from "@/lib/data/utils";
+import { dispatchAutomationTrigger } from "@/core/automation/resolver";
+import { getLogger } from "@/core/observability/logger";
 
 const SEED_ACTIVITIES: TimelineActivity[] = [
   {
@@ -428,5 +430,29 @@ export function recordTimelineActivity(
     ...(metadata ? { metadata } : {}),
   };
   writeActivities([...readActivities(), activity]);
+
+  // v2.0 Checkpoint 39 — the generic "Timeline Event" Workflow Trigger
+  // (`trigger.timeline-event`, `types/automation.ts`'s own
+  // `"timeline_event"` AutomationTriggerType) fires from here, the one
+  // real place every module's own Timeline write already passes through —
+  // not from ~15 separately-wired call sites. `activityType` is the exact
+  // generic condition field name the Compiler auto-injects
+  // (`core/workflow/compiler.ts`'s own `activityTypeCondition`) and the
+  // Condition Engine already reads generically from `trigger.facts`
+  // (`core/automation/conditions.ts`), so this one dispatch call is what
+  // makes every current and future Timeline activity type usable as a
+  // Workflow Trigger with zero further engine changes. Never lets a
+  // dispatch failure surface as a Timeline write failure.
+  dispatchAutomationTrigger(
+    {
+      type: "timeline_event",
+      workspaceId,
+      occurredAt: activity.timestamp,
+      actorMemberId: null,
+      facts: { activityType: type, ownerType, ownerId, description },
+    },
+    { workspaceName: null, userId: null, userName: null, role: null, permissions: [] },
+  ).catch((error: unknown) => getLogger().error("timeline_event trigger dispatch failed", { workspaceId, type, error: error instanceof Error ? error.message : "Unknown error" }));
+
   return activity;
 }

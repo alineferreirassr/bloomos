@@ -8,9 +8,9 @@ import { getFullName } from "@/lib/personName";
 
 export function ContractListTable({ rows }: { rows: ContractListRow[] }) {
   return (
-    <div className="hidden overflow-x-auto rounded-md border border-border md:block">
+    <div className="hidden overflow-x-auto rounded-lg border border-border bg-surface shadow-sm md:block">
       <table className="w-full border-collapse text-left text-sm">
-        <thead>
+        <thead className="sticky top-0 z-[var(--z-index-dropdown)] bg-surface">
           <tr>
             {[
               "Contract number",
@@ -29,7 +29,7 @@ export function ContractListTable({ rows }: { rows: ContractListRow[] }) {
             ].map((heading) => (
               <th
                 key={heading}
-                className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
+                className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
               >
                 {heading}
               </th>
@@ -38,7 +38,7 @@ export function ContractListTable({ rows }: { rows: ContractListRow[] }) {
         </thead>
         <tbody>
           {rows.map(({ contract, client, event, nextAction }) => (
-            <tr key={contract.id} className="hover:bg-text/4">
+            <tr key={contract.id} className="transition-colors duration-150 hover:bg-accent-100/40">
               <td className="border-b border-border px-2.5 py-2 whitespace-nowrap">
                 <Link href={`/contracts/${contract.id}`} className="font-medium text-text hover:text-accent">
                   {contract.contract_number}

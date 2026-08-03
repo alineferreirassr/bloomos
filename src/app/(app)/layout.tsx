@@ -5,6 +5,10 @@ import { AccessBlockedPage } from "@/components/layout/AccessBlockedPage";
 import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+import { CopilotProvider } from "@/modules/ai/copilot/CopilotProvider";
+import { CopilotPageContextProvider } from "@/modules/ai/copilot/CopilotPageContextProvider";
+import { DeferredFloatingWidgets } from "@/components/providers/DeferredFloatingWidgets";
+import { GlobalCommandRegistrar } from "@/components/providers/GlobalCommandRegistrar";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const snapshot = await resolveMemberSessionSnapshot();
@@ -38,7 +42,13 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <QueryProvider>
       <MemberSessionProvider snapshot={snapshot}>
-        <AppShell workspaceDisplayName={snapshot.workspaceDisplayName}>{children}</AppShell>
+        <CopilotPageContextProvider>
+          <CopilotProvider>
+            <AppShell workspaceDisplayName={snapshot.workspaceDisplayName}>{children}</AppShell>
+            <DeferredFloatingWidgets workspaceId={snapshot.workspace.id} />{/* v2.0 Checkpoint 38 — CommandPalette existed since v2 Checkpoint 1 but was never mounted anywhere in production (confirmed via repo-wide import search); mounting it here gives every page in BloomOS a working mod+k, not just the new Workspace Home. Checkpoint 45A — code-split from the initial route bundle via next/dynamic(ssr:false), see DeferredFloatingWidgets. */}
+            <GlobalCommandRegistrar />{/* v2.0 Checkpoint 40 — registers every "Open X"/"Create X" navigation command globally, once, so they're findable from the Command Palette above on every route. */}
+          </CopilotProvider>
+        </CopilotPageContextProvider>
       </MemberSessionProvider>
     </QueryProvider>
   );

@@ -6,10 +6,12 @@ import type { EventServiceStatus } from "@/core/enums/eventServiceStatus";
  * One centralized status→tone mapping per domain status family, so
  * ServiceStatusBadge/EventServiceStatusBadge never duplicate this logic (or
  * drift out of sync with each other) the way a copy-pasted mapping in each
- * badge component would. No traffic-light red/yellow/green — tone is
- * expressed only through Badge's existing outline/accent/neutral/danger
- * vocabulary, and `danger` is reserved for a genuinely terminal, unwanted
- * state (cancelled), never for a normal step in a lifecycle.
+ * badge component would. Checkpoint 19.3 — Bloom Status Badge system:
+ * `cancelled` now maps to `neutral`, matching the convention every other
+ * *StatusBadge component in the app already uses for a lifecycle's own
+ * terminal-but-not-alarming state (see docs/bloom-design-language.md) —
+ * `danger` is reserved for something that actively needs attention right
+ * now (e.g. an overdue payment), not a step that already reached its end.
  */
 export const SERVICE_STATUS_TONES: Record<ServiceStatus, BadgeTone> = {
   draft: "neutral",
@@ -23,5 +25,5 @@ export const EVENT_SERVICE_STATUS_TONES: Record<EventServiceStatus, BadgeTone> =
   confirmed: "accent",
   in_progress: "accent",
   completed: "neutral",
-  cancelled: "danger",
+  cancelled: "neutral",
 };

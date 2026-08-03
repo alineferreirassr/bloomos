@@ -1,16 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getClientPortalInvoiceById } from "@/lib/data";
+import { getClientPortalInvoiceById, logClientPortalActivityForCurrentSession } from "@/lib/data";
+import { getClientPortalReceiptForInvoice } from "@/modules/clientPortal/getClientPortalReceiptAction";
+import { createClientPortalBalanceCheckoutAction, createClientPortalDepositCheckoutAction, getClientPortalInvoicePdfAction } from "@/modules/integrations/stripe/clientPortalPaymentActions";
 import type { ClientPortalInvoiceWithPayments } from "@/types/clientPortal";
 import { NotFoundError } from "@/core/errors";
 import { formatMoney } from "@/lib/money";
 import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { FormField } from "@/components/forms/FormField";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { InvoiceStatusBadge } from "@/modules/finance/components/InvoiceStatusBadge";
 import { PaymentStatusBadge } from "@/modules/finance/components/PaymentStatusBadge";
 import { PAYMENT_METHOD_LABELS } from "@/core/enums/paymentMethod";
+import { ClientPortalInvoiceDocumentSection } from "@/modules/clientPortal/components/ClientPortalInvoiceDocumentSection";
 
 type LoadState =
   | { status: "loading" }
@@ -20,6 +26,10 @@ type LoadState =
 
 export function ClientPortalInvoiceDetailView({ invoiceId }: { invoiceId: string }) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [receiptState, setReceiptState] = useState<{ loading: boolean; text: string | null; error: string | null }>({ loading: false, text: null, error: null });
+  const [depositAmount, setDepositAmount] = useState("");
+  const [payState, setPayState] = useState<{ busy: "deposit" | "balance" | null; error: string | null }>({ busy: null, error: null });
+  const [invoicePdfUrl, setInvoicePdfUrl] = useState<string | null>(null);
 
   const fetchInvoice = () =>
     getClientPortalInvoiceById(invoiceId)
@@ -28,8 +38,45 @@ export function ClientPortalInvoiceDetailView({ invoiceId }: { invoiceId: string
 
   useEffect(() => {
     fetchInvoice();
+    logClientPortalActivityForCurrentSession("invoice_viewed", invoiceId);
+    getClientPortalInvoicePdfAction(invoiceId).then((result) => {
+      if (result.success) setInvoicePdfUrl(result.url);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoiceId]);
+
+  async function handleViewReceipt() {
+    setReceiptState({ loading: true, text: null, error: null });
+    const result = await getClientPortalReceiptForInvoice(invoiceId);
+    if (!result.success) {
+      setReceiptState({ loading: false, text: null, error: result.error });
+      return;
+    }
+    setReceiptState({ loading: false, text: result.text ?? "No receipt has been generated for this invoice yet.", error: null });
+  }
+
+  async function handlePayDeposit() {
+    const amountMinor = Math.round(Number(depositAmount) * 100);
+    setPayState({ busy: "deposit", error: null });
+    const origin = window.location.origin;
+    const result = await createClientPortalDepositCheckoutAction(invoiceId, amountMinor, `${origin}${window.location.pathname}?payment=success`, `${origin}${window.location.pathname}?payment=cancelled`);
+    if (!result.success) {
+      setPayState({ busy: null, error: result.error });
+      return;
+    }
+    window.location.href = result.url;
+  }
+
+  async function handlePayBalance() {
+    setPayState({ busy: "balance", error: null });
+    const origin = window.location.origin;
+    const result = await createClientPortalBalanceCheckoutAction(invoiceId, `${origin}${window.location.pathname}?payment=success`, `${origin}${window.location.pathname}?payment=cancelled`);
+    if (!result.success) {
+      setPayState({ busy: null, error: result.error });
+      return;
+    }
+    window.location.href = result.url;
+  }
 
   if (state.status === "loading") return <Skeleton className="h-64 w-full" />;
   if (state.status === "not-found") return <ErrorState message="This invoice could not be found." />;
@@ -58,6 +105,31 @@ export function ClientPortalInvoiceDetailView({ invoiceId }: { invoiceId: string
         </dl>
       </Card>
 
+      {invoice.balance_minor > 0 ? (
+        <Card>
+          <h3 className="font-serif text-[15px] font-semibold text-text">Make a Payment</h3>
+          <p className="mt-1 text-xs text-text-muted">Securely pay through Stripe — your card details are never seen by BloomOS.</p>
+
+          {payState.error ? (
+            <p role="alert" className="mt-3 text-xs text-rose-700 dark:text-rose-300">
+              {payState.error}
+            </p>
+          ) : null}
+
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <FormField label={`Deposit amount (${invoice.currency.toUpperCase()})`} htmlFor="deposit-amount">
+              <Input id="deposit-amount" type="number" min="1" step="0.01" value={depositAmount} onChange={(event) => setDepositAmount(event.target.value)} placeholder="0.00" className="w-32" />
+            </FormField>
+            <Button type="button" variant="secondary" disabled={payState.busy !== null || !depositAmount} onClick={handlePayDeposit}>
+              {payState.busy === "deposit" ? "Redirecting…" : "Pay Deposit"}
+            </Button>
+            <Button type="button" disabled={payState.busy !== null} onClick={handlePayBalance}>
+              {payState.busy === "balance" ? "Redirecting…" : `Pay Remaining Balance (${formatMoney(invoice.balance_minor, invoice.currency)})`}
+            </Button>
+          </div>
+        </Card>
+      ) : null}
+
       <Card>
         <h3 className="font-serif text-[15px] font-semibold text-text">Payment History</h3>
         {invoice.payments.length === 0 ? (
@@ -78,6 +150,31 @@ export function ClientPortalInvoiceDetailView({ invoiceId }: { invoiceId: string
           </ul>
         )}
       </Card>
+
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-serif text-[15px] font-semibold text-text">Receipt</h3>
+          <div className="flex gap-2">
+            {invoicePdfUrl ? (
+              <Button type="button" variant="secondary" onClick={() => window.open(invoicePdfUrl, "_blank", "noopener,noreferrer")}>
+                Download Invoice (PDF)
+              </Button>
+            ) : null}
+            <Button type="button" variant="secondary" onClick={handleViewReceipt} disabled={receiptState.loading}>
+              {receiptState.loading ? "Loading…" : "View Receipt"}
+            </Button>
+          </div>
+        </div>
+        {receiptState.error ? (
+          <p role="alert" className="mt-2 text-xs text-rose-700 dark:text-rose-300">
+            {receiptState.error}
+          </p>
+        ) : receiptState.text ? (
+          <pre className="mt-3 whitespace-pre-wrap rounded-md border border-border bg-text/5 p-3 text-xs text-text">{receiptState.text}</pre>
+        ) : null}
+      </Card>
+
+      <ClientPortalInvoiceDocumentSection invoiceId={invoice.id} />
     </div>
   );
 }

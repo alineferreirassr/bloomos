@@ -61,6 +61,8 @@ npm run supabase:types           # regenerate src/types/database.types.ts from t
 - **Calendar sync** (e.g., Google Calendar) — for the future Calendar module.
 - **AI provider** (Anthropic/Claude) — for the future Bloom AI assistant; see `docs/ai.md`.
 
+v2 Checkpoint 22 built the *reusable infrastructure* a future checkpoint would use to connect any of the above — a Provider Registry, generic OAuth Engine, Credentials Manager, Queue/Retry/Sync Engines, Health Monitor, and Audit Center — without connecting a single one of them for real. No Stripe/Google/Slack/HubSpot/etc. account is ever contacted; every "Connect" action in the Configuration Center is local state-machine bookkeeping only. See `docs/integration-platform.md` for the full architecture and `docs/v2-checkpoint-22-enterprise-integrations.md`'s Known Limitations for exactly what remains undone.
+
 ## Principles
 
 - Integrations are added when their owning module's phase begins, not speculatively.

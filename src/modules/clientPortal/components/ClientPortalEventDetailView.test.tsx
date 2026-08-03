@@ -1,9 +1,13 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { NotFoundError } from "@/core/errors";
 
 vi.mock("@/lib/data", () => ({
   getClientPortalEventById: vi.fn(),
+}));
+
+vi.mock("@/modules/clientPortal/getClientPortalKnowledgeSummary", () => ({
+  getClientPortalKnowledgeSummaryAction: vi.fn(),
 }));
 
 afterEach(() => {
@@ -12,6 +16,11 @@ afterEach(() => {
 
 import { ClientPortalEventDetailView } from "@/modules/clientPortal/components/ClientPortalEventDetailView";
 import { getClientPortalEventById } from "@/lib/data";
+import { getClientPortalKnowledgeSummaryAction } from "@/modules/clientPortal/getClientPortalKnowledgeSummary";
+
+beforeEach(() => {
+  vi.mocked(getClientPortalKnowledgeSummaryAction).mockResolvedValue({ success: true, data: { connections: [] } } as never);
+});
 
 const EVENT = {
   id: "event_1",

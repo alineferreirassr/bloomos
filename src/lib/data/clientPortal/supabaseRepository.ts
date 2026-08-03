@@ -13,7 +13,17 @@ import { type DataResult, ok, fail } from "@/lib/data/result";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import { normalizeSupabaseError } from "@/lib/supabase/errors";
 import { supabaseClientAccessRepository } from "@/lib/data/clientAccess/supabaseRepository";
+import { getClientDocumentApproval } from "@/lib/data/clientPortal/clientDocumentApprovalStore";
+import { aggregateClientPortalTimeline } from "@/lib/data/clientPortal/timelineAggregator";
 import type { ClientPortalRepository } from "@/lib/data/clientPortal/repository";
+import type { ClientPortalTimelineEntry } from "@/types/clientPortalTimeline";
+
+/** The signed-in client's own account id, resolved via the same session Supabase mode already authenticates — needed for the (mock-only, see `clientDocumentApprovalStore.ts`'s own doc comment) Document Approval enrichment. */
+async function currentClientAccountId(): Promise<string> {
+  const account = await supabaseClientAccessRepository.getCurrentClientAccount();
+  if (!account) throw new NotFoundError("No active client account.");
+  return account.id;
+}
 
 /**
  * Every query below relies on the new `*_select_client_account` RLS
@@ -65,7 +75,8 @@ interface DocumentRow {
   updated_at: string;
 }
 
-function toClientPortalDocument(row: DocumentRow): ClientPortalDocument {
+function toClientPortalDocument(row: DocumentRow, clientAccountId: string): ClientPortalDocument {
+  const approval = getClientDocumentApproval(row.id, clientAccountId);
   return {
     id: row.id,
     title: row.title,
@@ -83,6 +94,8 @@ function toClientPortalDocument(row: DocumentRow): ClientPortalDocument {
     expires_at: row.expires_at,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    approvalStatus: approval?.status ?? "pending",
+    approvalComment: approval?.comment ?? null,
   };
 }
 
@@ -155,6 +168,7 @@ async function getClientPortalInvoiceById(id: string): Promise<ClientPortalInvoi
 /** "No access to superseded versions unless current business rules explicitly permit it" — no such permission exists yet, so every query below is additionally scoped to is_latest_version = true. */
 async function getClientPortalDocuments(): Promise<ClientPortalDocument[]> {
   const supabase = createSupabaseClient();
+  const clientAccountId = await currentClientAccountId();
   const { data, error } = await supabase
     .from("documents")
     .select(DOCUMENT_COLUMNS)
@@ -162,11 +176,12 @@ async function getClientPortalDocuments(): Promise<ClientPortalDocument[]> {
     .eq("is_latest_version", true)
     .order("created_at", { ascending: false });
   if (error) throw normalizeSupabaseError(error);
-  return ((data ?? []) as unknown as DocumentRow[]).map(toClientPortalDocument);
+  return ((data ?? []) as unknown as DocumentRow[]).map((row) => toClientPortalDocument(row, clientAccountId));
 }
 
 async function getClientPortalDocumentById(id: string): Promise<ClientPortalDocument> {
   const supabase = createSupabaseClient();
+  const clientAccountId = await currentClientAccountId();
   const { data, error } = await supabase
     .from("documents")
     .select(DOCUMENT_COLUMNS)
@@ -175,7 +190,7 @@ async function getClientPortalDocumentById(id: string): Promise<ClientPortalDocu
     .maybeSingle();
   if (error) throw normalizeSupabaseError(error);
   if (!data) throw new NotFoundError(`Document ${id} was not found`);
-  return toClientPortalDocument(data as unknown as DocumentRow);
+  return toClientPortalDocument(data as unknown as DocumentRow, clientAccountId);
 }
 
 /**
@@ -250,6 +265,21 @@ async function getClientPortalOverview(): Promise<ClientPortalOverview> {
   };
 }
 
+async function getClientPortalTimeline(): Promise<ClientPortalTimelineEntry[]> {
+  const account = await supabaseClientAccessRepository.getCurrentClientAccount();
+  if (!account) throw new NotFoundError("No active client account.");
+
+  const [events, contracts, invoices, documents] = await Promise.all([
+    getClientPortalEvents(),
+    getClientPortalContracts(),
+    getClientPortalInvoices(),
+    getClientPortalDocuments(),
+  ]);
+  const invoicesWithPayments = await Promise.all(invoices.map((invoice) => getClientPortalInvoiceById(invoice.id)));
+
+  return aggregateClientPortalTimeline({ workspaceId: account.workspace_id, events, contracts, invoicesWithPayments, documents });
+}
+
 export const supabaseClientPortalRepository: ClientPortalRepository = {
   getClientPortalOverview,
   getClientPortalEvents,
@@ -261,4 +291,5 @@ export const supabaseClientPortalRepository: ClientPortalRepository = {
   getClientPortalDocuments,
   getClientPortalDocumentById,
   getClientPortalDocumentDownloadUrl,
+  getClientPortalTimeline,
 };

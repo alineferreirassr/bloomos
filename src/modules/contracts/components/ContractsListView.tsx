@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getClients, getContractNextAction, getContractTemplates, getContracts, getEvents } from "@/lib/data";
 import { getDataPersistenceMessage } from "@/lib/dataModeCopy";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import type { Contract } from "@/types/contract";
 import type { Client } from "@/types/client";
 import type { Event } from "@/types/event";
@@ -12,6 +13,11 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { KpiCard } from "@/components/ui/KpiCard";
+import { ModuleInsightCard } from "@/components/ui/ModuleInsightCard";
+import { ContractsIcon, CheckIcon, FinanceIcon } from "@/components/ui/icons";
+import { formatMoney, majorToMinor, sumMinor } from "@/lib/money";
 import {
   ContractFilters,
   DEFAULT_CONTRACT_FILTERS,
@@ -30,6 +36,24 @@ export interface ContractListRow {
 }
 
 type LoadState = { status: "loading" } | { status: "error" } | { status: "ready"; rows: ContractListRow[] };
+
+const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+function buildContractsInsight(rows: ContractListRow[]): string | null {
+  const now = Date.now();
+  const staleAwaitingSignature = rows.filter(
+    (row) =>
+      (row.contract.signature_status === "sent" || row.contract.signature_status === "viewed") &&
+      now - new Date(row.contract.updated_at).getTime() > ONE_WEEK_MS,
+  ).length;
+
+  if (staleAwaitingSignature > 0) {
+    return `${staleAwaitingSignature} contract${staleAwaitingSignature === 1 ? "" : "s"} ${
+      staleAwaitingSignature === 1 ? "has" : "have"
+    } been awaiting a signature for over a week.`;
+  }
+  return null;
+}
 
 function directionMultiplier(direction: ContractFiltersValue["sortDirection"]): number {
   return direction === "asc" ? 1 : -1;
@@ -111,27 +135,28 @@ export function ContractsListView() {
   const { can } = useMemberSession();
   const canCreate = can("contracts.create");
   const [filters, setFilters] = useState<ContractFiltersValue>(DEFAULT_CONTRACT_FILTERS);
+  const debouncedFilters = useDebouncedValue(filters, 300);
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    loadContractsFor(DEFAULT_CONTRACT_FILTERS).then((next) => {
+    loadContractsFor(debouncedFilters).then((next) => {
       if (!cancelled) setState(next);
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [debouncedFilters, retryToken]);
 
   const handleFiltersChange = (next: ContractFiltersValue) => {
     setFilters(next);
     setState({ status: "loading" });
-    loadContractsFor(next).then(setState);
   };
 
   const retry = () => {
     setState({ status: "loading" });
-    loadContractsFor(filters).then(setState);
+    setRetryToken((token) => token + 1);
   };
 
   const hasActiveFilters =
@@ -142,28 +167,56 @@ export function ContractsListView() {
     filters.effectiveDateFrom !== "" ||
     filters.effectiveDateTo !== "";
 
+  const kpis =
+    state.status === "ready"
+      ? {
+          total: state.rows.length,
+          signed: state.rows.filter((row) => row.contract.signature_status === "signed").length,
+          totalValue: formatMoney(
+            sumMinor(
+              state.rows
+                .filter((row) => row.contract.signature_status === "signed")
+                .map((row) => majorToMinor(row.contract.total_value ?? 0)),
+            ),
+            "USD",
+          ),
+        }
+      : null;
+  const insight = state.status === "ready" ? buildContractsInsight(state.rows) : null;
+
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="font-serif text-3xl font-semibold text-text">Contracts</h2>
-          <p className="mt-1 text-sm text-text-muted">
-            Every agreement closing the commercial cycle from Client through Event.
-            {" "}{getDataPersistenceMessage()}
-          </p>
-        </div>
-        {canCreate ? (
-          <Link href="/contracts/new">
-            <Button>New Contract</Button>
-          </Link>
-        ) : null}
-      </div>
+      <PageHeader
+        title="Contracts"
+        subtitle={`Every agreement closing the commercial cycle from Client through Event. ${getDataPersistenceMessage()}`}
+        actions={
+          canCreate ? (
+            <Link href="/contracts/new">
+              <Button>New Contract</Button>
+            </Link>
+          ) : null
+        }
+      />
 
-      <div className="mt-6">
+      {insight ? (
+        <div className="animate-fade-up mb-6">
+          <ModuleInsightCard insight={insight} tone="warning" />
+        </div>
+      ) : null}
+
+      {kpis ? (
+        <div className="animate-fade-up stagger-1 mb-6 grid grid-cols-2 gap-3 md:grid-cols-3">
+          <KpiCard icon={ContractsIcon} label="Total Contracts" value={kpis.total.toLocaleString()} />
+          <KpiCard icon={CheckIcon} label="Signed" value={kpis.signed.toLocaleString()} />
+          <KpiCard icon={FinanceIcon} label="Signed Value" value={kpis.totalValue} />
+        </div>
+      ) : null}
+
+      <div className="mb-6">
         <ContractFilters value={filters} onChange={handleFiltersChange} />
       </div>
 
-      <div className="mt-6">
+      <div>
         {state.status === "loading" ? (
           <div className="space-y-3">
             {Array.from({ length: 4 }).map((_, index) => (
@@ -174,6 +227,7 @@ export function ContractsListView() {
           <ErrorState message="Could not load contracts." onRetry={retry} />
         ) : state.rows.length === 0 ? (
           <EmptyState
+            icon={ContractsIcon}
             title={hasActiveFilters ? "No contracts match these filters" : "No contracts yet"}
             description={
               hasActiveFilters
@@ -189,10 +243,10 @@ export function ContractsListView() {
             }
           />
         ) : (
-          <>
+          <div className="animate-fade-up stagger-2">
             <ContractListTable rows={state.rows} />
             <ContractListCards rows={state.rows} />
-          </>
+          </div>
         )}
       </div>
     </div>

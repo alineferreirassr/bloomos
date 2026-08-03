@@ -10,6 +10,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { ContractStatusBadge } from "@/modules/contracts/components/ContractStatusBadge";
 import { SignatureStatusBadge } from "@/modules/contracts/components/SignatureStatusBadge";
 import { formatContractValue } from "@/modules/contracts/mappers";
+import { ClientPortalContractDocumentSection } from "@/modules/clientPortal/components/ClientPortalContractDocumentSection";
 
 type LoadState = { status: "loading" } | { status: "not-found" } | { status: "error" } | { status: "ready"; contract: ClientPortalContract };
 
@@ -59,6 +60,8 @@ export function ClientPortalContractDetailView({ contractId }: { contractId: str
           </div>
         ) : null}
       </Card>
+
+      <ClientPortalContractDocumentSection contractId={contract.id} />
     </div>
   );
 }

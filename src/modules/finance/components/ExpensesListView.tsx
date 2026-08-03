@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getEvents, getExpenseNextAction, getExpenses } from "@/lib/data";
 import { getDataPersistenceMessage } from "@/lib/dataModeCopy";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import type { Expense } from "@/types/expense";
 import type { Event } from "@/types/event";
 import { Button } from "@/components/ui/Button";
@@ -68,27 +69,28 @@ export function ExpensesListView() {
   const { can } = useMemberSession();
   const canCreate = can("finance.create");
   const [filters, setFilters] = useState<ExpenseFiltersValue>(DEFAULT_EXPENSE_FILTERS);
+  const debouncedFilters = useDebouncedValue(filters, 300);
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    loadExpensesFor(DEFAULT_EXPENSE_FILTERS).then((next) => {
+    loadExpensesFor(debouncedFilters).then((next) => {
       if (!cancelled) setState(next);
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [debouncedFilters, retryToken]);
 
   const handleFiltersChange = (next: ExpenseFiltersValue) => {
     setFilters(next);
     setState({ status: "loading" });
-    loadExpensesFor(next).then(setState);
   };
 
   const retry = () => {
     setState({ status: "loading" });
-    loadExpensesFor(filters).then(setState);
+    setRetryToken((token) => token + 1);
   };
 
   const hasActiveFilters =

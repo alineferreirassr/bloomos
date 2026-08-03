@@ -35,6 +35,8 @@ vi.mock("@/lib/data", () => ({
   getChartOfAccounts: vi.fn(),
   getAccountingPeriods: vi.fn(),
   getJournalEntries: vi.fn(),
+  // Bloom AI's PaymentForecastCard (Checkpoint 20, Step 12) reads this directly.
+  getInvoices: vi.fn().mockResolvedValue([]),
 }));
 
 import * as dataLayer from "@/lib/data";
@@ -43,6 +45,7 @@ function mockLedgerCommon() {
   vi.mocked(dataLayer.getChartOfAccounts).mockResolvedValue([]);
   vi.mocked(dataLayer.getAccountingPeriods).mockResolvedValue([]);
   vi.mocked(dataLayer.getJournalEntries).mockResolvedValue([]);
+  vi.mocked(dataLayer.getInvoices).mockResolvedValue([]);
 }
 
 describe("FinanceDashboardView", () => {

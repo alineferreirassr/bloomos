@@ -16,6 +16,7 @@ import {
   type DashboardMetric,
 } from "@/lib/data";
 import { getDataPersistenceMessage } from "@/lib/dataModeCopy";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import type { Document } from "@/types/document";
 import type { Client } from "@/types/client";
 import type { Event } from "@/types/event";
@@ -30,6 +31,7 @@ import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { MetricCard } from "@/modules/dashboard/components/MetricCard";
 import {
   DocumentFilters,
@@ -42,6 +44,7 @@ import { DocumentListCards } from "@/modules/documents/components/DocumentListCa
 import { NewFolderModal } from "@/modules/documents/components/NewFolderModal";
 import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 import { getFullName } from "@/lib/personName";
+import { DocumentsIcon } from "@/components/ui/icons";
 
 export interface DocumentListRow {
   document: Document;
@@ -209,56 +212,54 @@ export function DocumentsListView({ initialOwnerType, initialOwnerId, initialFol
     folderId: initialFolderId ?? DEFAULT_DOCUMENT_FILTERS.folderId,
   };
   const [filters, setFilters] = useState<DocumentFiltersValue>(initialFilters);
+  const debouncedFilters = useDebouncedValue(filters, 300);
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [retryToken, setRetryToken] = useState(0);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    loadDocumentsFor(filters).then((next) => {
+    loadDocumentsFor(debouncedFilters).then((next) => {
       if (!cancelled) setState(next);
     });
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [debouncedFilters, retryToken]);
 
   const handleFiltersChange = (next: DocumentFiltersValue) => {
     setFilters(next);
     setState({ status: "loading" });
-    loadDocumentsFor(next).then(setState);
   };
 
   const retry = () => {
     setState({ status: "loading" });
-    loadDocumentsFor(filters).then(setState);
+    setRetryToken((token) => token + 1);
   };
 
   const hasActiveFilters = JSON.stringify(filters) !== JSON.stringify(DEFAULT_DOCUMENT_FILTERS);
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="font-serif text-3xl font-semibold text-text">Documents</h2>
-          <p className="mt-1 text-sm text-text-muted">
-            The shared file system for BloomOS. {getDataPersistenceMessage()}
-          </p>
-        </div>
-        {canCreate ? (
-          <div className="flex items-center gap-3">
-            <Button variant="secondary" onClick={() => setNewFolderOpen(true)}>
-              New Folder
-            </Button>
-            <Link href="/documents/new">
-              <Button>Add Document</Button>
-            </Link>
-          </div>
-        ) : null}
-      </div>
+      <PageHeader
+        title="Documents"
+        subtitle={`The shared file system for BloomOS. ${getDataPersistenceMessage()}`}
+        actions={
+          canCreate ? (
+            <div className="flex items-center gap-3">
+              <Button variant="secondary" onClick={() => setNewFolderOpen(true)}>
+                New Folder
+              </Button>
+              <Link href="/documents/new">
+                <Button>Add Document</Button>
+              </Link>
+            </div>
+          ) : null
+        }
+      />
 
       {state.status === "ready" ? (
-        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="animate-fade-up stagger-1 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {state.summaryCards.map((metric) => (
             <MetricCard key={metric.label} {...metric} />
           ))}
@@ -304,6 +305,7 @@ export function DocumentsListView({ initialOwnerType, initialOwnerId, initialFol
           <ErrorState message="Could not load documents." onRetry={retry} />
         ) : state.rows.length === 0 ? (
           <EmptyState
+            icon={DocumentsIcon}
             title={hasActiveFilters ? "No documents match these filters" : "No documents yet"}
             description={
               hasActiveFilters
@@ -319,10 +321,10 @@ export function DocumentsListView({ initialOwnerType, initialOwnerId, initialFol
             }
           />
         ) : (
-          <>
+          <div className="animate-fade-up stagger-2">
             <DocumentListTable rows={state.rows} />
             <DocumentListCards rows={state.rows} />
-          </>
+          </div>
         )}
       </div>
 

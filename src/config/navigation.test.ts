@@ -40,15 +40,10 @@ describe("getVisibleNavigationModules", () => {
     expect(visible.find((m) => m.id === "crm")).toBeUndefined();
   });
 
-  it("keeps disabled placeholder modules with no href (Bloom AI) visible regardless of permission", () => {
-    const visible = getVisibleNavigationModules(() => false);
-    expect(visible.map((m) => m.id)).toEqual(expect.arrayContaining(["bloom-ai"]));
-  });
-
-  it("shows Inventory/Vendors/Purchases/Services regardless of permission — none of their routes has a ROUTE_ACCESS_MAP entry yet, so canAccessRoute treats them as active-membership-only", () => {
+  it("shows Inventory/Vendors/Purchases/Services/Bloom AI regardless of permission — none of their routes has a ROUTE_ACCESS_MAP entry, so canAccessRoute treats them as active-membership-only", () => {
     const visible = getVisibleNavigationModules(() => false);
     expect(visible.map((m) => m.id)).toEqual(
-      expect.arrayContaining(["inventory", "vendors", "purchases", "services"]),
+      expect.arrayContaining(["inventory", "vendors", "purchases", "services", "bloom-ai"]),
     );
   });
 
@@ -57,7 +52,17 @@ describe("getVisibleNavigationModules", () => {
     expect(visible.map((m) => m.id)).not.toContain("settings");
   });
 
-  it("shows exactly the staff-permitted modules for the seeded staff permission matrix (Settings excluded — staff lacks workspace.manage)", () => {
+  it("hides Analytics for a member without analytics.view", () => {
+    const visible = getVisibleNavigationModules(() => false);
+    expect(visible.map((m) => m.id)).not.toContain("analytics");
+  });
+
+  it("hides Developer for a member without workspace.manage", () => {
+    const visible = getVisibleNavigationModules(() => false);
+    expect(visible.map((m) => m.id)).not.toContain("developer");
+  });
+
+  it("shows exactly the staff-permitted modules for the seeded staff permission matrix (Settings excluded — staff lacks workspace.manage; Analytics excluded — staff lacks analytics.view; Developer/Marketplace/Integrations excluded — staff lacks workspace.manage)", () => {
     const staffPermissions = new Set([
       "workspace.view",
       "team.view",
@@ -68,11 +73,31 @@ describe("getVisibleNavigationModules", () => {
       "finance.view",
       "documents.view",
       "clients.portal_view",
+      "communications.view",
+      "notifications.view",
+      "notifications.preferences",
+      "assets.view",
+      "scheduling.view",
+      "allocations.view",
+      "operational_planning.view",
+      "execution_packages.view",
+      "dispatch.view",
+      "field_operations.view",
+      "route_optimization.view",
+      "operations_center.view",
+      "client_journeys.view",
+      "proposal_builder.view",
+      "reports.view",
     ]);
     const visible = getVisibleNavigationModules((permission) => staffPermissions.has(permission));
     expect(visible.map((m) => m.id)).toEqual(
-      navigationModules.map((m) => m.id).filter((id) => id !== "settings"),
+      navigationModules.map((m) => m.id).filter((id) => id !== "settings" && id !== "analytics" && id !== "developer" && id !== "marketplace" && id !== "integrations"),
     );
+  });
+
+  it("hides Integrations for a member without workspace.manage", () => {
+    const visible = getVisibleNavigationModules(() => false);
+    expect(visible.map((m) => m.id)).not.toContain("integrations");
   });
 });
 
@@ -86,7 +111,8 @@ describe("getNavigableLabelEntries", () => {
     expect(hrefs).toContain("/pipeline/commercial");
     expect(hrefs).toContain("/client-portal/accounts");
     expect(hrefs).toContain("/client-portal/invitations");
-    expect(hrefs).not.toContain("/settings");
+    expect(hrefs).toContain("/bloom-ai");
+    expect(hrefs).toContain("/settings");
   });
 
   it("never includes an entry for CRM or Events themselves, since those are childless-of-href expandable groups", () => {
@@ -103,6 +129,10 @@ describe("findActiveNavLabel", () => {
 
   it("resolves a nested child leaf", () => {
     expect(findActiveNavLabel("/leads")).toBe("Leads");
+  });
+
+  it("resolves Bloom AI now that it's a real link, not a disabled placeholder", () => {
+    expect(findActiveNavLabel("/bloom-ai")).toBe("Bloom AI");
   });
 
   it("resolves a sub-page via prefix match", () => {

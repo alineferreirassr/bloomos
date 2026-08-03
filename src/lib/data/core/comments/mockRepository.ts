@@ -54,6 +54,8 @@ async function createComment(
     created_at: nowIso(),
     edited_at: null,
     deleted_at: null,
+    mentioned_member_ids: input.mentionedMemberIds ?? [],
+    mentions_team: input.mentionsTeam ?? false,
   };
   comments = [...comments, comment];
   return ok(comment);
@@ -81,8 +83,14 @@ async function deleteComment(id: string): Promise<DataResult<Comment>> {
   return ok(updated);
 }
 
+async function getAllCommentsForWorkspace(workspaceId: string): Promise<Comment[]> {
+  await delay(100);
+  return comments.filter((comment) => comment.workspace_id === workspaceId && comment.deleted_at === null).sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
 export const mockCommentsRepository: CommentsRepository = {
   getCommentsForOwner,
+  getAllCommentsForWorkspace,
   createComment,
   updateComment,
   deleteComment,

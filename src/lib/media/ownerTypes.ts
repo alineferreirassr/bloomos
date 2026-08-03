@@ -21,6 +21,7 @@ export const MEDIA_ASSET_OWNER_TYPES: EntityType[] = [
   "automation",
   "inventory_item",
   "event_service",
+  "workspace",
 ];
 
 /**
@@ -46,4 +47,8 @@ export const LIVE_MEDIA_ASSET_OWNER_TYPES = [
   "inventory_item",
   "purchase",
   "event_service",
+  // v2.0 Checkpoint 25 — the Asset Library (Step 1) is a general-purpose
+  // store for files not owned by any single Client/Event/Vendor row (Brand
+  // Kits, Templates). Migration: 20260809100000_media_assets_workspace_owner_type.sql.
+  "workspace",
 ] as const satisfies readonly EntityType[];

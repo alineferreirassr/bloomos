@@ -6,7 +6,10 @@ import type { ClientExtensionSummary } from "@/types/clientExtensions";
 import type { Event } from "@/types/event";
 import type { ChecklistItem } from "@/types/checklistItem";
 import type { EventScheduleItem } from "@/types/eventScheduleItem";
-import type { MediaAsset } from "@/types/mediaAsset";
+import type { MediaAsset, MediaAssetMetadata } from "@/types/mediaAsset";
+import type { MediaAssetStatus } from "@/core/enums/mediaAssetStatus";
+import type { MediaFolder } from "@/types/mediaFolder";
+import type { MediaCollection } from "@/types/mediaCollection";
 import type { Contract } from "@/types/contract";
 import type { ContractTemplate } from "@/types/contractTemplate";
 import type { ContractExhibit } from "@/types/contractExhibit";
@@ -97,6 +100,26 @@ import type {
   ClientPortalDocument,
   ClientPortalOverview,
 } from "@/types/clientPortal";
+import type { ClientPortalTimelineEntry } from "@/types/clientPortalTimeline";
+import type { ClientPortalActivity, ClientPortalActivityKind } from "@/types/clientPortalActivity";
+import { logClientPortalActivity, listClientPortalActivity } from "@/lib/data/clientPortal/clientPortalActivityStore";
+import type { ClientPortalChecklistItem } from "@/types/clientPortalChecklist";
+import {
+  getClientPortalChecklist as getClientPortalChecklistService,
+  completeClientPortalChecklistItem as completeClientPortalChecklistItemService,
+  commentOnClientPortalChecklistItem as commentOnClientPortalChecklistItemService,
+} from "@/lib/data/clientPortal/clientPortalChecklistService";
+import type { ClientPortalMessage, ClientPortalMessageThread } from "@/types/clientPortalMessage";
+import {
+  getClientPortalThread as getClientPortalThreadService,
+  getClientPortalMessages as getClientPortalMessagesService,
+  sendClientPortalMessageAsClient as sendClientPortalMessageAsClientService,
+  markClientPortalThreadReadForCurrentSession as markClientPortalThreadReadForCurrentSessionService,
+} from "@/lib/data/clientPortal/clientPortalMessageService";
+import type { Notification } from "@/core/notifications";
+import { getCoreNotificationsService } from "@/core/notifications";
+import { setClientDocumentApprovalStatus } from "@/lib/data/clientPortal/clientDocumentApprovalStore";
+import { getProposalsRepository } from "@/lib/data/proposals";
 import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 import type { InvitationStatus } from "@/core/enums/invitationStatus";
 import type { Permission } from "@/core/enums/permission";
@@ -185,6 +208,11 @@ import type {
   MediaAssetDownload,
   MediaAssetDownloadUrl,
   MediaAssetChecksumVerification,
+  MediaFolderFilters,
+  MediaFolderInput,
+  MediaFolderUpdateInput,
+  MediaCollectionInput,
+  MediaCollectionUpdateInput,
 } from "@/lib/data/media/repository";
 import { mockMediaAssetsRepository } from "@/lib/data/media/mockRepository";
 import { supabaseMediaAssetsRepository } from "@/lib/data/media/supabaseRepository";
@@ -266,6 +294,32 @@ import { resetServicesStore } from "@/lib/data/mock/servicesStore";
 import { resetServiceTemplatesStore } from "@/lib/data/mock/serviceTemplatesStore";
 import { resetEventServicesStore } from "@/lib/data/mock/eventServicesStore";
 import { getFullName } from "@/lib/personName";
+import { dispatchAutomationTrigger } from "@/core/automation/resolver";
+import { clockNow } from "@/core/time/clock";
+import { getLogger } from "@/core/observability/logger";
+import type { AutomationTriggerType } from "@/types/automation";
+
+/**
+ * v2.0 Checkpoint 39 — the "dead trigger" fix. `client.created`,
+ * `event.created`, `event.completed`, and `contract.signed` were real
+ * `AutomationTriggerType` enum values with real Workflow Trigger nodes since
+ * Checkpoint 9/13, but nothing ever actually called `dispatchAutomationTrigger`
+ * for them outside the Stripe webhook / AI proposal / Client Portal paths —
+ * a Workflow built on one of these could be designed, published, and
+ * simulated, but never really ran. This repository layer has no member
+ * session (see `PaymentActions.tsx`'s own direct client-side call of
+ * `markPaymentSucceeded` — these mock functions are plain shared code, not
+ * server-only), so — exactly like `webhookProcessing.ts`'s own
+ * `dispatchPaymentEvent` — every dispatch here uses the same null "system"
+ * `ExecuteAutomationContext`. Never lets a dispatch failure surface as a
+ * mutation failure.
+ */
+function dispatchSystemTrigger(type: AutomationTriggerType, workspaceId: string, facts: Record<string, string | number | boolean | null>): void {
+  dispatchAutomationTrigger(
+    { type, workspaceId, occurredAt: clockNow().toISOString(), actorMemberId: null, facts },
+    { workspaceName: null, userId: null, userName: null, role: null, permissions: [] },
+  ).catch((error: unknown) => getLogger().error(`${type} trigger dispatch failed`, { workspaceId, error: error instanceof Error ? error.message : "Unknown error" }));
+}
 
 // ---------------------------------------------------------------------------
 // Leads
@@ -629,7 +683,11 @@ export async function getClientById(id: string): Promise<Client> {
 }
 
 export async function createClient(input: ClientFormInput): Promise<DataResult<Client>> {
-  return clientsRepository().createClient(input);
+  const result = await clientsRepository().createClient(input);
+  if (result.success) {
+    dispatchSystemTrigger("client.created", result.data.workspace_id, { clientId: result.data.id, clientName: `${result.data.first_name} ${result.data.last_name}` });
+  }
+  return result;
 }
 
 export async function updateClient(
@@ -729,7 +787,11 @@ export async function getEventById(id: string): Promise<Event> {
 }
 
 export async function createEvent(input: EventFormInput): Promise<DataResult<Event>> {
-  return eventsRepository().createEvent(input);
+  const result = await eventsRepository().createEvent(input);
+  if (result.success) {
+    dispatchSystemTrigger("event.created", result.data.workspace_id, { eventId: result.data.id, clientId: result.data.client_id, title: result.data.title });
+  }
+  return result;
 }
 
 export async function updateEvent(id: string, input: EventFormInput): Promise<DataResult<Event>> {
@@ -767,7 +829,11 @@ export async function cancelEvent(id: string): Promise<DataResult<Event>> {
 }
 
 export async function completeEvent(id: string): Promise<DataResult<Event>> {
-  return eventsRepository().completeEvent(id);
+  const result = await eventsRepository().completeEvent(id);
+  if (result.success) {
+    dispatchSystemTrigger("event.completed", result.data.workspace_id, { eventId: result.data.id, clientId: result.data.client_id, title: result.data.title });
+  }
+  return result;
 }
 
 export async function getEventNextAction(eventId: string): Promise<string | null> {
@@ -952,6 +1018,110 @@ export async function restoreMediaAsset(id: string): Promise<DataResult<MediaAss
   return mediaAssetsRepository().restoreMediaAsset(id);
 }
 
+// Checkpoint 25 — Digital Asset Management Platform additions.
+
+export async function listMediaAssetsForWorkspace(workspaceId: string, filters?: MediaAssetFilters): Promise<MediaAsset[]> {
+  return mediaAssetsRepository().listMediaAssetsForWorkspace(workspaceId, filters);
+}
+
+export async function setMediaAssetFolder(id: string, folderId: string | null): Promise<DataResult<MediaAsset>> {
+  return mediaAssetsRepository().setMediaAssetFolder(id, folderId);
+}
+
+export async function setMediaAssetTags(id: string, tags: string[]): Promise<DataResult<MediaAsset>> {
+  return mediaAssetsRepository().setMediaAssetTags(id, tags);
+}
+
+export async function setMediaAssetColorLabel(id: string, colorLabel: string | null): Promise<DataResult<MediaAsset>> {
+  return mediaAssetsRepository().setMediaAssetColorLabel(id, colorLabel);
+}
+
+export async function setMediaAssetPriority(id: string, priority: "low" | "normal" | "high" | null): Promise<DataResult<MediaAsset>> {
+  return mediaAssetsRepository().setMediaAssetPriority(id, priority);
+}
+
+export async function setMediaAssetAiReady(id: string, aiReady: boolean): Promise<DataResult<MediaAsset>> {
+  return mediaAssetsRepository().setMediaAssetAiReady(id, aiReady);
+}
+
+export async function updateMediaAssetMetadata(id: string, patch: Partial<MediaAssetMetadata>): Promise<DataResult<MediaAsset>> {
+  return mediaAssetsRepository().updateMediaAssetMetadata(id, patch);
+}
+
+export async function setMediaAssetStatus(
+  id: string,
+  status: MediaAssetStatus,
+  actor: string,
+  rejectionReason?: string | null,
+  actorMemberId?: string | null,
+): Promise<DataResult<MediaAsset>> {
+  return mediaAssetsRepository().setMediaAssetStatus(id, status, actor, rejectionReason, actorMemberId);
+}
+
+export async function getMediaFolders(filters?: MediaFolderFilters): Promise<MediaFolder[]> {
+  return mediaAssetsRepository().getMediaFolders(filters);
+}
+
+export async function getMediaFolderById(id: string): Promise<MediaFolder> {
+  return mediaAssetsRepository().getMediaFolderById(id);
+}
+
+export async function createMediaFolder(input: MediaFolderInput): Promise<DataResult<MediaFolder>> {
+  return mediaAssetsRepository().createMediaFolder(input);
+}
+
+export async function updateMediaFolder(id: string, input: MediaFolderUpdateInput): Promise<DataResult<MediaFolder>> {
+  return mediaAssetsRepository().updateMediaFolder(id, input);
+}
+
+export async function moveMediaFolder(id: string, newParentFolderId: string | null): Promise<DataResult<MediaFolder>> {
+  return mediaAssetsRepository().moveMediaFolder(id, newParentFolderId);
+}
+
+export async function archiveMediaFolder(id: string): Promise<DataResult<MediaFolder>> {
+  return mediaAssetsRepository().archiveMediaFolder(id);
+}
+
+export async function restoreMediaFolder(id: string): Promise<DataResult<MediaFolder>> {
+  return mediaAssetsRepository().restoreMediaFolder(id);
+}
+
+export async function getMediaCollections(): Promise<MediaCollection[]> {
+  return mediaAssetsRepository().getMediaCollections();
+}
+
+export async function getMediaCollectionById(id: string): Promise<MediaCollection> {
+  return mediaAssetsRepository().getMediaCollectionById(id);
+}
+
+export async function createMediaCollection(input: MediaCollectionInput): Promise<DataResult<MediaCollection>> {
+  return mediaAssetsRepository().createMediaCollection(input);
+}
+
+export async function updateMediaCollection(id: string, input: MediaCollectionUpdateInput): Promise<DataResult<MediaCollection>> {
+  return mediaAssetsRepository().updateMediaCollection(id, input);
+}
+
+export async function deleteMediaCollection(id: string): Promise<DataResult<MediaCollection>> {
+  return mediaAssetsRepository().deleteMediaCollection(id);
+}
+
+export async function addAssetToCollection(collectionId: string, assetId: string): Promise<DataResult<MediaCollection>> {
+  return mediaAssetsRepository().addAssetToCollection(collectionId, assetId);
+}
+
+export async function removeAssetFromCollection(collectionId: string, assetId: string): Promise<DataResult<MediaCollection>> {
+  return mediaAssetsRepository().removeAssetFromCollection(collectionId, assetId);
+}
+
+export async function toggleMediaCollectionFavorite(id: string): Promise<DataResult<MediaCollection>> {
+  return mediaAssetsRepository().toggleMediaCollectionFavorite(id);
+}
+
+export async function toggleMediaCollectionPinned(id: string): Promise<DataResult<MediaCollection>> {
+  return mediaAssetsRepository().toggleMediaCollectionPinned(id);
+}
+
 // ---------------------------------------------------------------------------
 // Contracts — closes the commercial cycle: Lead -> Client -> Event ->
 // Contract -> Invoice (future) -> Payments (future). Bundles Contracts,
@@ -997,7 +1167,11 @@ export async function markViewed(id: string): Promise<DataResult<Contract>> {
 }
 
 export async function markSigned(id: string): Promise<DataResult<Contract>> {
-  return contractsRepository().markSigned(id);
+  const result = await contractsRepository().markSigned(id);
+  if (result.success) {
+    dispatchSystemTrigger("contract.signed", result.data.workspace_id, { contractId: result.data.id, clientId: result.data.client_id });
+  }
+  return result;
 }
 
 export async function markDeclined(id: string): Promise<DataResult<Contract>> {
@@ -1209,12 +1383,35 @@ export async function getPaymentById(id: string): Promise<Payment> {
   return financeRepository().getPaymentById(id);
 }
 
+/**
+ * v2.0 Checkpoint 39 — the same "dead trigger" fix as `client.created`/
+ * `event.created`/`event.completed`/`contract.signed` above, for
+ * `invoice.paid`'s one remaining gap: `webhookProcessing.ts`'s own
+ * `dispatchPaymentEvent` already dispatches it for the Stripe path, by
+ * checking the resulting Invoice's own `status` after a payment lands
+ * (Invoice transitions are computed by the repository itself, so re-reading
+ * it is the only reliable way to know a given payment was the one that
+ * finally paid it off). Mirrors that exact check for every payment recorded
+ * directly in BloomOS (manual payments, non-Stripe methods).
+ */
+async function maybeDispatchInvoicePaid(invoiceId: string | null): Promise<void> {
+  if (!invoiceId) return;
+  const invoice = await financeRepository().getInvoiceById(invoiceId).catch(() => null);
+  if (invoice?.status === "paid") {
+    dispatchSystemTrigger("invoice.paid", invoice.workspace_id, { invoiceId: invoice.id, clientId: invoice.client_id, totalMinor: invoice.total_minor });
+  }
+}
+
 export async function createPayment(input: PaymentInput): Promise<DataResult<Payment>> {
-  return financeRepository().createPayment(input);
+  const result = await financeRepository().createPayment(input);
+  if (result.success) await maybeDispatchInvoicePaid(result.data.invoice_id);
+  return result;
 }
 
 export async function updatePayment(id: string, input: PaymentInput): Promise<DataResult<Payment>> {
-  return financeRepository().updatePayment(id, input);
+  const result = await financeRepository().updatePayment(id, input);
+  if (result.success) await maybeDispatchInvoicePaid(result.data.invoice_id);
+  return result;
 }
 
 export async function markPaymentProcessing(id: string): Promise<DataResult<Payment>> {
@@ -1222,7 +1419,9 @@ export async function markPaymentProcessing(id: string): Promise<DataResult<Paym
 }
 
 export async function markPaymentSucceeded(id: string): Promise<DataResult<Payment>> {
-  return financeRepository().markPaymentSucceeded(id);
+  const result = await financeRepository().markPaymentSucceeded(id);
+  if (result.success) await maybeDispatchInvoicePaid(result.data.invoice_id);
+  return result;
 }
 
 export async function markPaymentFailed(id: string): Promise<DataResult<Payment>> {
@@ -2072,6 +2271,10 @@ export async function getClientAccountsByClientId(clientId: string): Promise<Cli
   return clientAccessRepository().getClientAccountsByClientId(clientId);
 }
 
+export async function getClientAccountsForWorkspace(workspaceId: string): Promise<ClientAccount[]> {
+  return clientAccessRepository().getClientAccountsForWorkspace(workspaceId);
+}
+
 export async function getCurrentClientAccount(): Promise<ClientAccount | null> {
   return clientAccessRepository().getCurrentClientAccount();
 }
@@ -2201,6 +2404,153 @@ export async function getClientPortalDocumentById(id: string): Promise<ClientPor
 
 export async function getClientPortalDocumentDownloadUrl(id: string): Promise<DataResult<string>> {
   return clientPortalRepository().getClientPortalDocumentDownloadUrl(id);
+}
+
+export async function getClientPortalTimeline(): Promise<ClientPortalTimelineEntry[]> {
+  return clientPortalRepository().getClientPortalTimeline();
+}
+
+/**
+ * Checkpoint 14 — Activity logging is mock-only regardless of data mode
+ * (see `clientPortalActivityStore.ts`'s own doc comment), but still needs
+ * to resolve *which* client account is logging in via whichever
+ * repository (mock or Supabase) the session actually authenticated
+ * against — `getCurrentClientAccount()` above already does exactly that.
+ * Silently no-ops without a session rather than throwing, since every
+ * call site is a "log this in passing" side effect, never something a
+ * page's own render should fail over.
+ */
+export async function logClientPortalActivityForCurrentSession(
+  kind: ClientPortalActivityKind,
+  entityId: string | null = null,
+  entityLabel: string | null = null,
+): Promise<void> {
+  const account = await getCurrentClientAccount();
+  if (!account) return;
+  logClientPortalActivity(account.workspace_id, account.id, kind, entityId, entityLabel);
+}
+
+export async function getClientPortalActivity(): Promise<ClientPortalActivity[]> {
+  const account = await getCurrentClientAccount();
+  if (!account) return [];
+  return listClientPortalActivity(account.workspace_id, account.id);
+}
+
+/**
+ * Checkpoint 36, Step 17 — internal-team read of a specific Client Portal
+ * account's own Activity log, for the new `ClientPortalActivitySection` on
+ * Client Detail (`client_portal.view`). Distinct from `getClientPortalActivity`
+ * above, which resolves the *current client's own* session — an internal
+ * team member has no such session, so this takes the account directly.
+ * UI-gated only (the component hides itself without the permission), the
+ * same precedent `ClientAccessSection` already established on this page.
+ */
+export async function getClientPortalActivityForAccount(workspaceId: string, clientAccountId: string): Promise<ClientPortalActivity[]> {
+  return listClientPortalActivity(workspaceId, clientAccountId);
+}
+
+export async function getClientPortalChecklist(): Promise<ClientPortalChecklistItem[]> {
+  return getClientPortalChecklistService();
+}
+
+export async function completeClientPortalChecklistItem(id: string): Promise<DataResult<ClientPortalChecklistItem>> {
+  return completeClientPortalChecklistItemService(id);
+}
+
+export async function commentOnClientPortalChecklistItem(id: string, comment: string): Promise<DataResult<ClientPortalChecklistItem>> {
+  return commentOnClientPortalChecklistItemService(id, comment);
+}
+
+export async function getClientPortalThread(): Promise<ClientPortalMessageThread> {
+  return getClientPortalThreadService();
+}
+
+export async function getClientPortalMessages(): Promise<ClientPortalMessage[]> {
+  return getClientPortalMessagesService();
+}
+
+export async function sendClientPortalMessageAsClient(body: string): Promise<DataResult<ClientPortalMessage>> {
+  return sendClientPortalMessageAsClientService(body);
+}
+
+export async function markClientPortalThreadReadForCurrentSession(): Promise<void> {
+  return markClientPortalThreadReadForCurrentSessionService();
+}
+
+/**
+ * Checkpoint 14, Step 9 — the Client Portal's own Notification Center.
+ * Reuses the real, shared Notification module directly (`getCoreNotificationsService()`,
+ * unchanged from every internal caller) rather than a parallel one —
+ * `recipient_client_account_id` (added this checkpoint, see
+ * `core/notifications/types.ts`'s own doc comment) is the one thing that
+ * makes a client account a valid recipient at all.
+ */
+export async function getClientPortalNotifications(): Promise<Notification[]> {
+  const account = await getCurrentClientAccount();
+  if (!account) return [];
+  const existing = await getCoreNotificationsService().getNotificationsForClientAccount(account.workspace_id, account.id);
+  if (existing.length > 0) return existing;
+
+  // Seeds a real, working demo notification the first time this specific client account's own Notification Center is ever read — never on module load (which would risk polluting the shared store other tests reset), and never more than once (guarded by `existing.length > 0` above).
+  await getCoreNotificationsService().createInAppNotification(account.workspace_id, {
+    recipientClientAccountId: account.id,
+    title: "Welcome to your Client Portal",
+    body: "You can track your event, documents, and invoices here any time.",
+  });
+  return getCoreNotificationsService().getNotificationsForClientAccount(account.workspace_id, account.id);
+}
+
+export async function markClientPortalNotificationRead(id: string): Promise<DataResult<Notification>> {
+  return getCoreNotificationsService().markNotificationRead(id);
+}
+
+/**
+ * Checkpoint 14, Step 4 — "Approve (placeholder), Reject (placeholder)."
+ * Bolted onto `client_document_approvals` (mock-only, see
+ * `clientDocumentApprovalStore.ts`'s own doc comment), never a new field
+ * on the Document Platform's own `ComposedDocument` — a client's own
+ * sentiment on a Document is a different axis from that Document's
+ * draft/published/archived lifecycle (Checkpoint 12), and this checkpoint
+ * never touches that lifecycle at all. Re-validates the Document is
+ * actually one this client can see (`getClientPortalDocumentById` already
+ * throws `NotFoundError` otherwise) before recording a decision.
+ */
+export async function approveClientPortalDocument(documentId: string, comment: string | null = null): Promise<DataResult<ClientPortalDocument>> {
+  await getClientPortalDocumentById(documentId);
+  const account = await getCurrentClientAccount();
+  if (!account) return fail("No active client account.");
+  setClientDocumentApprovalStatus(account.workspace_id, documentId, account.id, "approved", comment);
+  return ok(await getClientPortalDocumentById(documentId));
+}
+
+export async function rejectClientPortalDocument(documentId: string, comment: string): Promise<DataResult<ClientPortalDocument>> {
+  if (comment.trim().length === 0) return fail("Please fix the highlighted fields.", { comment: "Let us know why, so we can follow up" });
+  await getClientPortalDocumentById(documentId);
+  const account = await getCurrentClientAccount();
+  if (!account) return fail("No active client account.");
+  setClientDocumentApprovalStatus(account.workspace_id, documentId, account.id, "rejected", comment);
+  return ok(await getClientPortalDocumentById(documentId));
+}
+
+/**
+ * Checkpoint 14, Step 11 — "Proposal Summary," read-only. Surfaces the
+ * client's own already-AI-authored `executive_summary` from their most
+ * recently *accepted* Proposal — never triggers a new AI call, never
+ * exposes Ask Bloom. `getProposalsRepository()` is always mock-only
+ * regardless of data mode (see its own doc comment), same precedent as
+ * the Timeline's own Proposal lookup; scoped to this client's own Events
+ * only, one lookup per Event, exactly like `aggregateClientPortalTimeline`
+ * already does.
+ */
+export async function getClientPortalProposalSummary(): Promise<{ proposalId: string; summary: string } | null> {
+  const events = await getClientPortalEvents();
+  const proposalsRepository = getProposalsRepository();
+  for (const event of events) {
+    const proposals = await proposalsRepository.getProposalsByEvent(event.id);
+    const accepted = proposals.find((proposal) => proposal.status === "accepted");
+    if (accepted) return { proposalId: accepted.id, summary: accepted.executive_summary };
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -2478,6 +2828,8 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+// Despite the name, this is also the metrics source for the Documents page's summary
+// cards (see DocumentsListView.tsx) — not solely the old /dashboard route. Keep in sync.
 export async function getDashboardMetrics(): Promise<DashboardMetric[]> {
   const [leads, clients, events, contracts] = await Promise.all([
     getLeads({ includeArchived: true }),

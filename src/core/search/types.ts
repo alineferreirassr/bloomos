@@ -15,6 +15,15 @@ export interface SearchableEntityConfig {
   route?: (id: string) => string;
 }
 
+/**
+ * v2.0 Checkpoint 40 — every field below `score` is additive and optional,
+ * so every existing `SearchProvider` (`workspaceSearchProvider.ts`) and every
+ * existing caller (`CommandPalette.tsx`, `CopilotPanel.tsx`,
+ * `GlobalSearchWidget.tsx`) keeps compiling and working unchanged. A
+ * provider that doesn't populate a given field simply means the Global
+ * Search Command Center can't filter/preview on it for that entity type yet
+ * — never a fabricated value standing in for one the provider didn't supply.
+ */
 export interface SearchResult {
   entityType: EntityType;
   entityId: string;
@@ -22,6 +31,16 @@ export interface SearchResult {
   snippet?: string;
   route: string;
   score?: number;
+  /** Design-token icon name, mirroring `WorkspaceQuickAction.icon` — never a raw component reference. */
+  icon?: string;
+  status?: string;
+  owner?: string;
+  tags?: string[];
+  /** ISO 8601 — the record's own last-updated timestamp, when the provider's underlying entity carries one. */
+  lastUpdatedAt?: string;
+  /** 0–100 — only set when the entity type has a real, already-computed health/readiness score to reuse (never a new one calculated here). */
+  health?: number;
+  archived?: boolean;
 }
 
 export interface SearchQuery {
@@ -29,6 +48,27 @@ export interface SearchQuery {
   term: string;
   entityTypes?: EntityType[];
   limit?: number;
+  filters?: SearchResultFilters;
+}
+
+/**
+ * Every field is an intersection (AND) against `SearchResult`'s own optional
+ * preview fields above — a filter naming a field a given result never
+ * populated simply excludes that result, the same "can't filter on data
+ * that was never honestly there" discipline `SearchResult`'s own doc
+ * comment states.
+ */
+export interface SearchResultFilters {
+  entityTypes?: EntityType[];
+  modules?: string[];
+  statuses?: string[];
+  tags?: string[];
+  owners?: string[];
+  archived?: boolean;
+  /** Inclusive ISO 8601 bounds against `lastUpdatedAt`. */
+  updatedAfter?: string;
+  updatedBefore?: string;
+  minHealth?: number;
 }
 
 /**

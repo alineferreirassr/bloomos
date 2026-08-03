@@ -434,9 +434,31 @@ async function restoreMediaAsset(id: string): Promise<DataResult<MediaAsset>> {
   return ok(updated);
 }
 
+async function listMediaAssetsForWorkspace(workspaceId: string, filters: MediaAssetFilters = {}): Promise<MediaAsset[]> {
+  const { includeArchived = false } = filters;
+  const supabase = createSupabaseClient();
+  let query = supabase.from("media_assets").select("*").eq("workspace_id", workspaceId);
+  if (!includeArchived) query = query.is("archived_at", null);
+  const { data, error } = await query.order("created_at", { ascending: false });
+  if (error) throw normalizeSupabaseError(error);
+  return (data ?? []).map(mapMediaAssetRow);
+}
+
+/**
+ * v2 Checkpoint 25 — Folders/Collections/Tags/Metadata/Approval have no
+ * columns on `media_assets` yet (no migration applied this session, same
+ * "throw, don't pretend" precedent every other Foundation-phase gap in this
+ * codebase already uses — see `lib/data/proposals/supabaseRepository.ts`).
+ * Mock mode is fully functional for all of these; only Supabase mode defers.
+ */
+function notMigrated(): never {
+  throw new Error("Digital Asset Management's Folders/Collections/Tags/Metadata/Approval fields have not been migrated to Supabase yet — this phase is mock-only.");
+}
+
 export const supabaseMediaAssetsRepository: MediaAssetsRepository = {
   getMediaAssetById,
   getMediaAssetsByOwner,
+  listMediaAssetsForWorkspace,
   uploadMediaAsset,
   replaceMediaAssetVersion,
   downloadMediaAsset,
@@ -444,4 +466,27 @@ export const supabaseMediaAssetsRepository: MediaAssetsRepository = {
   verifyMediaAssetChecksum,
   deleteMediaAsset,
   restoreMediaAsset,
+  setMediaAssetFolder: () => notMigrated(),
+  setMediaAssetTags: () => notMigrated(),
+  setMediaAssetColorLabel: () => notMigrated(),
+  setMediaAssetPriority: () => notMigrated(),
+  setMediaAssetAiReady: () => notMigrated(),
+  updateMediaAssetMetadata: () => notMigrated(),
+  setMediaAssetStatus: () => notMigrated(),
+  getMediaFolders: () => notMigrated(),
+  getMediaFolderById: () => notMigrated(),
+  createMediaFolder: () => notMigrated(),
+  updateMediaFolder: () => notMigrated(),
+  moveMediaFolder: () => notMigrated(),
+  archiveMediaFolder: () => notMigrated(),
+  restoreMediaFolder: () => notMigrated(),
+  getMediaCollections: () => notMigrated(),
+  getMediaCollectionById: () => notMigrated(),
+  createMediaCollection: () => notMigrated(),
+  updateMediaCollection: () => notMigrated(),
+  deleteMediaCollection: () => notMigrated(),
+  addAssetToCollection: () => notMigrated(),
+  removeAssetFromCollection: () => notMigrated(),
+  toggleMediaCollectionFavorite: () => notMigrated(),
+  toggleMediaCollectionPinned: () => notMigrated(),
 };

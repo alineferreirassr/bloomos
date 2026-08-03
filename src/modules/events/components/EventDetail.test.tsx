@@ -26,6 +26,13 @@ function renderEventDetail(eventId: string) {
   );
 }
 
+// `BloomAISkillPicker` (Checkpoint 4) calls `useRouter` for its fallback
+// navigation — same convention as every other component under test that
+// uses `next/navigation` (see `EventEdit.test.tsx`, etc.).
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
 vi.mock("@/lib/data", () => ({
   getEventById: vi.fn(),
   getClientById: vi.fn(),
@@ -41,6 +48,25 @@ vi.mock("@/lib/data", () => ({
   getDocumentOwnerSummary: vi.fn(),
   getContracts: vi.fn(),
   listEventServicesByEvent: vi.fn(),
+  // Bloom AI's EventAssistantCard (Checkpoint 20, Step 14) reads these directly.
+  listEventServiceInventoryRequirements: vi.fn(),
+  getVendors: vi.fn(),
+  getWorkspaceMembers: vi.fn(),
+  // Event Command Center (Checkpoint 21, Step 1) reads all of these via
+  // `getEventOperationsData` directly.
+  listEventServicePurchaseRequirements: vi.fn(),
+  listEventServiceBudgetLines: vi.fn(),
+  listEventServiceTeamRequirements: vi.fn(),
+  listEventServiceVendorAssignments: vi.fn(),
+  getInventoryItem: vi.fn(),
+  listInventoryMovements: vi.fn(),
+  getLowStockInventoryItems: vi.fn(),
+  getPayments: vi.fn(),
+  getExpenses: vi.fn(),
+  getMediaAssetsByOwner: vi.fn(),
+  getOverduePurchases: vi.fn(),
+  getPurchase: vi.fn(),
+  recordInventoryMovement: vi.fn(),
 }));
 
 // `generateEventOperationsBrief` is a `"use server"` action whose real
@@ -54,6 +80,37 @@ vi.mock("@/lib/data", () => ({
 vi.mock("@/modules/ai/generateEventOperationsBrief", () => ({
   generateEventOperationsBrief: vi.fn(),
 }));
+
+// `ProposalGeneratorPanel` (rendered by `EventDetailView`) calls
+// `getLatestProposalForEvent` on mount — a `"use server"` action whose real
+// module graph reaches `resolveMemberSessionSnapshot` -> `getWorkspaceSession`
+// -> `@/lib/supabase/server` (guarded by `server-only`). Mocked for the same
+// reason as `generateEventOperationsBrief` above; the other 3 Proposal
+// actions are mocked alongside it since they share the same real graph.
+vi.mock("@/modules/ai/proposal/getLatestProposalForEvent", () => ({
+  getLatestProposalForEvent: vi.fn().mockResolvedValue({ success: true, data: null }),
+}));
+vi.mock("@/modules/ai/proposal/generateProposalDraft", () => ({
+  generateProposalDraft: vi.fn(),
+}));
+vi.mock("@/modules/ai/proposal/acceptProposalDraft", () => ({
+  acceptProposalDraft: vi.fn(),
+}));
+vi.mock("@/modules/ai/proposal/rejectProposalDraft", () => ({
+  rejectProposalDraft: vi.fn(),
+}));
+
+// `BloomAISkillPicker` (also rendered by `EventDetailView`, Checkpoint 4)
+// calls `getBloomAIOverview` when opened — a `"use server"` action reaching
+// the same `server-only`-guarded graph as the actions above. Mocked for the
+// same reason; never opened in these tests, so the resolved value is unused.
+vi.mock("@/modules/ai/getBloomAIOverview", () => ({
+  getBloomAIOverview: vi.fn().mockResolvedValue({ success: true, data: { providerConfigured: false, skills: [], installedSkillsCount: 0, activeSkillsCount: 0, comingSoonSkillsCount: 0, recentProposals: [], stats: { totalGenerated: 0, accepted: 0, rejected: 0, awaitingReview: 0 } } }),
+}));
+
+// v2 Checkpoint 24 — same "use server" / server-only reasoning as the mocks above.
+vi.mock("@/modules/communication/timeline/components/EntityTimelinePanel", () => ({ EntityTimelinePanel: () => null }));
+vi.mock("@/modules/communication/comments/components/CommentsPanel", () => ({ CommentsPanel: () => null }));
 
 import * as dataLayer from "@/lib/data";
 
@@ -108,6 +165,19 @@ function mockReady(overrides: Partial<ReturnType<typeof makeEvent>> = {}) {
   });
   vi.mocked(dataLayer.getContracts).mockResolvedValue([]);
   vi.mocked(dataLayer.listEventServicesByEvent).mockResolvedValue([]);
+  vi.mocked(dataLayer.listEventServiceInventoryRequirements).mockResolvedValue([]);
+  vi.mocked(dataLayer.getVendors).mockResolvedValue([]);
+  vi.mocked(dataLayer.getWorkspaceMembers).mockResolvedValue([]);
+  vi.mocked(dataLayer.listEventServicePurchaseRequirements).mockResolvedValue([]);
+  vi.mocked(dataLayer.listEventServiceBudgetLines).mockResolvedValue([]);
+  vi.mocked(dataLayer.listEventServiceTeamRequirements).mockResolvedValue([]);
+  vi.mocked(dataLayer.listEventServiceVendorAssignments).mockResolvedValue([]);
+  vi.mocked(dataLayer.listInventoryMovements).mockResolvedValue([]);
+  vi.mocked(dataLayer.getLowStockInventoryItems).mockResolvedValue([]);
+  vi.mocked(dataLayer.getPayments).mockResolvedValue([]);
+  vi.mocked(dataLayer.getExpenses).mockResolvedValue([]);
+  vi.mocked(dataLayer.getMediaAssetsByOwner).mockResolvedValue([]);
+  vi.mocked(dataLayer.getOverduePurchases).mockResolvedValue([]);
   return event;
 }
 
@@ -142,7 +212,7 @@ describe("EventDetailView", () => {
     expect(screen.getByText("Checklist Summary")).toBeInTheDocument();
     expect(screen.getByText("Schedule Summary")).toBeInTheDocument();
     expect(screen.getByText("Timeline")).toBeInTheDocument();
-    expect(screen.getByText("Future Integrations")).toBeInTheDocument();
+    expect(await screen.findByText("Event Command Center")).toBeInTheDocument();
   });
 
   it("renders the health score and severity from getEventHealthDetails", async () => {
@@ -227,7 +297,11 @@ describe("EventDetailView", () => {
     renderEventDetail("event_1");
 
     await screen.findByText("Checklist Summary");
-    expect(screen.getByText("100%")).toBeInTheDocument();
+    // The Event Command Center's own Checklist summary tile (Checkpoint 21)
+    // can legitimately show the same "100%" text alongside the pre-existing
+    // Checklist Summary card, so assert at least one match rather than
+    // exactly one.
+    expect(screen.getAllByText("100%").length).toBeGreaterThan(0);
   });
 
   it("shows an error state when the event can't be found", async () => {

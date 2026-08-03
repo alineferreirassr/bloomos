@@ -7,13 +7,24 @@ import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { signOut } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/Button";
+import { ClientBriefButton } from "@/modules/ai/copilot/ClientBriefButton";
 
 const NAV_ITEMS = [
   { href: "/client-access", label: "Overview" },
+  { href: "/client-access/onboarding", label: "Getting Started" },
+  { href: "/client-access/journey", label: "My Journey" },
+  { href: "/client-access/proposals", label: "My Proposals" },
   { href: "/client-access/events", label: "My Events" },
   { href: "/client-access/contracts", label: "My Contracts" },
   { href: "/client-access/invoices", label: "My Invoices" },
   { href: "/client-access/documents", label: "My Documents" },
+  { href: "/client-access/timeline", label: "Timeline" },
+  { href: "/client-access/report", label: "My Report" },
+  { href: "/client-access/checklist", label: "Checklist" },
+  { href: "/client-access/messages", label: "Messages" },
+  { href: "/client-access/notifications", label: "Notifications" },
+  { href: "/client-access/communication", label: "Communication" },
+  { href: "/client-access/settings", label: "Settings" },
 ] as const;
 
 /** Exact match for the Overview route (it's also the prefix of every other route), longest-prefix match for everything else. */
@@ -31,11 +42,24 @@ function isActiveRoute(pathname: string, href: string): boolean {
  * Navigation is identical for every client (no permission gating needed —
  * unlike the internal Sidebar, there's no role/permission concept here).
  */
+/**
+ * Checkpoint 19 — `/client-access` (the Client Dashboard) renders its own
+ * full-page Luxury shell (`LuxuryClientDashboardShell`), which fully
+ * replaces this top-nav chrome, matching the approved Client reference
+ * image exactly. Every other client-portal page keeps this shell
+ * unchanged. See `AppShell.tsx`'s own identical seam for `/dashboard`.
+ */
+const LUXURY_CLIENT_SHELL_ROUTES = ["/client-access"];
+
 export function ClientPortalShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  if (LUXURY_CLIENT_SHELL_ROUTES.includes(pathname)) {
+    return <div className="min-h-screen bg-luxury-background">{children}</div>;
+  }
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -49,7 +73,7 @@ export function ClientPortalShell({ children }: { children: ReactNode }) {
       <header className="border-b border-border">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <Image src="/brand/amore-bloom-logo.png" alt="Amoré Bloom" width={640} height={426} priority className="h-8 w-auto" />
+            <Image src="/brand/amore-bloom-app-logo.png" alt="Amoré Bloom" width={670} height={670} priority className="h-9 w-auto" />
             <span className="text-xs tracking-[0.06em] text-text-muted uppercase">Client Portal</span>
           </div>
 
@@ -76,6 +100,7 @@ export function ClientPortalShell({ children }: { children: ReactNode }) {
           </nav>
 
           <div className="flex items-center gap-2">
+            <ClientBriefButton />
             <Button variant="secondary" onClick={handleLogout} disabled={loggingOut} className="hidden sm:inline-flex">
               {loggingOut ? "Signing out…" : "Sign out"}
             </Button>

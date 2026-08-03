@@ -32,6 +32,8 @@ export interface ClientAccessRepository {
   getClientAccounts(clientId?: string): Promise<ClientAccount[]>;
   getClientAccountById(id: string): Promise<ClientAccount>;
   getClientAccountsByClientId(clientId: string): Promise<ClientAccount[]>;
+  /** Checkpoint 16 — every Client Portal account in one Workspace, no session required. Powers the Public API's Portal Users endpoint, which authenticates via API Key rather than a `workspace_members` session. */
+  getClientAccountsForWorkspace(workspaceId: string): Promise<ClientAccount[]>;
   getCurrentClientAccount(): Promise<ClientAccount | null>;
   /** Display-safe context for the Client Portal landing page — client/Workspace names a client caller can never reach via the business-module repositories (those require Workspace membership). */
   getCurrentClientAccountContext(): Promise<ClientAccountContext | null>;

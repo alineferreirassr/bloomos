@@ -21,12 +21,12 @@ export function Sidebar({ workspaceDisplayName }: SidebarProps) {
     <aside className="hidden md:flex md:w-56 md:flex-col md:bg-sidebar md:border-r md:border-border md:py-6">
       <div className="mb-4 border-b border-border px-[23px] pb-[23px]">
         <Image
-          src="/brand/amore-bloom-logo.png"
+          src="/brand/amore-bloom-app-logo.png"
           alt="Amoré Bloom"
-          width={640}
-          height={426}
+          width={670}
+          height={670}
           priority
-          className="h-auto w-36"
+          className="h-auto w-24"
         />
         <div className="mt-1 text-[11px] tracking-[0.06em] text-text/55 uppercase">
           Luxury Proposal &amp; Event Studio

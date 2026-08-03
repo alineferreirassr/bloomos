@@ -37,6 +37,7 @@ import { SignatureStatusBadge } from "@/modules/contracts/components/SignatureSt
 import { ContractActions } from "@/modules/contracts/components/ContractActions";
 import { ExhibitsSection } from "@/modules/contracts/components/ExhibitsSection";
 import { VersionHistorySection } from "@/modules/contracts/components/VersionHistorySection";
+import { ContractDocumentSection } from "@/modules/contracts/components/ContractDocumentSection";
 import { formatContractValue } from "@/modules/contracts/mappers";
 import { ContractFinanceSummaryCard } from "@/modules/finance/components/ContractFinanceSummaryCard";
 import { DocumentsSummarySection } from "@/modules/documents/components/DocumentsSummarySection";
@@ -279,6 +280,8 @@ export function ContractDetailView({ contractId }: { contractId: string }) {
               <p className="mt-2 text-sm text-text-muted">No template selected.</p>
             )}
           </Card>
+
+          <ContractDocumentSection contractId={contract.id} />
 
           <VersionHistorySection contract={contract} />
 

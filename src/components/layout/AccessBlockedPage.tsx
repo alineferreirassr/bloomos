@@ -48,12 +48,12 @@ export function AccessBlockedPage({ title, message, brandSuffix }: AccessBlocked
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center text-center">
           <Image
-            src="/brand/amore-bloom-logo.png"
+            src="/brand/amore-bloom-app-logo.png"
             alt="Amoré Bloom"
-            width={640}
-            height={426}
+            width={670}
+            height={670}
             priority
-            className="h-auto w-48"
+            className="h-auto w-32"
           />
           {brandSuffix ? (
             <div className="mt-1 text-[11px] tracking-[0.06em] text-text/55 uppercase">{brandSuffix}</div>

@@ -41,11 +41,11 @@ export function MobileNav({ open, onClose, workspaceDisplayName }: MobileNavProp
         <div className="mb-4 flex items-center justify-between border-b border-border px-[23px] pb-[23px]">
           <div>
             <Image
-              src="/brand/amore-bloom-logo.png"
+              src="/brand/amore-bloom-app-logo.png"
               alt="Amoré Bloom"
-              width={640}
-              height={426}
-              className="h-auto w-36"
+              width={670}
+              height={670}
+              className="h-auto w-24"
             />
             <div className="mt-1 text-[11px] tracking-[0.06em] text-text/55 uppercase">
               Luxury Proposal &amp; Event Studio

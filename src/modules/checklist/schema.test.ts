@@ -59,6 +59,7 @@ describe("checklistItemFormSchema", () => {
     due_date: "",
     assigned_type: "unknown" as const,
     assigned_name: "",
+    client_visible: false,
   };
 
   it("accepts plain empty strings for nullable fields", () => {
@@ -82,6 +83,7 @@ describe("checklistFormToInput", () => {
       due_date: "",
       assigned_type: "employee",
       assigned_name: "",
+      client_visible: false,
     });
     expect(input).toEqual({
       title: "Book photographer",
@@ -92,6 +94,7 @@ describe("checklistFormToInput", () => {
       assigned_type: "employee",
       assigned_id: null,
       assigned_name: null,
+      client_visible: false,
     });
   });
 
@@ -104,6 +107,7 @@ describe("checklistFormToInput", () => {
       due_date: "2026-08-10",
       assigned_type: "vendor",
       assigned_name: "Bloom & Co",
+      client_visible: true,
     });
     expect(input.description).toBe("Call before Friday");
     expect(input.due_date).toBe("2026-08-10");

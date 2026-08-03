@@ -6,6 +6,7 @@ vi.mock("@/lib/supabase/client", () => ({
 vi.mock("@/lib/data/clientAccess/supabaseRepository", () => ({
   supabaseClientAccessRepository: {
     getCurrentClientAccountContext: vi.fn(),
+    getCurrentClientAccount: vi.fn(),
   },
 }));
 
@@ -113,6 +114,7 @@ describe("supabaseClientPortalRepository.getClientPortalInvoiceById", () => {
 
 describe("supabaseClientPortalRepository.getClientPortalDocuments", () => {
   it("derives hasFile from media_asset_id and never returns storage_bucket/storage_path in the select list", async () => {
+    vi.mocked(supabaseClientAccessRepository.getCurrentClientAccount).mockResolvedValue({ id: "account_1" } as never);
     const { client, calls } = createMockSupabase([{ data: [{ id: "doc_1", media_asset_id: "media_1" }], error: null }]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
@@ -162,6 +164,7 @@ describe("supabaseClientPortalRepository.getClientPortalOverview", () => {
       clientName: "Naomi Whitfield",
       workspaceName: "Amoré Bloom",
     });
+    vi.mocked(supabaseClientAccessRepository.getCurrentClientAccount).mockResolvedValue({ id: "a1" } as never);
     const { client } = createMockSupabase([
       { data: [], error: null }, // events
       { data: [], error: null }, // contracts

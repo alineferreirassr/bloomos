@@ -2,7 +2,8 @@
 
 import { usePathname } from "next/navigation";
 import { findActiveNavLabel } from "@/config/navigation";
-import { MenuIcon } from "@/components/ui/icons";
+import { MenuIcon, BloomAiIcon } from "@/components/ui/icons";
+import { useCopilotPanel } from "@/modules/ai/copilot/CopilotProvider";
 
 interface TopBarProps {
   onMenuClick: () => void;
@@ -11,9 +12,10 @@ interface TopBarProps {
 export function TopBar({ onMenuClick }: TopBarProps) {
   const pathname = usePathname();
   const activeLabel = findActiveNavLabel(pathname);
+  const { toggle } = useCopilotPanel();
 
   return (
-    <header className="flex h-[72px] min-h-[72px] items-center gap-3 border-b border-border bg-background px-4 md:px-7">
+    <header className="flex h-[72px] min-h-[72px] items-center gap-3 bg-background px-4 shadow-sm md:px-7">
       <button
         type="button"
         onClick={onMenuClick}
@@ -30,9 +32,17 @@ export function TopBar({ onMenuClick }: TopBarProps) {
         twice stacked on screen. Kept small/muted instead, functioning as a
         breadcrumb, so the one large title stays where it already lives.
       */}
-      <p className="text-sm font-medium tracking-tight text-text-muted">
+      <p className="flex-1 text-sm font-medium tracking-tight text-text-muted">
         {activeLabel ?? "Amoré Bloom"}
       </p>
+      <button
+        type="button"
+        onClick={toggle}
+        className="hidden items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm font-medium text-text transition-colors duration-150 hover:bg-accent-100 hover:text-accent md:flex"
+      >
+        <BloomAiIcon className="h-4 w-4" aria-hidden="true" />
+        Bloom AI
+      </button>
     </header>
   );
 }

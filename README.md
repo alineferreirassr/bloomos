@@ -97,6 +97,8 @@ npm run build
 | [`docs/purchases.md`](./docs/purchases.md) | Purchases module — Purchase/PurchaseItem lifecycle, receiving |
 | [`docs/finance-reports.md`](./docs/finance-reports.md) | Finance Reports — General Ledger, Trial Balance, P&L, Balance Sheet |
 | [`docs/services.md`](./docs/services.md) | Services module — catalog, Templates, Event Assignment |
+| [`docs/design-system-v2.md`](./docs/design-system-v2.md) | Component/layout/responsive conventions (additive to `docs/design-system.md`) |
+| [`docs/v2-checkpoint-1-foundation.md`](./docs/v2-checkpoint-1-foundation.md) | v2.0 foundation architecture — Command Palette, Search pipeline, Calendar, Notifications, Feature Flags, Observability, CI/CD |
 
 ## Philosophy
 

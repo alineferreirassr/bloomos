@@ -21,11 +21,11 @@ describe("HealthGauge", () => {
     expect(container.querySelector('[role="progressbar"]')).toHaveAttribute("aria-label", "Draft health");
   });
 
-  it("never applies a percent-tier color class — the bar fill is always the same accent class regardless of value", () => {
+  it("never applies a percent-tier color class — the bar fill is always the same accent gradient regardless of value", () => {
     const low = render(<HealthGauge percent={5} />);
     const high = render(<HealthGauge percent={95} />);
-    const lowFill = low.container.querySelector(".bg-accent");
-    const highFill = high.container.querySelector(".bg-accent");
+    const lowFill = low.container.querySelector(".bloom-gradient-accent");
+    const highFill = high.container.querySelector(".bloom-gradient-accent");
     expect(lowFill).toBeInTheDocument();
     expect(highFill).toBeInTheDocument();
   });

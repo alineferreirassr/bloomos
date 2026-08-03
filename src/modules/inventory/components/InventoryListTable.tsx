@@ -45,21 +45,21 @@ export function InventoryListTable({ items, onChanged }: InventoryListTableProps
   };
 
   return (
-    <div className="hidden overflow-x-auto rounded-md border border-border md:block">
+    <div className="hidden overflow-x-auto rounded-lg border border-border bg-surface shadow-sm md:block">
       <table className="w-full border-collapse text-left text-sm">
         <thead>
           <tr>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Name</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">SKU</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Category</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Type</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Status</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Condition</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">On hand</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Available</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Reserved</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Location</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Name</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">SKU</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Category</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Type</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Status</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Condition</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">On hand</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Available</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Reserved</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Location</th>
+            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">
               <span className="sr-only">Actions</span>
             </th>
           </tr>
@@ -68,7 +68,7 @@ export function InventoryListTable({ items, onChanged }: InventoryListTableProps
           {items.map((item) => {
             const lowStock = isInventoryItemLowStock(item);
             return (
-              <tr key={item.id} className="hover:bg-text/4">
+              <tr key={item.id} className="transition-colors duration-150 hover:bg-accent-100/40">
                 <td className="border-b border-border px-2.5 py-2">
                   <Link href={`/inventory/${item.id}`} className="block max-w-[16rem] truncate font-medium text-text hover:text-accent">
                     {item.name}

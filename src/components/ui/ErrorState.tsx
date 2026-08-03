@@ -8,7 +8,7 @@ export function ErrorState({
   onRetry,
 }: ErrorStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-md border border-border px-6 py-16 text-center">
+    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface-tint px-6 py-16 text-center">
       <p className="text-sm text-text/55">{message}</p>
       {onRetry ? (
         <button

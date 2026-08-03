@@ -8,6 +8,7 @@ import { FormField } from "@/components/forms/FormField";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Button } from "@/components/ui/Button";
 import {
   checklistFormToInput,
@@ -19,6 +20,7 @@ import { NOTE_PRIORITIES, NOTE_PRIORITY_LABELS } from "@/core/enums/notePriority
 import { ASSIGNED_TYPES, ASSIGNED_TYPE_LABELS } from "@/core/enums/assignedType";
 import { CHECKLIST_STATUSES, CHECKLIST_STATUS_LABELS, type ChecklistStatus } from "@/core/enums/checklistStatus";
 import { completeChecklistItem, createChecklistItem, updateChecklistItem, updateChecklistItemStatus } from "@/lib/data";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 import type { ChecklistItem } from "@/types/checklistItem";
 
 interface ChecklistItemFormProps {
@@ -38,6 +40,7 @@ const emptyDefaults: ChecklistItemFormInput = {
   due_date: "",
   assigned_type: "unknown",
   assigned_name: "",
+  client_visible: false,
 };
 
 function itemToFormValues(item: ChecklistItem): ChecklistItemFormInput {
@@ -49,6 +52,7 @@ function itemToFormValues(item: ChecklistItem): ChecklistItemFormInput {
     due_date: item.due_date ?? "",
     assigned_type: item.assigned_type,
     assigned_name: item.assigned_name ?? "",
+    client_visible: item.client_visible ?? false,
   };
 }
 
@@ -63,6 +67,8 @@ function itemToFormValues(item: ChecklistItem): ChecklistItemFormInput {
  * from the schema-bound field update.
  */
 export function ChecklistItemForm({ eventId, item, open, onClose, onSaved }: ChecklistItemFormProps) {
+  const { can } = useMemberSession();
+  const canSetClientVisible = can("client_portal.manage");
   const [formError, setFormError] = useState<string | null>(null);
   const [status, setStatus] = useState<ChecklistStatus>(item?.status ?? "pending");
   const {
@@ -194,6 +200,13 @@ export function ChecklistItemForm({ eventId, item, open, onClose, onSaved }: Che
             <Input id="checklist_assigned_name" invalid={!!errors.assigned_name} {...register("assigned_name")} />
           </FormField>
         </div>
+
+        {canSetClientVisible ? (
+          <label htmlFor="checklist_client_visible" className="flex items-center gap-2 text-sm text-text">
+            <Checkbox id="checklist_client_visible" {...register("client_visible")} />
+            Show in client&apos;s Task Center
+          </label>
+        ) : null}
 
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={isSubmitting}>

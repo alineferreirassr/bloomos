@@ -18,6 +18,7 @@ import { PurchaseNotesSection } from "@/modules/purchases/components/PurchaseNot
 import { PurchaseTimelineSection } from "@/modules/purchases/components/PurchaseTimelineSection";
 import { PurchaseDocumentsSection } from "@/modules/purchases/components/PurchaseDocumentsSection";
 import { formatPurchaseDate } from "@/modules/purchases/mappers";
+import { PurchaseAssignedEventsCard } from "@/modules/operations/components/PurchaseAssignedEventsCard";
 
 type LoadState =
   | { status: "loading" }
@@ -165,6 +166,8 @@ export function PurchaseDetailView({ purchaseId }: { purchaseId: string }) {
               <PurchaseVendorSection vendorId={purchase.vendor_id} />
             </div>
           </Card>
+
+          <PurchaseAssignedEventsCard purchaseId={purchase.id} />
 
           <Card>
             <h3 className="font-serif text-[17px] font-semibold text-text">Internal</h3>

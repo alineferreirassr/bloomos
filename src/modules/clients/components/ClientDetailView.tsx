@@ -23,15 +23,22 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { NotesSection } from "@/modules/notes/components/NotesSection";
 import { Timeline } from "@/modules/timeline/components/Timeline";
+import { EntityTimelinePanel } from "@/modules/communication/timeline/components/EntityTimelinePanel";
+import { CommentsPanel } from "@/modules/communication/comments/components/CommentsPanel";
 import { ClientStatusBadge } from "@/modules/clients/components/ClientStatusBadge";
 import { VipBadge } from "@/modules/clients/components/VipBadge";
 import { ClientActions } from "@/modules/clients/components/ClientActions";
 import { TagsEditor } from "@/modules/clients/components/TagsEditor";
 import { DocumentsSummarySection } from "@/modules/documents/components/DocumentsSummarySection";
+import { DocumentBundlesSection } from "@/modules/documentTemplates/components/DocumentBundlesSection";
 import { ClientAccessSection } from "@/modules/clientAccess/components/ClientAccessSection";
+import { ClientPortalActivitySection } from "@/modules/clients/components/ClientPortalActivitySection";
 import { ClientEventsSummaryCard } from "@/modules/events/components/ClientEventsSummaryCard";
 import { ClientFinancialSummaryCard } from "@/modules/finance/components/ClientFinancialSummaryCard";
+import { ClientJourneySummaryCard } from "@/modules/clientJourney/components/ClientJourneySummaryCard";
 import { CONTACT_METHOD_LABELS } from "@/core/enums/contactMethod";
+import { BloomAvatar } from "@/components/ui/BloomAvatar";
+import { useSetCopilotPageContext } from "@/modules/ai/copilot/CopilotPageContextProvider";
 
 type LoadState =
   | { status: "loading" }
@@ -65,6 +72,11 @@ async function loadClientDetail(clientId: string): Promise<LoadState> {
 
 export function ClientDetailView({ clientId }: { clientId: string }) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  useSetCopilotPageContext(
+    state.status === "ready"
+      ? { module: "crm", entity: { type: "client", id: state.client.id, label: `${state.client.first_name} ${state.client.last_name}` } }
+      : { module: "crm", entity: null },
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -107,10 +119,7 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
     <div className="space-y-6">
       <div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent/10 text-sm font-semibold text-accent">
-            {client.first_name[0]}
-            {client.last_name[0]}
-          </div>
+          <BloomAvatar name={`${client.first_name} ${client.last_name}`} />
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-3xl font-semibold text-text">
@@ -278,18 +287,39 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
             </dl>
           </Card>
 
+          <ClientJourneySummaryCard clientId={client.id} />
+
           <ClientEventsSummaryCard events={events} />
 
           <ClientFinancialSummaryCard clientId={client.id} summary={financialSummary} />
 
           <DocumentsSummarySection ownerType="client" ownerId={client.id} newDocumentParams={{ clientId: client.id }} />
 
+          <DocumentBundlesSection clientId={client.id} />
+
           <ClientAccessSection clientId={client.id} clientEmail={client.email} />
+
+          <ClientPortalActivitySection clientId={client.id} />
 
           <Card>
             <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
             <div className="mt-3">
               <Timeline activities={timeline} />
+            </div>
+          </Card>
+
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Communication Timeline</h3>
+            <p className="mt-1 text-xs text-text-muted">Comments, notifications, and other activity for this client — v2 Checkpoint 24.</p>
+            <div className="mt-3">
+              <EntityTimelinePanel ownerType="client" ownerId={client.id} />
+            </div>
+          </Card>
+
+          <Card>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Comments</h3>
+            <div className="mt-3">
+              <CommentsPanel ownerType="client" ownerId={client.id} />
             </div>
           </Card>
         </div>

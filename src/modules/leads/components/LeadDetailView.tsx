@@ -16,6 +16,7 @@ import { LeadActions } from "@/modules/leads/components/LeadActions";
 import { NotesSection } from "@/modules/notes/components/NotesSection";
 import { Timeline } from "@/modules/timeline/components/Timeline";
 import { getNextRecommendedAction } from "@/core/workflows/leadWorkflow";
+import { LeadJourneySummaryCard } from "@/modules/clientJourney/components/LeadJourneySummaryCard";
 
 type LoadState =
   | { status: "loading" }
@@ -118,6 +119,8 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
           <p className="mt-1 text-sm text-text">{nextAction}</p>
         </Card>
       ) : null}
+
+      {!isReadOnly ? <LeadJourneySummaryCard leadId={lead.id} /> : null}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">

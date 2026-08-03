@@ -8,6 +8,7 @@ import type { PaymentStatus } from "@/core/enums/paymentStatus";
 import type { PaymentMethod } from "@/core/enums/paymentMethod";
 import type { DocumentCategory } from "@/core/enums/documentCategory";
 import type { DocumentStatus } from "@/core/enums/documentStatus";
+import type { ClientDocumentApprovalStatus } from "@/types/clientDocumentApproval";
 
 /**
  * Client-safe projections — deliberately their own types, not `Pick<Event,...>`
@@ -128,6 +129,9 @@ export interface ClientPortalDocument {
   expires_at: string | null;
   created_at: string;
   updated_at: string;
+  /** Checkpoint 14 — the client's own approval decision on this Document, enriched in from `ClientDocumentApproval` at read time; `"pending"` for a Document the client has never decided on. */
+  approvalStatus: ClientDocumentApprovalStatus;
+  approvalComment: string | null;
 }
 
 export interface ClientPortalOverview {

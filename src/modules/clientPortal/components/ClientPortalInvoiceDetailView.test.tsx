@@ -1,9 +1,23 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { NotFoundError } from "@/core/errors";
 
 vi.mock("@/lib/data", () => ({
   getClientPortalInvoiceById: vi.fn(),
+  logClientPortalActivityForCurrentSession: vi.fn(),
+  getInvoiceById: vi.fn(),
+  getCurrentClientAccountContext: vi.fn().mockResolvedValue(null),
+}));
+vi.mock("@/modules/clientPortal/getClientPortalReceiptAction", () => ({
+  getClientPortalReceiptForInvoice: vi.fn(),
+}));
+vi.mock("@/modules/integrations/stripe/clientPortalPaymentActions", () => ({
+  createClientPortalDepositCheckoutAction: vi.fn(),
+  createClientPortalBalanceCheckoutAction: vi.fn(),
+  getClientPortalInvoicePdfAction: vi.fn().mockResolvedValue({ success: true, url: null }),
+}));
+vi.mock("@/components/providers/ClientAccountSessionProvider", () => ({
+  useClientAccountSession: () => ({ workspaceId: "ws_1", clientId: "client_1", accountId: "account_1" }),
 }));
 
 afterEach(() => {
@@ -12,6 +26,7 @@ afterEach(() => {
 
 import { ClientPortalInvoiceDetailView } from "@/modules/clientPortal/components/ClientPortalInvoiceDetailView";
 import { getClientPortalInvoiceById } from "@/lib/data";
+import { getClientPortalReceiptForInvoice } from "@/modules/clientPortal/getClientPortalReceiptAction";
 
 const INVOICE = {
   id: "invoice_1",
@@ -80,5 +95,28 @@ describe("ClientPortalInvoiceDetailView", () => {
     await waitFor(() => expect(screen.getByText("Deposit Invoice")).toBeInTheDocument());
     expect(screen.queryByText(/expense/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /refund/i })).not.toBeInTheDocument();
+  });
+
+  it("Step 5: View Receipt renders the compiled Document Platform receipt's own plain text", async () => {
+    vi.mocked(getClientPortalInvoiceById).mockResolvedValue(INVOICE as never);
+    vi.mocked(getClientPortalReceiptForInvoice).mockResolvedValue({ success: true, text: "Receipt for INV-1001\nPaid in full." });
+
+    render(<ClientPortalInvoiceDetailView invoiceId="invoice_1" />);
+    await waitFor(() => expect(screen.getByRole("button", { name: /view receipt/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /view receipt/i }));
+
+    await waitFor(() => expect(screen.getByText(/Paid in full/)).toBeInTheDocument());
+    expect(getClientPortalReceiptForInvoice).toHaveBeenCalledWith("invoice_1");
+  });
+
+  it("Step 5: shows a clear message rather than an error when no receipt has been generated yet", async () => {
+    vi.mocked(getClientPortalInvoiceById).mockResolvedValue(INVOICE as never);
+    vi.mocked(getClientPortalReceiptForInvoice).mockResolvedValue({ success: true, text: null });
+
+    render(<ClientPortalInvoiceDetailView invoiceId="invoice_1" />);
+    await waitFor(() => expect(screen.getByRole("button", { name: /view receipt/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /view receipt/i }));
+
+    await waitFor(() => expect(screen.getByText(/no receipt has been generated/i)).toBeInTheDocument());
   });
 });

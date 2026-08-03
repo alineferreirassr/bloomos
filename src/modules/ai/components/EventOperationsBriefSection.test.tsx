@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EventOperationsBriefSection } from "@/modules/ai/components/EventOperationsBriefSection";
+import { getSkillRunner, resetSkillRunnerRegistry } from "@/core/ai/skills/runnerRegistry";
+import { EVENT_OPERATIONS_BRIEF_SKILL_ID } from "@/modules/ai/registerEventOperationsBriefSkill";
 import type { GenerateEventOperationsBriefResult, GeneratedEventOperationsBrief, EventOperationsBrief } from "@/modules/ai/types";
 
 vi.mock("@/modules/ai/generateEventOperationsBrief", () => ({
@@ -12,6 +14,7 @@ import { generateEventOperationsBrief } from "@/modules/ai/generateEventOperatio
 
 afterEach(() => {
   vi.clearAllMocks();
+  resetSkillRunnerRegistry();
 });
 
 function makeBrief(
@@ -215,5 +218,29 @@ describe("EventOperationsBriefSection", () => {
     expect(screen.getByRole("heading", { name: /health score explanation/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /recommended actions/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /regenerate ai brief/i })).toBeInTheDocument();
+  });
+
+  describe("Bloom AI Skill runner integration", () => {
+    it("registers itself as the Event Operations Brief Skill's runner while mounted", () => {
+      const { unmount } = render(<EventOperationsBriefSection eventId="event_1" />);
+      expect(getSkillRunner(EVENT_OPERATIONS_BRIEF_SKILL_ID)).toBeDefined();
+      unmount();
+    });
+
+    it("unregisters its runner on unmount", () => {
+      const { unmount } = render(<EventOperationsBriefSection eventId="event_1" />);
+      unmount();
+      expect(getSkillRunner(EVENT_OPERATIONS_BRIEF_SKILL_ID)).toBeUndefined();
+    });
+
+    it("running the Skill Picker's Event Operations Brief card generates the brief, same as clicking Generate", async () => {
+      vi.mocked(generateEventOperationsBrief).mockResolvedValue({ success: true, data: makeBrief() });
+      render(<EventOperationsBriefSection eventId="event_1" />);
+
+      await getSkillRunner(EVENT_OPERATIONS_BRIEF_SKILL_ID)?.();
+
+      await waitFor(() => expect(screen.getByText(/progressing normally/i)).toBeInTheDocument());
+      expect(generateEventOperationsBrief).toHaveBeenCalledWith("event_1");
+    });
   });
 });

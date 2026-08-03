@@ -29,7 +29,7 @@ export function ProgressBar({ value, label, className = "" }: ProgressBarProps) 
         className="h-1.5 flex-1 overflow-hidden rounded-full bg-text/10"
       >
         <div
-          className="h-full rounded-full bg-accent transition-[width] duration-[var(--duration-base-ms)] ease-[var(--easing-standard)]"
+          className="bloom-gradient-accent h-full rounded-full transition-[width] duration-[var(--duration-base-ms)] ease-[var(--easing-standard)]"
           style={{ width: `${clamped}%` }}
         />
       </div>

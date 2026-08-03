@@ -17,7 +17,7 @@ describe("Services loading/empty/error state presets", () => {
     const { container } = render(<ServicesLoadingSkeleton rows={4} />);
     expect(container.firstChild).toHaveAttribute("aria-busy", "true");
     expect(container.firstChild).toHaveAttribute("aria-live", "polite");
-    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(4);
+    expect(container.querySelectorAll(".luxury-shimmer")).toHaveLength(4);
   });
 
   it("ServicesCatalogEmptyState/ErrorState show Services-specific copy via the generic primitives", async () => {
