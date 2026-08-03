@@ -192,12 +192,13 @@ describe("updatePassword", () => {
     expect(result.success).toBe(false);
   });
 
-  it("redirects to /sign-in on success", async () => {
+  it("returns success without redirecting (the client shows a success message before navigating)", async () => {
     setSupabaseConfigured();
     vi.mocked(createClient).mockResolvedValue(mockSupabaseClient({}) as never);
 
-    await updatePassword({ password: "new-secret" });
+    const result = await updatePassword({ password: "new-secret" });
 
-    expect(redirect).toHaveBeenCalledWith("/sign-in");
+    expect(result).toEqual({ success: true });
+    expect(redirect).not.toHaveBeenCalled();
   });
 });

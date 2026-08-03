@@ -118,5 +118,5 @@ export async function updatePassword(input: { password: string }): Promise<AuthA
     return { success: false, error: normalizeSupabaseError(error).message };
   }
 
-  redirect("/sign-in");
+  return { success: true };
 }

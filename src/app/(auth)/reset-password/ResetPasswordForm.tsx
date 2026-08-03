@@ -7,10 +7,10 @@ import { Card } from "@/components/ui/Card";
 import { FormField } from "@/components/forms/FormField";
 import { requestPasswordReset } from "@/lib/auth/actions";
 
-export function ResetPasswordForm() {
+export function ResetPasswordForm({ initialError }: { initialError?: string } = {}) {
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(initialError ?? null);
   const [sent, setSent] = useState(false);
 
   const submit = async (event: FormEvent) => {

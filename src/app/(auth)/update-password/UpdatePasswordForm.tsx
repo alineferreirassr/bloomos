@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
@@ -8,10 +9,18 @@ import { FormField } from "@/components/forms/FormField";
 import { updatePassword } from "@/lib/auth/actions";
 
 export function UpdatePasswordForm() {
+  const router = useRouter();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!success) return;
+    const timer = setTimeout(() => router.push("/sign-in"), 2500);
+    return () => clearTimeout(timer);
+  }, [success, router]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -31,8 +40,24 @@ export function UpdatePasswordForm() {
     setSubmitting(false);
     if (result && !result.success) {
       setFormError(result.error);
+      return;
     }
+    setSuccess(true);
   };
+
+  if (success) {
+    return (
+      <Card>
+        <h1 className="mb-2 font-serif text-lg font-semibold text-text">Password updated</h1>
+        <p className="text-sm text-text-muted">
+          Your password has been changed. Redirecting you to sign in…
+        </p>
+        <a href="/sign-in" className="mt-4 block text-center text-xs text-accent hover:underline">
+          Continue to sign in
+        </a>
+      </Card>
+    );
+  }
 
   return (
     <Card>

@@ -15,13 +15,13 @@ export async function GET(request: NextRequest) {
   const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/update-password";
 
   if (!code || !isSupabaseConfigured()) {
-    return NextResponse.redirect(`${origin}/sign-in`);
+    return NextResponse.redirect(`${origin}/reset-password?error=invalid_link`);
   }
 
   const supabase = await createClient();
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) {
-    return NextResponse.redirect(`${origin}/sign-in`);
+    return NextResponse.redirect(`${origin}/reset-password?error=invalid_link`);
   }
 
   return NextResponse.redirect(`${origin}${safeNext}`);
