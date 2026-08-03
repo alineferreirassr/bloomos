@@ -1,0 +1,1 @@
+Apply the `project-rules` skill: confirm the current branch, `HEAD`, and `git status`, and report them plainly (branch name, short SHA + subject, clean/dirty). Flag anything that contradicts what the user believes the current state to be — don't silently proceed on a stale assumption. No other action unless asked.

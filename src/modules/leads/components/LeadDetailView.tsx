@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getLeadById, getNotesByLeadId, getTimelineByLeadId } from "@/lib/data";
+import { createNote, getLeadById, getNotesByLeadId, getTimelineByLeadId, togglePinNote } from "@/lib/data";
 import type { Lead } from "@/types/lead";
-import type { LeadNote } from "@/types/note";
+import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
 import { NotFoundError } from "@/core/errors";
 import { Card } from "@/components/ui/Card";
@@ -13,15 +13,16 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { LeadStatusBadge } from "@/modules/leads/components/LeadStatusBadge";
 import { LeadStatusSelect } from "@/modules/leads/components/LeadStatusSelect";
 import { LeadActions } from "@/modules/leads/components/LeadActions";
-import { NotesSection } from "@/modules/leads/components/NotesSection";
-import { LeadTimeline } from "@/modules/leads/components/LeadTimeline";
+import { NotesSection } from "@/modules/notes/components/NotesSection";
+import { Timeline } from "@/modules/timeline/components/Timeline";
 import { getNextRecommendedAction } from "@/core/workflows/leadWorkflow";
+import { LeadJourneySummaryCard } from "@/modules/clientJourney/components/LeadJourneySummaryCard";
 
 type LoadState =
   | { status: "loading" }
   | { status: "not-found" }
   | { status: "error" }
-  | { status: "ready"; lead: Lead; notes: LeadNote[]; timeline: TimelineActivity[] };
+  | { status: "ready"; lead: Lead; notes: Note[]; timeline: TimelineActivity[] };
 
 async function loadLeadDetail(leadId: string): Promise<LoadState> {
   try {
@@ -83,7 +84,7 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
     <div className="space-y-6">
       <div>
         <div className="flex flex-wrap items-center gap-3">
-          <h2 className="text-xl font-semibold text-text">
+          <h2 className="text-3xl font-semibold text-text">
             {lead.first_name} {lead.last_name}
           </h2>
           <LeadStatusBadge status={lead.status} />
@@ -119,10 +120,12 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
         </Card>
       ) : null}
 
+      {!isReadOnly ? <LeadJourneySummaryCard leadId={lead.id} /> : null}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card>
-            <h3 className="text-sm font-medium text-text-muted">Contact information</h3>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Contact information</h3>
             <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Email" value={lead.email} />
               <Field label="Phone" value={lead.phone} />
@@ -133,7 +136,7 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
           </Card>
 
           <Card>
-            <h3 className="text-sm font-medium text-text-muted">Event information</h3>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Event information</h3>
             <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Event type" value={lead.event_type} />
               <Field
@@ -152,11 +155,15 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
           </Card>
 
           <Card>
-            <h3 className="text-sm font-medium text-text-muted">Notes</h3>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
             <div className="mt-3">
               <NotesSection
-                leadId={lead.id}
+                workspaceId={lead.workspace_id}
+                ownerType="lead"
+                ownerId={lead.id}
                 notes={notes}
+                onCreateNote={(input) => createNote(lead.id, input)}
+                onTogglePin={togglePinNote}
                 readOnly={isReadOnly}
                 onNotesChanged={refetch}
               />
@@ -166,15 +173,15 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
 
         <div className="space-y-6">
           <Card>
-            <h3 className="text-sm font-medium text-text-muted">Status</h3>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Status</h3>
             <div className="mt-3">
               <LeadStatusSelect leadId={lead.id} status={lead.status} onChanged={refetch} />
             </div>
           </Card>
           <Card>
-            <h3 className="text-sm font-medium text-text-muted">Timeline</h3>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
             <div className="mt-3">
-              <LeadTimeline activities={timeline} />
+              <Timeline activities={timeline} />
             </div>
           </Card>
         </div>

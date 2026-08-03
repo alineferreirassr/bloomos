@@ -1,4 +1,4 @@
-import { ClientProofView } from "@/modules/clients/components/ClientProofView";
+import { ClientDetailView } from "@/modules/clients/components/ClientDetailView";
 
 export default async function ClientDetailPage({
   params,
@@ -6,5 +6,5 @@ export default async function ClientDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <ClientProofView clientId={id} />;
+  return <ClientDetailView key={id} clientId={id} />;
 }

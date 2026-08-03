@@ -5,10 +5,12 @@ import {
   createNote,
   getClientById,
   getNotesByLeadId,
+  getTimelineByClientId,
   getTimelineByLeadId,
   resetAllMockData,
 } from "@/lib/data";
 import type { LeadFormInput } from "@/modules/leads/schema";
+import { makeClient } from "@/modules/clients/testUtils";
 
 const validInput: LeadFormInput = {
   first_name: "Priya",
@@ -43,7 +45,7 @@ describe("convertLeadToClient", () => {
     expect(result.data.lead.converted_client_id).toBe(result.data.client.id);
     expect(result.data.client.first_name).toBe("Priya");
     expect(result.data.client.email).toBe("priya@example.com");
-    expect(result.data.client.origin_lead_id).toBe(created.data.id);
+    expect(result.data.client.originating_lead_id).toBe(created.data.id);
 
     const storedClient = await getClientById(result.data.client.id);
     expect(storedClient.id).toBe(result.data.client.id);
@@ -93,5 +95,153 @@ describe("convertLeadToClient", () => {
     for (const activity of timelineBefore) {
       expect(timelineAfter).toContainEqual(activity);
     }
+  });
+});
+
+describe("convertLeadToClient — expanded Client model validation", () => {
+  it("produces a Client satisfying the full canonical Client shape, with no undefined fields", async () => {
+    const created = await createLead(validInput);
+    if (!created.success) throw new Error("setup failed");
+
+    const result = await convertLeadToClient(created.data.id);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    const { client } = result.data;
+
+    // Every canonical field exists and is defined — compares against the
+    // testUtils fixture, which enumerates the full 44-field Client shape.
+    expect(Object.keys(client).sort()).toEqual(Object.keys(makeClient()).sort());
+    for (const [key, value] of Object.entries(client)) {
+      expect(value, `field "${key}" should not be undefined`).not.toBeUndefined();
+    }
+
+    // Explicit defaults are sane for a freshly converted Client.
+    expect(client.internal_status).toBe("active");
+    expect(client.is_vip).toBe(false);
+    expect(client.tags).toEqual([]);
+    expect(client.important_dates).toEqual([]);
+    expect(client.archived_at).toBeNull();
+  });
+
+  it("preserves workspace_id from the originating Lead onto the new Client", async () => {
+    const created = await createLead(validInput);
+    if (!created.success) throw new Error("setup failed");
+
+    const result = await convertLeadToClient(created.data.id);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.data.client.workspace_id).toBe(created.data.workspace_id);
+    expect(result.data.lead.workspace_id).toBe(created.data.workspace_id);
+  });
+
+  it("preserves originating_lead_id on the new Client", async () => {
+    const created = await createLead(validInput);
+    if (!created.success) throw new Error("setup failed");
+
+    const result = await convertLeadToClient(created.data.id);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.data.client.originating_lead_id).toBe(created.data.id);
+
+    const stored = await getClientById(result.data.client.id);
+    expect(stored.originating_lead_id).toBe(created.data.id);
+  });
+
+  it("scopes the new Client's timeline separately from the Lead's — no cross-contamination", async () => {
+    const created = await createLead(validInput);
+    if (!created.success) throw new Error("setup failed");
+
+    const result = await convertLeadToClient(created.data.id);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    const leadTimeline = await getTimelineByLeadId(created.data.id);
+    const clientTimeline = await getTimelineByClientId(result.data.client.id);
+
+    expect(leadTimeline.every((activity) => activity.owner_type === "lead")).toBe(true);
+    expect(leadTimeline.every((activity) => activity.workspace_id === created.data.workspace_id)).toBe(
+      true,
+    );
+    expect(leadTimeline.some((activity) => activity.type === "client_created")).toBe(false);
+
+    expect(clientTimeline.every((activity) => activity.owner_type === "client")).toBe(true);
+    expect(
+      clientTimeline.every((activity) => activity.workspace_id === result.data.client.workspace_id),
+    ).toBe(true);
+    expect(clientTimeline.some((activity) => activity.type === "client_created")).toBe(true);
+  });
+});
+
+describe("convertLeadToClient — duplicate-Client prevention (Booking Workflow, Phase 2)", () => {
+  it("reuses an existing Client sharing the same email instead of creating a duplicate", async () => {
+    const firstLead = await createLead(validInput);
+    if (!firstLead.success) throw new Error("setup failed");
+    const firstConversion = await convertLeadToClient(firstLead.data.id);
+    expect(firstConversion.success).toBe(true);
+    if (!firstConversion.success) return;
+
+    const secondLead = await createLead({ ...validInput, first_name: "Priya", last_name: "Returning" });
+    if (!secondLead.success) throw new Error("setup failed");
+    const secondConversion = await convertLeadToClient(secondLead.data.id);
+    expect(secondConversion.success).toBe(true);
+    if (!secondConversion.success) return;
+
+    expect(secondConversion.data.client.id).toBe(firstConversion.data.client.id);
+    expect(secondConversion.data.lead.converted_client_id).toBe(firstConversion.data.client.id);
+  });
+
+  it("matches by email case- and whitespace-insensitively", async () => {
+    const firstLead = await createLead(validInput);
+    if (!firstLead.success) throw new Error("setup failed");
+    const firstConversion = await convertLeadToClient(firstLead.data.id);
+    expect(firstConversion.success).toBe(true);
+    if (!firstConversion.success) return;
+
+    const secondLead = await createLead({ ...validInput, email: "  PRIYA@EXAMPLE.COM  " });
+    if (!secondLead.success) throw new Error("setup failed");
+    const secondConversion = await convertLeadToClient(secondLead.data.id);
+    expect(secondConversion.success).toBe(true);
+    if (!secondConversion.success) return;
+
+    expect(secondConversion.data.client.id).toBe(firstConversion.data.client.id);
+  });
+
+  it("only backfills originating_lead_id on the reused Client when it was previously null — never overwrites an existing one", async () => {
+    const firstLead = await createLead(validInput);
+    if (!firstLead.success) throw new Error("setup failed");
+    const firstConversion = await convertLeadToClient(firstLead.data.id);
+    expect(firstConversion.success).toBe(true);
+    if (!firstConversion.success) return;
+    expect(firstConversion.data.client.originating_lead_id).toBe(firstLead.data.id);
+
+    const secondLead = await createLead(validInput);
+    if (!secondLead.success) throw new Error("setup failed");
+    const secondConversion = await convertLeadToClient(secondLead.data.id);
+    expect(secondConversion.success).toBe(true);
+    if (!secondConversion.success) return;
+
+    // Reused the same Client, but its original originating_lead_id (the first Lead) is untouched.
+    expect(secondConversion.data.client.originating_lead_id).toBe(firstLead.data.id);
+    const stored = await getClientById(secondConversion.data.client.id);
+    expect(stored.originating_lead_id).toBe(firstLead.data.id);
+  });
+
+  it("records a distinct timeline entry when a Lead is linked to an existing Client rather than creating one", async () => {
+    const firstLead = await createLead(validInput);
+    if (!firstLead.success) throw new Error("setup failed");
+    const firstConversion = await convertLeadToClient(firstLead.data.id);
+    expect(firstConversion.success).toBe(true);
+
+    const secondLead = await createLead(validInput);
+    if (!secondLead.success) throw new Error("setup failed");
+    const secondConversion = await convertLeadToClient(secondLead.data.id);
+    expect(secondConversion.success).toBe(true);
+    if (!secondConversion.success) return;
+
+    const clientTimeline = await getTimelineByClientId(secondConversion.data.client.id);
+    expect(clientTimeline.some((activity) => activity.type === "client_updated")).toBe(true);
   });
 });

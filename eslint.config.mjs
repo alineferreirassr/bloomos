@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated coverage reports (npm run test:coverage*) — already
+    // gitignored via /coverage; never meant to be linted or committed.
+    "coverage/**",
   ]),
 ]);
 

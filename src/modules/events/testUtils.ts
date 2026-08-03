@@ -1,0 +1,95 @@
+import type { Event } from "@/types/event";
+import type { ChecklistItem } from "@/types/checklistItem";
+import type { EventScheduleItem } from "@/types/eventScheduleItem";
+
+/** Test-only fixture factory — not imported by any app code. */
+export function makeEvent(overrides: Partial<Event> = {}): Event {
+  return {
+    id: "event_test",
+    workspace_id: "ws_test",
+    client_id: "client_test",
+    originating_lead_id: null,
+    title: "Test Event",
+    event_type: "other",
+    status: "draft",
+    lifecycle_stage: "intake",
+    event_date: null,
+    start_time: null,
+    end_time: null,
+    timezone: null,
+    location_name: null,
+    address: null,
+    city: null,
+    state: null,
+    zip_code: null,
+    latitude: null,
+    longitude: null,
+    guest_count: null,
+    budget_min: null,
+    budget_max: null,
+    package_name: null,
+    theme: null,
+    color_palette: null,
+    surprise_event: false,
+    confidentiality_notes: null,
+    accessibility_notes: null,
+    dietary_notes: null,
+    weather_plan: null,
+    backup_location: null,
+    internal_summary: null,
+    assigned_owner: null,
+    priority: "normal",
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+    archived_at: null,
+    completed_at: null,
+    cancelled_at: null,
+    ...overrides,
+  };
+}
+
+/** Test-only fixture factory — not imported by any app code. */
+export function makeChecklistItem(overrides: Partial<ChecklistItem> = {}): ChecklistItem {
+  return {
+    id: "checklist_test",
+    workspace_id: "ws_test",
+    owner_type: "event",
+    owner_id: "event_test",
+    title: "Test checklist item",
+    description: null,
+    category: "planning",
+    priority: "normal",
+    status: "pending",
+    due_date: null,
+    completed_at: null,
+    assigned_type: "unknown",
+    assigned_id: null,
+    assigned_name: null,
+    sort_order: 0,
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+/** Test-only fixture factory — not imported by any app code. */
+export function makeScheduleItem(overrides: Partial<EventScheduleItem> = {}): EventScheduleItem {
+  return {
+    id: "schedule_test",
+    workspace_id: "ws_test",
+    owner_type: "event",
+    owner_id: "event_test",
+    title: "Test schedule item",
+    description: null,
+    start_time: null,
+    end_time: null,
+    location: null,
+    assigned_to: null,
+    category: "setup",
+    status: "planned",
+    sort_order: 0,
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}

@@ -1,0 +1,1 @@
+Apply the `supabase-migration` skill, stopping at the approval gate: list exact pending migrations, explain what each creates, and confirm no unrelated tables are affected. Do not push anything — wait for a separate, explicit approval before applying.

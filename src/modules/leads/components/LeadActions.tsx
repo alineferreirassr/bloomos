@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { ConvertToClientModal } from "@/modules/leads/components/ConvertToClientModal";
 import { archiveLead, markWelcomeGuideSent } from "@/lib/data";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 import type { Lead } from "@/types/lead";
 import type { Client } from "@/types/client";
 
@@ -15,6 +16,11 @@ interface LeadActionsProps {
 }
 
 export function LeadActions({ lead, onChanged, onConverted }: LeadActionsProps) {
+  const { can } = useMemberSession();
+  const canUpdate = can("leads.update");
+  const canArchive = can("leads.archive");
+  // Converting creates a new Client record in addition to updating the Lead.
+  const canConvert = canUpdate && can("clients.create");
   const [convertOpen, setConvertOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<"welcome_guide" | "archive" | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -53,12 +59,12 @@ export function LeadActions({ lead, onChanged, onConverted }: LeadActionsProps) 
   return (
     <div>
       <div className="flex flex-wrap items-center gap-3">
-        {!isConverted ? (
+        {!isConverted && canUpdate ? (
           <Link href={`/leads/${lead.id}/edit`}>
             <Button variant="secondary">Edit</Button>
           </Link>
         ) : null}
-        {!isConverted && !isArchived ? (
+        {!isConverted && !isArchived && canUpdate ? (
           <Button
             variant="secondary"
             onClick={handleWelcomeGuide}
@@ -67,7 +73,7 @@ export function LeadActions({ lead, onChanged, onConverted }: LeadActionsProps) 
             {pendingAction === "welcome_guide" ? "Sending…" : "Mark Welcome Guide as Sent"}
           </Button>
         ) : null}
-        {!isConverted && !isArchived ? (
+        {!isConverted && !isArchived && canArchive ? (
           <Button
             variant="secondary"
             onClick={handleArchive}
@@ -76,7 +82,7 @@ export function LeadActions({ lead, onChanged, onConverted }: LeadActionsProps) 
             {pendingAction === "archive" ? "Archiving…" : "Archive"}
           </Button>
         ) : null}
-        {!isConverted ? (
+        {!isConverted && canConvert ? (
           <Button onClick={() => setConvertOpen(true)}>Convert to Client</Button>
         ) : lead.converted_client_id ? (
           <Link href={`/clients/${lead.converted_client_id}`}>

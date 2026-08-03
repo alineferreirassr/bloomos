@@ -1,0 +1,10 @@
+export type { SkillCategory, SkillDefinition, SkillMetadata, SkillExecuteFn, SkillExecuteParams, SkillExecutionResult, SkillExecutionMetadata, SkillExecutionError } from "@/core/ai/skills/types";
+export { SKILL_CATEGORIES } from "@/core/ai/skills/types";
+export { registerSkill, unregisterSkill, getSkill, listSkills, listSkillsByCategory, resetSkillRegistry } from "@/core/ai/skills/registry";
+export { executeSkill, runSkillCompletion } from "@/core/ai/skills/resolver";
+export type { ExecuteSkillParams, RunSkillCompletionParams } from "@/core/ai/skills/resolver";
+export { listSkillsForWorkspace, getSkillMetadata } from "@/core/ai/skills/discovery";
+export type { ListSkillsForWorkspaceParams } from "@/core/ai/skills/discovery";
+export { registerSkillRunner, unregisterSkillRunner, getSkillRunner, resetSkillRunnerRegistry } from "@/core/ai/skills/runnerRegistry";
+export { mapSkillErrorToMessage } from "@/core/ai/skills/errorMapping";
+export type { SkillErrorMessages } from "@/core/ai/skills/errorMapping";

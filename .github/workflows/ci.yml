@@ -1,0 +1,43 @@
+name: CI
+
+# Runs the exact quality-gate chain every checkpoint of this project has run
+# manually since v1 (`npm run lint && npm run typecheck && npm run
+# test:coverage`), plus a production build — automating what was previously
+# an accepted v1.0 operational risk (see RELEASE_NOTES.md's Known Limitations).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test with coverage
+        run: npm run test:coverage
+
+      - name: Production build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_DATA_MODE: mock

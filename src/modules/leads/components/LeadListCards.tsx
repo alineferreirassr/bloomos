@@ -8,17 +8,17 @@ export function LeadListCards({ leads }: { leads: Lead[] }) {
     <div className="space-y-3 md:hidden">
       {leads.map((lead) => (
         <Link key={lead.id} href={`/leads/${lead.id}`} className="block">
-          <Card className="transition-colors hover:border-accent">
+          <Card className="transition-colors duration-150 hover:border-accent/50">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-medium text-text">
+                <p className="font-medium tracking-tight text-text">
                   {lead.first_name} {lead.last_name}
                 </p>
-                <p className="text-xs text-text-muted">{lead.email}</p>
+                <p className="mt-0.5 text-xs text-text-muted">{lead.email}</p>
               </div>
               <LeadStatusBadge status={lead.status} />
             </div>
-            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted">
+            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted">
               <span>{lead.source}</span>
               {lead.event_type ? <span>{lead.event_type}</span> : null}
               {lead.event_date ? (

@@ -1,0 +1,43 @@
+export const CHECKLIST_CATEGORIES = [
+  "planning",
+  "client",
+  "venue",
+  "decor",
+  "flowers",
+  "photography",
+  "video",
+  "food_beverage",
+  "transportation",
+  "team",
+  "inventory",
+  "finance",
+  "legal",
+  "weather",
+  "setup",
+  "cleanup",
+  "post_event",
+  "other",
+] as const;
+
+export type ChecklistCategory = (typeof CHECKLIST_CATEGORIES)[number];
+
+export const CHECKLIST_CATEGORY_LABELS: Record<ChecklistCategory, string> = {
+  planning: "Planning",
+  client: "Client",
+  venue: "Venue",
+  decor: "Decor",
+  flowers: "Flowers",
+  photography: "Photography",
+  video: "Video",
+  food_beverage: "Food & Beverage",
+  transportation: "Transportation",
+  team: "Team",
+  inventory: "Inventory",
+  finance: "Finance",
+  legal: "Legal",
+  weather: "Weather",
+  setup: "Setup",
+  cleanup: "Cleanup",
+  post_event: "Post-Event",
+  other: "Other",
+};

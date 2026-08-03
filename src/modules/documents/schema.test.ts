@@ -1,0 +1,214 @@
+import { describe, expect, it } from "vitest";
+import {
+  documentMetadataInputSchema,
+  newDocumentVersionInputSchema,
+  documentSchema,
+  documentFolderInputSchema,
+  documentFolderSchema,
+} from "@/modules/documents/schema";
+
+const validMetadataInput = {
+  owner_type: "client" as const,
+  owner_id: "client_1",
+  folder_id: null,
+  title: null,
+  description: null,
+  category: "identification" as const,
+  visibility: "internal" as const,
+  media_asset_id: null,
+  expires_at: null,
+  uploaded_by: null,
+  contract_exhibit_id: null,
+  event_id: null,
+  client_id: null,
+  contract_id: null,
+  invoice_id: null,
+  payment_id: null,
+  expense_id: null,
+};
+
+describe("documentMetadataInputSchema", () => {
+  it("accepts a valid input", () => {
+    expect(documentMetadataInputSchema.safeParse(validMetadataInput).success).toBe(true);
+  });
+
+  it("rejects a missing owner_id", () => {
+    expect(documentMetadataInputSchema.safeParse({ ...validMetadataInput, owner_id: "" }).success).toBe(false);
+  });
+
+  it("rejects an empty-string title (must be null, not blank)", () => {
+    expect(documentMetadataInputSchema.safeParse({ ...validMetadataInput, title: "" }).success).toBe(false);
+  });
+
+  it("accepts a null title (defaulted by the data layer)", () => {
+    expect(documentMetadataInputSchema.safeParse({ ...validMetadataInput, title: null }).success).toBe(true);
+  });
+
+  it("accepts a non-null media_asset_id (validated for real existence by the data layer, not here)", () => {
+    const result = documentMetadataInputSchema.safeParse({ ...validMetadataInput, media_asset_id: "media_1" });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("newDocumentVersionInputSchema", () => {
+  const validVersionInput = {
+    document_id: "document_1",
+    media_asset_id: null,
+    uploaded_by: null,
+  };
+
+  it("accepts a minimal valid input with no category field", () => {
+    expect(newDocumentVersionInputSchema.safeParse(validVersionInput).success).toBe(true);
+  });
+
+  it("accepts a non-null media_asset_id", () => {
+    const result = newDocumentVersionInputSchema.safeParse({ ...validVersionInput, media_asset_id: "media_1" });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts optional title/visibility/expires_at overrides", () => {
+    const result = newDocumentVersionInputSchema.safeParse({
+      ...validVersionInput,
+      title: "Updated Title",
+      visibility: "client",
+      expires_at: "2027-01-01T00:00:00.000Z",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an empty-string title override (must be null, not blank)", () => {
+    const result = newDocumentVersionInputSchema.safeParse({ ...validVersionInput, title: "" });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("documentSchema", () => {
+  const validDocument = {
+    id: "document_1",
+    workspace_id: "ws_1",
+    owner_type: "client" as const,
+    owner_id: "client_1",
+    folder_id: null,
+    title: "Photo ID",
+    description: null,
+    category: "identification" as const,
+    status: "active" as const,
+    visibility: "internal" as const,
+    media_asset_id: "media_1",
+    file_name: "photo_id.jpg",
+    original_file_name: "IMG.jpg",
+    file_extension: "jpg",
+    mime_type: "image/jpeg",
+    size_bytes: 100_000,
+    storage_provider: "mock" as const,
+    storage_bucket: "media-assets",
+    storage_path: "ws_1/document/document_1/media_1/v1/photo_id.jpg",
+    checksum: "mock_abc123",
+    version: 1,
+    is_latest_version: true,
+    parent_document_id: null,
+    contract_exhibit_id: null,
+    event_id: null,
+    client_id: "client_1",
+    contract_id: null,
+    invoice_id: null,
+    payment_id: null,
+    expense_id: null,
+    uploaded_by: null,
+    uploaded_at: "2026-01-01T00:00:00.000Z",
+    expires_at: null,
+    archived_at: null,
+    deleted_at: null,
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+  };
+
+  it("accepts a fully valid Document record with a linked MediaAsset", () => {
+    expect(documentSchema.safeParse(validDocument).success).toBe(true);
+  });
+
+  it("accepts a metadata-only Document record (no MediaAsset linked, every file field null)", () => {
+    const result = documentSchema.safeParse({
+      ...validDocument,
+      media_asset_id: null,
+      file_name: null,
+      original_file_name: null,
+      file_extension: null,
+      mime_type: null,
+      size_bytes: null,
+      storage_bucket: null,
+      storage_path: null,
+      checksum: null,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects file metadata present without a linked media_asset_id", () => {
+    const result = documentSchema.safeParse({ ...validDocument, media_asset_id: null });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects expires_at at or before uploaded_at", () => {
+    const result = documentSchema.safeParse({ ...validDocument, expires_at: "2026-01-01T00:00:00.000Z" });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts expires_at after uploaded_at", () => {
+    const result = documentSchema.safeParse({ ...validDocument, expires_at: "2026-02-01T00:00:00.000Z" });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a chain root (parent_document_id: null) that isn't version 1", () => {
+    const result = documentSchema.safeParse({ ...validDocument, parent_document_id: null, version: 2 });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a non-root version above 1", () => {
+    const result = documentSchema.safeParse({ ...validDocument, parent_document_id: "document_0", version: 2 });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("documentFolderInputSchema", () => {
+  const validFolderInput = {
+    owner_type: "client" as const,
+    owner_id: "client_1",
+    parent_folder_id: null,
+    name: "Contracts",
+    description: null,
+    sort_order: 0,
+    visibility: "internal" as const,
+  };
+
+  it("accepts a valid folder input", () => {
+    expect(documentFolderInputSchema.safeParse(validFolderInput).success).toBe(true);
+  });
+
+  it("rejects a blank name", () => {
+    expect(documentFolderInputSchema.safeParse({ ...validFolderInput, name: "" }).success).toBe(false);
+  });
+
+  it("rejects a negative sort_order", () => {
+    expect(documentFolderInputSchema.safeParse({ ...validFolderInput, sort_order: -1 }).success).toBe(false);
+  });
+});
+
+describe("documentFolderSchema", () => {
+  it("accepts a fully valid DocumentFolder record", () => {
+    const result = documentFolderSchema.safeParse({
+      id: "docfolder_1",
+      workspace_id: "ws_1",
+      owner_type: "client",
+      owner_id: "client_1",
+      parent_folder_id: null,
+      name: "Contracts",
+      description: null,
+      sort_order: 0,
+      visibility: "internal",
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: "2026-01-01T00:00:00.000Z",
+      archived_at: null,
+    });
+    expect(result.success).toBe(true);
+  });
+});

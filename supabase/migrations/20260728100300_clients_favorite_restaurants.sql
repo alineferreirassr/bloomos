@@ -1,0 +1,21 @@
+-- Clients Core-integration foundation phase — one additive column.
+--
+-- Every other requested field (Address, Emergency Contact, Relationship
+-- Status, Communication Preferences, Preferences, Important Dates,
+-- Favorite Flowers, Favorite Colors) was already present on this table
+-- (address/city/state/zip_code, emergency_contact_name/phone,
+-- relationship_status, preferred_contact_method/do_not_call/
+-- preferred_communication_time, favorite_colors/flowers/music/food/drinks/
+-- preferred_style/disliked_elements, important_dates) — see
+-- src/types/client.ts. favorite_restaurants is the one genuinely missing
+-- sibling field, added in the same free-text style as favorite_food/
+-- favorite_drinks right next to it.
+--
+-- The remaining requested extension points (Proposal History, Event
+-- History, Payment Summary, Document Summary, Communication History, AI
+-- Profile Summary) are deliberately NOT columns here — each is a derived
+-- view of another module's data (Leads/Events/Finance/Documents/Bloom AI),
+-- which this phase explicitly does not integrate yet. See
+-- src/types/clientExtensions.ts and src/lib/data/clients/extensions.ts.
+
+alter table public.clients add column favorite_restaurants text null;

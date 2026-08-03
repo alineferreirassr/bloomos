@@ -9,7 +9,7 @@ export function NewLeadView() {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold text-text">New Lead</h2>
+      <h2 className="text-3xl font-semibold text-text">New Lead</h2>
       <div className="mt-6 max-w-3xl">
         <LeadForm
           submitLabel="Create Lead"

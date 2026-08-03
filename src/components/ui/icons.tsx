@@ -1,98 +1,230 @@
-import type { ReactNode, SVGProps } from "react";
+import type { SVGProps } from "react";
+import {
+  Home,
+  Users,
+  User,
+  Calendar,
+  FileText,
+  DollarSign,
+  Folder,
+  Menu,
+  X,
+  UserCog,
+  KeyRound,
+  Kanban,
+  Handshake,
+  Package,
+  Truck,
+  ShoppingCart,
+  Wrench,
+  Sparkles,
+  Settings,
+  ChevronRight,
+  Lock,
+  LayoutGrid,
+  List,
+  GripVertical,
+  ChevronDown,
+  Plus,
+  Check,
+  Zap,
+  Plug,
+  LayoutTemplate,
+  BarChart3,
+  FileBarChart2,
+  Terminal,
+  Store,
+  Bell,
+  BellRing,
+  Inbox,
+  Image,
+  Search,
+  Command,
+} from "lucide-react";
 
 type IconProps = SVGProps<SVGSVGElement>;
 
-function Icon({ children, ...props }: IconProps & { children: ReactNode }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      {...props}
-    >
-      {children}
-    </svg>
-  );
-}
-
+/* Icon choice per nav item matches the approved Sidebar.dc.html exactly:
+   dashboard=home, leads=users (group), clients=user (single person),
+   events=calendar, contracts=file, financial=dollar. */
 export function DashboardIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" />
-      <rect x="13.5" y="3.5" width="7" height="7" rx="1.5" />
-      <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" />
-      <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" />
-    </Icon>
-  );
+  return <Home strokeWidth={2} aria-hidden="true" {...props} />;
 }
 
 export function LeadsIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M9 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
-      <path d="M3 20c0-3.31 2.69-6 6-6s6 2.69 6 6" />
-      <path d="M18 8v6M15 11h6" />
-    </Icon>
-  );
+  return <Users strokeWidth={2} aria-hidden="true" {...props} />;
 }
 
 export function ClientsIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M8 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
-      <path d="M2.5 20c0-3.04 2.46-5.5 5.5-5.5s5.5 2.46 5.5 5.5" />
-      <path d="M16 9.5a2.75 2.75 0 1 0 0-5.5" />
-      <path d="M14.5 14.3c2.6.4 4.5 2.66 4.5 5.2" />
-    </Icon>
-  );
+  return <User strokeWidth={2} aria-hidden="true" {...props} />;
 }
 
 export function EventsIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <rect x="3.5" y="4.5" width="17" height="16" rx="2" />
-      <path d="M3.5 9.5h17" />
-      <path d="M8 3v3M16 3v3" />
-    </Icon>
-  );
+  return <Calendar strokeWidth={2} aria-hidden="true" {...props} />;
 }
 
 export function ContractsIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M6.5 3.5h8l4 4v13a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1Z" />
-      <path d="M14 3.5v4h4" />
-      <path d="M8.5 12h7M8.5 15.5h7M8.5 8.5h3" />
-    </Icon>
-  );
+  return <FileText strokeWidth={2} aria-hidden="true" {...props} />;
 }
 
 export function FinanceIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <rect x="3" y="6" width="18" height="13" rx="2" />
-      <path d="M3 10h18" />
-      <path d="M7 14.5h3" />
-    </Icon>
-  );
+  return <DollarSign strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+export function DocumentsIcon(props: IconProps) {
+  return <Folder strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+export function TeamIcon(props: IconProps) {
+  return <UserCog strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+export function PipelineIcon(props: IconProps) {
+  return <Kanban strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Distinct from ClientsIcon (the CRM record) — this represents external account/access administration, not the client relationship itself. */
+export function ClientPortalIcon(props: IconProps) {
+  return <KeyRound strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** CRM (top-level nav module) — distinct from ClientsIcon/LeadsIcon, which represent the individual record types nested inside it. */
+export function CrmIcon(props: IconProps) {
+  return <Handshake strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+export function InventoryIcon(props: IconProps) {
+  return <Package strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+export function VendorsIcon(props: IconProps) {
+  return <Truck strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+export function PurchasesIcon(props: IconProps) {
+  return <ShoppingCart strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+export function ServicesIcon(props: IconProps) {
+  return <Wrench strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+export function BloomAiIcon(props: IconProps) {
+  return <Sparkles strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+export function SettingsIcon(props: IconProps) {
+  return <Settings strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Automation Engine (top-level nav module, Checkpoint 9) — distinct from BloomAiIcon: this represents deterministic, triggered execution, not AI generation. */
+export function AutomationIcon(props: IconProps) {
+  return <Zap strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Document Intelligence Platform (top-level nav module, Checkpoint 12) — distinct from DocumentsIcon: this represents template-driven generation, not file storage/upload. */
+export function DocumentTemplatesIcon(props: IconProps) {
+  return <LayoutTemplate strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Executive Analytics Platform (top-level nav module, Checkpoint 15) — cross-module KPIs/trends, distinct from every single-domain icon above. */
+export function AnalyticsIcon(props: IconProps) {
+  return <BarChart3 strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Reporting & Business Intelligence Platform (top-level nav module, Checkpoint 42) — the unified Reporting Center, distinct from AnalyticsIcon's plain bar chart: this is composed, saved, and shareable reports over every module's own metrics. */
+export function ReportsIcon(props: IconProps) {
+  return <FileBarChart2 strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Communication & Collaboration Platform (top-level nav module, Checkpoint 24) — Notification Center/Activity Feed/Announcements/Reminders. */
+export function CommunicationsIcon(props: IconProps) {
+  return <Bell strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Notification Center (top-level nav module, Checkpoint 41) — the dedicated `/notifications` dashboard, distinct from CommunicationsIcon's plain Bell (the `/communications` tab it lives alongside). */
+export function NotificationsIcon(props: IconProps) {
+  return <BellRing strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Unified Inbox (top-level nav module, Checkpoint 24) — Internal Messaging + Client Portal threads merged, distinct from CommunicationsIcon: this is conversations, not alerts. */
+export function InboxIcon(props: IconProps) {
+  return <Inbox strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Public API Developer Console (top-level nav module, Checkpoint 16) — API Keys/scopes/usage, distinct from SettingsIcon: this is a developer-facing credential surface, not a Workspace configuration screen. */
+export function DeveloperIcon(props: IconProps) {
+  return <Terminal strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Marketplace & Integrations Platform (top-level nav module, Checkpoint 18) — Browse/Installed connectors, distinct from DeveloperIcon: this is a Workspace-owner-facing catalog, not a credential/API surface. */
+export function MarketplaceIcon(props: IconProps) {
+  return <Store strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Enterprise Integration Platform (top-level nav module, v2 Checkpoint 22) — the workspace-wide connection health dashboard, distinct from MarketplaceIcon (a Browse/Install catalog) and DeveloperIcon (API Keys/Webhooks/config): this is a read-only health view of installed provider connections. */
+export function IntegrationsIcon(props: IconProps) {
+  return <Plug strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Expand/collapse affordance for a nav module with nested children — rotates via a CSS transform, never swapped for a separate "collapsed" icon component. */
+export function NavChevronIcon(props: IconProps) {
+  return <ChevronRight strokeWidth={2} aria-hidden="true" {...props} />;
 }
 
 export function MenuIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M4 7h16M4 12h16M4 17h16" />
-    </Icon>
-  );
+  return <Menu strokeWidth={2} aria-hidden="true" {...props} />;
 }
 
 export function CloseIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M6 6l12 12M18 6L6 18" />
-    </Icon>
-  );
+  return <X strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** A published (immutable) ServiceVersion or a locked/read-only row — e.g. TemplateItemRow's published-version lock state. */
+export function LockIcon(props: IconProps) {
+  return <Lock strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Grid/card view mode — e.g. the Services Catalog's ViewToggle. */
+export function GridViewIcon(props: IconProps) {
+  return <LayoutGrid strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** List/table view mode — e.g. the Services Catalog's ViewToggle. */
+export function ListViewIcon(props: IconProps) {
+  return <List strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** A drag handle affordance — e.g. TemplateItemRow's reorder grip. */
+export function GripIcon(props: IconProps) {
+  return <GripVertical strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Expand/collapse affordance — rotate via className for the collapsed state. */
+export function ChevronDownIcon(props: IconProps) {
+  return <ChevronDown strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Add-item affordance — e.g. a Template category's "Add item" button. */
+export function PlusIcon(props: IconProps) {
+  return <Plus strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** A success confirmation — e.g. the shared Toast's success tone. */
+export function CheckIcon(props: IconProps) {
+  return <Check strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/* v2.0 Checkpoint 25 — Digital Asset Management Platform. */
+export function AssetsIcon(props: IconProps) {
+  return <Image strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/* v2.0 Checkpoint 40 — Global Search & Universal Command Center. */
+export function SearchIcon(props: IconProps) {
+  return <Search strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+export function CommandCenterIcon(props: IconProps) {
+  return <Command strokeWidth={2} aria-hidden="true" {...props} />;
 }

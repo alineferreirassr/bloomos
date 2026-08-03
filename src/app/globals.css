@@ -1,40 +1,494 @@
 @import "tailwindcss";
 
+/*
+  Checkpoint 19.1 — Global Luxury Rollout. These tokens used to hold the
+  original Classical gold/ink handoff values; Checkpoint 19.1 repoints THEIR
+  VALUES ONLY to the same Amoré Bloom Luxury palette the Owner/Team/Client
+  Dashboards already use (see the --luxury-* block below, unchanged). Variable
+  NAMES are untouched, so every existing bg-surface / text-text / border-border
+  / bg-accent / etc. call site across all ~100 pages repaints automatically —
+  zero component edits, zero business-logic risk. This is a visual unification,
+  not a redesign: the three approved Dashboards keep reading their own
+  --luxury-* namespace unchanged, and now everything else matches them too.
+*/
+
 :root {
+  --color-background: #fdf2ef;
+  --color-sidebar: #fdf2ef;
   --color-surface: #ffffff;
-  --color-surface-muted: #fafaf9;
-  --color-border: #e7e5e4;
-  --color-text: #1c1917;
-  --color-text-muted: #78716c;
-  --color-accent: #9f4a5c;
+  --color-surface-tint: #fdf6f4;
+  --color-border: color-mix(in srgb, #7a4d43 14%, transparent);
+  --color-text: #2a1f1c;
+  --color-text-muted: color-mix(in srgb, #2a1f1c 55%, transparent);
+  --color-accent: #d8695a;
+  --color-accent-2: #e8a189;
   --color-accent-foreground: #ffffff;
+
+  --color-accent-100: #f6dcd6;
+  --color-accent-800: #5c2c20;
+  --color-neutral-100: #fffaf6;
+  --color-neutral-800: #2a1f1c;
+
+  /* The Luxury system solved status color properly with real distinct hues
+     (Checkpoint 19, Step 1) instead of the old single-accent-family
+     workaround — adopting the same three hues here so status language is
+     consistent everywhere, not just on the Dashboards. */
+  --color-danger: #c24f42;
+  --color-danger-foreground: #ffffff;
+  --color-success: #5f8d6b;
+  --color-success-foreground: #ffffff;
+  --color-warning: #c98a3e;
+  --color-warning-foreground: #ffffff;
+
+  --font-heading-family: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
+  --font-body-family: var(--font-lora), "Lora", Georgia, serif;
+
+  --radius-sm-px: 8px;
+  --radius-md-px: 14px;
+  --radius-lg-px: 20px;
+
+  --shadow-sm-val: 0 1px 3px color-mix(in srgb, #7a4d43 6%, transparent);
+  --shadow-md-val: 0 8px 24px color-mix(in srgb, #7a4d43 8%, transparent);
+  /* Reserved for large, edge-anchored surfaces (Drawer) that sit above
+     Modal's own shadow-md — same warm color-mix family, just a longer
+     throw, never Tailwind's default cool-gray shadow-lg. */
+  --shadow-lg-val: 0 16px 40px color-mix(in srgb, #7a4d43 10%, transparent);
+
+  /* Semantic spacing steps for component authoring (e.g. a Drawer's own
+     padding/gap), layered on top of Tailwind's own numeric spacing scale
+     rather than replacing it — reach for these only when a size needs a
+     name, not a number. */
+  --spacing-xs-px: 8px;
+  --spacing-sm-px: 12px;
+  --spacing-md-px: 16px;
+  --spacing-lg-px: 24px;
+  --spacing-xl-px: 32px;
+
+  /* Motion — one shared timing/easing vocabulary so every future
+     transition (Drawer slide, Tooltip fade, Modal backdrop) reads as the
+     same system instead of each component picking its own duration. */
+  --duration-fast-ms: 120ms;
+  --duration-base-ms: 200ms;
+  --duration-slow-ms: 320ms;
+  --easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --easing-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --easing-accelerate: cubic-bezier(0.4, 0, 1, 1);
+
+  --icon-size-sm-px: 14px;
+  --icon-size-md-px: 16px;
+  --icon-size-lg-px: 20px;
+
+  /* A shared stacking order so a Tooltip can always render above a Drawer,
+     which always renders above a Modal's own backdrop, etc., regardless of
+     DOM insertion order. */
+  --z-index-dropdown: 10;
+  --z-index-sticky: 20;
+  --z-index-overlay: 40;
+  --z-index-modal: 50;
+  --z-index-tooltip: 60;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-surface: #171412;
-    --color-surface-muted: #1f1b19;
-    --color-border: #322c29;
-    --color-text: #f5f1ee;
-    --color-text-muted: #a39a94;
-    --color-accent: #d98a9a;
-    --color-accent-foreground: #1c1917;
-  }
+:root {
+  /*
+    Checkpoint 19 — Amoré Bloom Luxury Design System. Additive only: every
+    token here is newly namespaced `--luxury-*` and consumed only by the
+    new Owner/Team/Client Dashboard shell and its shared components
+    (`components/luxury/*`). Nothing above this block changes — the rest
+    of the app (CRM, Finance, Documents, Developer, Marketplace, ...) keeps
+    the existing Classical gold/ink system unchanged, since a full
+    application re-skin is this checkpoint's own explicit Non-Goal. See
+    docs/luxury-design-system.md for the full rationale and a comparison
+    against the three approved reference images.
+  */
+  --luxury-background: #fdf2ef;
+  --luxury-sidebar: #fdf2ef;
+  --luxury-surface: #ffffff;
+  --luxury-surface-tint: #fdf6f4;
+  --luxury-border: color-mix(in srgb, #7a4d43 14%, transparent);
+  --luxury-text: #2a1f1c;
+  --luxury-text-muted: color-mix(in srgb, #2a1f1c 55%, transparent);
+
+  --luxury-blush: #f6dcd6;
+  --luxury-blush-foreground: #8a4a3f;
+  --luxury-rose: #d8695a;
+  --luxury-rose-foreground: #ffffff;
+  --luxury-coral: #e8a189;
+  --luxury-coral-foreground: #5c2c20;
+  --luxury-ivory: #fffaf6;
+  --luxury-warm-white: #fffdfb;
+  --luxury-beige: #b3a29a;
+
+  /* Distinct hues (not one shared accent family) — Step 1 asks for
+     Success/Warning/Critical/Pending as their own text colors, unlike the
+     Classical system's deliberate single-accent-family status language. */
+  --luxury-success: #5f8d6b;
+  --luxury-success-foreground: #ffffff;
+  --luxury-warning: #c98a3e;
+  --luxury-warning-foreground: #ffffff;
+  --luxury-critical: #c24f42;
+  --luxury-critical-foreground: #ffffff;
+  --luxury-pending: #9c8d86;
+  --luxury-pending-foreground: #ffffff;
+
+  /* Same font stacks as the Classical system (Cormorant Garamond display,
+     Lora body) — the reference images' headline serif matches what's
+     already loaded, so no new webfont is introduced. */
+  --luxury-font-display: var(--font-heading-family);
+  --luxury-font-body: var(--font-body-family);
+
+  --luxury-radius-sm: 8px;
+  --luxury-radius-md: 14px;
+  --luxury-radius-lg: 20px;
+  --luxury-radius-full: 999px;
+
+  --luxury-shadow-sm: 0 1px 3px color-mix(in srgb, #7a4d43 6%, transparent);
+  --luxury-shadow-md: 0 8px 24px color-mix(in srgb, #7a4d43 8%, transparent);
+  --luxury-shadow-lg: 0 16px 40px color-mix(in srgb, #7a4d43 10%, transparent);
+
+  /* A touch slower than the Classical system's base duration — "keep
+     motion subtle and elegant" (Step 15) reads calmer with a gentler
+     entrance than the operational app's snappier 200ms default. */
+  --luxury-duration-gentle-ms: 260ms;
+
+  --luxury-focus-ring: 0 0 0 3px color-mix(in srgb, #d8695a 35%, transparent);
+
+  /* Type scale — Step 2's own named hierarchy. Sizes only; components
+     combine these with `--luxury-font-display`/`-body` and a weight. */
+  --luxury-text-display-size: 2.5rem;
+  --luxury-text-display-line: 1.15;
+  --luxury-text-page-size: 1.75rem;
+  --luxury-text-section-size: 1.125rem;
+  --luxury-text-card-heading-size: 1rem;
+  --luxury-text-body-size: 0.9375rem;
+  --luxury-text-small-size: 0.8125rem;
+  --luxury-text-metadata-size: 0.75rem;
+  --luxury-text-status-size: 0.6875rem;
+  --luxury-text-numeric-size: 1.75rem;
 }
 
 @theme inline {
+  --color-luxury-background: var(--luxury-background);
+  --color-luxury-sidebar: var(--luxury-sidebar);
+  --color-luxury-surface: var(--luxury-surface);
+  --color-luxury-surface-tint: var(--luxury-surface-tint);
+  --color-luxury-border: var(--luxury-border);
+  --color-luxury-text: var(--luxury-text);
+  --color-luxury-text-muted: var(--luxury-text-muted);
+  --color-luxury-blush: var(--luxury-blush);
+  --color-luxury-blush-foreground: var(--luxury-blush-foreground);
+  --color-luxury-rose: var(--luxury-rose);
+  --color-luxury-rose-foreground: var(--luxury-rose-foreground);
+  --color-luxury-coral: var(--luxury-coral);
+  --color-luxury-coral-foreground: var(--luxury-coral-foreground);
+  --color-luxury-ivory: var(--luxury-ivory);
+  --color-luxury-warm-white: var(--luxury-warm-white);
+  --color-luxury-beige: var(--luxury-beige);
+  --color-luxury-success: var(--luxury-success);
+  --color-luxury-success-foreground: var(--luxury-success-foreground);
+  --color-luxury-warning: var(--luxury-warning);
+  --color-luxury-warning-foreground: var(--luxury-warning-foreground);
+  --color-luxury-critical: var(--luxury-critical);
+  --color-luxury-critical-foreground: var(--luxury-critical-foreground);
+  --color-luxury-pending: var(--luxury-pending);
+  --color-luxury-pending-foreground: var(--luxury-pending-foreground);
+  --font-luxury-display: var(--luxury-font-display);
+  --font-luxury-body: var(--luxury-font-body);
+  --radius-luxury-sm: var(--luxury-radius-sm);
+  --radius-luxury-md: var(--luxury-radius-md);
+  --radius-luxury-lg: var(--luxury-radius-lg);
+  --radius-luxury-full: var(--luxury-radius-full);
+  --shadow-luxury-sm: var(--luxury-shadow-sm);
+  --shadow-luxury-md: var(--luxury-shadow-md);
+  --shadow-luxury-lg: var(--luxury-shadow-lg);
+
+  /* `--text-*` is Tailwind v4's font-size namespace — each entry below
+     generates a `text-luxury-*` utility (optionally paired with a
+     line-height via the `--text-*--line-height` sibling key). */
+  --text-luxury-display: var(--luxury-text-display-size);
+  --text-luxury-display--line-height: var(--luxury-text-display-line);
+  --text-luxury-page: var(--luxury-text-page-size);
+  --text-luxury-section: var(--luxury-text-section-size);
+  --text-luxury-card-heading: var(--luxury-text-card-heading-size);
+  --text-luxury-body: var(--luxury-text-body-size);
+  --text-luxury-small: var(--luxury-text-small-size);
+  --text-luxury-metadata: var(--luxury-text-metadata-size);
+  --text-luxury-status: var(--luxury-text-status-size);
+  --text-luxury-numeric: var(--luxury-text-numeric-size);
+}
+
+@theme inline {
+  --color-background: var(--color-background);
+  --color-sidebar: var(--color-sidebar);
   --color-surface: var(--color-surface);
-  --color-surface-muted: var(--color-surface-muted);
+  --color-surface-tint: var(--color-surface-tint);
+  --color-surface-muted: var(--color-surface-tint);
   --color-border: var(--color-border);
   --color-text: var(--color-text);
   --color-text-muted: var(--color-text-muted);
   --color-accent: var(--color-accent);
+  --color-accent-2: var(--color-accent-2);
   --color-accent-foreground: var(--color-accent-foreground);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-accent-100: var(--color-accent-100);
+  --color-accent-800: var(--color-accent-800);
+  --color-neutral-100: var(--color-neutral-100);
+  --color-neutral-800: var(--color-neutral-800);
+  --color-danger: var(--color-danger);
+  --color-danger-foreground: var(--color-danger-foreground);
+  --color-success: var(--color-success);
+  --color-success-foreground: var(--color-success-foreground);
+  --color-warning: var(--color-warning);
+  --color-warning-foreground: var(--color-warning-foreground);
+  --font-sans: var(--font-body-family);
+  --font-serif: var(--font-heading-family);
+  --radius-sm: var(--radius-sm-px);
+  --radius-md: var(--radius-md-px);
+  --radius-lg: var(--radius-lg-px);
+  /* Wires the shadow-sm/md/lg utilities to the warm color-mix values above
+     instead of Tailwind's generic cool-gray defaults — shadow-sm/md were
+     previously defined but never actually consumed by the utility classes
+     of the same name; this makes every existing shadow-sm/shadow-md call
+     site (ActionMenu, Modal, MobileNav) resolve correctly too. */
+  --shadow-sm: var(--shadow-sm-val);
+  --shadow-md: var(--shadow-md-val);
+  --shadow-lg: var(--shadow-lg-val);
 }
 
 body {
-  background: var(--color-surface-muted);
+  background: var(--color-background);
   color: var(--color-text);
   font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+h1,
+h2 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+}
+
+/* Checkpoint 19, Step 15 — a single sitewide rule (not just the new Luxury
+   Dashboard components) so every existing transition/animation across the
+   whole app respects a visitor's OS-level reduced-motion preference,
+   collapsing to an effectively-instant state change rather than a jump
+   cut mid-animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+  Checkpoint 19.2 — Luxury Motion System. One shared, named vocabulary of
+  entrance/feedback animations so every module reaches for the same handful
+  of elegant, restrained motions instead of inventing its own. Every
+  animation here is neutralized by the `prefers-reduced-motion` rule above
+  (it targets `*`, so nothing below needs its own reduced-motion override).
+  Durations sit inside the checkpoint's own 180-350ms band; easing reuses
+  the existing --easing-standard/--easing-decelerate tokens rather than
+  introducing a new curve vocabulary. See docs/luxury-motion-system.md.
+*/
+
+@keyframes luxury-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes luxury-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes luxury-fade-down {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes luxury-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes luxury-success-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes luxury-shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+.animate-fade-in {
+  animation: luxury-fade-in var(--duration-slow-ms) var(--easing-decelerate) both;
+}
+
+.animate-fade-up {
+  animation: luxury-fade-up var(--duration-slow-ms) var(--easing-decelerate) both;
+}
+
+.animate-fade-down {
+  animation: luxury-fade-down var(--duration-slow-ms) var(--easing-decelerate) both;
+}
+
+.animate-scale-in {
+  animation: luxury-scale-in var(--duration-base-ms) var(--easing-decelerate) both;
+}
+
+/* Widget/Timeline Reveal — the same fade-up language, named separately so a
+   Dashboard widget or a Timeline row can be targeted independently of a
+   generic "fade up" without duplicating the keyframe. */
+.animate-widget-reveal,
+.animate-timeline-reveal {
+  animation: luxury-fade-up var(--duration-slow-ms) var(--easing-decelerate) both;
+}
+
+.animate-success-pop {
+  animation: luxury-success-pop var(--duration-slow-ms) var(--easing-decelerate) both;
+}
+
+/* Soft Hover / Soft Press — elegant, never playful: a small lift and a
+   softer shadow on hover, a slight settle on press. Opt-in via class since
+   not every card/button wants a lift (e.g. a table row already has its own
+   hover tint). */
+.hover-lift {
+  transition:
+    transform var(--duration-base-ms) var(--easing-standard),
+    box-shadow var(--duration-base-ms) var(--easing-standard);
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.hover-lift:active {
+  transform: translateY(0) scale(0.99);
+}
+
+/* Card Cascade — a staggered fade-up for a grid/list of siblings (KPI rows,
+   Dashboard widgets). Apply `animate-fade-up` plus one of these to each
+   child in sequence; six steps covers every KPI row and metric grid in the
+   app without needing an arbitrary-index utility generator. */
+.stagger-0 {
+  animation-delay: 0ms;
+}
+.stagger-1 {
+  animation-delay: 40ms;
+}
+.stagger-2 {
+  animation-delay: 80ms;
+}
+.stagger-3 {
+  animation-delay: 120ms;
+}
+.stagger-4 {
+  animation-delay: 160ms;
+}
+.stagger-5 {
+  animation-delay: 200ms;
+}
+.stagger-6 {
+  animation-delay: 240ms;
+}
+
+/* Modal / Drawer / Toast entrance — distinct per surface (centered scale-in
+   for Modal, edge slide-in for Drawer, a gentle rise for Toast) so each
+   still reads as the same elegant family without being identical. */
+.animate-modal-in {
+  animation: luxury-scale-in var(--duration-base-ms) var(--easing-decelerate) both;
+}
+
+@keyframes luxury-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+.animate-drawer-in {
+  animation: luxury-drawer-in var(--duration-base-ms) var(--easing-decelerate) both;
+}
+
+.animate-toast-in {
+  animation: luxury-fade-up var(--duration-base-ms) var(--easing-decelerate) both;
+}
+
+/* Loading Transition — the shimmer sweep every Skeleton uses instead of a
+   flat pulse; a soft, moving highlight reads calmer than an opacity blink. */
+.luxury-shimmer {
+  background: linear-gradient(
+    100deg,
+    var(--color-border) 30%,
+    color-mix(in srgb, var(--color-accent) 12%, var(--color-border)) 50%,
+    var(--color-border) 70%
+  );
+  background-size: 200% 100%;
+  animation: luxury-shimmer 1.8s ease-in-out infinite;
+}
+
+/*
+  Checkpoint 19.3 — Bloom Design Language. Two new surface treatments,
+  additive only: a glass panel (for a floating/overlaid surface that should
+  read as "above" the page without a hard card border) and a brand gradient
+  (a restrained two-stop wash, never a loud multi-color blend). Both reuse
+  the existing warm color-mix family (#7a4d43) so they read as the same
+  system as --shadow-sm/md/lg, not a new palette. See
+  docs/bloom-design-language.md for the full elevation/surface reference.
+*/
+.bloom-glass {
+  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid color-mix(in srgb, var(--color-surface) 40%, var(--color-border));
+}
+
+.bloom-gradient-surface {
+  background: linear-gradient(
+    165deg,
+    var(--color-surface) 0%,
+    var(--color-surface-tint) 100%
+  );
+}
+
+.bloom-gradient-accent {
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-2) 100%);
+}
+
+/* Elevation scale — named aliases over the existing --shadow-sm/md/lg
+   tokens (Card=resting, Popover=raised menus/tooltips, Modal=highest). No
+   new shadow VALUES were introduced; this just gives the existing three
+   steps names that match how they're actually used across the app. */
+.bloom-elevation-card {
+  box-shadow: var(--shadow-sm);
+}
+.bloom-elevation-popover {
+  box-shadow: var(--shadow-md);
+}
+.bloom-elevation-modal {
+  box-shadow: var(--shadow-lg);
 }

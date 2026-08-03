@@ -1,0 +1,56 @@
+import {
+  DollarSign,
+  Wallet,
+  AlertTriangle,
+  CalendarClock,
+  UserPlus,
+  TrendingUp,
+  FileCheck,
+  CalendarPlus,
+  FileText,
+  Download,
+  Eye,
+  CheckCircle2,
+  Play,
+  AlertOctagon,
+  FlaskConical,
+  LogIn,
+  ListChecks,
+  History,
+  Bell,
+  Sparkles,
+  Newspaper,
+  Send,
+  HelpCircle,
+  type LucideIcon,
+} from "lucide-react";
+
+/** `MetricDefinition.icon` is a plain string (never a component reference — keeps the Metrics Registry importable from server code), the same reasoning `modules/workflow/canvas/nodeIcons.ts` already established for Workflow nodes. `HelpCircle` is the fallback for a name not in this map. */
+const METRIC_ICONS: Record<string, LucideIcon> = {
+  DollarSign,
+  Wallet,
+  AlertTriangle,
+  CalendarClock,
+  UserPlus,
+  TrendingUp,
+  FileCheck,
+  CalendarPlus,
+  FileText,
+  Download,
+  Eye,
+  CheckCircle2,
+  Play,
+  AlertOctagon,
+  FlaskConical,
+  LogIn,
+  ListChecks,
+  History,
+  Bell,
+  Sparkles,
+  Newspaper,
+  Send,
+};
+
+export function resolveMetricIcon(name: string): LucideIcon {
+  return METRIC_ICONS[name] ?? HelpCircle;
+}

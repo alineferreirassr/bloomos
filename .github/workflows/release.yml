@@ -1,0 +1,53 @@
+name: Release
+
+# Triggered by pushing a `v*` tag (e.g. `v1.0.0`, the tag this project's own
+# v1.0.0 release used). Re-runs the full quality-gate chain against the
+# exact tagged commit — a tag is not trusted just because CI passed on the
+# branch at some earlier point — then publishes a GitHub Release from it.
+# This is a verify-and-publish workflow, not a deployment pipeline: BloomOS
+# has no configured deployment target yet (see RELEASE_NOTES.md).
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  verify-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test with coverage
+        run: npm run test:coverage
+
+      - name: Production build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_DATA_MODE: mock
+
+      # body_path points at the one RELEASE_NOTES.md this repo has today
+      # (written for v1.0.0). A future release should replace this with a
+      # per-version notes file once a second one exists — not a v2
+      # Checkpoint 1 concern.
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
