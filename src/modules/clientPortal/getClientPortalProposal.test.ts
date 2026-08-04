@@ -3,6 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/auth/memberSessionSnapshot", () => ({
   resolveMemberSessionSnapshot: vi.fn(),
 }));
+// This module transitively imports @/modules/clientJourney/clientJourneyActions
+// (via proposalPlatformActions.ts's evaluateClientJourneyAction call), which
+// now imports @/lib/auth/workspaceSession, which transitively imports the
+// server-only-gated @/lib/supabase/server. Mock it out so that import doesn't
+// throw in this non-Server-Component test environment.
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: vi.fn(),
+}));
 
 import { createLead, bookLead, resetAllMockData, type BookLeadInput } from "@/lib/data";
 import { getClientPortalProposalAction, compareClientPortalProposalVersionsAction, requestProposalRevisionAction, submitClientProposalResponseAction, toggleFavoriteProposalAction, listClientPortalProposalsAction } from "@/modules/clientPortal/getClientPortalProposal";

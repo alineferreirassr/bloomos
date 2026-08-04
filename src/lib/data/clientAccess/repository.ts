@@ -33,7 +33,7 @@ export interface ClientAccessRepository {
   getClientAccounts(clientId?: string): Promise<ClientAccount[]>;
   /** `context` optionally injects an already-authenticated server Supabase client — see EventsRepository's identical doc comment. Ignored by the mock implementation. */
   getClientAccountById(id: string, context?: ServerRepositoryContext): Promise<ClientAccount>;
-  getClientAccountsByClientId(clientId: string): Promise<ClientAccount[]>;
+  getClientAccountsByClientId(clientId: string, context?: ServerRepositoryContext): Promise<ClientAccount[]>;
   /** Checkpoint 16 — every Client Portal account in one Workspace, no session required. Powers the Public API's Portal Users endpoint, which authenticates via API Key rather than a `workspace_members` session. */
   getClientAccountsForWorkspace(workspaceId: string): Promise<ClientAccount[]>;
   getCurrentClientAccount(): Promise<ClientAccount | null>;

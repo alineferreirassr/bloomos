@@ -1,6 +1,8 @@
 "use server";
 
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+import { getServerRepositoryContext, type ServerRepositoryContext } from "@/lib/auth/workspaceSession";
+import { getDataMode } from "@/lib/env";
 import { recordTimelineActivity } from "@/lib/data/mock/timelineStore";
 import { nowIso } from "@/lib/data/utils";
 
@@ -53,12 +55,12 @@ type ActionResult<T> = { success: true; data: T } | { success: false; error: str
 // Source data gathering — the one place every engine's input is assembled.
 // ---------------------------------------------------------------------------
 
-async function gatherJourneyRecords(workspaceId: string, subjectType: JourneySubjectType, subjectId: string) {
+async function gatherJourneyRecords(workspaceId: string, subjectType: JourneySubjectType, subjectId: string, repoContext?: ServerRepositoryContext) {
   const lead = subjectType === "lead" ? await getLeadById(subjectId).catch(() => null) : null;
-  const client = subjectType === "client" ? await getClientById(subjectId).catch(() => null) : null;
+  const client = subjectType === "client" ? await getClientById(subjectId, repoContext).catch(() => null) : null;
   const clientId = subjectType === "client" ? subjectId : null;
 
-  const events = clientId ? await getEvents({ clientId }) : [];
+  const events = clientId ? await getEvents({ clientId }, repoContext) : [];
   const focusEvent = mostRecentEvent(events);
 
   const proposalArrays = await Promise.all(events.map((e) => getProposalsRepository().getProposalsByEvent(e.id)));
@@ -66,13 +68,13 @@ async function gatherJourneyRecords(workspaceId: string, subjectType: JourneySub
   const proposal = latestProposal(proposals);
   const accepted = acceptedProposal(proposals);
 
-  const contracts = clientId ? await getContracts({ clientId }) : [];
+  const contracts = clientId ? await getContracts({ clientId }, repoContext) : [];
   const contract = primaryContract(contracts);
-  const invoices = clientId ? await getInvoices({ clientId }) : [];
+  const invoices = clientId ? await getInvoices({ clientId }, repoContext) : [];
   const invoice = primaryInvoice(invoices);
-  const payments = clientId ? await getPayments({ clientId }) : [];
-  const clientAccounts = clientId ? await getClientAccountsByClientId(clientId) : [];
-  const financialSummary = clientId ? await getClientFinancialSummary(clientId).catch(() => null) : null;
+  const payments = clientId ? await getPayments({ clientId }, repoContext) : [];
+  const clientAccounts = clientId ? await getClientAccountsByClientId(clientId, repoContext) : [];
+  const financialSummary = clientId ? await getClientFinancialSummary(clientId, repoContext).catch(() => null) : null;
 
   const depositRequired = (financialSummary?.deposit_required_minor ?? 0) > 0;
   const depositSatisfied = !depositRequired || (financialSummary?.deposit_balance_minor ?? 0) <= 0 || hasSucceededDepositPayment(payments);
@@ -142,8 +144,8 @@ function toOwnerAssignments(role: readonly JourneyOwnerRole[], records: Pick<Jou
 }
 
 /** Exported (not just used internally) so the Client Portal's own session-gated action can build a client-safe journey view without going through the team-member `resolveMemberSessionSnapshot()` gate every other export in this file uses — see `modules/clientPortal/getClientPortalJourneySummary.ts`. */
-export async function buildClientJourney(workspaceId: string, subjectType: JourneySubjectType, subjectId: string): Promise<ClientJourney | null> {
-  const records = await gatherJourneyRecords(workspaceId, subjectType, subjectId);
+export async function buildClientJourney(workspaceId: string, subjectType: JourneySubjectType, subjectId: string, repoContext?: ServerRepositoryContext): Promise<ClientJourney | null> {
+  const records = await gatherJourneyRecords(workspaceId, subjectType, subjectId, repoContext);
   if (subjectType === "lead" && !records.lead) return null;
   if (subjectType === "client" && !records.client) return null;
 
@@ -313,7 +315,8 @@ export async function evaluateClientJourneyAction(subjectType: JourneySubjectTyp
   const session = await resolveMemberSessionSnapshot();
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
 
-  const journey = await buildClientJourney(session.workspace.id, subjectType, subjectId);
+  const repoContext = getDataMode() === "supabase" ? await getServerRepositoryContext() : undefined;
+  const journey = await buildClientJourney(session.workspace.id, subjectType, subjectId, repoContext);
   if (!journey) return { success: false, error: NOT_FOUND_ERROR };
   return { success: true, data: journey };
 }

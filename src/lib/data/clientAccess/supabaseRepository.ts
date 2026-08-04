@@ -79,9 +79,9 @@ function mapInvitationRow(row: ClientInvitationRow): ClientInvitation {
 // Accounts
 // ---------------------------------------------------------------------------
 
-async function getClientAccounts(clientId?: string): Promise<ClientAccount[]> {
-  const session = await requireWorkspaceSession();
-  const supabase = createSupabaseClient();
+async function getClientAccounts(clientId?: string, context?: ServerRepositoryContext): Promise<ClientAccount[]> {
+  const session = context?.session ?? (await requireWorkspaceSession());
+  const supabase = context?.supabase ?? createSupabaseClient();
   let query = supabase.from("client_accounts").select("*").eq("workspace_id", session.workspace.id);
   if (clientId) query = query.eq("client_id", clientId);
   const { data, error } = await query.order("created_at", { ascending: false });
@@ -97,8 +97,8 @@ async function getClientAccountById(id: string, context?: ServerRepositoryContex
   return mapAccountRow(data);
 }
 
-async function getClientAccountsByClientId(clientId: string): Promise<ClientAccount[]> {
-  return getClientAccounts(clientId);
+async function getClientAccountsByClientId(clientId: string, context?: ServerRepositoryContext): Promise<ClientAccount[]> {
+  return getClientAccounts(clientId, context);
 }
 
 /** No workspace session required — the Public API's own API-Key-authenticated callers never have one. Filters directly by `workspace_id`, unlike `getClientAccounts()` above which resolves the Workspace from an internal member session. */

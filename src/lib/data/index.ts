@@ -1514,12 +1514,12 @@ export async function getEventFinancialSummary(eventId: string): Promise<EventFi
   return computeEventFinancialSummary(eventId, contracts, invoices, payments, expenses);
 }
 
-export async function getClientFinancialSummary(clientId: string): Promise<ClientFinancialSummary> {
+export async function getClientFinancialSummary(clientId: string, context?: ServerRepositoryContext): Promise<ClientFinancialSummary> {
   const [contracts, invoices, payments, expenses] = await Promise.all([
-    getContracts({ includeArchived: true }),
-    getInvoices({ includeArchived: true }),
-    getPayments(),
-    getExpenses({ includeArchived: true }),
+    getContracts({ includeArchived: true }, context),
+    getInvoices({ includeArchived: true }, context),
+    getPayments(undefined, context),
+    getExpenses({ includeArchived: true }, context),
   ]);
   return computeClientFinancialSummary(clientId, contracts, invoices, payments, expenses);
 }
@@ -2268,8 +2268,8 @@ export async function getClientAccountById(id: string, context?: ServerRepositor
   return clientAccessRepository().getClientAccountById(id, context);
 }
 
-export async function getClientAccountsByClientId(clientId: string): Promise<ClientAccount[]> {
-  return clientAccessRepository().getClientAccountsByClientId(clientId);
+export async function getClientAccountsByClientId(clientId: string, context?: ServerRepositoryContext): Promise<ClientAccount[]> {
+  return clientAccessRepository().getClientAccountsByClientId(clientId, context);
 }
 
 export async function getClientAccountsForWorkspace(workspaceId: string): Promise<ClientAccount[]> {
