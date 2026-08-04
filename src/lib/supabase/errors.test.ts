@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeSupabaseError } from "@/lib/supabase/errors";
+import { isMissingAuthSessionError, normalizeSupabaseError } from "@/lib/supabase/errors";
 import {
   ConflictError,
   ForbiddenError,
@@ -91,5 +91,33 @@ describe("normalizeSupabaseError", () => {
     const original = { code: "23505", message: "duplicate key" };
     const result = normalizeSupabaseError(original);
     expect(result.cause).toBe(original);
+  });
+});
+
+describe("isMissingAuthSessionError", () => {
+  it("is true for AuthSessionMissingError regardless of status", () => {
+    expect(isMissingAuthSessionError({ name: "AuthSessionMissingError", message: "Auth session missing!" })).toBe(true);
+  });
+
+  it("is true for each documented GoTrue 401 code meaning no valid session", () => {
+    const codes = ["session_not_found", "session_expired", "refresh_token_not_found", "refresh_token_already_used", "bad_jwt"];
+    for (const code of codes) {
+      expect(isMissingAuthSessionError({ name: "AuthApiError", status: 401, code })).toBe(true);
+    }
+  });
+
+  it("is false for a 401 with an unrelated or unrecognized code", () => {
+    expect(isMissingAuthSessionError({ name: "AuthApiError", status: 401, code: "no_authorization" })).toBe(false);
+    expect(isMissingAuthSessionError({ name: "AuthApiError", status: 401 })).toBe(false);
+  });
+
+  it("is false for a non-401 error, even with a matching code", () => {
+    expect(isMissingAuthSessionError({ name: "AuthApiError", status: 500, code: "session_not_found" })).toBe(false);
+  });
+
+  it("is false for a non-object or null input", () => {
+    expect(isMissingAuthSessionError("a plain string")).toBe(false);
+    expect(isMissingAuthSessionError(null)).toBe(false);
+    expect(isMissingAuthSessionError(undefined)).toBe(false);
   });
 });

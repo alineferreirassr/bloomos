@@ -65,3 +65,28 @@ function withCause(appError: Error, cause: unknown): Error {
   appError.cause = cause;
   return appError;
 }
+
+/**
+ * True for the specific Supabase Auth error shapes that unambiguously mean
+ * "no valid session for this call" — as opposed to a real infrastructure,
+ * configuration, or unexpected auth failure that a caller should still see.
+ * Deliberately narrow: a bare `status === 401` also covers unrelated auth
+ * failures (bad API key, disabled provider, etc.), so callers that want to
+ * treat "not signed in" as a normal, silent case — like `getCurrentUser()` —
+ * should check this instead of `status === 401` alone. The `code` values are
+ * GoTrue's own documented codes for a session/token that no longer resolves
+ * to an active session (expired, rotated-out, or not found).
+ */
+export function isMissingAuthSessionError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const err = error as { name?: unknown; status?: unknown; code?: unknown };
+  if (err.name === "AuthSessionMissingError") return true;
+  if (err.status !== 401) return false;
+  return (
+    err.code === "session_not_found" ||
+    err.code === "session_expired" ||
+    err.code === "refresh_token_not_found" ||
+    err.code === "refresh_token_already_used" ||
+    err.code === "bad_jwt"
+  );
+}

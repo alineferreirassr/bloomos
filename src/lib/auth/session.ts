@@ -1,6 +1,6 @@
 import type { Session, User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import { normalizeSupabaseError } from "@/lib/supabase/errors";
+import { isMissingAuthSessionError, normalizeSupabaseError } from "@/lib/supabase/errors";
 
 /** Server-side only. Returns null when signed out — never throws for "no session," only for a real Supabase/network failure. */
 export async function getSession(): Promise<Session | null> {
@@ -19,7 +19,7 @@ export async function getCurrentUser(): Promise<User | null> {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getUser();
   if (error) {
-    if (error.name === "AuthSessionMissingError") return null;
+    if (isMissingAuthSessionError(error)) return null;
     throw normalizeSupabaseError(error);
   }
   return data.user;

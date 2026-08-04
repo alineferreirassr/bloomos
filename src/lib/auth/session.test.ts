@@ -68,6 +68,32 @@ describe("getCurrentUser", () => {
     await expect(getCurrentUser()).resolves.toBeNull();
   });
 
+  it("returns null (not a throw) for a 401 whose code means the session no longer resolves (e.g. rotated/expired cookie)", async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      mockSupabaseClient({
+        getUser: async () => ({
+          data: { user: null },
+          error: { name: "AuthApiError", status: 401, code: "session_not_found", message: "Session from session_id claim in JWT does not exist" },
+        }),
+      }) as never,
+    );
+
+    await expect(getCurrentUser()).resolves.toBeNull();
+  });
+
+  it("throws a normalized error for an unrelated 401 (not a recognized missing-session code)", async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      mockSupabaseClient({
+        getUser: async () => ({
+          data: { user: null },
+          error: { name: "AuthApiError", status: 401, code: "no_authorization", message: "This endpoint requires a Bearer token" },
+        }),
+      }) as never,
+    );
+
+    await expect(getCurrentUser()).rejects.toThrow();
+  });
+
   it("throws a normalized error for a real Supabase failure", async () => {
     vi.mocked(createClient).mockResolvedValue(
       mockSupabaseClient({
