@@ -2,6 +2,7 @@ import type { ClientAccount, ClientAccountContext } from "@/types/clientAccount"
 import type { ClientInvitation, ClientInvitationWithToken, ClientInvitationPreview } from "@/types/clientInvitation";
 import type { InvitationStatus } from "@/core/enums/invitationStatus";
 import type { DataResult } from "@/lib/data/result";
+import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 
 export interface CreateClientInvitationInput {
   client_id: string;
@@ -30,7 +31,8 @@ export interface ClientInvitationFilters {
 export interface ClientAccessRepository {
   // Accounts
   getClientAccounts(clientId?: string): Promise<ClientAccount[]>;
-  getClientAccountById(id: string): Promise<ClientAccount>;
+  /** `context` optionally injects an already-authenticated server Supabase client — see EventsRepository's identical doc comment. Ignored by the mock implementation. */
+  getClientAccountById(id: string, context?: ServerRepositoryContext): Promise<ClientAccount>;
   getClientAccountsByClientId(clientId: string): Promise<ClientAccount[]>;
   /** Checkpoint 16 — every Client Portal account in one Workspace, no session required. Powers the Public API's Portal Users endpoint, which authenticates via API Key rather than a `workspace_members` session. */
   getClientAccountsForWorkspace(workspaceId: string): Promise<ClientAccount[]>;

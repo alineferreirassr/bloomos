@@ -55,6 +55,7 @@ import {
   mapAccountingPeriodRow,
 } from "@/lib/supabase/mappers";
 import { getClientWorkspaceSession, type WorkspaceSession } from "@/lib/auth/workspaceSessionClient";
+import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 import { getCoreAuditLogService } from "@/core/audit";
 import { handleFinanceRpcError, throwFinanceReportError } from "@/lib/data/finance/errors";
 import type {
@@ -241,8 +242,8 @@ async function recomputeInvoiceBalance(supabase: SupabaseClient, invoiceId: stri
 // Invoices
 // ---------------------------------------------------------------------------
 
-async function getInvoices(filters: InvoiceFilters = {}): Promise<Invoice[]> {
-  const session = await requireWorkspaceSession();
+async function getInvoices(filters: InvoiceFilters = {}, context?: ServerRepositoryContext): Promise<Invoice[]> {
+  const session = context?.session ?? (await requireWorkspaceSession());
   const {
     search,
     status,
@@ -257,7 +258,7 @@ async function getInvoices(filters: InvoiceFilters = {}): Promise<Invoice[]> {
     includeArchived = false,
   } = filters;
 
-  const supabase = createSupabaseClient();
+  const supabase = context?.supabase ?? createSupabaseClient();
   let query = supabase.from("invoices").select("*").eq("workspace_id", session.workspace.id);
 
   if (!includeArchived) query = query.neq("status", "archived");
@@ -667,8 +668,8 @@ async function getInvoiceNextAction(invoiceId: string): Promise<string | null> {
 // Payments
 // ---------------------------------------------------------------------------
 
-async function getPayments(filters: PaymentFilters = {}): Promise<Payment[]> {
-  const session = await requireWorkspaceSession();
+async function getPayments(filters: PaymentFilters = {}, context?: ServerRepositoryContext): Promise<Payment[]> {
+  const session = context?.session ?? (await requireWorkspaceSession());
   const {
     search,
     status,
@@ -683,7 +684,7 @@ async function getPayments(filters: PaymentFilters = {}): Promise<Payment[]> {
     refundsOnly = false,
   } = filters;
 
-  const supabase = createSupabaseClient();
+  const supabase = context?.supabase ?? createSupabaseClient();
   let query = supabase.from("payments").select("*").eq("workspace_id", session.workspace.id);
 
   if (status && status !== "all") query = query.eq("status", status);
@@ -1071,8 +1072,8 @@ async function getPaymentNextAction(paymentId: string): Promise<string | null> {
 
 const UNPAID_EXPENSE_STATUSES = ["planned", "approved", "due"];
 
-async function getExpenses(filters: ExpenseFilters = {}): Promise<Expense[]> {
-  const session = await requireWorkspaceSession();
+async function getExpenses(filters: ExpenseFilters = {}, context?: ServerRepositoryContext): Promise<Expense[]> {
+  const session = context?.session ?? (await requireWorkspaceSession());
   const {
     search,
     status,
@@ -1085,7 +1086,7 @@ async function getExpenses(filters: ExpenseFilters = {}): Promise<Expense[]> {
     includeArchived = false,
   } = filters;
 
-  const supabase = createSupabaseClient();
+  const supabase = context?.supabase ?? createSupabaseClient();
   let query = supabase.from("expenses").select("*").eq("workspace_id", session.workspace.id);
 
   if (!includeArchived) query = query.neq("status", "archived");

@@ -931,6 +931,73 @@ describe("supabaseEventsRepository.getTimelineByEventId", () => {
   });
 });
 
+describe("supabaseEventsRepository server-side context injection", () => {
+  it("getEvents uses the injected context's Supabase client and session, never the browser client or getClientWorkspaceSession", async () => {
+    const { client: contextClient, calls } = createMockSupabase([{ data: [eventRow()], error: null }]);
+    const context = { supabase: contextClient as never, session: SESSION.session as never };
+
+    const events = await supabaseEventsRepository.getEvents(undefined, context);
+
+    expect(events).toHaveLength(1);
+    expect(createClient).not.toHaveBeenCalled();
+    expect(getClientWorkspaceSession).not.toHaveBeenCalled();
+    const eqWorkspace = calls.find((c) => c.method === "eq" && c.args[0] === "workspace_id");
+    expect(eqWorkspace?.args[1]).toBe("workspace_1");
+  });
+
+  it("getEvents still applies filters and workspace isolation identically when a context is injected", async () => {
+    const { client: contextClient, calls } = createMockSupabase([{ data: [], error: null }]);
+    const context = { supabase: contextClient as never, session: SESSION.session as never };
+
+    await supabaseEventsRepository.getEvents({ status: "confirmed", clientId: "client_1" }, context);
+
+    expect(calls.some((c) => c.method === "eq" && c.args[0] === "status" && c.args[1] === "confirmed")).toBe(true);
+    expect(calls.some((c) => c.method === "eq" && c.args[0] === "client_id" && c.args[1] === "client_1")).toBe(true);
+    expect(calls.some((c) => c.method === "neq" && c.args[0] === "status" && c.args[1] === "archived")).toBe(true);
+  });
+
+  it("getEvents falls back to the browser client + getClientWorkspaceSession when no context is provided", async () => {
+    mockSession();
+    const { client, calls } = createMockSupabase([{ data: [eventRow()], error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const events = await supabaseEventsRepository.getEvents();
+
+    expect(events).toHaveLength(1);
+    expect(createClient).toHaveBeenCalled();
+    expect(getClientWorkspaceSession).toHaveBeenCalled();
+    expect(calls.some((c) => c.method === "eq" && c.args[0] === "workspace_id")).toBe(true);
+  });
+
+  it("getChecklistByEventId forwards the injected context to both the event lookup and the checklist query", async () => {
+    const { client: contextClient, calls } = createMockSupabase([
+      { data: eventRow(), error: null },
+      { data: [checklistItemRow()], error: null },
+    ]);
+    const context = { supabase: contextClient as never, session: SESSION.session as never };
+
+    const items = await supabaseEventsRepository.getChecklistByEventId("event_1", context);
+
+    expect(items).toHaveLength(1);
+    expect(createClient).not.toHaveBeenCalled();
+    expect(calls.some((c) => c.table === "checklist_items" && c.method === "then")).toBe(true);
+  });
+
+  it("getScheduleByEventId forwards the injected context to both the event lookup and the schedule query", async () => {
+    const { client: contextClient, calls } = createMockSupabase([
+      { data: eventRow(), error: null },
+      { data: [scheduleItemRow()], error: null },
+    ]);
+    const context = { supabase: contextClient as never, session: SESSION.session as never };
+
+    const items = await supabaseEventsRepository.getScheduleByEventId("event_1", context);
+
+    expect(items).toHaveLength(1);
+    expect(createClient).not.toHaveBeenCalled();
+    expect(calls.some((c) => c.table === "event_schedule_items" && c.method === "then")).toBe(true);
+  });
+});
+
 describe("supabaseEventsRepository Workspace isolation / session errors", () => {
   it("getEvents throws Unauthorized when there is no signed-in user", async () => {
     vi.mocked(getClientWorkspaceSession).mockResolvedValue({ status: "unauthenticated" });

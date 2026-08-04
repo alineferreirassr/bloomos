@@ -5,6 +5,7 @@ import type { LeadStatus } from "@/core/enums/leadStatus";
 import type { LeadFormInput } from "@/modules/leads/schema";
 import type { NoteFormInput } from "@/modules/notes/schema";
 import type { DataResult } from "@/lib/data/result";
+import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 
 export interface LeadFilters {
   search?: string;
@@ -30,7 +31,8 @@ export interface LeadFilters {
  * a persistence migration.
  */
 export interface LeadsRepository {
-  getLeads(filters?: LeadFilters): Promise<Lead[]>;
+  /** `context` optionally injects an already-authenticated server Supabase client + Workspace session — see EventsRepository's identical doc comment. Ignored by the mock implementation. */
+  getLeads(filters?: LeadFilters, context?: ServerRepositoryContext): Promise<Lead[]>;
   getLeadById(id: string): Promise<Lead>;
   createLead(input: LeadFormInput): Promise<DataResult<Lead>>;
   updateLead(id: string, input: LeadFormInput): Promise<DataResult<Lead>>;

@@ -10,6 +10,7 @@ import { type DataResult, ok, fail } from "@/lib/data/result";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import { normalizeSupabaseError } from "@/lib/supabase/errors";
 import { getClientWorkspaceSession, type WorkspaceSession } from "@/lib/auth/workspaceSessionClient";
+import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 import type {
   ClientAccessRepository,
   CreateClientInvitationInput,
@@ -88,8 +89,8 @@ async function getClientAccounts(clientId?: string): Promise<ClientAccount[]> {
   return (data ?? []).map(mapAccountRow);
 }
 
-async function getClientAccountById(id: string): Promise<ClientAccount> {
-  const supabase = createSupabaseClient();
+async function getClientAccountById(id: string, context?: ServerRepositoryContext): Promise<ClientAccount> {
+  const supabase = context?.supabase ?? createSupabaseClient();
   const { data, error } = await supabase.from("client_accounts").select("*").eq("id", id).maybeSingle();
   if (error) throw normalizeSupabaseError(error);
   if (!data) throw new NotFoundError(`Client account ${id} was not found`);

@@ -34,6 +34,7 @@ import {
   mapTimelineActivityRow,
 } from "@/lib/supabase/mappers";
 import { getClientWorkspaceSession, type WorkspaceSession } from "@/lib/auth/workspaceSessionClient";
+import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 import type { EventFilters, EventsRepository } from "@/lib/data/events/repository";
 import { getFullName } from "@/lib/personName";
 
@@ -98,8 +99,8 @@ async function insertTimelineActivity(
 }
 
 /** Internal existence check — returns null rather than throwing, matching the mock's `readEvents().find(...)` pattern. RLS means an event in another Workspace is simply invisible here, not a distinct error case. */
-async function fetchEventRow(id: string): Promise<Event | null> {
-  const supabase = createSupabaseClient();
+async function fetchEventRow(id: string, context?: ServerRepositoryContext): Promise<Event | null> {
+  const supabase = context?.supabase ?? createSupabaseClient();
   const { data, error } = await supabase.from("events").select("*").eq("id", id).maybeSingle();
   if (error) throw normalizeSupabaseError(error);
   return data ? mapEventRow(data) : null;
@@ -123,12 +124,12 @@ async function fetchScheduleItemRow(id: string): Promise<EventScheduleItem | nul
 // Events
 // ---------------------------------------------------------------------------
 
-async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
-  const session = await requireWorkspaceSession();
+async function getEvents(filters: EventFilters = {}, context?: ServerRepositoryContext): Promise<Event[]> {
+  const session = context?.session ?? (await requireWorkspaceSession());
   const { search, status, lifecycleStage, eventType, priority, clientId, dateFrom, dateTo, includeArchived = false } =
     filters;
 
-  const supabase = createSupabaseClient();
+  const supabase = context?.supabase ?? createSupabaseClient();
   let query = supabase.from("events").select("*").eq("workspace_id", session.workspace.id);
 
   if (!includeArchived) query = query.neq("status", "archived");
@@ -482,8 +483,8 @@ async function completeEvent(id: string): Promise<DataResult<Event>> {
 // ---------------------------------------------------------------------------
 
 /** Shared by getChecklistByEventId and reorderChecklistItems, which both need this query but must not re-fetch the Event row a second time once they already have it. */
-async function fetchChecklistItemsForEvent(workspaceId: string, eventId: string): Promise<ChecklistItem[]> {
-  const supabase = createSupabaseClient();
+async function fetchChecklistItemsForEvent(workspaceId: string, eventId: string, context?: ServerRepositoryContext): Promise<ChecklistItem[]> {
+  const supabase = context?.supabase ?? createSupabaseClient();
   const { data, error } = await supabase
     .from("checklist_items")
     .select("*")
@@ -496,10 +497,10 @@ async function fetchChecklistItemsForEvent(workspaceId: string, eventId: string)
   return (data ?? []).map(mapChecklistItemRow);
 }
 
-async function getChecklistByEventId(eventId: string): Promise<ChecklistItem[]> {
-  const event = await fetchEventRow(eventId);
+async function getChecklistByEventId(eventId: string, context?: ServerRepositoryContext): Promise<ChecklistItem[]> {
+  const event = await fetchEventRow(eventId, context);
   if (!event) return [];
-  return fetchChecklistItemsForEvent(event.workspace_id, eventId);
+  return fetchChecklistItemsForEvent(event.workspace_id, eventId, context);
 }
 
 async function createChecklistItem(eventId: string, input: ChecklistItemInput): Promise<DataResult<ChecklistItem>> {
@@ -676,8 +677,8 @@ async function reorderChecklistItems(eventId: string, orderedIds: string[]): Pro
 // ---------------------------------------------------------------------------
 
 /** Shared by getScheduleByEventId and reorderScheduleItems, which both need this query but must not re-fetch the Event row a second time once they already have it. */
-async function fetchScheduleItemsForEvent(workspaceId: string, eventId: string): Promise<EventScheduleItem[]> {
-  const supabase = createSupabaseClient();
+async function fetchScheduleItemsForEvent(workspaceId: string, eventId: string, context?: ServerRepositoryContext): Promise<EventScheduleItem[]> {
+  const supabase = context?.supabase ?? createSupabaseClient();
   const { data, error } = await supabase
     .from("event_schedule_items")
     .select("*")
@@ -690,10 +691,10 @@ async function fetchScheduleItemsForEvent(workspaceId: string, eventId: string):
   return (data ?? []).map(mapEventScheduleItemRow);
 }
 
-async function getScheduleByEventId(eventId: string): Promise<EventScheduleItem[]> {
-  const event = await fetchEventRow(eventId);
+async function getScheduleByEventId(eventId: string, context?: ServerRepositoryContext): Promise<EventScheduleItem[]> {
+  const event = await fetchEventRow(eventId, context);
   if (!event) return [];
-  return fetchScheduleItemsForEvent(event.workspace_id, eventId);
+  return fetchScheduleItemsForEvent(event.workspace_id, eventId, context);
 }
 
 async function createScheduleItem(eventId: string, input: ScheduleItemInput): Promise<DataResult<EventScheduleItem>> {

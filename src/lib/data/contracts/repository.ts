@@ -10,6 +10,7 @@ import type { ContractInput } from "@/modules/contracts/schema";
 import type { ContractExhibitInput } from "@/modules/contracts/schema";
 import type { NoteFormInput } from "@/modules/notes/schema";
 import type { DataResult } from "@/lib/data/result";
+import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 
 export type { ContractVersionSnapshot };
 
@@ -45,7 +46,8 @@ export interface ContractTemplateFilters {
  * status.
  */
 export interface ContractsRepository {
-  getContracts(filters?: ContractFilters): Promise<Contract[]>;
+  /** `context` optionally injects an already-authenticated server Supabase client + Workspace session — see EventsRepository's identical doc comment. Ignored by the mock implementation. */
+  getContracts(filters?: ContractFilters, context?: ServerRepositoryContext): Promise<Contract[]>;
   getContract(id: string): Promise<Contract>;
   createContract(input: ContractInput): Promise<DataResult<Contract>>;
   updateContract(id: string, input: ContractInput): Promise<DataResult<Contract>>;

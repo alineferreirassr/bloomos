@@ -21,6 +21,7 @@ import {
   mapTimelineActivityRow,
 } from "@/lib/supabase/mappers";
 import { getClientWorkspaceSession, type WorkspaceSession } from "@/lib/auth/workspaceSessionClient";
+import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 import type {
   ContractFilters,
   ContractTemplateFilters,
@@ -142,8 +143,8 @@ async function insertContractWithGeneratedNumber(
 // Contracts
 // ---------------------------------------------------------------------------
 
-async function getContracts(filters: ContractFilters = {}): Promise<Contract[]> {
-  const session = await requireWorkspaceSession();
+async function getContracts(filters: ContractFilters = {}, context?: ServerRepositoryContext): Promise<Contract[]> {
+  const session = context?.session ?? (await requireWorkspaceSession());
   const {
     search,
     status,
@@ -155,7 +156,7 @@ async function getContracts(filters: ContractFilters = {}): Promise<Contract[]> 
     includeArchived = false,
   } = filters;
 
-  const supabase = createSupabaseClient();
+  const supabase = context?.supabase ?? createSupabaseClient();
   let query = supabase.from("contracts").select("*").eq("workspace_id", session.workspace.id);
 
   if (!includeArchived) query = query.neq("status", "archived");

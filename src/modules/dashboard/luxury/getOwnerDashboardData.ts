@@ -1,6 +1,8 @@
 "use server";
 
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+import { getServerRepositoryContext } from "@/lib/auth/workspaceSession";
+import { getDataMode } from "@/lib/env";
 import { getEvents, getLeads, getClients, getContracts, getInvoices, getPayments, getExpenses, getChecklistByEventId, getClientAccountById, getClientById } from "@/lib/data";
 import { getProposalsRepository } from "@/lib/data/proposals";
 import { listClientPortalThreadsForWorkspace, listClientPortalMessages } from "@/lib/data/clientPortal/clientPortalMessageStore";
@@ -63,14 +65,16 @@ export async function getOwnerDashboardData(): Promise<GetOwnerDashboardDataResu
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (resolveDashboardExperience(session.membership.role) !== "owner") return { success: false, error: GENERIC_ACCESS_ERROR };
 
+  const serverContext = getDataMode() === "supabase" ? await getServerRepositoryContext() : undefined;
+
   const [events, leads, , contracts, invoices, payments, expenses, proposals] = await Promise.all([
-    getEvents(),
-    getLeads(),
-    getClients(),
-    getContracts(),
-    getInvoices(),
-    getPayments(),
-    getExpenses(),
+    getEvents(undefined, serverContext),
+    getLeads(undefined, serverContext),
+    getClients(undefined, serverContext),
+    getContracts(undefined, serverContext),
+    getInvoices(undefined, serverContext),
+    getPayments(undefined, serverContext),
+    getExpenses(undefined, serverContext),
     getProposalsRepository().getRecentProposals(session.workspace.id, 200),
   ]);
 
@@ -124,7 +128,7 @@ export async function getOwnerDashboardData(): Promise<GetOwnerDashboardDataResu
     };
   });
 
-  const checklistLists = await Promise.all(activeEvents.map((event) => getChecklistByEventId(event.id)));
+  const checklistLists = await Promise.all(activeEvents.map((event) => getChecklistByEventId(event.id, serverContext)));
   const allChecklistItems = checklistLists.flat();
   const openPriorityItems = allChecklistItems
     .filter((item) => item.status !== "completed" && item.status !== "cancelled")
@@ -161,8 +165,8 @@ export async function getOwnerDashboardData(): Promise<GetOwnerDashboardDataResu
         if (!last) return null;
         let clientName = "A client";
         try {
-          const account = await getClientAccountById(thread.client_account_id);
-          const client = await getClientById(account.client_id);
+          const account = await getClientAccountById(thread.client_account_id, serverContext);
+          const client = await getClientById(account.client_id, serverContext);
           clientName = `${client.first_name} ${client.last_name}`.trim();
         } catch {
           // Falls back to the generic label above — never blocks the dashboard on a lookup failure.

@@ -1,3 +1,4 @@
+import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 import type { Lead } from "@/types/lead";
 import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
@@ -338,8 +339,8 @@ function leadsRepository() {
   return selectRepository({ mock: mockLeadsRepository, supabase: supabaseLeadsRepository });
 }
 
-export async function getLeads(filters: LeadFilters = {}): Promise<Lead[]> {
-  return leadsRepository().getLeads(filters);
+export async function getLeads(filters: LeadFilters = {}, context?: ServerRepositoryContext): Promise<Lead[]> {
+  return leadsRepository().getLeads(filters, context);
 }
 
 export async function getLeadById(id: string): Promise<Lead> {
@@ -674,12 +675,12 @@ function clientsRepository() {
   return selectRepository({ mock: mockClientsRepository, supabase: supabaseClientsRepository });
 }
 
-export async function getClients(filters: ClientFilters = {}): Promise<Client[]> {
-  return clientsRepository().getClients(filters);
+export async function getClients(filters: ClientFilters = {}, context?: ServerRepositoryContext): Promise<Client[]> {
+  return clientsRepository().getClients(filters, context);
 }
 
-export async function getClientById(id: string): Promise<Client> {
-  return clientsRepository().getClientById(id);
+export async function getClientById(id: string, context?: ServerRepositoryContext): Promise<Client> {
+  return clientsRepository().getClientById(id, context);
 }
 
 export async function createClient(input: ClientFormInput): Promise<DataResult<Client>> {
@@ -778,8 +779,8 @@ function eventsRepository() {
   return selectRepository({ mock: mockEventsRepository, supabase: supabaseEventsRepository });
 }
 
-export async function getEvents(filters: EventFilters = {}): Promise<Event[]> {
-  return eventsRepository().getEvents(filters);
+export async function getEvents(filters: EventFilters = {}, context?: ServerRepositoryContext): Promise<Event[]> {
+  return eventsRepository().getEvents(filters, context);
 }
 
 export async function getEventById(id: string): Promise<Event> {
@@ -846,8 +847,8 @@ export async function getEventNextAction(eventId: string): Promise<string | null
 // same as Events above.
 // ---------------------------------------------------------------------------
 
-export async function getChecklistByEventId(eventId: string): Promise<ChecklistItem[]> {
-  return eventsRepository().getChecklistByEventId(eventId);
+export async function getChecklistByEventId(eventId: string, context?: ServerRepositoryContext): Promise<ChecklistItem[]> {
+  return eventsRepository().getChecklistByEventId(eventId, context);
 }
 
 export async function createChecklistItem(
@@ -894,8 +895,8 @@ export async function reorderChecklistItems(
 // Events/Checklist above.
 // ---------------------------------------------------------------------------
 
-export async function getScheduleByEventId(eventId: string): Promise<EventScheduleItem[]> {
-  return eventsRepository().getScheduleByEventId(eventId);
+export async function getScheduleByEventId(eventId: string, context?: ServerRepositoryContext): Promise<EventScheduleItem[]> {
+  return eventsRepository().getScheduleByEventId(eventId, context);
 }
 
 export async function createScheduleItem(
@@ -1138,8 +1139,8 @@ function contractsRepository() {
   return selectRepository({ mock: mockContractsRepository, supabase: supabaseContractsRepository });
 }
 
-export async function getContracts(filters: ContractFilters = {}): Promise<Contract[]> {
-  return contractsRepository().getContracts(filters);
+export async function getContracts(filters: ContractFilters = {}, context?: ServerRepositoryContext): Promise<Contract[]> {
+  return contractsRepository().getContracts(filters, context);
 }
 
 export async function getContract(id: string): Promise<Contract> {
@@ -1323,8 +1324,8 @@ function financeRepository() {
   return selectRepository({ mock: mockFinanceRepository, supabase: supabaseFinanceRepository });
 }
 
-export async function getInvoices(filters: InvoiceFilters = {}): Promise<Invoice[]> {
-  return financeRepository().getInvoices(filters);
+export async function getInvoices(filters: InvoiceFilters = {}, context?: ServerRepositoryContext): Promise<Invoice[]> {
+  return financeRepository().getInvoices(filters, context);
 }
 
 export async function getInvoiceById(id: string): Promise<Invoice> {
@@ -1375,8 +1376,8 @@ export async function getInvoiceNextAction(invoiceId: string): Promise<string | 
   return financeRepository().getInvoiceNextAction(invoiceId);
 }
 
-export async function getPayments(filters: PaymentFilters = {}): Promise<Payment[]> {
-  return financeRepository().getPayments(filters);
+export async function getPayments(filters: PaymentFilters = {}, context?: ServerRepositoryContext): Promise<Payment[]> {
+  return financeRepository().getPayments(filters, context);
 }
 
 export async function getPaymentById(id: string): Promise<Payment> {
@@ -1444,8 +1445,8 @@ export async function getPaymentNextAction(paymentId: string): Promise<string | 
   return financeRepository().getPaymentNextAction(paymentId);
 }
 
-export async function getExpenses(filters: ExpenseFilters = {}): Promise<Expense[]> {
-  return financeRepository().getExpenses(filters);
+export async function getExpenses(filters: ExpenseFilters = {}, context?: ServerRepositoryContext): Promise<Expense[]> {
+  return financeRepository().getExpenses(filters, context);
 }
 
 export async function getExpenseById(id: string): Promise<Expense> {
@@ -2263,8 +2264,8 @@ export async function getClientAccounts(clientId?: string): Promise<ClientAccoun
   return clientAccessRepository().getClientAccounts(clientId);
 }
 
-export async function getClientAccountById(id: string): Promise<ClientAccount> {
-  return clientAccessRepository().getClientAccountById(id);
+export async function getClientAccountById(id: string, context?: ServerRepositoryContext): Promise<ClientAccount> {
+  return clientAccessRepository().getClientAccountById(id, context);
 }
 
 export async function getClientAccountsByClientId(clientId: string): Promise<ClientAccount[]> {

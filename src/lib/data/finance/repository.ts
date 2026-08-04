@@ -27,6 +27,7 @@ import type {
 } from "@/modules/finance/schema";
 import type { NoteFormInput } from "@/modules/notes/schema";
 import type { DataResult } from "@/lib/data/result";
+import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 import type {
   GeneralLedgerReport,
   TrialBalanceReport,
@@ -138,7 +139,8 @@ export interface BalanceSheetReportFilters {
  * separate repository files without re-deriving that atomicity twice.
  */
 export interface FinanceRepository {
-  getInvoices(filters?: InvoiceFilters): Promise<Invoice[]>;
+  /** `context` optionally injects an already-authenticated server Supabase client + Workspace session — see EventsRepository's identical doc comment. Ignored by the mock implementation. */
+  getInvoices(filters?: InvoiceFilters, context?: ServerRepositoryContext): Promise<Invoice[]>;
   getInvoiceById(id: string): Promise<Invoice>;
   createInvoice(input: InvoiceInput): Promise<DataResult<Invoice>>;
   updateInvoice(id: string, input: InvoiceInput): Promise<DataResult<Invoice>>;
@@ -152,7 +154,8 @@ export interface FinanceRepository {
   duplicateInvoice(id: string): Promise<DataResult<Invoice>>;
   getInvoiceNextAction(invoiceId: string): Promise<string | null>;
 
-  getPayments(filters?: PaymentFilters): Promise<Payment[]>;
+  /** `context` optionally injects an already-authenticated server Supabase client + Workspace session — see EventsRepository's identical doc comment. Ignored by the mock implementation. */
+  getPayments(filters?: PaymentFilters, context?: ServerRepositoryContext): Promise<Payment[]>;
   getPaymentById(id: string): Promise<Payment>;
   createPayment(input: PaymentInput): Promise<DataResult<Payment>>;
   updatePayment(id: string, input: PaymentInput): Promise<DataResult<Payment>>;
@@ -164,7 +167,8 @@ export interface FinanceRepository {
   getPaymentRefundableAmount(paymentId: string): Promise<number>;
   getPaymentNextAction(paymentId: string): Promise<string | null>;
 
-  getExpenses(filters?: ExpenseFilters): Promise<Expense[]>;
+  /** `context` optionally injects an already-authenticated server Supabase client + Workspace session — see EventsRepository's identical doc comment. Ignored by the mock implementation. */
+  getExpenses(filters?: ExpenseFilters, context?: ServerRepositoryContext): Promise<Expense[]>;
   getExpenseById(id: string): Promise<Expense>;
   createExpense(input: ExpenseInput): Promise<DataResult<Expense>>;
   updateExpense(id: string, input: ExpenseInput): Promise<DataResult<Expense>>;

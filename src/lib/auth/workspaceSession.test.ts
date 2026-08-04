@@ -4,7 +4,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
-import { getWorkspaceSession } from "@/lib/auth/workspaceSession";
+import { getWorkspaceSession, getServerRepositoryContext } from "@/lib/auth/workspaceSession";
 import { createClient } from "@/lib/supabase/server";
 
 type QueryResult = { data: unknown; error: unknown };
@@ -306,5 +306,68 @@ describe("getWorkspaceSession", () => {
     await expect(getWorkspaceSession()).rejects.toThrow(
       "Could not reach the server. Check your connection and try again.",
     );
+  });
+});
+
+describe("getServerRepositoryContext", () => {
+  it("returns the server Supabase client paired with the resolved session when authenticated with an active Workspace", async () => {
+    const user = { id: "user_1", email: "owner@example.com" };
+    const profileRow = {
+      id: "user_1",
+      full_name: null,
+      email: "owner@example.com",
+      avatar_url: null,
+      created_at: "2026-07-16T00:00:00Z",
+      updated_at: "2026-07-16T00:00:00Z",
+    };
+    const memberRow = {
+      id: "member_1",
+      workspace_id: "workspace_1",
+      user_id: "user_1",
+      role: "owner",
+      status: "active",
+      created_at: "2026-07-16T00:00:00Z",
+      updated_at: "2026-07-16T00:00:00Z",
+    };
+    const workspaceRow = {
+      id: "workspace_1",
+      name: "Amoré Bloom",
+      slug: "amore-bloom",
+      created_by: "user_1",
+      created_at: "2026-07-16T00:00:00Z",
+      updated_at: "2026-07-16T00:00:00Z",
+      archived_at: null,
+    };
+    const supabaseClient = mockSupabaseClient({
+      user,
+      profile: { data: profileRow, error: null },
+      members: { data: [memberRow], error: null },
+      workspace: { data: workspaceRow, error: null },
+      rolePermissions: { data: [{ permission_id: "workspace.view" }], error: null },
+    });
+    vi.mocked(createClient).mockResolvedValue(supabaseClient as never);
+
+    const context = await getServerRepositoryContext();
+
+    expect(context.supabase).toBe(supabaseClient);
+    expect(context.session.workspace.id).toBe("workspace_1");
+    expect(context.session.membership.id).toBe("member_1");
+  });
+
+  it("throws UnauthorizedError when there is no signed-in user (never silently returns an empty context)", async () => {
+    vi.mocked(createClient).mockResolvedValue(mockSupabaseClient({ user: null }) as never);
+
+    await expect(getServerRepositoryContext()).rejects.toThrow("Authentication is required.");
+  });
+
+  it("throws ForbiddenError when the signed-in user has no Workspace membership", async () => {
+    vi.mocked(createClient).mockResolvedValue(
+      mockSupabaseClient({
+        user: { id: "user_1", email: "owner@example.com" },
+        profile: { data: null, error: null },
+      }) as never,
+    );
+
+    await expect(getServerRepositoryContext()).rejects.toThrow("You don't have permission to do that.");
   });
 });

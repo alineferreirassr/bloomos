@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 import { normalizeSupabaseError } from "@/lib/supabase/errors";
 import { mapLeadRow, mapNoteRow, mapTimelineActivityRow } from "@/lib/supabase/mappers";
 import { getClientWorkspaceSession, type WorkspaceSession } from "@/lib/auth/workspaceSessionClient";
+import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 import type { LeadFilters, LeadsRepository } from "@/lib/data/leads/repository";
 import { getFullName } from "@/lib/personName";
 
@@ -83,11 +84,11 @@ async function fetchLeadRow(id: string): Promise<Lead | null> {
   return data ? mapLeadRow(data) : null;
 }
 
-async function getLeads(filters: LeadFilters = {}): Promise<Lead[]> {
-  const session = await requireWorkspaceSession();
+async function getLeads(filters: LeadFilters = {}, context?: ServerRepositoryContext): Promise<Lead[]> {
+  const session = context?.session ?? (await requireWorkspaceSession());
   const { search, status, source, eventType, includeArchived = false } = filters;
 
-  const supabase = createClient();
+  const supabase = context?.supabase ?? createClient();
   let query = supabase.from("leads").select("*").eq("workspace_id", session.workspace.id);
 
   if (!includeArchived) {

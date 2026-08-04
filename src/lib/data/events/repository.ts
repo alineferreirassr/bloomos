@@ -14,6 +14,7 @@ import type { ScheduleItemInput } from "@/modules/events/schema";
 import type { ChecklistItemInput } from "@/modules/checklist/schema";
 import type { NoteFormInput } from "@/modules/notes/schema";
 import type { DataResult } from "@/lib/data/result";
+import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 
 export interface EventFilters {
   search?: string;
@@ -42,7 +43,15 @@ export interface EventFilters {
  * resolution logic four times over.
  */
 export interface EventsRepository {
-  getEvents(filters?: EventFilters): Promise<Event[]>;
+  /**
+   * `context` lets a Server Component/Server Action pass an
+   * already-authenticated server Supabase client + Workspace session,
+   * instead of this repository resolving its own via the Client
+   * Component-only `getClientWorkspaceSession()` (which always resolves as
+   * unauthenticated during SSR). Optional and ignored by the mock
+   * implementation.
+   */
+  getEvents(filters?: EventFilters, context?: ServerRepositoryContext): Promise<Event[]>;
   getEventById(id: string): Promise<Event>;
   createEvent(input: EventFormInput): Promise<DataResult<Event>>;
   updateEvent(id: string, input: EventFormInput): Promise<DataResult<Event>>;
@@ -55,7 +64,7 @@ export interface EventsRepository {
   completeEvent(id: string): Promise<DataResult<Event>>;
   getEventNextAction(eventId: string): Promise<string | null>;
 
-  getChecklistByEventId(eventId: string): Promise<ChecklistItem[]>;
+  getChecklistByEventId(eventId: string, context?: ServerRepositoryContext): Promise<ChecklistItem[]>;
   createChecklistItem(eventId: string, input: ChecklistItemInput): Promise<DataResult<ChecklistItem>>;
   updateChecklistItem(id: string, input: ChecklistItemInput): Promise<DataResult<ChecklistItem>>;
   updateChecklistItemStatus(id: string, status: ChecklistStatus): Promise<DataResult<ChecklistItem>>;
@@ -63,7 +72,7 @@ export interface EventsRepository {
   deleteChecklistItem(id: string): Promise<DataResult<null>>;
   reorderChecklistItems(eventId: string, orderedIds: string[]): Promise<DataResult<ChecklistItem[]>>;
 
-  getScheduleByEventId(eventId: string): Promise<EventScheduleItem[]>;
+  getScheduleByEventId(eventId: string, context?: ServerRepositoryContext): Promise<EventScheduleItem[]>;
   createScheduleItem(eventId: string, input: ScheduleItemInput): Promise<DataResult<EventScheduleItem>>;
   updateScheduleItem(id: string, input: ScheduleItemInput): Promise<DataResult<EventScheduleItem>>;
   updateScheduleItemStatus(id: string, status: ScheduleStatus): Promise<DataResult<EventScheduleItem>>;

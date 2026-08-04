@@ -1,6 +1,8 @@
 "use server";
 
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+import { getServerRepositoryContext } from "@/lib/auth/workspaceSession";
+import { getDataMode } from "@/lib/env";
 import { getEvents, getChecklistByEventId, getScheduleByEventId } from "@/lib/data";
 import { listClientPortalThreadsForWorkspace, listClientPortalMessages } from "@/lib/data/clientPortal/clientPortalMessageStore";
 import { getTeamRoleLabel } from "@/lib/data/core/dashboard/teamRoleLabelStore";
@@ -89,7 +91,9 @@ export async function getTeamDashboardData(): Promise<GetTeamDashboardDataResult
   const now = new Date();
   const todayIso = now.toISOString().slice(0, 10);
 
-  const allEvents = await getEvents();
+  const serverContext = getDataMode() === "supabase" ? await getServerRepositoryContext() : undefined;
+
+  const allEvents = await getEvents(undefined, serverContext);
   const activeEvents = allEvents.filter((e) => e.archived_at === null && e.cancelled_at === null);
 
   const myEvents = activeEvents.filter((e) => isAssignedToMember(e.assigned_owner, memberName));
@@ -102,8 +106,8 @@ export async function getTeamDashboardData(): Promise<GetTeamDashboardDataResult
     .sort((a, b) => (a.event_date ?? "").localeCompare(b.event_date ?? ""));
 
   const [checklistLists, scheduleLists] = await Promise.all([
-    Promise.all(effectiveEvents.map((event) => getChecklistByEventId(event.id))),
-    Promise.all(todaysEvents.map((event) => getScheduleByEventId(event.id))),
+    Promise.all(effectiveEvents.map((event) => getChecklistByEventId(event.id, serverContext))),
+    Promise.all(todaysEvents.map((event) => getScheduleByEventId(event.id, serverContext))),
   ]);
   const allChecklistItems = checklistLists.flat();
   const myChecklistItems = allChecklistItems.filter((item) => isAssignedToMember(item.assigned_name, memberName));

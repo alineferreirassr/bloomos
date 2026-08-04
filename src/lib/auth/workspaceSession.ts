@@ -1,12 +1,15 @@
-import type { User } from "@supabase/supabase-js";
+import { cache } from "react";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeSupabaseError } from "@/lib/supabase/errors";
 import { getCurrentUser } from "@/lib/auth/session";
 import { mapProfileRow, mapWorkspaceMemberRow, mapWorkspaceRow } from "@/lib/supabase/mappers";
+import { UnauthorizedError, ForbiddenError } from "@/core/errors";
 import type { Profile } from "@/types/profile";
 import type { Workspace } from "@/types/workspace";
 import type { WorkspaceMember } from "@/types/workspaceMember";
 import type { Permission } from "@/core/enums/permission";
+import type { Database } from "@/types/database.types";
 
 export interface WorkspaceSession {
   user: User;
@@ -38,7 +41,7 @@ export type WorkspaceSessionResult =
  * only if none is active does the first (necessarily inactive) row apply —
  * this MVP still assumes one meaningful Workspace per user in practice.
  */
-export async function getWorkspaceSession(): Promise<WorkspaceSessionResult> {
+export const getWorkspaceSession = cache(async (): Promise<WorkspaceSessionResult> => {
   const user = await getCurrentUser();
   if (!user) return { status: "unauthenticated" };
 
@@ -88,4 +91,33 @@ export async function getWorkspaceSession(): Promise<WorkspaceSessionResult> {
       permissions,
     },
   };
+});
+
+export interface ServerRepositoryContext {
+  supabase: SupabaseClient<Database>;
+  session: WorkspaceSession;
 }
+
+/**
+ * Resolves both a genuinely server-authenticated Supabase client and the
+ * caller's Workspace session together, for repository functions that need
+ * to run real, authenticated Supabase queries from a Server Component or
+ * Server Action. This is the server-side counterpart callers should inject
+ * into repository functions that otherwise default to
+ * `getClientWorkspaceSession()` (`lib/auth/workspaceSessionClient.ts`) — the
+ * browser client that resolves as "unauthenticated" during SSR regardless
+ * of the real session, since it has no `document.cookie` to read there.
+ * Cached per request (`getWorkspaceSession` above is too), so calling this
+ * more than once in one render doesn't re-run the underlying queries.
+ */
+export const getServerRepositoryContext = cache(async (): Promise<ServerRepositoryContext> => {
+  const supabase = await createClient();
+  const result = await getWorkspaceSession();
+  if (result.status === "unauthenticated") {
+    throw new UnauthorizedError("Authentication is required.");
+  }
+  if (result.status === "no-workspace") {
+    throw new ForbiddenError("You don't have permission to do that.");
+  }
+  return { supabase, session: result.session };
+});

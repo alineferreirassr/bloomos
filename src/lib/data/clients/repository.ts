@@ -7,6 +7,7 @@ import type { ContactMethod } from "@/core/enums/contactMethod";
 import type { ClientFormInput } from "@/modules/clients/schema";
 import type { NoteFormInput } from "@/modules/notes/schema";
 import type { DataResult } from "@/lib/data/result";
+import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 
 export interface MarkClientRecoveryPendingInput {
   workflow: string;
@@ -35,8 +36,9 @@ export interface ClientFilters {
  * un-archiving), no delete method (soft-delete only).
  */
 export interface ClientsRepository {
-  getClients(filters?: ClientFilters): Promise<Client[]>;
-  getClientById(id: string): Promise<Client>;
+  /** `context` optionally injects an already-authenticated server Supabase client + Workspace session — see EventsRepository's identical doc comment. Ignored by the mock implementation. */
+  getClients(filters?: ClientFilters, context?: ServerRepositoryContext): Promise<Client[]>;
+  getClientById(id: string, context?: ServerRepositoryContext): Promise<Client>;
   createClient(input: ClientFormInput): Promise<DataResult<Client>>;
   updateClient(id: string, input: ClientFormInput): Promise<DataResult<Client>>;
   updateClientStatus(id: string, status: ClientStatus): Promise<DataResult<Client>>;

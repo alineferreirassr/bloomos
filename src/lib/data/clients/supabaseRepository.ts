@@ -15,6 +15,7 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import { normalizeSupabaseError } from "@/lib/supabase/errors";
 import { mapClientRow, mapNoteRow, mapTimelineActivityRow } from "@/lib/supabase/mappers";
 import { getClientWorkspaceSession, type WorkspaceSession } from "@/lib/auth/workspaceSessionClient";
+import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 import { getClientExtensionSummary } from "@/lib/data/clients/extensions";
 import { getFullName } from "@/lib/personName";
 import { getCoreAuditLogService } from "@/core/audit";
@@ -77,18 +78,18 @@ async function insertTimelineActivity(
 }
 
 /** Internal existence check — returns null rather than throwing, matching the mock's `readClients().find(...)` pattern. RLS means a client in another Workspace is simply invisible here, not a distinct error case. */
-async function fetchClientRow(id: string): Promise<Client | null> {
-  const supabase = createSupabaseClient();
+async function fetchClientRow(id: string, context?: ServerRepositoryContext): Promise<Client | null> {
+  const supabase = context?.supabase ?? createSupabaseClient();
   const { data, error } = await supabase.from("clients").select("*").eq("id", id).maybeSingle();
   if (error) throw normalizeSupabaseError(error);
   return data ? mapClientRow(data) : null;
 }
 
-async function getClients(filters: ClientFilters = {}): Promise<Client[]> {
-  const session = await requireWorkspaceSession();
+async function getClients(filters: ClientFilters = {}, context?: ServerRepositoryContext): Promise<Client[]> {
+  const session = context?.session ?? (await requireWorkspaceSession());
   const { search, status, source, tags, vipOnly, includeArchived = false } = filters;
 
-  const supabase = createSupabaseClient();
+  const supabase = context?.supabase ?? createSupabaseClient();
   let query = supabase.from("clients").select("*").eq("workspace_id", session.workspace.id);
 
   if (!includeArchived) {
@@ -122,8 +123,8 @@ async function getClients(filters: ClientFilters = {}): Promise<Client[]> {
   });
 }
 
-async function getClientById(id: string): Promise<Client> {
-  const client = await fetchClientRow(id);
+async function getClientById(id: string, context?: ServerRepositoryContext): Promise<Client> {
+  const client = await fetchClientRow(id, context);
   if (!client) {
     throw new NotFoundError(`Client ${id} was not found`);
   }
