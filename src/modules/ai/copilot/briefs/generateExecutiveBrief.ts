@@ -3,6 +3,7 @@ import { getCoreAuditLogService } from "@/core/audit";
 import { isInventoryItemLowStock } from "@/modules/inventory/inventoryStats";
 import { formatMoney } from "@/lib/money";
 import type { BriefLine, ExecutiveBrief } from "@/modules/ai/copilot/briefs/types";
+import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const ONE_WEEK_MS = 7 * ONE_DAY_MS;
@@ -28,18 +29,18 @@ function startOfDay(): Date {
  * file's own doc comment for the full "browser-bound Supabase repository"
  * constraint this sidesteps.
  */
-export async function generateExecutiveBrief(workspaceId: string, firstName: string | null): Promise<ExecutiveBrief> {
+export async function generateExecutiveBrief(workspaceId: string, firstName: string | null, context?: ServerRepositoryContext): Promise<ExecutiveBrief> {
   const monthStart = startOfMonth().toISOString();
   const dayStart = startOfDay();
   const now = Date.now();
 
   const [events, invoices, lowStockItems, draftDocuments, leads, paymentsThisMonth, recentActivity] = await Promise.all([
-    getEvents({ includeArchived: false }),
-    getInvoices({ includeArchived: false }),
-    getLowStockInventoryItems(),
-    getDocuments({ status: "draft", includeArchived: false, includeDeleted: false }),
-    getLeads({ includeArchived: false }),
-    getPayments({ status: "succeeded", dateFrom: monthStart }),
+    getEvents({ includeArchived: false }, context),
+    getInvoices({ includeArchived: false }, context),
+    getLowStockInventoryItems().catch(() => []),
+    getDocuments({ status: "draft", includeArchived: false, includeDeleted: false }).catch(() => []),
+    getLeads({ includeArchived: false }, context),
+    getPayments({ status: "succeeded", dateFrom: monthStart }, context),
     getCoreAuditLogService().getAuditLogForWorkspace(workspaceId),
   ]);
 

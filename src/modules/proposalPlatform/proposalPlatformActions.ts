@@ -192,7 +192,12 @@ export async function listProposalSummariesAction(): Promise<ActionResult<Propos
   const cached = getCached<ProposalSummary[]>(cacheKey);
   if (cached) return { success: true, data: cached };
 
-  const proposals = await getProposalsRepository().getRecentProposals(session.workspace.id, 500);
+  let proposals;
+  try {
+    proposals = await getProposalsRepository().getRecentProposals(session.workspace.id, 500);
+  } catch {
+    return { success: false, error: GENERIC_ACCESS_ERROR };
+  }
   const details = await Promise.all(proposals.map((p) => buildProposalDetail(session.workspace.id, p.id)));
   const summaries = details.filter((d): d is NonNullable<typeof d> => d !== null).map(toSummary);
 

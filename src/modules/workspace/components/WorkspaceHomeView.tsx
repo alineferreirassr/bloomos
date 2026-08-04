@@ -42,7 +42,9 @@ export function WorkspaceHomeView() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    getWorkspaceSummaryAction().then((result) => setSummary(result.success ? result.data : null));
+    getWorkspaceSummaryAction()
+      .then((result) => setSummary(result.success ? result.data : null))
+      .catch(() => setSummary(null));
   }, []);
 
   if (!summary) {

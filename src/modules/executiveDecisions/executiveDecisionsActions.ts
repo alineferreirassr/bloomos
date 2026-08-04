@@ -88,8 +88,8 @@ export async function evaluateExecutiveDecisionsAction(): Promise<{ success: tru
 
   const [relationships, documents, folders, businessHealthResult, objectivesResult, capabilityCoverageResult, schedulingRecommendations, allocationRecommendations, operationalPlanningRecommendations, executionPackageRecommendations, dispatchRecommendations, fieldOperationsRecommendations, routeOptimizationRecommendations, journeyRecommendations, proposalRecommendations, contractRecommendations, invoiceRecommendations, clientPortalRecommendations, digitalAssetsRecommendations, workflowRecommendations, searchRecommendations, notificationRecommendations, documentPlatformRecommendations] = await Promise.all([
     getCoreKnowledgeGraphService().listRelationshipsForWorkspace(workspaceId, true),
-    getDocuments({ includeArchived: true, latestVersionOnly: true }),
-    getMediaFolders(),
+    getDocuments({ includeArchived: true, latestVersionOnly: true }).catch(() => []),
+    getMediaFolders().catch(() => []),
     evaluateBusinessHealthAction(),
     evaluateObjectivesAction(),
     evaluateWorkforceCapabilityCoverageAction(),

@@ -1,6 +1,7 @@
 "use server";
 
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 import { getContracts, getInvoices, getPayments, getExpenses, getEvents, getLeads, listInventoryItems } from "@/lib/data";
 import { getOperationsDashboardData } from "@/modules/operations/operationsDashboardData";
 import { computeWorkspaceFinancialSummary, computeAllTimeFinancialTotals, type WorkspaceFinancialSummary } from "@/modules/finance/financialSummary";
@@ -58,21 +59,21 @@ function paymentCounts(payment: Payment): boolean {
  * doc comment), `ForecastEngine`, and `BusinessHealthEngine` rather than
  * re-deriving any of their arithmetic here.
  */
-export async function getExecutiveDashboardData(): Promise<GetExecutiveDashboardDataResult> {
+export async function getExecutiveDashboardData(context?: ServerRepositoryContext): Promise<GetExecutiveDashboardDataResult> {
   const session = await resolveMemberSessionSnapshot();
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("analytics.view")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
   const now = clockNow();
   const [contracts, invoices, payments, expenses, events, leads, inventoryItems, operationsData] = await Promise.all([
-    getContracts({ includeArchived: true }),
-    getInvoices({ includeArchived: true }),
-    getPayments(),
-    getExpenses({ includeArchived: true }),
-    getEvents({ includeArchived: false }),
-    getLeads({ includeArchived: false }),
-    listInventoryItems(),
-    getOperationsDashboardData(),
+    getContracts({ includeArchived: true }, context),
+    getInvoices({ includeArchived: true }, context),
+    getPayments(undefined, context),
+    getExpenses({ includeArchived: true }, context),
+    getEvents({ includeArchived: false }, context),
+    getLeads({ includeArchived: false }, context),
+    listInventoryItems().catch(() => []),
+    getOperationsDashboardData(context),
   ]);
 
   const currency = payments[0]?.currency ?? invoices[0]?.currency ?? "usd";

@@ -1,6 +1,8 @@
 "use server";
 
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+import { getServerRepositoryContext } from "@/lib/auth/workspaceSession";
+import { getDataMode } from "@/lib/env";
 import { generateId, nowIso } from "@/lib/data/utils";
 
 import { getWorkspaceLayout, saveWorkspaceLayout } from "@/lib/data/mock/workspaceLayoutStore";
@@ -102,20 +104,32 @@ export async function getWorkspaceSummaryAction(): Promise<WorkspaceActionResult
   const favorites = sortFavoritesByRecency(readWorkspaceFavorites().filter((f) => f.workspace_id === workspaceId && f.member_id === memberId));
   const recentItems = sortRecentItemsByRecency(readWorkspaceRecentItems().filter((r) => r.workspace_id === workspaceId && r.member_id === memberId));
 
+  // Only ever resolved in Supabase data mode — the six repositories this injects into
+  // (events/leads/clients/contracts/finance/clientAccess) fall back to the browser
+  // Supabase client otherwise, which has no real session during this server-side
+  // Server Action call. See docs on the dashboard SSR-authentication fix.
+  const serverContext = getDataMode() === "supabase" ? await getServerRepositoryContext() : undefined;
+
+  // Each sub-fetch is individually wrapped so one section failing (whether from an
+  // unmigrated Supabase repository, a permissions gap, or anything else) degrades
+  // that section rather than failing the entire Workspace Home — matching this
+  // file's own `unwrap()` contract below, which otherwise only guards against a
+  // resolved `{success:false}`, not an outright rejected promise.
+  const SECTION_UNAVAILABLE = "This section is temporarily unavailable.";
   const [activityResult, operationsResult, assetsResult, proposalsResult, contractsResult, invoicesResult, journeysResult, capabilityResult, executiveResult, graphStatsResult, executiveBrief, analyticsResult, reportsResult] = await Promise.all([
-    getActivityFeedData({}),
-    evaluateOperationsCenterAction(),
-    evaluateDigitalAssetsPlatformAction(),
-    listProposalSummariesAction(),
-    listContractSummariesAction(),
-    listInvoiceSummariesAction(),
-    listClientJourneysAction(),
-    evaluateWorkforceCapabilityCoverageAction(),
-    evaluateExecutiveDecisionsAction(),
-    getGraphStatsAction(),
-    generateExecutiveBrief(workspaceId, deriveFirstName(session.profile?.full_name)),
-    getExecutiveDashboardData(),
-    listReportsAction(),
+    getActivityFeedData({}).catch(() => ({ success: false as const, error: SECTION_UNAVAILABLE })),
+    evaluateOperationsCenterAction().catch(() => ({ success: false as const, error: SECTION_UNAVAILABLE })),
+    evaluateDigitalAssetsPlatformAction().catch(() => ({ success: false as const, error: SECTION_UNAVAILABLE })),
+    listProposalSummariesAction().catch(() => ({ success: false as const, error: SECTION_UNAVAILABLE })),
+    listContractSummariesAction().catch(() => ({ success: false as const, error: SECTION_UNAVAILABLE })),
+    listInvoiceSummariesAction().catch(() => ({ success: false as const, error: SECTION_UNAVAILABLE })),
+    listClientJourneysAction().catch(() => ({ success: false as const, error: SECTION_UNAVAILABLE })),
+    evaluateWorkforceCapabilityCoverageAction().catch(() => ({ success: false as const, error: SECTION_UNAVAILABLE })),
+    evaluateExecutiveDecisionsAction().catch(() => ({ success: false as const, error: SECTION_UNAVAILABLE })),
+    getGraphStatsAction().catch(() => ({ success: false as const, error: SECTION_UNAVAILABLE })),
+    generateExecutiveBrief(workspaceId, deriveFirstName(session.profile?.full_name), serverContext).catch(() => null),
+    getExecutiveDashboardData(serverContext).catch(() => ({ success: false as const, error: SECTION_UNAVAILABLE })),
+    listReportsAction().catch(() => ({ success: false as const, error: SECTION_UNAVAILABLE })),
   ]);
 
   const activityEntries = unwrap(activityResult, [] as ActivityEntry[]);

@@ -1524,12 +1524,12 @@ export async function getClientFinancialSummary(clientId: string): Promise<Clien
   return computeClientFinancialSummary(clientId, contracts, invoices, payments, expenses);
 }
 
-export async function getWorkspaceFinancialSummary(): Promise<WorkspaceFinancialSummary> {
+export async function getWorkspaceFinancialSummary(context?: ServerRepositoryContext): Promise<WorkspaceFinancialSummary> {
   const [contracts, invoices, payments, expenses] = await Promise.all([
-    getContracts({ includeArchived: true }),
-    getInvoices({ includeArchived: true }),
-    getPayments(),
-    getExpenses({ includeArchived: true }),
+    getContracts({ includeArchived: true }, context),
+    getInvoices({ includeArchived: true }, context),
+    getPayments(undefined, context),
+    getExpenses({ includeArchived: true }, context),
   ]);
   return computeWorkspaceFinancialSummary(contracts, invoices, payments, expenses);
 }

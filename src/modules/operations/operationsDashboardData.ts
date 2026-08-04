@@ -8,6 +8,7 @@ import {
   listEventServicesByEvent,
   listEventServiceVendorAssignments,
 } from "@/lib/data";
+import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 import { getEventHealthDetails } from "@/core/workflows/eventHealth";
 import { computeChecklistStats } from "@/modules/events/checklistStats";
 import type { Event } from "@/types/event";
@@ -66,13 +67,13 @@ function daysUntil(eventDate: string | null): number | null {
  * calls on a single dashboard load. The Command Center remains the place
  * to see one event's full Operations Health Score.
  */
-export async function getOperationsDashboardData(): Promise<OperationsDashboardData> {
+export async function getOperationsDashboardData(context?: ServerRepositoryContext): Promise<OperationsDashboardData> {
   const [events, lowStockItems, damagedItems, overduePurchases, financialSummary] = await Promise.all([
-    getEvents({ includeArchived: false }),
-    getLowStockInventoryItems(),
-    getDamagedOrUnderRepairInventoryItems(),
-    getOverduePurchases(),
-    getWorkspaceFinancialSummary(),
+    getEvents({ includeArchived: false }, context),
+    getLowStockInventoryItems().catch(() => []),
+    getDamagedOrUnderRepairInventoryItems().catch(() => []),
+    getOverduePurchases().catch(() => []),
+    getWorkspaceFinancialSummary(context),
   ]);
 
   const activeEvents = events.filter((event) => event.status !== "cancelled" && event.status !== "archived");
@@ -84,7 +85,7 @@ export async function getOperationsDashboardData(): Promise<OperationsDashboardD
     })
     .sort((a, b) => (a.event_date ?? "").localeCompare(b.event_date ?? ""));
 
-  const checklistLists = await Promise.all(upcomingEvents.map((event) => getChecklistByEventId(event.id)));
+  const checklistLists = await Promise.all(upcomingEvents.map((event) => getChecklistByEventId(event.id, context)));
   const lateTaskCount = checklistLists.reduce((sum, checklist) => sum + computeChecklistStats(checklist).overdue, 0);
   const totalChecklistItemCount = checklistLists.reduce((sum, checklist) => sum + checklist.length, 0);
 
@@ -98,9 +99,9 @@ export async function getOperationsDashboardData(): Promise<OperationsDashboardD
     return { event, score };
   });
 
-  const servicesLists = await Promise.all(upcomingEvents.map((event) => listEventServicesByEvent(event.id)));
+  const servicesLists = await Promise.all(upcomingEvents.map((event) => listEventServicesByEvent(event.id).catch(() => [])));
   const vendorAssignmentLists = await Promise.all(
-    servicesLists.flat().map((service) => listEventServiceVendorAssignments(service.id)),
+    servicesLists.flat().map((service) => listEventServiceVendorAssignments(service.id).catch(() => [])),
   );
   const unconfirmedVendorAssignmentCount = vendorAssignmentLists.flat().filter((assignment) => assignment.status !== "confirmed").length;
   const confirmedVendorIds = [...new Set(vendorAssignmentLists.flat().filter((assignment) => assignment.status === "confirmed").map((assignment) => assignment.vendor_id))];
