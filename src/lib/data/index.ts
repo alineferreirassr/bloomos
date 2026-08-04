@@ -2162,8 +2162,8 @@ function teamRepository() {
   return selectRepository({ mock: mockTeamRepository, supabase: supabaseTeamRepository });
 }
 
-export async function getWorkspaceMembers(): Promise<TeamMember[]> {
-  return teamRepository().getWorkspaceMembers();
+export async function getWorkspaceMembers(context?: ServerRepositoryContext): Promise<TeamMember[]> {
+  return teamRepository().getWorkspaceMembers(context);
 }
 
 export async function getWorkspaceMemberById(id: string): Promise<TeamMember> {

@@ -1,8 +1,10 @@
 "use server";
 
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+import { getServerRepositoryContext } from "@/lib/auth/workspaceSession";
 import { getWorkspaceMemberById, getWorkspaceMembers } from "@/lib/data";
 import { getTeamRoleLabel, setTeamRoleLabel } from "@/lib/data/core/dashboard/teamRoleLabelStore";
+import { getDataMode } from "@/lib/env";
 import type { TeamRoleLabel } from "@/types/teamRoleLabel";
 
 const GENERIC_ACCESS_ERROR = "Team role labels aren't available. You may not have access to them.";
@@ -39,7 +41,8 @@ export async function listTeamRoleLabelsAction(): Promise<TeamRoleLabelResult<Re
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("team.view")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
-  const members = await getWorkspaceMembers();
+  const context = getDataMode() === "supabase" ? await getServerRepositoryContext() : undefined;
+  const members = await getWorkspaceMembers(context);
   const result: Record<string, TeamRoleLabel> = {};
   for (const member of members) result[member.id] = getTeamRoleLabel(member.id);
   return { success: true, data: result };

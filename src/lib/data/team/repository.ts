@@ -4,6 +4,7 @@ import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 import type { InvitationStatus } from "@/core/enums/invitationStatus";
 import type { Permission } from "@/core/enums/permission";
 import type { DataResult } from "@/lib/data/result";
+import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 
 export interface CreateWorkspaceInvitationInput {
   email: string;
@@ -28,7 +29,7 @@ export interface WorkspaceInvitationFilters {
  */
 export interface TeamRepository {
   // Members
-  getWorkspaceMembers(): Promise<TeamMember[]>;
+  getWorkspaceMembers(context?: ServerRepositoryContext): Promise<TeamMember[]>;
   getWorkspaceMemberById(id: string): Promise<TeamMember>;
   getCurrentWorkspaceMember(): Promise<TeamMember | null>;
   updateWorkspaceMemberRole(id: string, role: WorkspaceMemberRole): Promise<DataResult<TeamMember>>;

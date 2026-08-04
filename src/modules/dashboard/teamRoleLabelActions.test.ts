@@ -4,6 +4,14 @@ import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 vi.mock("@/lib/auth/memberSessionSnapshot", () => ({
   resolveMemberSessionSnapshot: vi.fn(),
 }));
+// getServerRepositoryContext() is only ever called in Supabase data mode (see
+// teamRoleLabelActions.ts) — these tests run in mock mode, but the module
+// still imports @/lib/auth/workspaceSession, which transitively imports the
+// server-only-gated @/lib/supabase/server. Mock it out so that import doesn't
+// throw in this non-Server-Component test environment.
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: vi.fn(),
+}));
 
 import { getOwnTeamRoleLabelAction, listTeamRoleLabelsAction, setTeamRoleLabelAction } from "@/modules/dashboard/teamRoleLabelActions";
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";

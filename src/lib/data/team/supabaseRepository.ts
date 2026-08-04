@@ -11,6 +11,7 @@ import { type DataResult, ok, fail } from "@/lib/data/result";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import { normalizeSupabaseError } from "@/lib/supabase/errors";
 import { getClientWorkspaceSession, type WorkspaceSession } from "@/lib/auth/workspaceSessionClient";
+import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 import type {
   TeamRepository,
   CreateWorkspaceInvitationInput,
@@ -75,9 +76,9 @@ async function fetchProfilesByIds(supabase: SupabaseClient, userIds: string[]): 
 // Members
 // ---------------------------------------------------------------------------
 
-async function getWorkspaceMembers(): Promise<TeamMember[]> {
-  const session = await requireWorkspaceSession();
-  const supabase = createSupabaseClient();
+async function getWorkspaceMembers(context?: ServerRepositoryContext): Promise<TeamMember[]> {
+  const session = context?.session ?? (await requireWorkspaceSession());
+  const supabase = context?.supabase ?? createSupabaseClient();
   const { data, error } = await supabase
     .from("workspace_members")
     .select("*")
