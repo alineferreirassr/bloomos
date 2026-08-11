@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWelcomeCopy, resolveTimeOfDay } from "@/core/dashboard/buildWelcomeCopy";
+import { buildTimeOfDayGreeting, buildWelcomeCopy, resolveTimeOfDay } from "@/core/dashboard/buildWelcomeCopy";
 
 describe("resolveTimeOfDay", () => {
   it("returns morning before noon", () => {
@@ -42,5 +42,22 @@ describe("buildWelcomeCopy", () => {
   it("defaults to the real current time of day when none is supplied", () => {
     const copy = buildWelcomeCopy({ experience: "owner", firstName: "Aline", workspaceName: "Amoré Bloom" });
     expect(copy.greeting).toMatch(/^Good (morning|afternoon|evening), Aline$/);
+  });
+});
+
+describe("buildTimeOfDayGreeting", () => {
+  it("interpolates the first name and each explicit time of day", () => {
+    expect(buildTimeOfDayGreeting("Aline", "morning")).toBe("Good morning, Aline");
+    expect(buildTimeOfDayGreeting("Aline", "afternoon")).toBe("Good afternoon, Aline");
+    expect(buildTimeOfDayGreeting("Aline", "evening")).toBe("Good evening, Aline");
+  });
+
+  it("defaults to the real current time of day when none is supplied", () => {
+    expect(buildTimeOfDayGreeting("Aline")).toMatch(/^Good (morning|afternoon|evening), Aline$/);
+  });
+
+  it("is the same formatting buildWelcomeCopy uses for the owner/team experiences", () => {
+    const owner = buildWelcomeCopy({ experience: "owner", firstName: "Aline", timeOfDay: "evening", workspaceName: "Amoré Bloom" });
+    expect(owner.greeting).toBe(buildTimeOfDayGreeting("Aline", "evening"));
   });
 });

@@ -24,6 +24,8 @@ const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "S
 
 export interface OwnerDashboardData {
   welcome: WelcomeCopy;
+  /** The same first name already embedded in `welcome.greeting` (real `profile.full_name`, falling back to "there" if unset — never hardcoded) — surfaced separately so the client can re-greet with the visitor's own local time of day without re-deriving name resolution. */
+  firstName: string;
   metrics: LuxuryMetricCardData[];
   upcomingEvents: EventPreviewCardData[];
   weekAgenda: { dayLabel: string; dateLabel: string; events: { id: string; title: string; timeLabel: string | null; href: string }[] }[];
@@ -198,10 +200,13 @@ export async function getOwnerDashboardData(): Promise<GetOwnerDashboardDataResu
   const notificationCount = memberNotifications.filter((n) => n.read_at === null && n.archived_at === null).length;
   const messageCount = recentMessages.filter((item) => item.unread).length;
 
+  const firstName = session.profile.full_name?.split(" ")[0] ?? "there";
+
   return {
     success: true,
     data: {
-      welcome: buildWelcomeCopy({ experience: "owner", firstName: session.profile.full_name?.split(" ")[0] ?? "there", timeOfDay: resolveTimeOfDay(now), workspaceName: session.workspace.name }),
+      welcome: buildWelcomeCopy({ experience: "owner", firstName, timeOfDay: resolveTimeOfDay(now), workspaceName: session.workspace.name }),
+      firstName,
       metrics,
       upcomingEvents,
       weekAgenda,

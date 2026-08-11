@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { OwnerDashboardData } from "@/modules/dashboard/luxury/getOwnerDashboardData";
+import { buildTimeOfDayGreeting, resolveTimeOfDay } from "@/core/dashboard/buildWelcomeCopy";
 import type { LuxuryBranding } from "@/modules/dashboard/luxury/components/LuxuryDashboardShell";
 import { LuxuryDashboardShell } from "@/modules/dashboard/luxury/components/LuxuryDashboardShell";
 import { PersonalizedWelcomeHeader } from "@/modules/dashboard/luxury/components/PersonalizedWelcomeHeader";
@@ -34,11 +36,27 @@ interface OwnerDashboardViewProps {
 export function OwnerDashboardView({ data, branding, profileName, profileRoleLabel, profileAvatarUrl }: OwnerDashboardViewProps) {
   const router = useRouter();
 
+  // `data.welcome.greeting` was built server-side (Vercel/Node's own clock),
+  // so its "Good {timeOfDay}," word can be wrong for the visitor's actual
+  // local time. A lazy `useState` initializer can't read the browser's clock
+  // during the SSR pass (no real local time there), so committing it
+  // synchronously on the client's first render would diverge from the
+  // server-rendered HTML and produce a hydration mismatch — same "sync
+  // initial state from an external, request-independent source" exception
+  // documented at ServicesCatalogPage.tsx's own readStoredViewMode() effect.
+  // firstName is the real profile.full_name the server already resolved,
+  // never hardcoded here.
+  const [greeting, setGreeting] = useState(data.welcome.greeting);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setGreeting(buildTimeOfDayGreeting(data.firstName, resolveTimeOfDay()));
+  }, [data.firstName]);
+
   return (
     <LuxuryDashboardShell branding={branding} sidebarFooter={<ProfileMenu name={profileName} roleLabel={profileRoleLabel} avatarUrl={profileAvatarUrl} />}>
       <div className="space-y-6">
         <PersonalizedWelcomeHeader
-          copy={data.welcome}
+          copy={{ ...data.welcome, greeting }}
           actions={
             <>
               <DashboardDateSelector />

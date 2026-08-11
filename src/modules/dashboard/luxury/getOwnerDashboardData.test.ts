@@ -54,6 +54,7 @@ describe("getOwnerDashboardData", () => {
     if (!result.success) return;
 
     expect(result.data.welcome.greeting).toContain("Aline");
+    expect(result.data.firstName).toBe("Aline");
     expect(result.data.metrics).toHaveLength(5);
     expect(result.data.weekAgenda).toHaveLength(7);
     expect(result.data.revenueSeries).toHaveLength(6);
@@ -70,5 +71,24 @@ describe("getOwnerDashboardData", () => {
     vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session({ membership: { id: "member_1", role: "admin", status: "active", created_at: "2026-01-01T00:00:00Z" } }));
     const result = await getOwnerDashboardData();
     expect(result.success).toBe(true);
+  });
+
+  it("falls back to 'there' when the profile has no full_name (never hardcodes a name)", async () => {
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session({ profile: { full_name: null, avatar_url: null } }));
+    const result = await getOwnerDashboardData();
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.data.firstName).toBe("there");
+    expect(result.data.welcome.greeting).toContain("there");
+  });
+
+  it("uses only the first word of a multi-word full_name", async () => {
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session({ profile: { full_name: "Sophia Costa Reyes", avatar_url: null } }));
+    const result = await getOwnerDashboardData();
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.data.firstName).toBe("Sophia");
   });
 });

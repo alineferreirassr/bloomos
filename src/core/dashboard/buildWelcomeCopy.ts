@@ -13,6 +13,11 @@ function pluralize(count: number, singular: string, plural = `${singular}s`): st
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
+/** The one place the "Good {timeOfDay}, {firstName}" string is assembled — shared by `buildWelcomeCopy`'s own server-side pass and by any client-side re-greet that needs to correct `timeOfDay` for the visitor's local clock without re-deriving the format. */
+export function buildTimeOfDayGreeting(firstName: string, timeOfDay: TimeOfDay = resolveTimeOfDay()): string {
+  return `Good ${timeOfDay}, ${firstName}`;
+}
+
 export interface WelcomeCopy {
   greeting: string;
   subtitle: string;
@@ -42,7 +47,7 @@ export function buildWelcomeCopy(input: WelcomeCopyInput): WelcomeCopy {
   }
 
   const timeOfDay = input.timeOfDay ?? resolveTimeOfDay();
-  const greeting = `Good ${timeOfDay}, ${input.firstName}`;
+  const greeting = buildTimeOfDayGreeting(input.firstName, timeOfDay);
 
   if (input.experience === "owner") {
     return { greeting, subtitle: `Here's what's happening across ${input.workspaceName} today.` };
