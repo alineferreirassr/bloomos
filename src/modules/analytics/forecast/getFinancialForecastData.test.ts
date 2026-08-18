@@ -26,7 +26,7 @@ const activeSession: MemberSessionSnapshot = {
   profile: { full_name: "Owner", avatar_url: null },
   workspace: { id: "ws_1", name: "Amoré Bloom" },
   membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
-  permissions: ["analytics.view"],
+  permissions: ["analytics.view", "finance.amounts.view", "finance.executive.view"],
   workspaceDisplayName: "Amoré Bloom",
 };
 
@@ -80,12 +80,29 @@ describe("getFinancialForecastData", () => {
     const result = await getFinancialForecastData();
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.cashFlowForecast.length).toBe(result.data.revenueForecast.projected.length);
-      for (const point of result.data.cashFlowForecast) {
-        const revenue = result.data.revenueForecast.projected.find((p) => p.label === point.month)?.value ?? 0;
-        const expense = result.data.expenseForecast.projected.find((p) => p.label === point.month)?.value ?? 0;
+      const { cashFlowForecast, revenueForecast, expenseForecast } = result.data;
+      if (!cashFlowForecast || !revenueForecast || !expenseForecast) throw new Error("expected forecast data for a caller with full finance permissions");
+      expect(cashFlowForecast.length).toBe(revenueForecast.projected.length);
+      for (const point of cashFlowForecast) {
+        const revenue = revenueForecast.projected.find((p) => p.label === point.month)?.value ?? 0;
+        const expense = expenseForecast.projected.find((p) => p.label === point.month)?.value ?? 0;
         expect(point.projectedMinor).toBe(revenue - expense);
       }
+    }
+  });
+
+  it("Phase 08 — redacts revenue/expense/cash-flow forecasts for a caller without finance.amounts.view/finance.executive.view, but still returns non-financial figures", async () => {
+    setUpDefaults();
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue({ ...activeSession, permissions: ["analytics.view"] });
+    vi.mocked(getEvents).mockResolvedValue([{ id: "e1", event_date: "2026-06-15", status: "confirmed" }] as never);
+
+    const result = await getFinancialForecastData();
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.revenueForecast).toBeNull();
+      expect(result.data.expenseForecast).toBeNull();
+      expect(result.data.cashFlowForecast).toBeNull();
+      expect(result.data.predictedBusyMonths.find((m) => m.month === "June")?.historicalEventCount).toBe(1);
     }
   });
 

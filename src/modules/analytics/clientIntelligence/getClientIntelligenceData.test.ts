@@ -26,7 +26,7 @@ const activeSession: MemberSessionSnapshot = {
   profile: { full_name: "Owner", avatar_url: null },
   workspace: { id: "ws_1", name: "Amoré Bloom" },
   membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
-  permissions: ["clients.view"],
+  permissions: ["clients.view", "finance.amounts.view"],
   workspaceDisplayName: "Amoré Bloom",
 };
 
@@ -96,6 +96,27 @@ describe("getClientIntelligenceData", () => {
     const result = await getClientIntelligenceData();
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.inactiveClientCount).toBe(1);
+  });
+
+  it("Phase 08 — redacts lifetimeCollectedMinor for a caller without finance.amounts.view, but keeps VIP/High Value classification and event counts real", async () => {
+    setUpDefaults();
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue({ ...activeSession, permissions: ["clients.view"] });
+    vi.mocked(getClients).mockResolvedValue([client({ id: "c1", is_returning: true }), client({ id: "c2" })] as never);
+    vi.mocked(getPayments).mockResolvedValue([
+      { id: "p1", client_id: "c1", event_id: null, amount_minor: 900000, currency: "usd", status: "succeeded", payment_type: "deposit", transaction_date: "2026-07-01T00:00:00.000Z" },
+      { id: "p2", client_id: "c2", event_id: null, amount_minor: 10000, currency: "usd", status: "succeeded", payment_type: "deposit", transaction_date: "2026-07-01T00:00:00.000Z" },
+    ] as never);
+
+    const result = await getClientIntelligenceData();
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const c1 = result.data.clients.find((c) => c.clientId === "c1");
+      expect(c1?.lifetimeCollectedMinor).toBeNull();
+      // Classification (derived from the real, internal figure) and ranking stay correct even though the amount itself is hidden.
+      expect(c1?.isHighValue).toBe(true);
+      expect(c1?.isVip).toBe(true);
+      expect(result.data.clients[0].clientId).toBe("c1"); // still sorted by the real lifetime value, c1 first
+    }
   });
 
   it("marks high-value clients as those above the workspace's own average lifetime spend", async () => {

@@ -23,7 +23,7 @@ const activeSession: MemberSessionSnapshot = {
   profile: { full_name: "Owner", avatar_url: null },
   workspace: { id: "ws_1", name: "Amoré Bloom" },
   membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
-  permissions: ["analytics.view"],
+  permissions: ["analytics.view", "finance.view", "finance.executive.view"],
   workspaceDisplayName: "Amoré Bloom",
 };
 

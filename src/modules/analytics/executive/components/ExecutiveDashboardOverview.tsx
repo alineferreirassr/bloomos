@@ -23,6 +23,11 @@ function formatPercent(value: number | null): string {
   return `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
 }
 
+/** Matches `ClientFinancialSummaryCard`'s own `money()` convention — `null` means "hidden from your role" (finance.amounts.view/finance.executive.view redaction in `getExecutiveDashboardData`), never `$0.00`. */
+function money(minor: number | null, currency: string): string {
+  return minor === null ? "—" : formatMoney(minor, currency);
+}
+
 interface StatTileContent {
   id: ExecutiveDashboardWidgetId;
   value: string;
@@ -84,20 +89,20 @@ const HEALTH_BAND_TONE: Record<string, BadgeTone> = { excellent: "success", heal
 
 function buildWidgetContent(d: ExecutiveDashboardData): Record<ExecutiveDashboardWidgetId, StatTileContent> {
   return {
-    todaysRevenue: { id: "todaysRevenue", value: formatMoney(d.todaysRevenueMinor, d.currency), drillDownHref: "/finance/payments" },
-    monthlyRevenue: { id: "monthlyRevenue", value: formatMoney(d.monthlyRevenueMinor, d.currency), trend: { value: d.revenueGrowthPercent }, drillDownHref: "/finance/payments" },
+    todaysRevenue: { id: "todaysRevenue", value: money(d.todaysRevenueMinor, d.currency), drillDownHref: "/finance/payments" },
+    monthlyRevenue: { id: "monthlyRevenue", value: money(d.monthlyRevenueMinor, d.currency), trend: { value: d.revenueGrowthPercent }, drillDownHref: "/finance/payments" },
     revenueGrowth: { id: "revenueGrowth", value: formatPercent(d.revenueGrowthPercent), drillDownHref: "/finance/payments" },
-    profit: { id: "profit", value: formatMoney(d.profitMinor, d.currency), drillDownHref: "/finance/reports/profit-and-loss" },
-    expenses: { id: "expenses", value: formatMoney(d.expensesMinor, d.currency), trend: { value: null }, drillDownHref: "/finance/expenses" },
-    cashFlow: { id: "cashFlow", value: formatMoney(d.cashFlowMinor, d.currency), helpText: "Cash collected minus cash expenses this month." },
+    profit: { id: "profit", value: money(d.profitMinor, d.currency), drillDownHref: "/finance/reports/profit-and-loss" },
+    expenses: { id: "expenses", value: money(d.expensesMinor, d.currency), trend: { value: null }, drillDownHref: "/finance/expenses" },
+    cashFlow: { id: "cashFlow", value: money(d.cashFlowMinor, d.currency), helpText: "Cash collected minus cash expenses this month." },
     pipelineValue: { id: "pipelineValue", value: formatMoney(d.pipelineValueMinor, d.currency), drillDownHref: "/pipeline/commercial" },
     upcomingEvents: { id: "upcomingEvents", value: d.upcomingEventsCount.toLocaleString(), drillDownHref: "/events" },
     eventsThisMonth: { id: "eventsThisMonth", value: d.eventsThisMonthCount.toLocaleString(), drillDownHref: "/events" },
     conversionRate: { id: "conversionRate", value: `${d.conversionRatePercent.toFixed(1)}%`, drillDownHref: "/pipeline/commercial" },
-    averageTicket: { id: "averageTicket", value: formatMoney(d.averageTicketMinor, d.currency), drillDownHref: "/finance/invoices" },
-    averageDeposit: { id: "averageDeposit", value: formatMoney(d.averageDepositMinor, d.currency), drillDownHref: "/contracts" },
-    outstandingPayments: { id: "outstandingPayments", value: formatMoney(d.outstandingPaymentsMinor, d.currency), drillDownHref: "/finance/invoices" },
-    customerLifetimeValue: { id: "customerLifetimeValue", value: formatMoney(d.estimatedCustomerLifetimeValueMinor, d.currency), helpText: "Estimated — total collected to date divided by paying clients.", drillDownHref: "/clients" },
+    averageTicket: { id: "averageTicket", value: money(d.averageTicketMinor, d.currency), drillDownHref: "/finance/invoices" },
+    averageDeposit: { id: "averageDeposit", value: money(d.averageDepositMinor, d.currency), drillDownHref: "/contracts" },
+    outstandingPayments: { id: "outstandingPayments", value: money(d.outstandingPaymentsMinor, d.currency), drillDownHref: "/finance/invoices" },
+    customerLifetimeValue: { id: "customerLifetimeValue", value: money(d.estimatedCustomerLifetimeValueMinor, d.currency), helpText: "Estimated — total collected to date divided by paying clients.", drillDownHref: "/clients" },
   };
 }
 
@@ -190,7 +195,7 @@ export function ExecutiveDashboardOverview() {
           pdfSections={[
             { heading: "Key Performance Indicators", lines: orderedVisible.map((widget) => `${EXECUTIVE_DASHBOARD_WIDGET_LABELS[widget.widgetId]}: ${content[widget.widgetId].value}`) },
             { heading: `Business Health Score: ${d.businessHealth.score} / 100 (${BUSINESS_HEALTH_BAND_LABELS[d.businessHealth.band]})`, lines: d.businessHealth.dimensions.map((dim) => `${BUSINESS_HEALTH_DIMENSION_LABELS[dim.dimension]}: ${dim.score === null ? "no data yet" : `${dim.score} / 100`} — ${dim.explanation}`) },
-            { heading: "Revenue Forecast", lines: [d.forecast.note, ...d.forecast.projected.map((p) => `${p.label}: ${formatMoney(p.value, d.currency)}`)] },
+            { heading: "Revenue Forecast", lines: d.forecast ? [d.forecast.note, ...d.forecast.projected.map((p) => `${p.label}: ${formatMoney(p.value, d.currency)}`)] : ["Restricted — ask an Owner or Admin for the revenue forecast."] },
           ]}
         />
       </div>
@@ -254,25 +259,31 @@ export function ExecutiveDashboardOverview() {
 
       <Card>
         <h3 className="font-serif text-[17px] font-semibold text-text">Revenue Forecast</h3>
-        <p className="mt-1 text-xs text-text-muted">{d.forecast.note}</p>
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-border text-xs text-text-muted">
-                <th className="pb-2 pr-3 font-normal">Period</th>
-                <th className="pb-2 font-normal">Projected Revenue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {d.forecast.projected.map((point) => (
-                <tr key={point.label} className="border-b border-border/60 last:border-0">
-                  <td className="py-2 pr-3 text-text">{point.label}</td>
-                  <td className="py-2 tabular-nums text-text-muted">{formatMoney(point.value, d.currency)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {d.forecast ? (
+          <>
+            <p className="mt-1 text-xs text-text-muted">{d.forecast.note}</p>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border text-xs text-text-muted">
+                    <th className="pb-2 pr-3 font-normal">Period</th>
+                    <th className="pb-2 font-normal">Projected Revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.forecast.projected.map((point) => (
+                    <tr key={point.label} className="border-b border-border/60 last:border-0">
+                      <td className="py-2 pr-3 text-text">{point.label}</td>
+                      <td className="py-2 tabular-nums text-text-muted">{formatMoney(point.value, d.currency)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <p className="mt-1 text-xs text-text-muted">Restricted — ask an Owner or Admin for the revenue forecast.</p>
+        )}
       </Card>
     </div>
   );

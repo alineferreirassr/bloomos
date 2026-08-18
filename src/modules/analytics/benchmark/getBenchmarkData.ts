@@ -14,8 +14,10 @@ import type { Expense } from "@/types/expense";
 const GENERIC_ACCESS_ERROR = "The Benchmark Center isn't available. You may not have access to it.";
 
 export interface BenchmarkData {
-  revenue: BenchmarkResult;
-  profit: BenchmarkResult;
+  /** `null` when the caller lacks `finance.amounts.view` — Phase 08's redaction, matching the Phase 06B policy applied elsewhere in Finance. */
+  revenue: BenchmarkResult | null;
+  /** `null` when the caller lacks `finance.executive.view` — Profit is gated separately from raw revenue amounts, per the same policy. */
+  profit: BenchmarkResult | null;
   eventsBooked: BenchmarkResult;
   newClients: BenchmarkResult;
 }
@@ -40,6 +42,9 @@ export async function getBenchmarkData(): Promise<GetBenchmarkDataResult> {
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("analytics.view")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
+  const canViewAmounts = session.permissions.includes("finance.amounts.view");
+  const canViewExecutive = session.permissions.includes("finance.executive.view");
+
   const now = clockNow();
   const [payments, expenses, events, clients] = await Promise.all([
     getPayments(),
@@ -59,5 +64,13 @@ export async function getBenchmarkData(): Promise<GetBenchmarkDataResult> {
     computeBenchmark("New Clients", (window) => filterInWindow(clients, (c) => c.created_at, window).length, now),
   ]);
 
-  return { success: true, data: { revenue, profit, eventsBooked, newClients } };
+  return {
+    success: true,
+    data: {
+      revenue: canViewAmounts ? revenue : null,
+      profit: canViewExecutive ? profit : null,
+      eventsBooked,
+      newClients,
+    },
+  };
 }

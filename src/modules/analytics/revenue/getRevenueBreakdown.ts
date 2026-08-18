@@ -24,10 +24,14 @@ function paymentCounts(payment: Payment): boolean {
  * never accrual/invoiced totals, so every "Revenue by X" view agrees with
  * the headline KPI it's a breakdown of.
  */
+// Phase 08 — every row this action returns is a real dollar amount, so it now also requires `finance.amounts.view`
+// (previously gated on `analytics.view` alone), matching the Phase 06B policy applied elsewhere in Finance.
 export async function getRevenueBreakdown(dimension: RevenueBreakdownDimension, windowKey: TrendWindowKey): Promise<GetRevenueBreakdownResult> {
   const session = await resolveMemberSessionSnapshot();
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
-  if (!session.permissions.includes("analytics.view")) return { success: false, error: GENERIC_ACCESS_ERROR };
+  if (!session.permissions.includes("analytics.view") || !session.permissions.includes("finance.amounts.view")) {
+    return { success: false, error: GENERIC_ACCESS_ERROR };
+  }
 
   const { window } = resolveTrendWindow(windowKey);
   const allPayments = await getPayments();

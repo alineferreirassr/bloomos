@@ -29,10 +29,11 @@ export interface InventoryNeedRow {
 }
 
 export interface FinancialForecastData {
-  revenueForecast: ForecastResult;
-  expenseForecast: ForecastResult;
-  /** Projected revenue minus projected expenses per future month — derived from the two forecasts above, not a separately fitted model. */
-  cashFlowForecast: { month: string; projectedMinor: number }[];
+  /** `null` when the caller lacks `finance.amounts.view` — Phase 08's redaction, matching the Phase 06B policy applied elsewhere in Finance. */
+  revenueForecast: ForecastResult | null;
+  expenseForecast: ForecastResult | null;
+  /** Projected revenue minus projected expenses per future month — derived from the two forecasts above, not a separately fitted model. `null` when the caller lacks `finance.executive.view` — it's a net/cash-flow figure, gated the same way `cashFlowMinor` is on the Executive tab. */
+  cashFlowForecast: { month: string; projectedMinor: number }[] | null;
   /** The 3 calendar months with the most events historically, as a seasonal repeat-pattern prediction — not a fitted trend. */
   predictedBusyMonths: BusyMonthPrediction[];
   /** Inventory items already low in stock (`quantity_available <= reorder_level`) with a real, currently unfulfilled requirement from an event in the next 90 days — not a fabricated consumption-rate projection. */
@@ -50,6 +51,9 @@ export async function getFinancialForecastData(): Promise<GetFinancialForecastDa
   const session = await resolveMemberSessionSnapshot();
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("analytics.view")) return { success: false, error: GENERIC_ACCESS_ERROR };
+
+  const canViewAmounts = session.permissions.includes("finance.amounts.view");
+  const canViewExecutive = session.permissions.includes("finance.executive.view");
 
   const now = clockNow();
   const [payments, expenses, events, inventoryItems] = await Promise.all([
@@ -112,6 +116,12 @@ export async function getFinancialForecastData(): Promise<GetFinancialForecastDa
 
   return {
     success: true,
-    data: { revenueForecast, expenseForecast, cashFlowForecast, predictedBusyMonths, inventoryNeeds },
+    data: {
+      revenueForecast: canViewAmounts ? revenueForecast : null,
+      expenseForecast: canViewAmounts ? expenseForecast : null,
+      cashFlowForecast: canViewExecutive ? cashFlowForecast : null,
+      predictedBusyMonths,
+      inventoryNeeds,
+    },
   };
 }

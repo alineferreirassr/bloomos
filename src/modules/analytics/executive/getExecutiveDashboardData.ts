@@ -24,23 +24,33 @@ const OPEN_LEAD_STATUSES = new Set(["new", "contacted", "welcome_guide_sent", "c
 
 export interface ExecutiveDashboardData {
   currency: string;
-  todaysRevenueMinor: number;
-  monthlyRevenueMinor: number;
+  /**
+   * Money-bearing fields are `number | null` rather than `number` — the
+   * action redacts them server-side based on the caller's own
+   * `finance.amounts.view`/`finance.executive.view` permissions (matching
+   * `getFinanceDashboardDataAction`'s established pattern), so a caller
+   * without the permission never receives the real figure on the wire.
+   * `null` means "hidden from you", not "zero" — the UI must render "—",
+   * never `$0.00`, for a `null` value here.
+   */
+  todaysRevenueMinor: number | null;
+  monthlyRevenueMinor: number | null;
   revenueGrowthPercent: number | null;
-  profitMinor: number;
-  expensesMinor: number;
-  /** Operating cash flow for the month (cash collected − cash expenses) — the same cash-basis figure `financialSummary.ts` calls `net_profit_minor`. Not a full statement of cash flows (no financing/investing sections) — see `docs/finance-reports.md`'s own deferred-reports list. */
-  cashFlowMinor: number;
+  /** Gated on `finance.executive.view` specifically — company-wide Profit, per the Phase 06B policy. */
+  profitMinor: number | null;
+  expensesMinor: number | null;
+  /** Operating cash flow for the month (cash collected − cash expenses) — the same cash-basis figure `financialSummary.ts` calls `net_profit_minor`. Not a full statement of cash flows (no financing/investing sections) — see `docs/finance-reports.md`'s own deferred-reports list. Gated on `finance.executive.view` — it is literally the Profit figure under another label. */
+  cashFlowMinor: number | null;
   pipelineValueMinor: number;
   upcomingEventsCount: number;
   eventsThisMonthCount: number;
   conversionRatePercent: number;
-  averageTicketMinor: number;
-  averageDepositMinor: number;
-  outstandingPaymentsMinor: number;
+  averageTicketMinor: number | null;
+  averageDepositMinor: number | null;
+  outstandingPaymentsMinor: number | null;
   /** Estimated, not tracked: total collected to date divided by the number of distinct clients who have ever paid. Labeled "estimated" throughout the UI. */
-  estimatedCustomerLifetimeValueMinor: number;
-  forecast: ForecastResult;
+  estimatedCustomerLifetimeValueMinor: number | null;
+  forecast: ForecastResult | null;
   businessHealth: BusinessHealthResult;
 }
 
@@ -63,6 +73,9 @@ export async function getExecutiveDashboardData(context?: ServerRepositoryContex
   const session = await resolveMemberSessionSnapshot();
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("analytics.view")) return { success: false, error: GENERIC_ACCESS_ERROR };
+
+  const canViewAmounts = session.permissions.includes("finance.amounts.view");
+  const canViewExecutive = session.permissions.includes("finance.executive.view");
 
   const now = clockNow();
   const [contracts, invoices, payments, expenses, events, leads, inventoryItems, operationsData] = await Promise.all([
@@ -140,27 +153,39 @@ export async function getExecutiveDashboardData(context?: ServerRepositoryContex
       openWarningRiskCount: operationsData.eventHealthScores.filter((e) => e.score >= 45 && e.score < 70).length,
     },
   };
-  const businessHealth = computeBusinessHealthScore(businessHealthContext, now);
+  const rawBusinessHealth = computeBusinessHealthScore(businessHealthContext, now);
+  // The "finance" dimension's explanation/factors narrate Profit/Margin directly (e.g. "operating at a net loss") —
+  // the same concept `finance.executive.view` gates everywhere else, so it's redacted here too, not just the raw numbers above.
+  const businessHealth: BusinessHealthResult = canViewExecutive
+    ? rawBusinessHealth
+    : {
+        ...rawBusinessHealth,
+        dimensions: rawBusinessHealth.dimensions.map((dimension) =>
+          dimension.dimension === "finance"
+            ? { ...dimension, score: null, explanation: "Restricted — ask an Owner or Admin for financial health detail.", factors: [] }
+            : dimension,
+        ),
+      };
 
   return {
     success: true,
     data: {
       currency,
-      todaysRevenueMinor,
-      monthlyRevenueMinor: financialSummary.revenue_this_month_minor,
-      revenueGrowthPercent,
-      profitMinor: financialSummary.net_profit_minor,
-      expensesMinor: financialSummary.expenses_this_month_minor,
-      cashFlowMinor: financialSummary.net_profit_minor,
+      todaysRevenueMinor: canViewAmounts ? todaysRevenueMinor : null,
+      monthlyRevenueMinor: canViewAmounts ? financialSummary.revenue_this_month_minor : null,
+      revenueGrowthPercent: canViewAmounts ? revenueGrowthPercent : null,
+      profitMinor: canViewExecutive ? financialSummary.net_profit_minor : null,
+      expensesMinor: canViewAmounts ? financialSummary.expenses_this_month_minor : null,
+      cashFlowMinor: canViewExecutive ? financialSummary.net_profit_minor : null,
       pipelineValueMinor,
       upcomingEventsCount: operationsData.upcomingEvents.length,
       eventsThisMonthCount,
       conversionRatePercent,
-      averageTicketMinor,
-      averageDepositMinor,
-      outstandingPaymentsMinor: financialSummary.outstanding_receivables_minor,
-      estimatedCustomerLifetimeValueMinor,
-      forecast,
+      averageTicketMinor: canViewAmounts ? averageTicketMinor : null,
+      averageDepositMinor: canViewAmounts ? averageDepositMinor : null,
+      outstandingPaymentsMinor: canViewAmounts ? financialSummary.outstanding_receivables_minor : null,
+      estimatedCustomerLifetimeValueMinor: canViewAmounts ? estimatedCustomerLifetimeValueMinor : null,
+      forecast: canViewAmounts ? forecast : null,
       businessHealth,
     },
   };

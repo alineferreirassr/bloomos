@@ -34,7 +34,7 @@ const activeSession: MemberSessionSnapshot = {
   profile: { full_name: "Owner", avatar_url: null },
   workspace: { id: "ws_1", name: "Amoré Bloom" },
   membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
-  permissions: ["analytics.view"],
+  permissions: ["analytics.view", "finance.amounts.view"],
   workspaceDisplayName: "Amoré Bloom",
 };
 
@@ -82,6 +82,21 @@ describe("getExecutiveInsightsData", () => {
     const result = await getExecutiveInsightsData();
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.map((i) => i.category).sort()).toEqual([...EXECUTIVE_INSIGHT_CATEGORIES].sort());
+  });
+
+  it("Phase 08 — drops revenue/expense/risk insights for a caller without finance.amounts.view, but keeps pipeline/growth/clientTrend/operational", async () => {
+    setUpDefaults();
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue({ ...activeSession, permissions: ["analytics.view"] });
+
+    const result = await getExecutiveInsightsData();
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const categories = result.data.map((i) => i.category);
+      expect(categories).not.toContain("revenue");
+      expect(categories).not.toContain("expense");
+      expect(categories).not.toContain("risk");
+      expect(categories).toContain("pipeline");
+    }
   });
 
   it("passes VIP/inactive client counts through from getClientIntelligenceData without recomputing them", async () => {

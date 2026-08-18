@@ -16,10 +16,13 @@ function paymentCounts(payment: Payment): boolean {
   return PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(payment.status) && payment.payment_type !== "refund";
 }
 
-async function computeCurrentValue(goal: Goal): Promise<{ currentValue: number | null }> {
+async function computeCurrentValue(goal: Goal, canViewAmounts: boolean, canViewExecutive: boolean): Promise<{ currentValue: number | null }> {
   const window = { start: goal.period_start, end: goal.period_end };
 
   if (goal.metric === "monthlyRevenue" || goal.metric === "quarterlyRevenue" || goal.metric === "annualRevenue") {
+    // Restricted rather than fetched, same "honestly null" treatment `customerSatisfaction` already uses below —
+    // matches the Phase 06B `finance.amounts.view` gate applied to every other revenue figure in Analytics.
+    if (!canViewAmounts) return { currentValue: null };
     const payments = await getPayments();
     return { currentValue: filterInWindow(payments.filter(paymentCounts), (p) => p.transaction_date, window).reduce((sum, p) => sum + p.amount_minor, 0) };
   }
@@ -29,6 +32,8 @@ async function computeCurrentValue(goal: Goal): Promise<{ currentValue: number |
     return { currentValue: filterInWindow(dated, (e) => e.event_date as string, window).length };
   }
   if (goal.metric === "profit") {
+    // Gated on `finance.executive.view`, not `finance.amounts.view` — Profit specifically, matching every other Profit figure in Analytics.
+    if (!canViewExecutive) return { currentValue: null };
     const [payments, expenses] = await Promise.all([getPayments(), getExpenses({ includeArchived: true })]);
     const collected = filterInWindow(payments.filter(paymentCounts), (p) => p.transaction_date, window).reduce((sum, p) => sum + p.amount_minor, 0);
     const cost = filterInWindow(
@@ -60,8 +65,11 @@ export async function listGoalsProgressAction(): Promise<GoalsActionResult<GoalP
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("analytics.view")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
+  const canViewAmounts = session.permissions.includes("finance.amounts.view");
+  const canViewExecutive = session.permissions.includes("finance.executive.view");
+
   const goals = listGoalsForWorkspace(session.workspace.id);
-  const progress = await Promise.all(goals.map(async (goal) => toProgress(goal, (await computeCurrentValue(goal)).currentValue)));
+  const progress = await Promise.all(goals.map(async (goal) => toProgress(goal, (await computeCurrentValue(goal, canViewAmounts, canViewExecutive)).currentValue)));
   return { success: true, data: progress };
 }
 

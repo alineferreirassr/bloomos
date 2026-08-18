@@ -29,6 +29,8 @@ export async function getExecutiveInsightsData(): Promise<GetExecutiveInsightsDa
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("analytics.view")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
+  const canViewAmounts = session.permissions.includes("finance.amounts.view");
+
   const now = clockNow();
   const thisMonthWindow = resolveBenchmarkWindow("thisMonth", now);
   const lastMonthWindow = resolveBenchmarkWindow("lastMonth", now);
@@ -74,5 +76,10 @@ export async function getExecutiveInsightsData(): Promise<GetExecutiveInsightsDa
     operational: { lowStockItemCount: operationsData.lowStockItems.length, unassignedRequirementCount: operationsData.unconfirmedVendorAssignmentCount },
   });
 
-  return { success: true, data: insights };
+  // "revenue"/"expense"/"risk" insight text embeds real dollar amounts (unlike "pipeline", whose figure is a CRM/Leads
+  // valuation, not a Finance-module concept) — dropped outright rather than partially redacted, since these are
+  // narrative strings, not structured fields, matching the Phase 06B policy for `finance.amounts.view`.
+  const visibleInsights = canViewAmounts ? insights : insights.filter((insight) => insight.category !== "revenue" && insight.category !== "expense" && insight.category !== "risk");
+
+  return { success: true, data: visibleInsights };
 }

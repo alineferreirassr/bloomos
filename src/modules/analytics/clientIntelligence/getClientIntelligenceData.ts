@@ -12,7 +12,8 @@ const INACTIVITY_DAYS = 365;
 export interface ClientLifetimeRow {
   clientId: string;
   name: string;
-  lifetimeCollectedMinor: number;
+  /** `null` when the caller lacks `finance.amounts.view` — Phase 08 redaction, matching the Phase 06B policy applied elsewhere in Finance/Analytics. VIP/High Value classification below is still computed from the real figure and stays visible; only the raw dollar amount is hidden. */
+  lifetimeCollectedMinor: number | null;
   eventCount: number;
   isReturning: boolean;
   isVip: boolean;
@@ -49,6 +50,8 @@ export async function getClientIntelligenceData(): Promise<GetClientIntelligence
   const session = await resolveMemberSessionSnapshot();
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("clients.view")) return { success: false, error: GENERIC_ACCESS_ERROR };
+
+  const canViewAmounts = session.permissions.includes("finance.amounts.view");
 
   const now = clockNow();
   const [clients, events, contracts, invoices, payments, expenses] = await Promise.all([
@@ -121,7 +124,10 @@ export async function getClientIntelligenceData(): Promise<GetClientIntelligence
       highValueClientCount: clientRows.filter((row) => row.isHighValue).length,
       inactiveClientCount: clientRows.filter((row) => row.isInactive).length,
       retentionRatePercent: clientsWithEvents.length === 0 ? null : (returningClientCount / clientsWithEvents.length) * 100,
-      clients: [...clientRows].sort((a, b) => b.lifetimeCollectedMinor - a.lifetimeCollectedMinor),
+      // Sorted by the real (internal, unredacted) figure — every row is built from `summary.collected_minor`
+      // above and is never null until the redaction map below — so ranking stays correct even when the
+      // amount itself is hidden from the response.
+      clients: [...clientRows].sort((a, b) => (b.lifetimeCollectedMinor as number) - (a.lifetimeCollectedMinor as number)).map((row) => ({ ...row, lifetimeCollectedMinor: canViewAmounts ? row.lifetimeCollectedMinor : null })),
     },
   };
 }

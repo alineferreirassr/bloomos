@@ -92,7 +92,7 @@ export function ClientIntelligencePanel() {
                   onKeyDown={(e) => (e.key === "Enter" ? router.push(`/clients/${row.clientId}`) : undefined)}
                 >
                   <td className="py-2 pr-3 text-text">{row.name}</td>
-                  <td className="py-2 pr-3 tabular-nums text-text">{formatMoney(row.lifetimeCollectedMinor, "USD")}</td>
+                  <td className="py-2 pr-3 tabular-nums text-text">{row.lifetimeCollectedMinor === null ? "—" : formatMoney(row.lifetimeCollectedMinor, "USD")}</td>
                   <td className="py-2 pr-3 tabular-nums text-text-muted">{row.eventCount}</td>
                   <td className="py-2">
                     <div className="flex flex-wrap gap-1">

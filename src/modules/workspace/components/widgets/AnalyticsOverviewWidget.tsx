@@ -14,7 +14,7 @@ export function AnalyticsOverviewWidget({ analytics }: { analytics: ExecutiveDas
       <div className="grid grid-cols-2 gap-3">
         <div>
           <p className="text-xs text-text-muted">Revenue this month</p>
-          <p className="mt-0.5 text-lg font-semibold text-text">{formatMoney(analytics.monthlyRevenueMinor, analytics.currency)}</p>
+          <p className="mt-0.5 text-lg font-semibold text-text">{analytics.monthlyRevenueMinor === null ? "—" : formatMoney(analytics.monthlyRevenueMinor, analytics.currency)}</p>
         </div>
         <div>
           <p className="text-xs text-text-muted">Pipeline value</p>

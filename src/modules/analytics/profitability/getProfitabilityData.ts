@@ -45,11 +45,22 @@ function paymentCounts(payment: Payment): boolean {
  * the same proportional allocation Revenue Analytics (Step 2) uses, so
  * "Most/Least Profitable Services" agrees with "Revenue by Service" on
  * what each service actually earned.
+ *
+ * Phase 08 — every field this action returns is Gross/Net Profit, margin, or
+ * per-service profit, i.e. exactly what `finance.executive.view` exists to
+ * gate under the frozen Phase 06B policy (this tab was previously gated on
+ * `analytics.view` alone). Since the entire payload is profit-shaped, this
+ * requires the permission outright rather than redacting individual fields
+ * — matching the same full-gate precedent `getFinanceLedgerSummaryAction`
+ * already uses for `finance.accounting.view`, and simpler/lower-risk than
+ * partial nulling for a table-heavy view where nearly every column is money.
  */
 export async function getProfitabilityData(windowKey: TrendWindowKey): Promise<GetProfitabilityDataResult> {
   const session = await resolveMemberSessionSnapshot();
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
-  if (!session.permissions.includes("analytics.view")) return { success: false, error: GENERIC_ACCESS_ERROR };
+  if (!session.permissions.includes("analytics.view") || !session.permissions.includes("finance.view") || !session.permissions.includes("finance.executive.view")) {
+    return { success: false, error: GENERIC_ACCESS_ERROR };
+  }
 
   const { window } = resolveTrendWindow(windowKey);
   const [allPayments, allInvoices, allExpenses, events, services] = await Promise.all([

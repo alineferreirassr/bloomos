@@ -31,7 +31,7 @@ const activeSession: MemberSessionSnapshot = {
   profile: { full_name: "Amoré Bloom Owner", avatar_url: null },
   workspace: { id: "ws_1", name: "Amoré Bloom" },
   membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
-  permissions: ["analytics.view"],
+  permissions: ["analytics.view", "finance.amounts.view", "finance.executive.view"],
   workspaceDisplayName: "Amoré Bloom",
 };
 
@@ -88,7 +88,7 @@ describe("getExecutiveDashboardData", () => {
       expect(result.data.todaysRevenueMinor).toBe(0);
       expect(result.data.businessHealth.score).toBe(100);
       // groupByMonth zero-fills every month in the lookback window even with no payments at all, so the forecast still has real (zero-value) historical points to project flat from.
-      expect(result.data.forecast.projected.every((p) => p.value === 0)).toBe(true);
+      expect(result.data.forecast?.projected.every((p) => p.value === 0)).toBe(true);
     }
   });
 
@@ -103,6 +103,21 @@ describe("getExecutiveDashboardData", () => {
     const result = await getExecutiveDashboardData();
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.todaysRevenueMinor).toBe(10000);
+  });
+
+  it("Phase 08A — a payment recorded with a date-only transaction_date (no time component, as the real DATE column stores it) for today still contributes to Today's Revenue", async () => {
+    setUpDefaults();
+    vi.mocked(getPayments).mockResolvedValue([
+      { id: "p1", client_id: "c1", event_id: null, contract_id: null, invoice_id: null, amount_minor: 7500, currency: "usd", status: "succeeded", payment_type: "deposit", transaction_date: "2026-07-15", reference: null, notes: null, payment_method: "manual", created_at: "2026-07-15T09:00:00.000Z", updated_at: "2026-07-15T09:00:00.000Z" },
+      { id: "p2", client_id: "c1", event_id: null, contract_id: null, invoice_id: null, amount_minor: 99999, currency: "usd", status: "succeeded", payment_type: "deposit", transaction_date: "2026-07-14", reference: null, notes: null, payment_method: "manual", created_at: "2026-07-14T09:00:00.000Z", updated_at: "2026-07-14T09:00:00.000Z" },
+    ] as never);
+
+    const result = await getExecutiveDashboardData();
+    expect(result.success).toBe(true);
+    // Before the Phase 08A fix, isWithinWindow's lexicographic string comparison sorted "2026-07-15"
+    // before "2026-07-15T00:00:00.000Z" (the "today" window's start), silently excluding it — this
+    // would have failed with todaysRevenueMinor === 0.
+    if (result.success) expect(result.data.todaysRevenueMinor).toBe(7500);
   });
 
   it("computes pipeline value from open leads' budget, excluding won/lost leads", async () => {

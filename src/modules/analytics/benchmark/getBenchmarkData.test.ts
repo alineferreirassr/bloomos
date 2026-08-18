@@ -24,7 +24,7 @@ const activeSession: MemberSessionSnapshot = {
   profile: { full_name: "Owner", avatar_url: null },
   workspace: { id: "ws_1", name: "Amoré Bloom" },
   membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
-  permissions: ["analytics.view"],
+  permissions: ["analytics.view", "finance.amounts.view", "finance.executive.view"],
   workspaceDisplayName: "Amoré Bloom",
 };
 
@@ -59,7 +59,7 @@ describe("getBenchmarkData", () => {
     const result = await getBenchmarkData();
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.revenue.values.find((v) => v.period === "thisMonth")?.value).toBe(50000);
+      expect(result.data.revenue?.values.find((v) => v.period === "thisMonth")?.value).toBe(50000);
     }
   });
 
@@ -73,7 +73,21 @@ describe("getBenchmarkData", () => {
     const result = await getBenchmarkData();
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.profit.values.find((v) => v.period === "thisMonth")?.value).toBe(30000);
+      expect(result.data.profit?.values.find((v) => v.period === "thisMonth")?.value).toBe(30000);
+    }
+  });
+
+  it("Phase 08 — redacts revenue/profit for a caller without finance.amounts.view/finance.executive.view, but still returns non-financial figures", async () => {
+    setUpDefaults();
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue({ ...activeSession, permissions: ["analytics.view"] });
+    vi.mocked(getEvents).mockResolvedValue([{ id: "e1", event_date: "2026-07-10", status: "confirmed" }] as never);
+
+    const result = await getBenchmarkData();
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.revenue).toBeNull();
+      expect(result.data.profit).toBeNull();
+      expect(result.data.eventsBooked.values.find((v) => v.period === "thisMonth")?.value).toBe(1);
     }
   });
 

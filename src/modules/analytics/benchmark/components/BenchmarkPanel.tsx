@@ -15,6 +15,16 @@ function formatPercent(value: number | null): string {
   return value === null ? "—" : `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
 }
 
+/** Rendered in place of a `BenchmarkTable` when the caller lacks the finance permission that field requires — matches the redaction `getBenchmarkData` already applies server-side. */
+function RestrictedBenchmarkCard({ label }: { label: string }) {
+  return (
+    <Card>
+      <h3 className="font-serif text-[17px] font-semibold text-text">{label}</h3>
+      <p className="mt-2 text-sm text-text-muted">Restricted — ask an Owner or Admin for this figure.</p>
+    </Card>
+  );
+}
+
 function BenchmarkTable({ result, isMoney }: { result: BenchmarkResult; isMoney: boolean }) {
   return (
     <Card>
@@ -72,8 +82,8 @@ export function BenchmarkPanel() {
 
   return (
     <div className="space-y-4">
-      <BenchmarkTable result={d.revenue} isMoney />
-      <BenchmarkTable result={d.profit} isMoney />
+      {d.revenue ? <BenchmarkTable result={d.revenue} isMoney /> : <RestrictedBenchmarkCard label="Revenue" />}
+      {d.profit ? <BenchmarkTable result={d.profit} isMoney /> : <RestrictedBenchmarkCard label="Profit" />}
       <BenchmarkTable result={d.eventsBooked} isMoney={false} />
       <BenchmarkTable result={d.newClients} isMoney={false} />
     </div>

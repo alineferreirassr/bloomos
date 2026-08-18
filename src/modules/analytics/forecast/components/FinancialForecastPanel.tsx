@@ -34,43 +34,64 @@ export function FinancialForecastPanel() {
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card>
-          <div className="flex items-center justify-between">
-            <h3 className="font-serif text-[17px] font-semibold text-text">Revenue Forecast</h3>
-            <Badge tone={d.revenueForecast.confidence === "high" ? "success" : d.revenueForecast.confidence === "medium" ? "warning" : "neutral"}>{d.revenueForecast.confidence} confidence</Badge>
-          </div>
-          <p className="mt-1 text-xs text-text-muted">{d.revenueForecast.note}</p>
-          <ul className="mt-3 space-y-1 text-sm">
-            {d.revenueForecast.projected.map((p) => (
-              <li key={p.label} className="flex justify-between tabular-nums text-text">
-                <span className="text-text-muted">{p.label}</span>
-                <span>{formatMoney(p.value, "USD")}</span>
-              </li>
-            ))}
-          </ul>
+          {d.revenueForecast ? (
+            <>
+              <div className="flex items-center justify-between">
+                <h3 className="font-serif text-[17px] font-semibold text-text">Revenue Forecast</h3>
+                <Badge tone={d.revenueForecast.confidence === "high" ? "success" : d.revenueForecast.confidence === "medium" ? "warning" : "neutral"}>{d.revenueForecast.confidence} confidence</Badge>
+              </div>
+              <p className="mt-1 text-xs text-text-muted">{d.revenueForecast.note}</p>
+              <ul className="mt-3 space-y-1 text-sm">
+                {d.revenueForecast.projected.map((p) => (
+                  <li key={p.label} className="flex justify-between tabular-nums text-text">
+                    <span className="text-text-muted">{p.label}</span>
+                    <span>{formatMoney(p.value, "USD")}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <>
+              <h3 className="font-serif text-[17px] font-semibold text-text">Revenue Forecast</h3>
+              <p className="mt-2 text-sm text-text-muted">Restricted — ask an Owner or Admin for this figure.</p>
+            </>
+          )}
         </Card>
         <Card>
           <h3 className="font-serif text-[17px] font-semibold text-text">Expense Forecast</h3>
-          <p className="mt-1 text-xs text-text-muted">{d.expenseForecast.note}</p>
-          <ul className="mt-3 space-y-1 text-sm">
-            {d.expenseForecast.projected.map((p) => (
-              <li key={p.label} className="flex justify-between tabular-nums text-text">
-                <span className="text-text-muted">{p.label}</span>
-                <span>{formatMoney(p.value, "USD")}</span>
-              </li>
-            ))}
-          </ul>
+          {d.expenseForecast ? (
+            <>
+              <p className="mt-1 text-xs text-text-muted">{d.expenseForecast.note}</p>
+              <ul className="mt-3 space-y-1 text-sm">
+                {d.expenseForecast.projected.map((p) => (
+                  <li key={p.label} className="flex justify-between tabular-nums text-text">
+                    <span className="text-text-muted">{p.label}</span>
+                    <span>{formatMoney(p.value, "USD")}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="mt-2 text-sm text-text-muted">Restricted — ask an Owner or Admin for this figure.</p>
+          )}
         </Card>
         <Card>
           <h3 className="font-serif text-[17px] font-semibold text-text">Cash Flow Forecast</h3>
-          <p className="mt-1 text-xs text-text-muted">Projected revenue minus projected expenses.</p>
-          <ul className="mt-3 space-y-1 text-sm">
-            {d.cashFlowForecast.map((p) => (
-              <li key={p.month} className="flex justify-between tabular-nums text-text">
-                <span className="text-text-muted">{p.month}</span>
-                <span className={p.projectedMinor < 0 ? "text-danger" : ""}>{formatMoney(p.projectedMinor, "USD")}</span>
-              </li>
-            ))}
-          </ul>
+          {d.cashFlowForecast ? (
+            <>
+              <p className="mt-1 text-xs text-text-muted">Projected revenue minus projected expenses.</p>
+              <ul className="mt-3 space-y-1 text-sm">
+                {d.cashFlowForecast.map((p) => (
+                  <li key={p.month} className="flex justify-between tabular-nums text-text">
+                    <span className="text-text-muted">{p.month}</span>
+                    <span className={p.projectedMinor < 0 ? "text-danger" : ""}>{formatMoney(p.projectedMinor, "USD")}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="mt-2 text-sm text-text-muted">Restricted — ask an Owner or Admin for this figure.</p>
+          )}
         </Card>
       </div>
 
