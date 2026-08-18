@@ -34,6 +34,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<WorkspaceMemberRole, readonly Perm
     "finance.view",
     "finance.create",
     "finance.update",
+    "finance.amounts.view",
     "documents.view",
     "documents.create",
     "documents.update",

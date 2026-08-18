@@ -40,6 +40,28 @@ export const PERMISSIONS = [
   "finance.create",
   "finance.update",
   "finance.refund",
+  // Phase 06B — Permission Hardening. `finance.view` alone used to gate
+  // every Finance surface identically for every role that held it,
+  // including company-wide P&L/Balance Sheet/ledger and profit/margin —
+  // Founder-approved policy requires Manager to keep day-to-day operational
+  // Finance (status, dates, individual transaction amounts) while losing
+  // executive/accounting surfaces by default, and Staff to lose monetary
+  // figures entirely by default. Four narrower gates, layered on top of
+  // `finance.view` (the operational entry point every finance-capable role
+  // keeps): "finance.amounts.view" — individual invoice/payment/expense
+  // dollar amounts and client/event operational financial summaries (not
+  // profit/margin); "finance.accounting.view" — Chart of Accounts, Journal
+  // Entries, Accounting Periods; "finance.reports.view" — the General
+  // Ledger, Trial Balance, P&L, and Balance Sheet reports;
+  // "finance.executive.view" — company-wide profit/margin and aggregate
+  // figures wherever they appear, including outside the Finance module
+  // itself (Client/Event financial summary cards). See permissionMatrix.ts
+  // for the resulting Manager/Staff defaults and docs/permissions.md for
+  // the full policy writeup.
+  "finance.amounts.view",
+  "finance.accounting.view",
+  "finance.reports.view",
+  "finance.executive.view",
   "documents.view",
   "documents.create",
   "documents.update",
