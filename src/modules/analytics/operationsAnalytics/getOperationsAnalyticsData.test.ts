@@ -140,4 +140,50 @@ describe("getOperationsAnalyticsData", () => {
       expect(result.data.operationalEfficiencyPercent).toBe(70);
     }
   });
+
+  // Phase 08 — purchase cost is amount-level finance data (Class B): it requires finance.amounts.view,
+  // while the surrounding operational metrics stay available under analytics.view.
+  it("A. analytics.view + finance.amounts.view → totalPurchaseCostMinor is the real amount", async () => {
+    setUpDefaults();
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue({
+      ...activeSession,
+      permissions: ["analytics.view", "finance.amounts.view"],
+    });
+    vi.mocked(listPurchases).mockResolvedValue([{ total_minor: 30000 }, { total_minor: 12000 }] as never);
+
+    const result = await getOperationsAnalyticsData();
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.totalPurchaseCostMinor).toBe(42000);
+  });
+
+  it("B. analytics.view WITHOUT finance.amounts.view → operational metrics stay, totalPurchaseCostMinor === null", async () => {
+    setUpDefaults(); // activeSession has ["analytics.view"] only
+    vi.mocked(listPurchases).mockResolvedValue([{ total_minor: 30000 }, { total_minor: 12000 }] as never);
+    vi.mocked(getWorkspaceMembers).mockResolvedValue([{ id: "m1", status: "active" }] as never);
+    vi.mocked(getOperationsDashboardData).mockResolvedValue({
+      ...emptyDashboardData,
+      assignedTeamMemberNames: ["Sofia"],
+    } as never);
+
+    const result = await getOperationsAnalyticsData();
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.totalPurchaseCostMinor).toBeNull();
+      // Non-financial Operations Analytics remains fully available under analytics.view.
+      expect(result.data.teamUtilizationPercent).toBe(100);
+      expect(result.data.lateTaskCount).toBe(3);
+    }
+  });
+
+  it("C. an unauthorized caller never receives the real purchase amount anywhere in the payload", async () => {
+    setUpDefaults(); // analytics.view only
+    vi.mocked(listPurchases).mockResolvedValue([{ total_minor: 999999 }] as never);
+
+    const result = await getOperationsAnalyticsData();
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(JSON.stringify(result.data)).not.toContain("999999");
+      expect(result.data.totalPurchaseCostMinor).toBeNull();
+    }
+  });
 });

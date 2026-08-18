@@ -91,7 +91,7 @@ export function OperationsAnalyticsPanel() {
 
       <Card>
         <h3 className="font-serif text-[17px] font-semibold text-text">Inventory Usage</h3>
-        <p className="mt-1 text-xs text-text-muted">{d.purchaseCount} purchases, {formatMoney(d.totalPurchaseCostMinor, "USD")} total cost.</p>
+        <p className="mt-1 text-xs text-text-muted">{d.purchaseCount} purchases, {d.totalPurchaseCostMinor === null ? "—" : formatMoney(d.totalPurchaseCostMinor, "USD")} total cost.</p>
         {d.inventoryUsage.length === 0 ? (
           <div className="mt-3">
             <EmptyState title="No inventory movement yet" description="Reserve or use Inventory items on an Event to see usage here." />

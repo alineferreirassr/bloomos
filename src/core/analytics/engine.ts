@@ -51,8 +51,22 @@ export function resolveTrendWindow(key: TrendWindowKey, now: Date = clockNow()):
 // own date-window filtering/grouping/comparison arithmetic.
 // ---------------------------------------------------------------------------
 
+/**
+ * Phase 08 fix — a date-only value ("YYYY-MM-DD", e.g. a payment `transaction_date` or an invoice
+ * `due_date` stored as a DATE column) has no time component, so comparing it lexicographically against
+ * a full-ISO bound ("YYYY-MM-DDT00:00:00.000Z") sorts it *before* that same day's midnight and wrongly
+ * drops it from a window whose start is that midnight — most visibly, "today". Normalize a bare date to
+ * the start of its UTC day so it participates in the window by its calendar date. Values already
+ * carrying a time ("...T...") are untouched, and inclusive-start / exclusive-end semantics are
+ * preserved for every window boundary.
+ */
+function normalizeWindowValue(iso: string): string {
+  return iso.length === 10 ? `${iso}T00:00:00.000Z` : iso;
+}
+
 export function isWithinWindow(iso: string, window: TimeWindow): boolean {
-  return iso >= window.start && iso < window.end;
+  const value = normalizeWindowValue(iso);
+  return value >= window.start && value < window.end;
 }
 
 export function filterInWindow<T>(items: T[], dateSelector: (item: T) => string, window: TimeWindow): T[] {

@@ -98,6 +98,55 @@ describe("filterInWindow / sumBy", () => {
   });
 });
 
+describe("filterInWindow — date-only values participate by calendar date (Phase 08 fix)", () => {
+  // A window whose start is a full-ISO midnight instant and whose end is a mid-day instant — exactly
+  // the shape resolveTrendWindow builds for "today".
+  const todayWindow: TimeWindow = { start: "2026-08-17T00:00:00.000Z", end: "2026-08-17T14:30:00.000Z" };
+
+  it("A. date-only value ON the window start date is INCLUDED (was wrongly excluded before the fix)", () => {
+    const items = [{ at: "2026-08-17" }];
+    expect(filterInWindow(items, (i) => i.at, todayWindow)).toEqual(items);
+  });
+
+  it("B. date-only value BEFORE the window start is EXCLUDED", () => {
+    const items = [{ at: "2026-08-16" }];
+    expect(filterInWindow(items, (i) => i.at, todayWindow)).toEqual([]);
+  });
+
+  it("C. exclusive-end preserved: a date-only value equal to an exclusive midnight end is EXCLUDED", () => {
+    const endMidnight: TimeWindow = { start: "2026-08-16T00:00:00.000Z", end: "2026-08-17T00:00:00.000Z" };
+    expect(filterInWindow([{ at: "2026-08-17" }], (i) => i.at, endMidnight)).toEqual([]);
+    // ...while the prior calendar day is still included (inclusive start, by date)
+    expect(filterInWindow([{ at: "2026-08-16" }], (i) => i.at, endMidnight)).toEqual([{ at: "2026-08-16" }]);
+  });
+
+  it("D. datetime value previously inside the window remains INCLUDED", () => {
+    const items = [{ at: "2026-08-17T09:15:00.000Z" }];
+    expect(filterInWindow(items, (i) => i.at, todayWindow)).toEqual(items);
+  });
+
+  it("E. datetime value previously outside the window remains EXCLUDED", () => {
+    expect(filterInWindow([{ at: "2026-08-17T20:00:00.000Z" }], (i) => i.at, todayWindow)).toEqual([]);
+    expect(filterInWindow([{ at: "2026-08-16T23:59:59.000Z" }], (i) => i.at, todayWindow)).toEqual([]);
+  });
+
+  it("F. today's date-only payment/expense/event value no longer disappears for lacking a T-timestamp", () => {
+    const { window } = resolveTrendWindow("today", new Date("2026-08-17T14:30:00.000Z"));
+    const payments = [{ transaction_date: "2026-08-17" }, { transaction_date: "2026-08-16" }];
+    expect(filterInWindow(payments, (p) => p.transaction_date, window)).toEqual([{ transaction_date: "2026-08-17" }]);
+  });
+
+  it("G. rolling-window semantics unchanged for datetime values (7d spans exactly N×24h back from now)", () => {
+    const { window } = resolveTrendWindow("7d", new Date("2026-08-17T14:30:00.000Z"));
+    const items = [
+      { at: "2026-08-17T00:00:00.000Z" }, // inside
+      { at: "2026-08-10T14:30:00.000Z" }, // exactly the rolling start — inclusive
+      { at: "2026-08-10T14:29:59.000Z" }, // one second before the rolling start — excluded
+    ];
+    expect(filterInWindow(items, (i) => i.at, window)).toEqual([items[0], items[1]]);
+  });
+});
+
 describe("groupByDay", () => {
   it("buckets by UTC calendar day, filling every day in the window with 0 even when no item falls on it", () => {
     const window: TimeWindow = { start: "2026-07-01T00:00:00.000Z", end: "2026-07-04T00:00:00.000Z" };

@@ -15,7 +15,8 @@ export interface OperationsAnalyticsData {
   vendorPerformance: VendorPerformanceRow[];
   inventoryUsage: InventoryUsageRow[];
   purchaseCount: number;
-  totalPurchaseCostMinor: number;
+  /** `null` when the caller lacks `finance.amounts.view` — Phase 08 redaction: purchase cost is an amount-level finance value, gated like every other money figure in Analytics, while the surrounding operational metrics stay available under `analytics.view`. */
+  totalPurchaseCostMinor: number | null;
   lateTaskCount: number;
   totalChecklistItemCount: number;
   averageEventHealthScore: number | null;
@@ -30,6 +31,10 @@ export async function getOperationsAnalyticsData(): Promise<GetOperationsAnalyti
   const session = await resolveMemberSessionSnapshot();
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("analytics.view")) return { success: false, error: GENERIC_ACCESS_ERROR };
+
+  // Phase 08 — purchase cost is amount-level finance data; the operational metrics stay under
+  // `analytics.view`, but the money figure requires `finance.amounts.view` (matching Phase 06B).
+  const canViewAmounts = session.permissions.includes("finance.amounts.view");
 
   const [dashboardData, reportsData, teamMembers, activeVendors, purchases] = await Promise.all([
     getOperationsDashboardData(),
@@ -54,7 +59,7 @@ export async function getOperationsAnalyticsData(): Promise<GetOperationsAnalyti
       vendorPerformance: reportsData.vendorPerformance,
       inventoryUsage: reportsData.inventoryUsage,
       purchaseCount: reportsData.purchaseCount,
-      totalPurchaseCostMinor: purchases.reduce((sum, p) => sum + p.total_minor, 0),
+      totalPurchaseCostMinor: canViewAmounts ? purchases.reduce((sum, p) => sum + p.total_minor, 0) : null,
       lateTaskCount: dashboardData.lateTaskCount,
       totalChecklistItemCount: dashboardData.totalChecklistItemCount,
       averageEventHealthScore,
