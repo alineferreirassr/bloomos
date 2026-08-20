@@ -21,6 +21,11 @@ import { RevenueTrendChart } from "@/modules/dashboard/luxury/components/Revenue
 import { RecentMessagesCard } from "@/modules/dashboard/luxury/components/RecentMessagesCard";
 import { TeamActivityCard } from "@/modules/dashboard/luxury/components/TeamActivityCard";
 import { OwnerAIBriefCard } from "@/modules/dashboard/luxury/components/OwnerAIBriefCard";
+import { OwnerNextEventWeatherCard } from "@/modules/dashboard/luxury/components/OwnerNextEventWeatherCard";
+import { CalendarWidget } from "@/modules/dashboard/luxury/components/CalendarWidget";
+import { MoodCheckInCard } from "@/modules/dashboard/luxury/components/MoodCheckInCard";
+import { WaterTrackerCard } from "@/modules/dashboard/luxury/components/WaterTrackerCard";
+import { LuxuryHeartIcon } from "@/modules/dashboard/luxury/luxuryIcons";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatMoney } from "@/lib/money";
 
@@ -32,7 +37,21 @@ interface OwnerDashboardViewProps {
   profileAvatarUrl: string | null;
 }
 
-/** Checkpoint 19, Step 6 — the Owner Dashboard, matching the approved reference image's own structure: welcome header + actions, 5 metric cards, Upcoming Events / Calendar-this-week / Priorities, Revenue Overview + Recent Messages + Team Activity, AI Executive Brief. */
+/**
+ * Checkpoint 19, Step 6, then the App Shell + Home redesign — the Founder's
+ * personal daily workspace, not a business-report landing page. Leads with
+ * "what's my day," "what needs my attention," "what's next": greeting,
+ * metrics strip, Calendar + Weather side by side (the Calendar's own
+ * selected-day agenda already defaults to today, standing in for "Today's
+ * Schedule" without a second widget), My Day (private Mood/Water), then
+ * Upcoming Events/My Priorities. Revenue Overview, Recent Messages, Team
+ * Activity, and the AI Executive Brief are unchanged in content but pushed
+ * below that fold — de-emphasized, never deleted. Date/Notifications/
+ * Messages moved out of this header into the shell's own persistent
+ * `LuxuryTopbar` (see `LuxuryDashboardShell`'s `topbarActions` prop) —
+ * `PersonalizedWelcomeHeader` now carries only the greeting, matching the
+ * reference product's sparse "Good morning, {name} ♡" pattern.
+ */
 export function OwnerDashboardView({ data, branding, profileName, profileRoleLabel, profileAvatarUrl }: OwnerDashboardViewProps) {
   const router = useRouter();
 
@@ -53,26 +72,54 @@ export function OwnerDashboardView({ data, branding, profileName, profileRoleLab
   }, [data.firstName]);
 
   return (
-    <LuxuryDashboardShell branding={branding} sidebarFooter={<ProfileMenu name={profileName} roleLabel={profileRoleLabel} avatarUrl={profileAvatarUrl} />}>
+    <LuxuryDashboardShell
+      branding={branding}
+      sidebarFooter={<ProfileMenu name={profileName} roleLabel={profileRoleLabel} avatarUrl={profileAvatarUrl} />}
+      topbarActions={
+        <>
+          <DashboardDateSelector />
+          <NotificationButton count={data.notificationCount} onClick={() => router.push("/communications")} />
+          <MessageButton count={data.messageCount} onClick={() => router.push("/inbox")} />
+        </>
+      }
+    >
       <div className="space-y-6">
-        <PersonalizedWelcomeHeader
-          copy={{ ...data.welcome, greeting }}
-          actions={
-            <>
-              <DashboardDateSelector />
-              <NotificationButton count={data.notificationCount} onClick={() => router.push("/communications")} />
-              <MessageButton count={data.messageCount} onClick={() => router.push("/inbox")} />
-            </>
-          }
-        />
+        <PersonalizedWelcomeHeader copy={{ ...data.welcome, greeting }} />
 
-        <div className="animate-fade-up stagger-1 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="animate-fade-up stagger-1 grid grid-cols-2 gap-4 lg:grid-cols-5">
           {data.metrics.map((metric) => (
             <LuxuryMetricCard key={metric.id} data={metric} />
           ))}
         </div>
 
         <div className="animate-fade-up stagger-2 grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <LuxuryCard className="lg:col-span-2">
+            <SectionHeader title="Calendar" />
+            <CalendarWidget initialEvents={data.calendarWidget.initialEvents} initialAnchorIso={data.calendarWidget.initialAnchorIso} />
+          </LuxuryCard>
+          {data.nextEventWeather ? (
+            <LuxuryCard tone="tint">
+              <SectionHeader title="Weather" />
+              <OwnerNextEventWeatherCard data={data.nextEventWeather} />
+            </LuxuryCard>
+          ) : null}
+        </div>
+
+        <section className="animate-fade-up stagger-3 rounded-luxury-lg border border-luxury-border bg-luxury-surface-tint p-5 shadow-luxury-sm sm:p-6">
+          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+            <div className="flex items-center gap-2">
+              <LuxuryHeartIcon className="h-4.5 w-4.5 text-luxury-rose" />
+              <h2 className="font-luxury-display text-luxury-section font-semibold text-luxury-text">My Day</h2>
+            </div>
+            <p className="text-luxury-small text-luxury-text-muted">A few things just for you.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <MoodCheckInCard privacyDetail="Your mood and water tracker are personal to you and are never visible to your team." />
+            <WaterTrackerCard privacyDetail="Your mood and water tracker are personal to you and are never visible to your team." />
+          </div>
+        </section>
+
+        <div className="animate-fade-up stagger-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <LuxuryCard>
             <SectionHeader title="Upcoming Events" action={<Link href="/events" className="text-luxury-small font-medium text-luxury-rose">View all</Link>} />
             {data.upcomingEvents.length === 0 ? (
@@ -87,36 +134,12 @@ export function OwnerDashboardView({ data, branding, profileName, profileRoleLab
           </LuxuryCard>
 
           <LuxuryCard>
-            <SectionHeader title="Calendar — This Week" action={<Link href="/events" className="text-luxury-small font-medium text-luxury-rose">View calendar</Link>} />
-            <ol className="space-y-2">
-              {data.weekAgenda.map((day) => (
-                <li key={day.dateLabel + day.dayLabel} className="flex items-start gap-3 text-luxury-small">
-                  <span className="w-10 shrink-0 text-luxury-text-muted">
-                    {day.dayLabel} {day.dateLabel}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    {day.events.length === 0 ? (
-                      <span className="text-luxury-text-muted">—</span>
-                    ) : (
-                      day.events.map((event) => (
-                        <Link key={event.id} href={event.href} className="block truncate text-luxury-text hover:text-luxury-rose">
-                          {event.title}
-                        </Link>
-                      ))
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </LuxuryCard>
-
-          <LuxuryCard>
             <SectionHeader title="My Priorities" action={<span className="text-luxury-small text-luxury-text-muted">{data.priorities.length} tasks</span>} />
             {data.priorities.length === 0 ? <EmptyState title="Nothing urgent" description="High-priority items appear here." /> : <PriorityList items={data.priorities} />}
           </LuxuryCard>
         </div>
 
-        <div className="animate-fade-up stagger-3 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="animate-fade-up stagger-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
           <LuxuryCard className="lg:col-span-2">
             <SectionHeader title="Revenue Overview" action={<span className="text-luxury-small text-luxury-text-muted">This month</span>} />
             <p className="font-luxury-display text-luxury-display font-semibold text-luxury-text">{formatMoney(data.revenueSeries[data.revenueSeries.length - 1]?.valueMinor ?? 0, "USD")}</p>
@@ -137,7 +160,7 @@ export function OwnerDashboardView({ data, branding, profileName, profileRoleLab
           </div>
         </div>
 
-        <LuxuryCard className="animate-fade-up stagger-4">
+        <LuxuryCard className="animate-fade-up stagger-6">
           <SectionHeader title="AI Executive Brief" />
           <OwnerAIBriefCard />
         </LuxuryCard>
