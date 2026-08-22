@@ -354,6 +354,46 @@ describe("mockFinanceRepository.createPayment", () => {
     expect(invoice.paid_minor).toBe(20000);
     expect(invoice.balance_minor).toBe(30000);
   });
+
+  it("Finance F1.7 — a payment that starts succeeded posts a balanced Journal Entry and exactly one Audit entry, matching recordPaymentSettlement's own effect", async () => {
+    const result = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      amount_minor: 20000,
+      payment_method: "cash",
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.status).toBe("succeeded");
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_settlement" });
+    const posted = entries.find((e) => e.source_id === result.data.id);
+    expect(posted).toBeDefined();
+    expect(posted?.posting_key).toBe(`payment_settlement:${result.data.id}`);
+
+    const detail = await mockFinanceRepository.getJournalEntry(posted!.id);
+    const totalDebit = detail.lines!.reduce((sum, line) => sum + line.debit_minor, 0);
+    const totalCredit = detail.lines!.reduce((sum, line) => sum + line.credit_minor, 0);
+    expect(totalDebit).toBe(totalCredit);
+    expect(totalDebit).toBe(20000);
+
+    const auditEntries = await mockAuditLogRepository.getAuditLogForOwner(CURRENT_WORKSPACE_ID, "payment", result.data.id);
+    expect(auditEntries.filter((e) => e.action === "payment_settlement_recorded")).toHaveLength(1);
+  });
+
+  it("Finance F1.7 — a payment that starts pending posts nothing to the ledger yet (only reaching succeeded posts)", async () => {
+    const result = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: null,
+      amount_minor: 20000,
+      payment_method: "credit_card",
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.status).toBe("pending");
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_settlement" });
+    expect(entries.some((e) => e.source_id === result.data.id)).toBe(false);
+  });
 });
 
 describe("mockFinanceRepository.markPaymentSucceeded", () => {
@@ -410,6 +450,78 @@ describe("mockFinanceRepository.markPaymentSucceeded", () => {
     const result = await mockFinanceRepository.markPaymentSucceeded(pending.data.id);
     expect(result.success).toBe(false);
   });
+
+  it("Finance F1.7 — transitioning a pending payment to succeeded posts a balanced Journal Entry, matching the same-creation-time path", async () => {
+    const pending = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: null,
+      amount_minor: 15000,
+      payment_method: "credit_card",
+    });
+    expect(pending.success).toBe(true);
+    if (!pending.success) return;
+
+    let entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_settlement" });
+    expect(entries.some((e) => e.source_id === pending.data.id)).toBe(false);
+
+    const succeeded = await mockFinanceRepository.markPaymentSucceeded(pending.data.id);
+    expect(succeeded.success).toBe(true);
+
+    entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_settlement" });
+    const posted = entries.find((e) => e.source_id === pending.data.id);
+    expect(posted).toBeDefined();
+    expect(posted?.posting_key).toBe(`payment_settlement:${pending.data.id}`);
+
+    const detail = await mockFinanceRepository.getJournalEntry(posted!.id);
+    const totalDebit = detail.lines!.reduce((sum, line) => sum + line.debit_minor, 0);
+    const totalCredit = detail.lines!.reduce((sum, line) => sum + line.credit_minor, 0);
+    expect(totalDebit).toBe(totalCredit);
+    expect(totalDebit).toBe(15000);
+  });
+
+  it("Finance F1.8 — a posting failure on succeed rolls back the WHOLE transition: status stays pending, no Timeline entry, no Journal Entry (atomic by ordering, replacing F1.7's best-effort/Audit-Log design)", async () => {
+    const pending = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: null,
+      amount_minor: 5000,
+      payment_method: "credit_card",
+      transaction_date: "2027-01-01", // Outside every seeded accounting period.
+    });
+    expect(pending.success).toBe(true);
+    if (!pending.success) return;
+
+    const succeeded = await mockFinanceRepository.markPaymentSucceeded(pending.data.id);
+    expect(succeeded.success).toBe(false);
+
+    const stillPending = await mockFinanceRepository.getPaymentById(pending.data.id);
+    expect(stillPending.status).toBe("pending");
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_settlement" });
+    expect(entries.some((e) => e.source_id === pending.data.id)).toBe(false);
+
+    const timeline = await mockFinanceRepository.getTimelineByPaymentId(pending.data.id);
+    expect(timeline.some((t) => t.type === "payment_succeeded")).toBe(false);
+  });
+
+  it("Finance F1.8 — a retry against an already-succeeded payment is rejected before ever attempting to post again (no second Journal Entry)", async () => {
+    const covering = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: null,
+      amount_minor: 5000,
+      payment_method: "credit_card",
+    });
+    expect(covering.success).toBe(true);
+    if (!covering.success) return;
+
+    const first = await mockFinanceRepository.markPaymentSucceeded(covering.data.id);
+    expect(first.success).toBe(true);
+
+    const retry = await mockFinanceRepository.markPaymentSucceeded(covering.data.id);
+    expect(retry.success).toBe(false);
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_settlement" });
+    expect(entries.filter((e) => e.source_id === covering.data.id)).toHaveLength(1);
+  });
 });
 
 describe("mockFinanceRepository.markPaymentFailed / cancelPayment", () => {
@@ -443,73 +555,165 @@ describe("mockFinanceRepository.markPaymentFailed / cancelPayment", () => {
 });
 
 describe("mockFinanceRepository.refundPayment", () => {
-  it("a full refund updates the original payment to refunded and restores the invoice balance", async () => {
-    // payment_1: succeeded, amount 250000, linked to invoice_1 (paid, balance 0).
-    const result = await mockFinanceRepository.refundPayment("payment_1", 250000);
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-    expect(result.data.payment_type).toBe("refund");
-    expect(result.data.amount_minor).toBe(250000);
-
-    const original = await mockFinanceRepository.getPaymentById("payment_1");
-    expect(original.status).toBe("refunded");
-
-    const invoice = await mockFinanceRepository.getInvoiceById("invoice_1");
-    expect(invoice.paid_minor).toBe(0);
-    expect(invoice.balance_minor).toBe(250000);
-  });
-
-  it("a partial refund updates the original payment to partially_refunded and reduces paid_minor", async () => {
-    // payment_2: succeeded, amount 300000, linked to invoice_2 (total 600000, paid 300000).
-    const result = await mockFinanceRepository.refundPayment("payment_2", 100000);
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-
-    const original = await mockFinanceRepository.getPaymentById("payment_2");
-    expect(original.status).toBe("partially_refunded");
-
-    const invoice = await mockFinanceRepository.getInvoiceById("invoice_2");
-    expect(invoice.paid_minor).toBe(200000);
-    expect(invoice.balance_minor).toBe(400000);
-  });
-
-  it("rejects a refund exceeding the remaining refundable amount", async () => {
-    const result = await mockFinanceRepository.refundPayment("payment_1", 300000);
-    expect(result.success).toBe(false);
-  });
-
-  it("prevents two sequential partial refunds whose sum would exceed the original amount", async () => {
-    const firstRefund = await mockFinanceRepository.refundPayment("payment_2", 100000);
-    expect(firstRefund.success).toBe(true);
-
-    const secondRefund = await mockFinanceRepository.refundPayment("payment_2", 150000);
-    expect(secondRefund.success).toBe(true);
-
-    // Refundable is now 300000 - 100000 - 150000 = 50000 — a further 60000 must be rejected.
-    const thirdRefund = await mockFinanceRepository.refundPayment("payment_2", 60000);
-    expect(thirdRefund.success).toBe(false);
-
-    const refundable = await mockFinanceRepository.getPaymentRefundableAmount("payment_2");
-    expect(refundable).toBe(50000);
-  });
-
   it("cannot refund a payment that isn't refundable (e.g. failed)", async () => {
     // payment_4 is seeded as "failed".
     const result = await mockFinanceRepository.refundPayment("payment_4", 1000);
     expect(result.success).toBe(false);
   });
+
+  it("Finance F1.8 — fails safely (does not invent a reversal) for a legacy payment with no settlement Journal Entry", async () => {
+    // payment_1 is seeded directly as "succeeded" with no payment_settlement
+    // Journal Entry ever posted for it — exactly the legacy-data shape a
+    // real pre-F1.7 payment would have.
+    const before = await mockFinanceRepository.getPaymentById("payment_1");
+    expect(before.status).toBe("succeeded");
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_settlement" });
+    expect(entries.some((e) => e.source_id === "payment_1")).toBe(false);
+
+    const result = await mockFinanceRepository.refundPayment("payment_1", 1000);
+    expect(result.success).toBe(false);
+
+    const after = await mockFinanceRepository.getPaymentById("payment_1");
+    expect(after.status).toBe("succeeded");
+  });
+
+  describe("settlement-backed payments (Finance F1.8 reversal happy path)", () => {
+    async function createSettledPayment(overrides: Partial<PaymentInput> = {}) {
+      const created = await mockFinanceRepository.createPayment({
+        ...BASE_PAYMENT_INPUT,
+        invoice_id: null,
+        payment_method: "cash",
+        amount_minor: 40000,
+        ...overrides,
+      });
+      if (!created.success) throw new Error("setup failed");
+      return created.data;
+    }
+
+    it("a full invoice-linked refund posts Dr 1100 Accounts Receivable / Cr 1000 Cash for the full amount, and restores the invoice balance", async () => {
+      // invoice_4 has balance_minor 50000 before this payment.
+      const payment = await createSettledPayment({ invoice_id: "invoice_4", amount_minor: 30000 });
+      let invoice = await mockFinanceRepository.getInvoiceById("invoice_4");
+      expect(invoice.balance_minor).toBe(20000);
+
+      const refund = await mockFinanceRepository.refundPayment(payment.id, 30000);
+      expect(refund.success).toBe(true);
+      if (!refund.success) return;
+
+      const original = await mockFinanceRepository.getPaymentById(payment.id);
+      expect(original.status).toBe("refunded");
+
+      invoice = await mockFinanceRepository.getInvoiceById("invoice_4");
+      expect(invoice.balance_minor).toBe(50000);
+
+      const reversalEntries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_refund" });
+      const posted = reversalEntries.find((e) => e.source_id === refund.data.id);
+      expect(posted).toBeDefined();
+      const detail = await mockFinanceRepository.getJournalEntry(posted!.id);
+      expect(detail.lines).toEqual([
+        expect.objectContaining({ account_id: "account_1100", debit_minor: 30000, credit_minor: 0 }),
+        expect.objectContaining({ account_id: "account_1000", debit_minor: 0, credit_minor: 30000 }),
+      ]);
+    });
+
+    it("a partial invoice-linked refund posts a PROPORTIONAL reversal only, leaving the original settlement entry's own lines unchanged", async () => {
+      const payment = await createSettledPayment({ invoice_id: "invoice_4", amount_minor: 40000 });
+      const settlementEntries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_settlement" });
+      const settlement = settlementEntries.find((e) => e.source_id === payment.id)!;
+      const settlementBefore = await mockFinanceRepository.getJournalEntry(settlement.id);
+
+      const refund = await mockFinanceRepository.refundPayment(payment.id, 15000);
+      expect(refund.success).toBe(true);
+      if (!refund.success) return;
+
+      const original = await mockFinanceRepository.getPaymentById(payment.id);
+      expect(original.status).toBe("partially_refunded");
+
+      const reversalEntries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_refund" });
+      const posted = reversalEntries.find((e) => e.source_id === refund.data.id)!;
+      const detail = await mockFinanceRepository.getJournalEntry(posted.id);
+      expect(detail.lines!.map((l) => l.debit_minor + l.credit_minor)).toEqual([15000, 15000]);
+
+      // The original settlement entry's own lines are untouched — still the full 40000, not swapped or reduced.
+      const settlementAfter = await mockFinanceRepository.getJournalEntry(settlement.id);
+      expect(settlementAfter.lines).toEqual(settlementBefore.lines);
+    });
+
+    it("two legitimate partial refunds against the same original payment produce two distinct postings with distinct posting_keys", async () => {
+      const payment = await createSettledPayment({ invoice_id: "invoice_4", amount_minor: 40000 });
+
+      const firstRefund = await mockFinanceRepository.refundPayment(payment.id, 10000);
+      const secondRefund = await mockFinanceRepository.refundPayment(payment.id, 15000);
+      expect(firstRefund.success).toBe(true);
+      expect(secondRefund.success).toBe(true);
+      if (!firstRefund.success || !secondRefund.success) return;
+      expect(firstRefund.data.id).not.toBe(secondRefund.data.id);
+
+      const reversalEntries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_refund" });
+      const forThisPayment = reversalEntries.filter((e) => [firstRefund.data.id, secondRefund.data.id].includes(e.source_id ?? ""));
+      expect(forThisPayment).toHaveLength(2);
+      expect(new Set(forThisPayment.map((e) => e.posting_key)).size).toBe(2);
+
+      // Refundable is now 40000 - 10000 - 15000 = 15000 — a further 20000 must be rejected.
+      const thirdRefund = await mockFinanceRepository.refundPayment(payment.id, 20000);
+      expect(thirdRefund.success).toBe(false);
+      const refundable = await mockFinanceRepository.getPaymentRefundableAmount(payment.id);
+      expect(refundable).toBe(15000);
+    });
+
+    it("a full unapplied/deposit refund posts Dr 2200 Customer Deposits / Cr 1000 Cash", async () => {
+      const payment = await createSettledPayment({ invoice_id: null, amount_minor: 20000 });
+
+      const refund = await mockFinanceRepository.refundPayment(payment.id, 20000);
+      expect(refund.success).toBe(true);
+      if (!refund.success) return;
+
+      const reversalEntries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_refund" });
+      const posted = reversalEntries.find((e) => e.source_id === refund.data.id)!;
+      const detail = await mockFinanceRepository.getJournalEntry(posted.id);
+      expect(detail.lines).toEqual([
+        expect.objectContaining({ account_id: "account_2200", debit_minor: 20000, credit_minor: 0 }),
+        expect.objectContaining({ account_id: "account_1000", debit_minor: 0, credit_minor: 20000 }),
+      ]);
+    });
+
+    it("a partial unapplied/deposit refund posts a proportional reversal", async () => {
+      const payment = await createSettledPayment({ invoice_id: null, amount_minor: 20000 });
+
+      const refund = await mockFinanceRepository.refundPayment(payment.id, 8000);
+      expect(refund.success).toBe(true);
+      if (!refund.success) return;
+
+      const reversalEntries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_refund" });
+      const posted = reversalEntries.find((e) => e.source_id === refund.data.id)!;
+      const detail = await mockFinanceRepository.getJournalEntry(posted.id);
+      expect(detail.lines!.map((l) => l.debit_minor + l.credit_minor)).toEqual([8000, 8000]);
+    });
+
+    it("rejects a refund exceeding the remaining refundable amount, and never posts a reversal for the rejected attempt", async () => {
+      const payment = await createSettledPayment({ invoice_id: null, amount_minor: 20000 });
+      const result = await mockFinanceRepository.refundPayment(payment.id, 30000);
+      expect(result.success).toBe(false);
+
+      const reversalEntries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_refund" });
+      expect(reversalEntries.some((e) => e.source_id === payment.id)).toBe(false);
+    });
+
+    it("Finance F1.8 — Revenue account 4000 is never touched by a refund reversal", async () => {
+      const payment = await createSettledPayment({ invoice_id: "invoice_4", amount_minor: 10000 });
+      const refund = await mockFinanceRepository.refundPayment(payment.id, 10000);
+      expect(refund.success).toBe(true);
+      if (!refund.success) return;
+
+      const reversalEntries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_refund" });
+      const posted = reversalEntries.find((e) => e.source_id === refund.data.id)!;
+      const detail = await mockFinanceRepository.getJournalEntry(posted.id);
+      expect(detail.lines!.some((l) => l.account_id === "account_4000")).toBe(false);
+    });
+  });
 });
 
 describe("mockFinanceRepository.getPaymentRefundableAmount", () => {
-  it("reflects prior refunds correctly", async () => {
-    const before = await mockFinanceRepository.getPaymentRefundableAmount("payment_2");
-    expect(before).toBe(300000);
-
-    await mockFinanceRepository.refundPayment("payment_2", 100000);
-    const after = await mockFinanceRepository.getPaymentRefundableAmount("payment_2");
-    expect(after).toBe(200000);
-  });
-
   it("returns 0 for a payment that isn't refundable", async () => {
     const refundable = await mockFinanceRepository.getPaymentRefundableAmount("payment_4");
     expect(refundable).toBe(0);
@@ -910,6 +1114,45 @@ describe("mockFinanceRepository.recordPaymentSettlement", () => {
 
     const auditEntries = await mockAuditLogRepository.getAuditLogForOwner(CURRENT_WORKSPACE_ID, "payment", result.data.id);
     expect(auditEntries.filter((e) => e.action === "payment_settlement_recorded")).toHaveLength(1);
+  });
+});
+
+describe("mockFinanceRepository — payment path unification (Finance F1.7)", () => {
+  it("createPayment (succeeded) and recordPaymentSettlement post structurally identical Journal Entries for the same inputs — one canonical settlement path, not two", async () => {
+    const viaCreate = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      amount_minor: 20000,
+      payment_method: "cash",
+    });
+    expect(viaCreate.success).toBe(true);
+    if (!viaCreate.success) return;
+
+    const viaSettlement = await mockFinanceRepository.recordPaymentSettlement({
+      ...PAYMENT_SETTLEMENT_INPUT,
+      amount_minor: 20000,
+    });
+    expect(viaSettlement.success).toBe(true);
+    if (!viaSettlement.success) return;
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_settlement" });
+    const createEntry = entries.find((e) => e.source_id === viaCreate.data.id);
+    const settlementEntry = entries.find((e) => e.source_id === viaSettlement.data.id);
+    expect(createEntry).toBeDefined();
+    expect(settlementEntry).toBeDefined();
+
+    const createDetail = await mockFinanceRepository.getJournalEntry(createEntry!.id);
+    const settlementDetail = await mockFinanceRepository.getJournalEntry(settlementEntry!.id);
+    const shape = (entry: typeof createDetail) => ({
+      accountIds: entry.lines!.map((l) => l.account_id).sort(),
+      debits: entry.lines!.map((l) => l.debit_minor).sort(),
+      credits: entry.lines!.map((l) => l.credit_minor).sort(),
+    });
+    expect(shape(createDetail)).toEqual(shape(settlementDetail));
+
+    const createAudit = await mockAuditLogRepository.getAuditLogForOwner(CURRENT_WORKSPACE_ID, "payment", viaCreate.data.id);
+    const settlementAudit = await mockAuditLogRepository.getAuditLogForOwner(CURRENT_WORKSPACE_ID, "payment", viaSettlement.data.id);
+    expect(createAudit.filter((e) => e.action === "payment_settlement_recorded")).toHaveLength(1);
+    expect(settlementAudit.filter((e) => e.action === "payment_settlement_recorded")).toHaveLength(1);
   });
 });
 

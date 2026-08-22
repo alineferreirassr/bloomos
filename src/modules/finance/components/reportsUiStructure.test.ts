@@ -65,8 +65,30 @@ describe("Finance Reports UI structural guardrails", () => {
     expect(routeDirs).not.toContain("ar-aging");
     expect(routeDirs).not.toContain("ap-aging");
 
-    const files = readAllRouteFiles();
-    expect(files).toHaveLength(5); // overview page.tsx + 4 report page.tsx files
+    // Finance F1.13 — asserts the exact expected page.tsx set directly
+    // (existence + no extras) rather than a raw file-count, which would
+    // silently depend on whether Phase 06B's optional finance/reports/
+    // layout.tsx (a separate, independently-tracked, not-yet-released
+    // RouteGuard addition — see core/permissions/routeAccess.ts) happens to
+    // also be present in the working tree. This is the same protection
+    // (still fails if a forbidden report route like cash-flow/ar-aging/
+    // ap-aging gets a page.tsx) without being brittle to that unrelated
+    // file's presence or absence.
+    const pageFiles = readAllRouteFiles()
+      .filter(({ name }) => name.endsWith("page.tsx"))
+      .map(({ name }) => name)
+      .sort();
+    expect(pageFiles).toEqual(
+      ["balance-sheet/page.tsx", "general-ledger/page.tsx", "page.tsx", "profit-and-loss/page.tsx", "trial-balance/page.tsx"].sort(),
+    );
+
+    // If Phase 06B's layout.tsx is present (uncommitted, unrelated to this
+    // release), it must still only be a layout — never a second page.tsx
+    // slipped in disguised as something else.
+    const otherFiles = readAllRouteFiles()
+      .filter(({ name }) => !name.endsWith("page.tsx"))
+      .map(({ name }) => name);
+    expect(otherFiles.every((name) => name === "layout.tsx")).toBe(true);
   });
 
   it("route files are thin wrappers only — no direct data-layer or Supabase imports", () => {
@@ -145,11 +167,18 @@ describe("Finance Reports UI structural guardrails", () => {
     const migrationsDir = path.resolve(__dirname, "../../../../supabase/migrations");
     const files = readdirSync(migrationsDir).filter((f) => f.endsWith(".sql"));
     // The last migration committed in the Finance Reports Foundation checkpoint remains the
-    // newest FINANCE file — the Reports UI phase adds zero new .sql files of its own. Scoped to
-    // files with a "finance" prefix (rather than "no file at all sorts after it") since later,
-    // unrelated modules (e.g. Services) are expected to add their own migrations afterward.
+    // newest FINANCE file as of the Reports UI phase — that phase itself adds zero new .sql
+    // files of its own. Scoped to files with a "finance" prefix (rather than "no file at all
+    // sorts after it") since later, unrelated modules (e.g. Services) are expected to add their
+    // own migrations afterward. Finance F1.8 (20260821100000/100100 — payment atomicity + refund
+    // settlement reversal) is a separate, later, sanctioned Finance checkpoint that DOES touch
+    // the database — explicitly excluded here, not a violation of this test's actual claim about
+    // the Reports UI phase specifically.
     expect(files).toContain("20260805100000_finance_report_rpcs.sql");
-    const financeFilesAfter = files.filter((f) => f > "20260805100000_finance_report_rpcs.sql" && f.includes("finance"));
+    const F1_8_FILES = ["20260821100000_finance_mark_payment_succeeded_atomic.sql", "20260821100100_finance_payment_refund_reversal.sql"];
+    const financeFilesAfter = files.filter(
+      (f) => f > "20260805100000_finance_report_rpcs.sql" && f.includes("finance") && !F1_8_FILES.includes(f),
+    );
     expect(financeFilesAfter).toHaveLength(0);
   });
 });

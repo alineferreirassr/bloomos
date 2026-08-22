@@ -634,14 +634,13 @@ describe("supabaseFinanceRepository.createPayment", () => {
     expect(result.success).toBe(false);
   });
 
-  it("a succeeded payment linked to an invoice calls recompute_invoice_balance", async () => {
+  it("Finance F1.7 — a succeeded payment linked to an invoice goes through the atomic record_payment_settlement RPC, not a plain insert + recompute_invoice_balance", async () => {
     mockSession();
     const { client, rpcCalls } = createMockSupabase([
       { data: clientRow(), error: null }, // client lookup
       { data: invoiceRow({ balance_minor: 100000 }), error: null }, // linked invoice lookup
-      { data: paymentRow(), error: null }, // insert
+      { data: paymentRow(), error: null }, // record_payment_settlement rpc
       { data: null, error: null }, // timeline insert
-      { data: null, error: null }, // recompute_invoice_balance rpc
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
@@ -651,7 +650,10 @@ describe("supabaseFinanceRepository.createPayment", () => {
       payment_method: "cash",
     });
     expect(result.success).toBe(true);
-    expect(rpcCalls.some((c) => c.name === "recompute_invoice_balance")).toBe(true);
+    expect(rpcCalls.map((c) => c.name)).toEqual(["record_payment_settlement"]);
+    expect(recordAuditEventMock).toHaveBeenCalledTimes(1);
+    const [, auditInput] = recordAuditEventMock.mock.calls[0];
+    expect(auditInput.action).toBe("payment_settlement_recorded");
   });
 
   it("a pending payment (non-immediate method) doesn't call recompute_invoice_balance", async () => {
@@ -686,20 +688,83 @@ describe("supabaseFinanceRepository.markPaymentSucceeded", () => {
     expect(result.success).toBe(false);
   });
 
-  it("succeeds and calls recompute_invoice_balance", async () => {
+  it("Finance F1.8 — succeeds via ONE atomic mark_payment_succeeded_and_post_settlement RPC call, never a separate status update + separate posting call", async () => {
     mockSession();
     const { client, rpcCalls } = createMockSupabase([
       { data: paymentRow({ status: "pending", amount_minor: 50000 }), error: null }, // fetch payment
       { data: invoiceRow({ balance_minor: 100000 }), error: null }, // linked invoice lookup
-      { data: paymentRow({ status: "succeeded" }), error: null }, // update
+      { data: paymentRow({ status: "succeeded" }), error: null }, // mark_payment_succeeded_and_post_settlement rpc
       { data: null, error: null }, // timeline insert
-      { data: null, error: null }, // recompute_invoice_balance rpc
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
     const result = await supabaseFinanceRepository.markPaymentSucceeded("payment_1");
     expect(result.success).toBe(true);
-    expect(rpcCalls.some((c) => c.name === "recompute_invoice_balance")).toBe(true);
+    if (result.success) expect(result.data.status).toBe("succeeded");
+    expect(rpcCalls.map((c) => c.name)).toEqual(["mark_payment_succeeded_and_post_settlement"]);
+    const args = rpcCalls[0].args as Record<string, unknown>;
+    expect(args.p_payment_id).toBe("payment_1");
+  });
+
+  it("Finance F1.8 — a posting failure rolls the WHOLE atomic transition back: fail() is returned, no Timeline entry is written, no best-effort Audit Log fallback (replaces F1.7's design)", async () => {
+    mockSession();
+    const { client, rpcCalls, calls } = createMockSupabase([
+      { data: paymentRow({ status: "pending", amount_minor: 50000 }), error: null }, // fetch payment
+      { data: invoiceRow({ balance_minor: 100000 }), error: null }, // linked invoice lookup
+      { data: null, error: { code: "P1100", message: "System account 1000 not found for this workspace." } }, // mark_payment_succeeded_and_post_settlement rpc fails — whole transaction rolls back
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.markPaymentSucceeded("payment_1");
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toBe("System account 1000 not found for this workspace.");
+    expect(rpcCalls.map((c) => c.name)).toEqual(["mark_payment_succeeded_and_post_settlement"]);
+    expect(calls.some((c) => c.table === "timeline_activities")).toBe(false);
+    expect(recordAuditEventMock).not.toHaveBeenCalled();
+  });
+
+  it("Finance F1.8 — a retry against an already-succeeded payment is rejected (P1105) and translated to fail(), not thrown", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: paymentRow({ status: "pending", amount_minor: 50000 }), error: null }, // fetch payment (still "pending" here — the TS-layer canTransitionPaymentStatus guard is the first line of defense; this proves the RPC's OWN guard is also translated correctly when reached)
+      { data: invoiceRow({ balance_minor: 100000 }), error: null }, // linked invoice lookup
+      { data: null, error: { code: "P1105", message: "Cannot mark succeeded payment as succeeded." } }, // rpc rejects the transition
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.markPaymentSucceeded("payment_1");
+    expect(result.success).toBe(false);
+    expect(rpcCalls.map((c) => c.name)).toEqual(["mark_payment_succeeded_and_post_settlement"]);
+  });
+});
+
+describe("supabaseFinanceRepository — payment path unification (Finance F1.7)", () => {
+  it("createPayment (succeeded) and recordPaymentSettlement call the identical RPC with the identical argument shape — one canonical settlement path, not two", async () => {
+    mockSession();
+    const createHarness = createMockSupabase([
+      { data: clientRow(), error: null }, // client lookup
+      { data: invoiceRow({ balance_minor: 100000 }), error: null }, // linked invoice lookup
+      { data: paymentRow(), error: null }, // record_payment_settlement rpc
+      { data: null, error: null }, // timeline insert
+    ]);
+    vi.mocked(createClient).mockReturnValue(createHarness.client as never);
+    await supabaseFinanceRepository.createPayment({ ...PAYMENT_INPUT, amount_minor: 50000, payment_method: "cash" });
+
+    const settlementHarness = createMockSupabase([
+      { data: paymentRow(), error: null }, // record_payment_settlement rpc
+      { data: null, error: null }, // timeline insert
+    ]);
+    vi.mocked(createClient).mockReturnValue(settlementHarness.client as never);
+    await supabaseFinanceRepository.recordPaymentSettlement({ ...PAYMENT_SETTLEMENT_INPUT, amount_minor: 50000, invoice_id: "invoice_1" });
+
+    expect(createHarness.rpcCalls[0].name).toBe("record_payment_settlement");
+    expect(settlementHarness.rpcCalls[0].name).toBe("record_payment_settlement");
+    // Same shape (payment_type/amount/method/etc. keys), workspace/actor resolved from the same session either way.
+    expect(Object.keys(createHarness.rpcCalls[0].args as object).sort()).toEqual(Object.keys(settlementHarness.rpcCalls[0].args as object).sort());
+    const createArgs = createHarness.rpcCalls[0].args as Record<string, unknown>;
+    const settlementArgs = settlementHarness.rpcCalls[0].args as Record<string, unknown>;
+    expect(createArgs.p_amount_minor).toBe(settlementArgs.p_amount_minor);
+    expect(createArgs.p_payment_method).toBe(settlementArgs.p_payment_method);
   });
 });
 
@@ -743,6 +808,43 @@ describe("supabaseFinanceRepository.refundPayment", () => {
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error).toBe("Cannot refund more than the refundable amount (10000 minor units remaining).");
+    expect(rpcCalls.map((c) => c.name)).toEqual(["process_payment_refund"]);
+  });
+
+  it("Finance F1.8 — translates a P1118 (no settlement entry to reverse — legacy payment) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: paymentRow({ status: "succeeded" }), error: null }, // fetch original payment
+      {
+        data: null,
+        error: {
+          code: "P1118",
+          message:
+            "No settlement entry exists for the original payment — cannot reverse. It predates ledger posting or was never settled; resolve via reconciliation, not an invented reversal.",
+        },
+      }, // process_payment_refund rpc — composed post_payment_refund_reversal fails
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toMatch(/No settlement entry exists/);
+    expect(rpcCalls.map((c) => c.name)).toEqual(["process_payment_refund"]);
+  });
+
+  it("Finance F1.8 — translates a P1104 (duplicate reversal posting) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: paymentRow({ status: "succeeded" }), error: null }, // fetch original payment
+      { data: null, error: { code: "P1104", message: "This refund has already been posted." } }, // process_payment_refund rpc
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("This refund has already been posted.");
     expect(rpcCalls.map((c) => c.name)).toEqual(["process_payment_refund"]);
   });
 
@@ -1069,7 +1171,10 @@ describe("supabaseFinanceRepository.recordPaymentSettlement", () => {
 
   it("calls record_payment_settlement with the correct RPC name and arguments, maps the result, and writes exactly one Audit entry", async () => {
     mockSession();
-    const { client, rpcCalls } = createMockSupabase([{ data: paymentRow(), error: null }]);
+    const { client, rpcCalls } = createMockSupabase([
+      { data: paymentRow(), error: null }, // record_payment_settlement rpc
+      { data: null, error: null }, // timeline insert
+    ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
     const result = await supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT);
@@ -1110,7 +1215,10 @@ describe("supabaseFinanceRepository.recordPaymentSettlement", () => {
 
   it("does not retry the RPC merely because Audit recording is invoked afterward — exactly one rpc call regardless", async () => {
     mockSession();
-    const { client, rpcCalls } = createMockSupabase([{ data: paymentRow(), error: null }]);
+    const { client, rpcCalls } = createMockSupabase([
+      { data: paymentRow(), error: null }, // record_payment_settlement rpc
+      { data: null, error: null }, // timeline insert
+    ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
     await supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT);
@@ -1328,7 +1436,10 @@ describe("supabaseFinanceRepository accounting period write methods", () => {
 describe("supabaseFinanceRepository Stripe deferral (Finance Ledger)", () => {
   it("recordPaymentSettlement never accesses stripe_webhook_events or account 1010", async () => {
     mockSession();
-    const { client, calls } = createMockSupabase([{ data: paymentRow(), error: null }]);
+    const { client, calls } = createMockSupabase([
+      { data: paymentRow(), error: null }, // record_payment_settlement rpc
+      { data: null, error: null }, // timeline insert
+    ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
     await supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT);

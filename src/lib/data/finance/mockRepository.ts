@@ -1,4 +1,5 @@
 import type { Invoice } from "@/types/invoice";
+import type { Client } from "@/types/client";
 import type { Payment } from "@/types/payment";
 import type { Expense } from "@/types/expense";
 import type { Note } from "@/types/note";
@@ -570,6 +571,66 @@ async function getPaymentById(id: string): Promise<Payment> {
 /** Methods with no real payment-provider integration are recorded as already succeeded — there is no provider round trip to await. */
 const IMMEDIATELY_SUCCEEDED_METHODS = new Set(["cash", "check", "bank_transfer", "ach", "zelle", "venmo"]);
 
+/**
+ * Finance F1.7 — the single canonical path that creates a Payment AND
+ * posts its (mock) ledger settlement, mirroring
+ * supabaseRepository.ts's insertSettledPayment exactly so mock and
+ * Supabase mode stay in parity. Shared by createPayment (only when its
+ * own status computation already decided "succeeded") and
+ * recordPaymentSettlement — the fix for the F1.6 finding that "Record
+ * Payment" and "Record Settlement" silently diverged (one posted to the
+ * ledger, one didn't, for what a user would reasonably consider the same
+ * action).
+ */
+async function insertSettledPayment(client: Client, parsed: PaymentInput, invoice: Invoice | undefined): Promise<Payment> {
+  const timestamp = nowIso();
+  const payment: Payment = {
+    id: generateId("payment"),
+    workspace_id: client.workspace_id,
+    ...parsed,
+    status: "succeeded",
+    received_at: timestamp,
+    failed_at: null,
+    refunded_at: null,
+    document_id: null,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+  writePayments([...readPayments(), payment]);
+  recordTimelineActivity(payment.workspace_id, "payment", payment.id, "payment_created", "Payment created: Succeeded");
+
+  if (invoice) {
+    applyPaymentToInvoice(invoice.id);
+  }
+
+  const creditAccount = findAccountByNumber(payment.workspace_id, invoice ? 1100 : 2200);
+  const debitAccount = findAccountByNumber(payment.workspace_id, 1000);
+  insertMockJournalEntry({
+    workspace_id: payment.workspace_id,
+    entry_date: payment.transaction_date,
+    source_type: "payment_settlement",
+    source_id: payment.id,
+    posting_key: `payment_settlement:${payment.id}`,
+    memo: `Payment settlement (${payment.payment_type}, ${payment.payment_method})`,
+    posted_by: CURRENT_ACTOR,
+    lines: [
+      { account_id: debitAccount.id, debit_minor: payment.amount_minor, credit_minor: 0 },
+      { account_id: creditAccount.id, debit_minor: 0, credit_minor: payment.amount_minor },
+    ],
+  });
+
+  await getCoreAuditLogService().recordAuditEvent(payment.workspace_id, {
+    actor: CURRENT_ACTOR,
+    action: "payment_settlement_recorded",
+    ownerType: "payment",
+    ownerId: payment.id,
+    before: null,
+    after: { amount_minor: payment.amount_minor, payment_method: payment.payment_method, invoice_id: payment.invoice_id },
+  });
+
+  return payment;
+}
+
 async function createPayment(input: PaymentInput): Promise<DataResult<Payment>> {
   const parsed = paymentSchema.safeParse(input);
   if (!parsed.success) {
@@ -616,12 +677,23 @@ async function createPayment(input: PaymentInput): Promise<DataResult<Payment>> 
       );
     }
   }
+  // Finance F1.7 — a Payment that starts "succeeded" goes through the same
+  // canonical insert+ledger-post path recordPaymentSettlement uses, never
+  // a plain insert — the fix for the F1.6 finding that "Record Payment"
+  // silently never reached the (mock) ledger even when it recorded a
+  // payment as already succeeded. See insertSettledPayment's own doc
+  // comment and its Supabase-mode counterpart for the full reasoning.
+  if (initialStatus === "succeeded") {
+    const payment = await insertSettledPayment(client, parsed.data, invoice);
+    return ok(payment);
+  }
+
   const payment: Payment = {
     id: generateId("payment"),
     workspace_id: client.workspace_id,
     ...parsed.data,
     status: initialStatus,
-    received_at: initialStatus === "succeeded" ? timestamp : null,
+    received_at: null,
     failed_at: null,
     refunded_at: null,
     document_id: null,
@@ -637,10 +709,6 @@ async function createPayment(input: PaymentInput): Promise<DataResult<Payment>> 
     "payment_created",
     `Payment created: ${PAYMENT_STATUS_LABELS[initialStatus]}`,
   );
-
-  if (initialStatus === "succeeded" && invoice) {
-    applyPaymentToInvoice(invoice.id);
-  }
 
   return ok(payment);
 }
@@ -702,6 +770,19 @@ async function markPaymentProcessing(id: string): Promise<DataResult<Payment>> {
   return ok(updated);
 }
 
+/**
+ * Finance F1.8 — the atomic version. Mock mode has no real database
+ * transaction, so atomicity is achieved by ORDERING: the settlement
+ * posting is attempted FIRST, against the still-pending Payment, before
+ * any store mutation happens. If posting throws (e.g. no accounting period
+ * covers the transaction_date), this returns fail() immediately with the
+ * store completely untouched — status stays pending, no Timeline entry, no
+ * invoice recompute — closing the F1.7-disclosed gap where a posting
+ * failure could leave a Payment persisted as "succeeded" with no
+ * settlement entry. Only after posting succeeds do status/Timeline/invoice
+ * mutate, mirroring the Supabase-mode RPC's transactional guarantee as
+ * closely as an in-memory store can.
+ */
 async function markPaymentSucceeded(id: string): Promise<DataResult<Payment>> {
   const existing = readPayments().find((p) => p.id === id);
   if (!existing) {
@@ -720,6 +801,26 @@ async function markPaymentSucceeded(id: string): Promise<DataResult<Payment>> {
         `This payment (${existing.amount_minor} minor units) would exceed the invoice's remaining balance (${linkedInvoice.balance_minor} minor units).`,
       );
     }
+  }
+
+  try {
+    const creditAccount = findAccountByNumber(existing.workspace_id, existing.invoice_id ? 1100 : 2200);
+    const debitAccount = findAccountByNumber(existing.workspace_id, 1000);
+    insertMockJournalEntry({
+      workspace_id: existing.workspace_id,
+      entry_date: existing.transaction_date,
+      source_type: "payment_settlement",
+      source_id: existing.id,
+      posting_key: `payment_settlement:${existing.id}`,
+      memo: `Payment settlement (${existing.payment_type}, ${existing.payment_method})`,
+      posted_by: CURRENT_ACTOR,
+      lines: [
+        { account_id: debitAccount.id, debit_minor: existing.amount_minor, credit_minor: 0 },
+        { account_id: creditAccount.id, debit_minor: 0, credit_minor: existing.amount_minor },
+      ],
+    });
+  } catch (postingError) {
+    return fail(postingError instanceof Error ? postingError.message : String(postingError));
   }
 
   const timestamp = nowIso();
@@ -763,6 +864,25 @@ function refundReferenceFor(originalPaymentId: string): string {
   return `refund_of:${originalPaymentId}`;
 }
 
+/**
+ * Finance F1.8 — also posts a PARTIAL, proportional settlement reversal
+ * (Dr [original credit account] / Cr [original Cash account], for this
+ * refund's own amount_minor, never the original's full amount) so N
+ * legitimate partial refunds against one original payment each produce
+ * their own distinct posting. Never reuses reverseJournalEntry — that's a
+ * whole-entry-only mechanism (at most one reversal per original entry),
+ * wrong for partial/multiple refunds. Mirrors post_payment_refund_reversal
+ * exactly: reads the original settlement's ACTUAL posted account_ids back
+ * from the mock journal store rather than re-deriving routing from
+ * invoice_id, and fails safely (never invents a reversal) if no
+ * payment_settlement entry exists for the original payment — the correct
+ * behavior for a payment that predates F1.7/F1.8 or was never settled.
+ *
+ * Atomic by ORDERING, same technique as markPaymentSucceeded: the refund's
+ * id is pre-generated and the reversal is posted BEFORE any store mutation.
+ * If posting throws, this returns fail() with the store completely
+ * untouched — no refund row, no original-status change, no Timeline entry.
+ */
 async function refundPayment(originalPaymentId: string, amountMinor: number): Promise<DataResult<Payment>> {
   const original = readPayments().find((p) => p.id === originalPaymentId);
   if (!original) {
@@ -786,8 +906,43 @@ async function refundPayment(originalPaymentId: string, amountMinor: number): Pr
   }
 
   const timestamp = nowIso();
+  const refundId = generateId("payment");
+
+  const settlementEntry = readJournalEntries().find(
+    (e) => e.workspace_id === original.workspace_id && e.source_type === "payment_settlement" && e.source_id === original.id,
+  );
+  if (!settlementEntry) {
+    return fail(
+      "No settlement entry exists for the original payment — cannot reverse. It predates ledger posting or was never settled; resolve via reconciliation, not an invented reversal.",
+    );
+  }
+  const settlementLines = readJournalLines().filter((l) => l.journal_entry_id === settlementEntry.id);
+  const cashLine = settlementLines.find((l) => l.debit_minor > 0);
+  const creditLine = settlementLines.find((l) => l.credit_minor > 0);
+  if (!cashLine || !creditLine) {
+    return fail("The original settlement entry is malformed — cannot determine accounts to reverse.");
+  }
+
+  try {
+    insertMockJournalEntry({
+      workspace_id: original.workspace_id,
+      entry_date: timestamp.slice(0, 10),
+      source_type: "payment_refund",
+      source_id: refundId,
+      posting_key: `payment_refund:${refundId}`,
+      memo: `Refund reversal of payment settlement ${settlementEntry.id} (${amountMinor} minor units)`,
+      posted_by: CURRENT_ACTOR,
+      lines: [
+        { account_id: creditLine.account_id, debit_minor: amountMinor, credit_minor: 0 },
+        { account_id: cashLine.account_id, debit_minor: 0, credit_minor: amountMinor },
+      ],
+    });
+  } catch (postingError) {
+    return fail(postingError instanceof Error ? postingError.message : String(postingError));
+  }
+
   const refund: Payment = {
-    id: generateId("payment"),
+    id: refundId,
     workspace_id: original.workspace_id,
     invoice_id: original.invoice_id,
     client_id: original.client_id,
@@ -1311,7 +1466,17 @@ function findAccountByNumber(workspaceId: string, accountNumber: number): ChartO
   return account;
 }
 
-/** Appends one Journal Entry + its lines — mirrors finance_insert_journal_entry's shape (posting_key/source_type/source_id all distinct fields, never conflated). Throws if no seeded period covers entry_date, matching finance_resolve_period's own "never auto-create" rule. */
+/**
+ * Appends one Journal Entry + its lines — mirrors finance_insert_journal_entry's shape (posting_key/source_type/source_id all distinct fields, never conflated). Throws if no seeded period covers entry_date, matching finance_resolve_period's own "never auto-create" rule.
+ *
+ * Finance F1.8: also throws on a duplicate (workspace_id, posting_key) —
+ * mirroring the Supabase-mode journal_entries_workspace_posting_key_unique
+ * index (Posting Engine migration, 20260804095000). This is the "minimal
+ * mock idempotency guard" the F1.8 payment-atomicity and refund-reversal
+ * work depends on to faithfully match the Supabase invariant; it was a
+ * known, disclosed pre-F1.8 gap (F1.7's own report noted mock mode had no
+ * duplicate-posting_key enforcement at all).
+ */
 function insertMockJournalEntry(params: {
   workspace_id: string;
   entry_date: string;
@@ -1323,6 +1488,15 @@ function insertMockJournalEntry(params: {
   reverses_entry_id?: string | null;
   lines: { account_id: string; debit_minor: number; credit_minor: number; line_memo?: string | null }[];
 }): JournalEntry {
+  if (params.posting_key !== null) {
+    const duplicate = readJournalEntries().find(
+      (e) => e.workspace_id === params.workspace_id && e.posting_key === params.posting_key,
+    );
+    if (duplicate) {
+      throw new Error(`A journal entry with posting_key "${params.posting_key}" already exists for this workspace.`);
+    }
+  }
+
   const period = readAccountingPeriods().find(
     (p) => p.workspace_id === params.workspace_id && p.period_start <= params.entry_date && p.period_end >= params.entry_date,
   );
@@ -1446,14 +1620,14 @@ async function getAccountingPeriod(id: string): Promise<AccountingPeriod> {
 }
 
 /**
- * Rejects payment_method='stripe' at this boundary too (Stripe remains
- * deferred). Does not call createPayment() — record_payment_settlement's
- * own RPC only requires a positive amount and an existing client/invoice,
- * a narrower check than createPayment's full validation (event/contract-
- * belongs-to-client, overpayment), so this inlines just that subset
- * instead of running checks the real RPC doesn't perform either. Inserts
- * the Payment directly as 'succeeded' — no separate pending state, since
- * settlement means the money has already moved.
+ * Finance F1.7 — delegates to the same canonical `insertSettledPayment`
+ * helper `createPayment` now uses for its own "succeeded" branch (see that
+ * helper's doc comment, and its Supabase-mode counterpart). This
+ * function's only remaining distinct behavior is rejecting
+ * `payment_method === "stripe"` before validation even runs, and requiring
+ * only client/invoice existence (not the full event/contract-ownership
+ * and overpayment checks `createPayment` runs) — mirroring the real RPC's
+ * own narrower validation exactly, not a mock-only shortcut.
  */
 async function recordPaymentSettlement(input: PaymentSettlementInput): Promise<DataResult<Payment>> {
   if (input.payment_method === "stripe") {
@@ -1478,51 +1652,7 @@ async function recordPaymentSettlement(input: PaymentSettlementInput): Promise<D
     }
   }
 
-  const timestamp = nowIso();
-  const payment: Payment = {
-    id: generateId("payment"),
-    workspace_id: client.workspace_id,
-    ...parsed.data,
-    status: "succeeded",
-    received_at: timestamp,
-    failed_at: null,
-    refunded_at: null,
-    document_id: null,
-    created_at: timestamp,
-    updated_at: timestamp,
-  };
-  writePayments([...readPayments(), payment]);
-  recordTimelineActivity(payment.workspace_id, "payment", payment.id, "payment_created", "Payment created: Succeeded");
-
-  if (invoice) {
-    applyPaymentToInvoice(invoice.id);
-  }
-
-  const creditAccount = findAccountByNumber(payment.workspace_id, invoice ? 1100 : 2200);
-  const debitAccount = findAccountByNumber(payment.workspace_id, 1000);
-  insertMockJournalEntry({
-    workspace_id: payment.workspace_id,
-    entry_date: payment.transaction_date,
-    source_type: "payment_settlement",
-    source_id: payment.id,
-    posting_key: `payment_settlement:${payment.id}`,
-    memo: `Payment settlement (${payment.payment_type}, ${payment.payment_method})`,
-    posted_by: CURRENT_ACTOR,
-    lines: [
-      { account_id: debitAccount.id, debit_minor: payment.amount_minor, credit_minor: 0 },
-      { account_id: creditAccount.id, debit_minor: 0, credit_minor: payment.amount_minor },
-    ],
-  });
-
-  await getCoreAuditLogService().recordAuditEvent(payment.workspace_id, {
-    actor: CURRENT_ACTOR,
-    action: "payment_settlement_recorded",
-    ownerType: "payment",
-    ownerId: payment.id,
-    before: null,
-    after: { amount_minor: payment.amount_minor, payment_method: payment.payment_method, invoice_id: payment.invoice_id },
-  });
-
+  const payment = await insertSettledPayment(client, parsed.data, invoice);
   return ok(payment);
 }
 

@@ -93,8 +93,15 @@ type InvoiceInsert = Omit<Database["public"]["Tables"]["invoices"]["Insert"], "i
 const MAX_INVOICE_NUMBER_ATTEMPTS = 5;
 const UNIQUE_VIOLATION = "23505";
 const UNKNOWN_ERROR_CODE = "unknown";
-/** errcodes raised by process_payment_refund (migration 8) for expected, user-facing validation failures — translated to a DataResult fail() rather than a thrown error. */
-const APP_VALIDATION_ERROR_CODES = new Set(["P0001", "P0002", "P0003", "P0004"]);
+/**
+ * errcodes raised by process_payment_refund for expected, user-facing
+ * validation failures — translated to a DataResult fail() rather than a
+ * thrown error. P0001-P0004 are the original (migration 8) validation
+ * codes; P1104/P1118 are Finance F1.8's additions, raised by the
+ * post_payment_refund_reversal step process_payment_refund now composes
+ * (duplicate reversal posting / no settlement entry to reverse).
+ */
+const APP_VALIDATION_ERROR_CODES = new Set(["P0001", "P0002", "P0003", "P0004", "P1104", "P1118"]);
 
 function fieldErrorsFromZod(error: {
   issues: { path: PropertyKey[]; message: string }[];
@@ -739,6 +746,61 @@ async function getPaymentById(id: string): Promise<Payment> {
 /** Methods with no real payment-provider integration are recorded as already succeeded — there is no provider round trip to await. */
 const IMMEDIATELY_SUCCEEDED_METHODS = new Set(["cash", "check", "bank_transfer", "ach", "zelle", "venmo"]);
 
+/**
+ * Finance F1.7 — the single canonical path that creates a Payment AND
+ * posts its ledger settlement atomically, via the `record_payment_
+ * settlement` RPC (one Postgres transaction: insert the row, then post
+ * Dr 1000 Cash / Cr 1100 Accounts Receivable or Cr 2200 Customer Deposits).
+ * Shared by createPayment (only when its own status computation already
+ * decided "succeeded") and recordPaymentSettlement, so a Payment that
+ * economically succeeds always reaches the ledger the same way regardless
+ * of which UI screen recorded it — this is the fix for the F1.6 finding
+ * that "Record Payment" and "Record Settlement" silently diverged (one
+ * posted, one didn't, for what a user would reasonably consider the same
+ * action). Every caller has already run its own client/event/contract/
+ * invoice-ownership validation before reaching this helper — it performs
+ * no additional business validation itself, only the insert+post call and
+ * the two audit trails (Timeline + Audit Log) both prior paths already had
+ * one or the other of, never both — this helper gives every caller both.
+ */
+async function insertSettledPayment(
+  supabase: SupabaseClient,
+  session: WorkspaceSession,
+  actor: string,
+  parsed: PaymentInput,
+): Promise<DataResult<Payment>> {
+  const { data, error } = await supabase.rpc("record_payment_settlement", {
+    p_workspace_id: session.workspace.id,
+    p_invoice_id: parsed.invoice_id,
+    p_client_id: parsed.client_id,
+    p_event_id: parsed.event_id,
+    p_contract_id: parsed.contract_id,
+    p_payment_type: parsed.payment_type,
+    p_amount_minor: parsed.amount_minor,
+    p_currency: parsed.currency,
+    p_payment_method: parsed.payment_method,
+    p_reference: parsed.reference,
+    p_transaction_date: parsed.transaction_date,
+    p_notes: parsed.notes,
+    p_actor: actor,
+  });
+  if (error) return handleFinanceRpcError<Payment>(error);
+
+  const payment = mapPaymentRow(data as Database["public"]["Tables"]["payments"]["Row"]);
+
+  await insertTimelineActivity(supabase, actor, payment.workspace_id, "payment", payment.id, "payment_created", "Payment created: Succeeded");
+  await getCoreAuditLogService().recordAuditEvent(payment.workspace_id, {
+    actor,
+    action: "payment_settlement_recorded",
+    ownerType: "payment",
+    ownerId: payment.id,
+    before: null,
+    after: { amount_minor: payment.amount_minor, payment_method: payment.payment_method, invoice_id: payment.invoice_id },
+  });
+
+  return ok(payment);
+}
+
 async function createPayment(input: PaymentInput): Promise<DataResult<Payment>> {
   const parsed = paymentSchema.safeParse(input);
   if (!parsed.success) {
@@ -795,14 +857,28 @@ async function createPayment(input: PaymentInput): Promise<DataResult<Payment>> 
     }
   }
 
-  const timestamp = new Date().toISOString();
+  // Finance F1.7 — a Payment that starts "succeeded" (an immediately-
+  // succeeded method, or a refund — see IMMEDIATELY_SUCCEEDED_METHODS
+  // above) is an economically-complete money movement the moment it's
+  // created, so it goes through the same atomic insert+ledger-post RPC
+  // recordPaymentSettlement uses, never a plain insert — this is the fix
+  // for the F1.6 finding that "Record Payment" silently never reached the
+  // ledger even when it recorded a payment as already succeeded. A
+  // Payment that starts "pending" (e.g. a manually-recorded card/PayPal/
+  // Stripe payment awaiting confirmation) correctly stays a plain insert —
+  // posting to the ledger before the money has actually moved would be a
+  // real accounting error, not merely a missed opportunity.
+  if (initialStatus === "succeeded") {
+    return insertSettledPayment(supabase, session, actor, parsed.data);
+  }
+
   const { data, error } = await supabase
     .from("payments")
     .insert({
       workspace_id: client.workspace_id,
       ...parsed.data,
       status: initialStatus,
-      received_at: initialStatus === "succeeded" ? timestamp : null,
+      received_at: null,
     })
     .select("*")
     .single();
@@ -818,10 +894,6 @@ async function createPayment(input: PaymentInput): Promise<DataResult<Payment>> 
     "payment_created",
     `Payment created: ${PAYMENT_STATUS_LABELS[initialStatus]}`,
   );
-
-  if (initialStatus === "succeeded" && invoice) {
-    await recomputeInvoiceBalance(supabase, invoice.id, actor);
-  }
 
   return ok(payment);
 }
@@ -897,6 +969,17 @@ async function markPaymentProcessing(id: string): Promise<DataResult<Payment>> {
   return ok(updated);
 }
 
+/**
+ * Finance F1.8 — the atomic version. A single database transaction (the
+ * mark_payment_succeeded_and_post_settlement RPC) validates the pending/
+ * processing -> succeeded transition, updates status, recomputes the linked
+ * Invoice balance, and posts the settlement — closing the F1.7-disclosed
+ * gap where a status update and its ledger post were two separate calls
+ * and a posting failure could leave a Payment persisted as "succeeded"
+ * with no settlement entry. A posting failure now rolls back the whole
+ * transaction: the caller gets a clean fail() and the Payment's status is
+ * untouched, exactly as if nothing had been attempted.
+ */
 async function markPaymentSucceeded(id: string): Promise<DataResult<Payment>> {
   const existing = await fetchPaymentRow(id);
   if (!existing) {
@@ -908,7 +991,11 @@ async function markPaymentSucceeded(id: string): Promise<DataResult<Payment>> {
 
   const supabase = createSupabaseClient();
   // No overpayment: re-checked here (not just at createPayment) since a
-  // pending/processing Payment can sit for a while.
+  // pending/processing Payment can sit for a while. Deliberately stays a
+  // TypeScript-layer check, not duplicated into the RPC — record_payment_
+  // settlement (the sibling create-time path) doesn't enforce it in SQL
+  // either, so this keeps both paths' business validation in the one place
+  // it already lived, rather than a second copy that could drift.
   if (existing.invoice_id && existing.payment_type !== "refund") {
     const linkedInvoice = await fetchInvoiceRow(existing.invoice_id);
     if (linkedInvoice && existing.amount_minor > linkedInvoice.balance_minor) {
@@ -920,21 +1007,14 @@ async function markPaymentSucceeded(id: string): Promise<DataResult<Payment>> {
 
   const session = await requireWorkspaceSession();
   const actor = resolveActorName(session);
-  const timestamp = new Date().toISOString();
-  const { data, error } = await supabase
-    .from("payments")
-    .update({ status: "succeeded", received_at: timestamp })
-    .eq("id", id)
-    .select("*")
-    .single();
-  if (error) throw normalizeSupabaseError(error);
+  const { data, error } = await supabase.rpc("mark_payment_succeeded_and_post_settlement", {
+    p_payment_id: id,
+    p_actor: actor,
+  });
+  if (error) return handleFinanceRpcError<Payment>(error);
 
-  const updated = mapPaymentRow(data);
+  const updated = mapPaymentRow(data as Database["public"]["Tables"]["payments"]["Row"]);
   await insertTimelineActivity(supabase, actor, updated.workspace_id, "payment", id, "payment_succeeded", "Payment succeeded");
-
-  if (updated.invoice_id) {
-    await recomputeInvoiceBalance(supabase, updated.invoice_id, actor);
-  }
 
   return ok(updated);
 }
@@ -974,12 +1054,19 @@ function refundReferenceFor(originalPaymentId: string): string {
  * insert, original Payment status update, Timeline entry) to
  * process_payment_refund() — see migration 8's comment for why the row lock
  * there makes this race-safe. Expected validation failures (errcodes
- * P0001-P0004) are translated into a DataResult fail() with the RPC's own
- * message rather than thrown, matching the mock's fail()-returning
- * refundPayment exactly. Calls recompute_invoice_balance() as a separate
- * step afterward if the original Payment was invoice-linked — same
- * two-step pattern as the mock's refundPayment() calling
- * applyPaymentToInvoice() as its own last step.
+ * P0001-P0004, plus Finance F1.8's P1104/P1118) are translated into a
+ * DataResult fail() with the RPC's own message rather than thrown,
+ * matching the mock's fail()-returning refundPayment exactly. Calls
+ * recompute_invoice_balance() as a separate step afterward if the original
+ * Payment was invoice-linked — same two-step pattern as the mock's
+ * refundPayment() calling applyPaymentToInvoice() as its own last step.
+ *
+ * Finance F1.8 — process_payment_refund itself now ALSO posts the
+ * proportional settlement reversal (Dr AR-or-Deposits / Cr Cash for the
+ * refunded amount) in the same transaction as the operational refund — no
+ * code change was needed at this call site, since it's the same RPC name,
+ * same params, same return shape as before F1.8. See the migration's own
+ * comment for why this can't reuse the whole-entry reverse_journal_entry.
  */
 async function refundPayment(originalPaymentId: string, amountMinor: number): Promise<DataResult<Payment>> {
   const original = await fetchPaymentRow(originalPaymentId);
@@ -1983,7 +2070,17 @@ async function getBalanceSheetReport(filters: BalanceSheetReportFilters): Promis
   };
 }
 
-/** Calls record_payment_settlement. payment_method='stripe' is rejected here, at the Repository boundary, independent of and before the RPC's own P1117 rejection — Stripe remains deferred at every layer. */
+/**
+ * Finance F1.7 — delegates to the same canonical `insertSettledPayment`
+ * helper `createPayment` now uses for its own "succeeded" branch (see that
+ * helper's doc comment). This function's only remaining distinct behavior
+ * is rejecting `payment_method === "stripe"` before validation even runs —
+ * Settlement forces every non-Stripe method to post as already-succeeded
+ * regardless of whether it's one of `createPayment`'s
+ * IMMEDIATELY_SUCCEEDED_METHODS, which is the genuine, still-useful
+ * distinction between the two screens: "I already know this money moved,
+ * post it now" vs. "record what I was told, infer whether it's settled."
+ */
 async function recordPaymentSettlement(input: PaymentSettlementInput): Promise<DataResult<Payment>> {
   if (input.payment_method === "stripe") {
     return fail("Stripe payments are not supported in this phase — record only manual/internal payment methods.");
@@ -1998,35 +2095,7 @@ async function recordPaymentSettlement(input: PaymentSettlementInput): Promise<D
   const actor = resolveActorName(session);
   const supabase = createSupabaseClient();
 
-  const { data, error } = await supabase.rpc("record_payment_settlement", {
-    p_workspace_id: session.workspace.id,
-    p_invoice_id: parsed.data.invoice_id,
-    p_client_id: parsed.data.client_id,
-    p_event_id: parsed.data.event_id,
-    p_contract_id: parsed.data.contract_id,
-    p_payment_type: parsed.data.payment_type,
-    p_amount_minor: parsed.data.amount_minor,
-    p_currency: parsed.data.currency,
-    p_payment_method: parsed.data.payment_method,
-    p_reference: parsed.data.reference,
-    p_transaction_date: parsed.data.transaction_date,
-    p_notes: parsed.data.notes,
-    p_actor: actor,
-  });
-  if (error) return handleFinanceRpcError<Payment>(error);
-
-  const payment = mapPaymentRow(data as Database["public"]["Tables"]["payments"]["Row"]);
-
-  await getCoreAuditLogService().recordAuditEvent(payment.workspace_id, {
-    actor,
-    action: "payment_settlement_recorded",
-    ownerType: "payment",
-    ownerId: payment.id,
-    before: null,
-    after: { amount_minor: payment.amount_minor, payment_method: payment.payment_method, invoice_id: payment.invoice_id },
-  });
-
-  return ok(payment);
+  return insertSettledPayment(supabase, session, actor, parsed.data);
 }
 
 async function recordExpenseTransition(expenseId: string, input: ExpenseTransitionInput): Promise<DataResult<Expense>> {

@@ -43,6 +43,90 @@ export interface Database {
         };
         Relationships: [];
       };
+      employee_wellness_checkins: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          member_id: string;
+          checkin_date: string;
+          mood: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          member_id: string;
+          checkin_date: string;
+          mood: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          member_id?: string;
+          checkin_date?: string;
+          mood?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      employee_water_logs: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          member_id: string;
+          log_date: string;
+          glasses: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          member_id: string;
+          log_date: string;
+          glasses?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          member_id?: string;
+          log_date?: string;
+          glasses?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      notes_to_founder: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          author_id: string;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          author_id: string;
+          body: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          author_id?: string;
+          body?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       workspaces: {
         Row: {
           id: string;
@@ -2416,6 +2500,10 @@ export interface Database {
         Args: { p_original_payment_id: string; p_amount_minor: number; p_actor: string };
         Returns: Database["public"]["Tables"]["payments"]["Row"];
       };
+      post_payment_refund_reversal: {
+        Args: { p_refund_payment_id: string; p_original_payment_id: string; p_actor: string };
+        Returns: Database["public"]["Tables"]["journal_entries"]["Row"];
+      };
       create_document_version: {
         Args: {
           p_document_id: string;
@@ -2497,6 +2585,10 @@ export interface Database {
       post_payment_settlement: {
         Args: { p_payment_id: string; p_actor: string };
         Returns: Database["public"]["Tables"]["journal_entries"]["Row"];
+      };
+      mark_payment_succeeded_and_post_settlement: {
+        Args: { p_payment_id: string; p_actor: string };
+        Returns: Database["public"]["Tables"]["payments"]["Row"];
       };
       record_payment_settlement: {
         Args: {

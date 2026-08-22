@@ -10,6 +10,26 @@ function migrationFiles(): string[] {
     .sort();
 }
 
+/**
+ * Finance F1.13 — this repository routinely carries several independent,
+ * separately-authored bodies of work uncommitted in the working tree at
+ * once (each its own future release), so a single global file count can't
+ * describe "what HEAD plus THIS release contains" — it would describe
+ * whatever else happens to also be sitting uncommitted alongside it. This
+ * excludes exactly the migration file(s) known to belong to a DIFFERENT,
+ * independently-tracked, not-yet-released body of work, so the exact-count
+ * assertion below stays meaningful and precise for a standalone checkout of
+ * HEAD + this release — true whether or not that other work is present in
+ * the current working tree. Add a filename here only when a NEW body of
+ * work is confirmed (via `git status`) to be uncommitted and unrelated to
+ * the release under test — never to silently excuse an actual miscount.
+ */
+const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set(["20260815100000_employee_wellness_privacy.sql"]);
+
+function migrationFilesForThisRelease(): string[] {
+  return migrationFiles().filter((name) => !KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS.has(name));
+}
+
 function readMigration(filename: string): string {
   return readFileSync(path.join(MIGRATIONS_DIR, filename), "utf-8");
 }
@@ -23,9 +43,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation + 20 Services Foundation schema migrations + 1 Event Service Workspace media owner_type widening migration + 1 Client Portal Checkpoint 14 schema migration + 1 Analytics permission seed migration + 1 Digital Asset Management media_assets workspace owner_type widening migration, in chronological (execution) order", () => {
-    const files = migrationFiles();
-    expect(files).toHaveLength(157);
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation + 20 Services Foundation schema migrations + 1 Event Service Workspace media owner_type widening migration + 1 Client Portal Checkpoint 14 schema migration + 1 Analytics permission seed migration + 1 Digital Asset Management media_assets workspace owner_type widening migration + 2 Finance F1.8 Payment Atomicity & Refund Reversal migrations (excluding independently-tracked, not-yet-released work still uncommitted alongside this one — see KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS), in chronological (execution) order", () => {
+    const files = migrationFilesForThisRelease();
+    expect(files).toHaveLength(159);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -1172,7 +1192,16 @@ describe("Finance Posting Engine migrations", () => {
     for (const code of ["P1100", "P1101", "P1104", "P1105", "P1106", "P1107", "P1108", "P1109", "P1110", "P1111", "P1112", "P1113", "P1114", "P1115", "P1116", "P1117"]) {
       expect(combined).toMatch(new RegExp(`errcode = '${code}'`));
     }
-    for (const otherFile of migrationFiles().filter((f) => !POSTING_ENGINE_FILES.includes(f))) {
+    // Finance F1.8's two migrations are an intentional, sanctioned extension
+    // of this exact P1100+ range for the same Payments domain — reusing
+    // P1104/P1105/P1111 for their EXACT established meanings (duplicate
+    // posting / invalid transition / missing source document), not a
+    // collision of two different meanings sharing one code. P1118 is the
+    // next genuinely new code in the same sequence. Excluded from the
+    // "no other file" check below for that reason, not because the
+    // collision guard stopped mattering.
+    const F1_8_FILES = ["20260821100000_finance_mark_payment_succeeded_atomic.sql", "20260821100100_finance_payment_refund_reversal.sql"];
+    for (const otherFile of migrationFiles().filter((f) => !POSTING_ENGINE_FILES.includes(f) && !F1_8_FILES.includes(f))) {
       const sql = readMigration(otherFile);
       for (const code of allCodes) {
         expect(sql).not.toMatch(new RegExp(`errcode = '${code}'`));
@@ -1638,6 +1667,121 @@ describe("Finance Posting Engine migrations", () => {
     it("post_payment_settlement never resolves account 1010 Stripe Clearing in its actual account-resolution code", () => {
       const sql = stripSqlComments(readMigration("20260804100200_finance_post_payment_settlement.sql"));
       expect(sql).not.toMatch(/finance_resolve_account\([^)]*,\s*1010\)/);
+    });
+  });
+});
+
+describe("Finance F1.8 migrations — payment atomicity + refund reversal", () => {
+  describe("mark_payment_succeeded_and_post_settlement", () => {
+    const sql = () => readMigration("20260821100000_finance_mark_payment_succeeded_atomic.sql");
+
+    it("locks the payment row and rejects any status other than pending/processing with P1105, before ever posting", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/select \* into v_payment from public\.payments where id = p_payment_id for update/);
+      expect(code).toMatch(/if v_payment\.status not in \('pending', 'processing'\) then/);
+      expect(code).toMatch(/errcode = 'P1105'/);
+      const transitionCheckIndex = code.indexOf("if v_payment.status not in");
+      const postIndex = code.indexOf("perform public.post_payment_settlement(");
+      expect(transitionCheckIndex).toBeGreaterThan(-1);
+      expect(postIndex).toBeGreaterThan(transitionCheckIndex);
+    });
+
+    it("composes the EXISTING post_payment_settlement — no new posting primitive, no duplicated account-routing logic", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/perform public\.post_payment_settlement\(p_payment_id, p_actor\)/);
+      expect(code).not.toMatch(/finance_resolve_account/);
+      expect(code).not.toMatch(/finance_insert_journal_entry/);
+    });
+
+    it("recomputes the linked Invoice balance in the same transaction, only when invoice-linked", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/if v_payment\.invoice_id is not null then\s*\n\s*perform public\.recompute_invoice_balance\(v_payment\.invoice_id, p_actor\);/);
+    });
+
+    it("updates status/received_at before posting, in one function with no explicit transaction boundary — an exception anywhere rolls the whole thing back", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/update public\.payments\s*\n\s*set status = 'succeeded', received_at = now\(\), updated_at = now\(\)/);
+      expect(code).not.toMatch(/\bbegin\s*;|\bcommit\s*;/i);
+    });
+  });
+
+  describe("post_payment_refund_reversal / process_payment_refund composition", () => {
+    const sql = () => readMigration("20260821100100_finance_payment_refund_reversal.sql");
+
+    it("posts a PARTIAL reversal for the refund's own amount_minor, never the original settlement's full amount", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/'debit_minor', v_refund\.amount_minor, 'credit_minor', 0/);
+      expect(code).toMatch(/'debit_minor', 0, 'credit_minor', v_refund\.amount_minor/);
+      // Scoped to the reversal function only — process_payment_refund's own
+      // pre-existing refundable-ceiling math legitimately uses
+      // v_original.amount_minor elsewhere in this same file.
+      const reversalFn = code.match(/create or replace function public\.post_payment_refund_reversal[\s\S]*?^\$\$;/m)?.[0] ?? "";
+      expect(reversalFn.length).toBeGreaterThan(0);
+      expect(reversalFn).not.toMatch(/v_original\.amount_minor/);
+    });
+
+    it("reads the ORIGINAL settlement's actual posted account_ids back from journal_lines rather than re-deriving routing from invoice_id", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/select \* into v_cash_line from public\.journal_lines where journal_entry_id = v_settlement_entry\.id and debit_minor > 0/);
+      expect(code).toMatch(/select \* into v_credit_line from public\.journal_lines where journal_entry_id = v_settlement_entry\.id and credit_minor > 0/);
+      expect(code).not.toMatch(/invoice_id is not null then/);
+    });
+
+    it("never sets reverses_entry_id/reversed_by_entry_id — reserved exclusively for reverse_journal_entry's whole-entry semantics", () => {
+      const code = stripSqlComments(sql());
+      expect(code).not.toMatch(/reversed_by_entry_id/);
+      expect(code).not.toMatch(/reverses_entry_id/);
+    });
+
+    it("fails with P1118 rather than inventing a reversal when no payment_settlement entry exists for the original payment", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/source_type = 'payment_settlement'\s*\n\s*and source_id = p_original_payment_id::text/);
+      expect(code).toMatch(/errcode = 'P1118'/);
+    });
+
+    it("is idempotent per refund row: posting_key is payment_refund:<refund_payment_id>, never the original payment's id", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/v_posting_key := 'payment_refund:' \|\| p_refund_payment_id;/);
+      expect(code).not.toMatch(/'payment_refund:' \|\| p_original_payment_id/);
+      expect(code).toMatch(/source_type = 'payment_refund' and source_id = p_refund_payment_id::text/);
+      expect(code).toMatch(/errcode = 'P1104'/);
+    });
+
+    it("does not widen journal_entries_source_type_check — 'payment_refund' was already an allowed value from the original Database Schema phase", () => {
+      const code = stripSqlComments(sql());
+      expect(code).not.toMatch(/journal_entries_source_type_check/);
+      expect(code).not.toMatch(/alter table public\.journal_entries/);
+    });
+
+    it("process_payment_refund composes post_payment_refund_reversal after the refund insert and original-status update, no new transaction boundary", () => {
+      const code = stripSqlComments(sql());
+      const insertIndex = code.indexOf("returning * into v_refund;");
+      const statusUpdateIndex = code.indexOf("set status = case when (v_refundable - p_amount_minor) = 0 then 'refunded' else 'partially_refunded' end");
+      const postIndex = code.indexOf("perform public.post_payment_refund_reversal(v_refund.id, v_original.id, p_actor);");
+      expect(insertIndex).toBeGreaterThan(-1);
+      expect(statusUpdateIndex).toBeGreaterThan(insertIndex);
+      expect(postIndex).toBeGreaterThan(statusUpdateIndex);
+      expect(code).not.toMatch(/\bbegin\s*;|\bcommit\s*;/i);
+    });
+
+    it("preserves every pre-existing process_payment_refund validation unchanged (P0001-P0004)", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/errcode = 'P0001'/);
+      expect(code).toMatch(/errcode = 'P0002'/);
+      expect(code).toMatch(/errcode = 'P0003'/);
+      expect(code).toMatch(/errcode = 'P0004'/);
+      expect(code).toMatch(/if v_original\.status not in \('succeeded', 'partially_refunded'\) then/);
+    });
+  });
+
+  describe("F1.8 does not touch Revenue Recognition, account 4000, or AR origination", () => {
+    it("neither migration file references account 4000, revenue recognition, or AR origination language", () => {
+      for (const file of ["20260821100000_finance_mark_payment_succeeded_atomic.sql", "20260821100100_finance_payment_refund_reversal.sql"]) {
+        const code = stripSqlComments(readMigration(file));
+        expect(code).not.toMatch(/,\s*4000\)/);
+        expect(code).not.toMatch(/revenue recognition/i);
+        expect(code).not.toMatch(/ar origination|originate.{0,10}(accounts receivable|ar\b)/i);
+      }
     });
   });
 });

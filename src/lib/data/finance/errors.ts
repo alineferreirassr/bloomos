@@ -26,6 +26,9 @@ import { type DataResult, fail } from "@/lib/data/result";
  *   - missing source document:              P1111
  *   - blank reversal reason / memo:         P1112, P1113
  *   - invalid/overlapping period range:     P1116
+ *   - no settlement entry to reverse:       P1118 (Finance F1.8 —
+ *     post_payment_refund_reversal, refuses to invent a reversal for a
+ *     payment that predates ledger posting)
  *   - required receipt event id:            P0010 (Purchases-owned range,
  *     reachable here since record_payment_settlement/record_expense_
  *     transition/record_manual_adjustment/reverse_journal_entry/
@@ -69,6 +72,7 @@ export const FINANCE_VALIDATION_ERROR_CODES = new Set([
   "P1115",
   "P1116",
   "P1117",
+  "P1118",
   "P1200",
 ]);
 
