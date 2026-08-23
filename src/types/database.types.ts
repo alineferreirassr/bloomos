@@ -2590,6 +2590,22 @@ export interface Database {
         Args: { p_payment_id: string; p_actor: string };
         Returns: Database["public"]["Tables"]["payments"]["Row"];
       };
+      post_invoice_revenue_recognition: {
+        Args: { p_invoice_id: string; p_actor: string };
+        Returns: Database["public"]["Tables"]["journal_entries"]["Row"];
+      };
+      issue_invoice_and_post_revenue_recognition: {
+        Args: { p_invoice_id: string; p_actor: string };
+        Returns: Database["public"]["Tables"]["invoices"]["Row"];
+      };
+      post_invoice_voided_reversal: {
+        Args: { p_invoice_id: string; p_actor: string };
+        Returns: Database["public"]["Tables"]["journal_entries"]["Row"];
+      };
+      void_invoice_and_reverse_revenue_recognition: {
+        Args: { p_invoice_id: string; p_actor: string };
+        Returns: Database["public"]["Tables"]["invoices"]["Row"];
+      };
       record_payment_settlement: {
         Args: {
           p_workspace_id: string;

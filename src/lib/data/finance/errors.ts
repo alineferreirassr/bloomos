@@ -29,6 +29,16 @@ import { type DataResult, fail } from "@/lib/data/result";
  *   - no settlement entry to reverse:       P1118 (Finance F1.8 —
  *     post_payment_refund_reversal, refuses to invent a reversal for a
  *     payment that predates ledger posting)
+ *   - void rejected, payments applied:      P1119 (Finance F2.1B —
+ *     post_invoice_voided_reversal, refuses to reverse Revenue recognition
+ *     for an invoice with any payment applied; void-after-partial-payment
+ *     needs a proportional correction model not yet built)
+ *   - refund rejected, Revenue recognized:  P1120 (Finance F2.1B-REVIEW —
+ *     process_payment_refund, refuses to refund a payment linked to an
+ *     invoice with unreversed recognized Revenue; the existing settlement-
+ *     only reversal would otherwise leave a phantom AR balance and an
+ *     overstated Revenue balance until Revenue-side refund correction
+ *     exists)
  *   - required receipt event id:            P0010 (Purchases-owned range,
  *     reachable here since record_payment_settlement/record_expense_
  *     transition/record_manual_adjustment/reverse_journal_entry/
@@ -73,6 +83,8 @@ export const FINANCE_VALIDATION_ERROR_CODES = new Set([
   "P1116",
   "P1117",
   "P1118",
+  "P1119",
+  "P1120",
   "P1200",
 ]);
 

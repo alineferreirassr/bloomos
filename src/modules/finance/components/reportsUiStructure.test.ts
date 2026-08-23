@@ -171,13 +171,19 @@ describe("Finance Reports UI structural guardrails", () => {
     // files of its own. Scoped to files with a "finance" prefix (rather than "no file at all
     // sorts after it") since later, unrelated modules (e.g. Services) are expected to add their
     // own migrations afterward. Finance F1.8 (20260821100000/100100 — payment atomicity + refund
-    // settlement reversal) is a separate, later, sanctioned Finance checkpoint that DOES touch
-    // the database — explicitly excluded here, not a violation of this test's actual claim about
-    // the Reports UI phase specifically.
+    // settlement reversal) and Finance F2.1B (20260822100000 — invoice revenue recognition) are
+    // separate, later, sanctioned Finance checkpoints that DO touch the database — explicitly
+    // excluded here, not a violation of this test's actual claim about the Reports UI phase
+    // specifically.
     expect(files).toContain("20260805100000_finance_report_rpcs.sql");
-    const F1_8_FILES = ["20260821100000_finance_mark_payment_succeeded_atomic.sql", "20260821100100_finance_payment_refund_reversal.sql"];
+    const LATER_SANCTIONED_FINANCE_FILES = [
+      "20260821100000_finance_mark_payment_succeeded_atomic.sql",
+      "20260821100100_finance_payment_refund_reversal.sql",
+      "20260822100000_finance_invoice_revenue_recognition.sql",
+      "20260822110000_finance_invoice_revenue_recognition_refund_guard.sql",
+    ];
     const financeFilesAfter = files.filter(
-      (f) => f > "20260805100000_finance_report_rpcs.sql" && f.includes("finance") && !F1_8_FILES.includes(f),
+      (f) => f > "20260805100000_finance_report_rpcs.sql" && f.includes("finance") && !LATER_SANCTIONED_FINANCE_FILES.includes(f),
     );
     expect(financeFilesAfter).toHaveLength(0);
   });

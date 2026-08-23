@@ -259,6 +259,23 @@ async function updateInvoice(id: string, input: InvoiceInput): Promise<DataResul
   if (!parsed.success) {
     return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
   }
+  // Finance F2.1B — once an invoice leaves draft, Revenue has been recognized
+  // against its current subtotal/tax/discount (source_type='invoice_issued').
+  // Changing any of those fields now would silently diverge the ledger from
+  // the Invoice record, with no correction posting to keep them in sync.
+  // This requires a dedicated correction flow F2.1B does not implement
+  // (F2.1C) — block the financially material fields, not the whole record,
+  // so title/description/notes/due_date remain editable post-issuance.
+  if (
+    existing.status !== "draft" &&
+    (parsed.data.subtotal_minor !== existing.subtotal_minor ||
+      parsed.data.tax_minor !== existing.tax_minor ||
+      parsed.data.discount_minor !== existing.discount_minor)
+  ) {
+    return fail(
+      "Cannot change the subtotal, tax, or discount after an invoice has been issued — Revenue has already been recognized. This requires a dedicated correction flow not yet available.",
+    );
+  }
   if (parsed.data.client_id !== existing.client_id) {
     return fail("An invoice's client can't be changed after creation.", { client_id: "Client cannot be changed." });
   }
@@ -286,6 +303,78 @@ async function updateInvoice(id: string, input: InvoiceInput): Promise<DataResul
   return ok(updated);
 }
 
+/**
+ * Finance F2.1B — posts Revenue recognition for a just-issued invoice:
+ * Debit 1100 AR (total_minor) + 4900 Sales Discounts (discount_minor, if
+ * any), Credit 4000 Service Revenue (subtotal_minor) + 2100 Sales Tax
+ * Payable (tax_minor, if any). Mirrors post_invoice_revenue_recognition
+ * exactly — same account numbers, same posting_key convention
+ * (invoice_issued:<invoice_id>), same source_type ('invoice_issued',
+ * already a reserved value in journal_entries_source_type_check since the
+ * reverse_journal_entry migration).
+ */
+function postInvoiceRevenueRecognitionMock(invoice: Invoice): void {
+  const arAccount = findAccountByNumber(invoice.workspace_id, 1100);
+  const revenueAccount = findAccountByNumber(invoice.workspace_id, 4000);
+
+  const lines: { account_id: string; debit_minor: number; credit_minor: number }[] = [
+    { account_id: arAccount.id, debit_minor: invoice.total_minor, credit_minor: 0 },
+  ];
+  if (invoice.discount_minor > 0) {
+    lines.push({ account_id: findAccountByNumber(invoice.workspace_id, 4900).id, debit_minor: invoice.discount_minor, credit_minor: 0 });
+  }
+  lines.push({ account_id: revenueAccount.id, debit_minor: 0, credit_minor: invoice.subtotal_minor });
+  if (invoice.tax_minor > 0) {
+    lines.push({ account_id: findAccountByNumber(invoice.workspace_id, 2100).id, debit_minor: 0, credit_minor: invoice.tax_minor });
+  }
+
+  insertMockJournalEntry({
+    workspace_id: invoice.workspace_id,
+    entry_date: invoice.issue_date ?? nowIso().slice(0, 10),
+    source_type: "invoice_issued",
+    source_id: invoice.id,
+    posting_key: `invoice_issued:${invoice.id}`,
+    memo: `Revenue recognized on invoice issuance: "${invoice.title}"`,
+    posted_by: CURRENT_ACTOR,
+    lines,
+  });
+}
+
+/**
+ * Finance F2.1B — mirrors post_invoice_voided_reversal exactly: a no-op if
+ * the invoice was voided before ever being issued (no recognition entry
+ * exists yet), otherwise swaps every original line's debit/credit into a
+ * new entry (source_type 'invoice_voided', posting_key
+ * invoice_voided:<invoice_id>) and marks the original reversed. The caller
+ * (voidInvoice) already guarantees paid_minor === 0 before calling this.
+ */
+function reverseInvoiceRevenueRecognitionMock(invoice: Invoice): void {
+  const original = readJournalEntries().find((e) => e.source_type === "invoice_issued" && e.source_id === invoice.id);
+  if (!original) {
+    return;
+  }
+
+  const originalLines = readJournalLines().filter((line) => line.journal_entry_id === original.id);
+  const reversal = insertMockJournalEntry({
+    workspace_id: original.workspace_id,
+    entry_date: nowIso().slice(0, 10),
+    source_type: "invoice_voided",
+    source_id: invoice.id,
+    posting_key: `invoice_voided:${invoice.id}`,
+    memo: `Revenue recognition reversed: invoice voided ("${invoice.title}")`,
+    posted_by: CURRENT_ACTOR,
+    reverses_entry_id: original.id,
+    lines: originalLines.map((line) => ({
+      account_id: line.account_id,
+      debit_minor: line.credit_minor,
+      credit_minor: line.debit_minor,
+      line_memo: line.line_memo,
+    })),
+  });
+
+  writeJournalEntries(readJournalEntries().map((e) => (e.id === original.id ? { ...e, reversed_by_entry_id: reversal.id } : e)));
+}
+
 async function issueInvoice(id: string): Promise<DataResult<Invoice>> {
   const existing = readInvoices().find((i) => i.id === id);
   if (!existing) {
@@ -303,6 +392,7 @@ async function issueInvoice(id: string): Promise<DataResult<Invoice>> {
     updated_at: timestamp,
   };
   writeInvoices(readInvoices().map((i) => (i.id === id ? updated : i)));
+  postInvoiceRevenueRecognitionMock(updated);
   recordTimelineActivity(existing.workspace_id, "invoice", id, "invoice_issued", `Invoice issued: "${existing.title}"`);
 
   return ok(updated);
@@ -373,10 +463,17 @@ async function voidInvoice(id: string): Promise<DataResult<Invoice>> {
   if (!canTransitionInvoiceStatus(existing.status, "voided")) {
     return fail(`Cannot void an invoice that is already ${INVOICE_STATUS_LABELS[existing.status].toLowerCase()}.`);
   }
+  // Finance F2.1B — mirrors post_invoice_voided_reversal's P1119 guard:
+  // void-after-partial-payment needs a proportional correction model this
+  // clean-case migration does not implement (F2.1C).
+  if (existing.paid_minor > 0) {
+    return fail("Cannot void an invoice with payments applied. This requires a dedicated correction flow not yet available.");
+  }
 
   const timestamp = nowIso();
   const updated: Invoice = { ...existing, status: "voided", voided_at: timestamp, updated_at: timestamp };
   writeInvoices(readInvoices().map((i) => (i.id === id ? updated : i)));
+  reverseInvoiceRevenueRecognitionMock(updated);
   recordTimelineActivity(existing.workspace_id, "invoice", id, "invoice_voided", `Invoice voided: "${existing.title}"`);
 
   return ok(updated);
@@ -890,6 +987,18 @@ async function refundPayment(originalPaymentId: string, amountMinor: number): Pr
   }
   if (!isPaymentRefundable(original.status)) {
     return fail(`Cannot refund a payment that is ${PAYMENT_STATUS_LABELS[original.status].toLowerCase()}.`);
+  }
+  // Finance F2.1B-REVIEW: mirrors process_payment_refund's P1120 guard — the
+  // existing settlement-only reversal below would otherwise leave a phantom
+  // AR balance and an overstated Revenue balance for an invoice-linked
+  // payment whose invoice has recognized Revenue.
+  if (
+    original.invoice_id !== null &&
+    readJournalEntries().some(
+      (e) => e.source_type === "invoice_issued" && e.source_id === original.invoice_id && e.reversed_by_entry_id === null,
+    )
+  ) {
+    return fail("Cannot refund a payment linked to an invoice with recognized Revenue. This requires a dedicated correction flow not yet available.");
   }
   if (!Number.isInteger(amountMinor) || amountMinor <= 0) {
     return fail("Enter a refund amount greater than zero.");

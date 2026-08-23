@@ -43,9 +43,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation + 20 Services Foundation schema migrations + 1 Event Service Workspace media owner_type widening migration + 1 Client Portal Checkpoint 14 schema migration + 1 Analytics permission seed migration + 1 Digital Asset Management media_assets workspace owner_type widening migration + 2 Finance F1.8 Payment Atomicity & Refund Reversal migrations (excluding independently-tracked, not-yet-released work still uncommitted alongside this one — see KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS), in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation + 20 Services Foundation schema migrations + 1 Event Service Workspace media owner_type widening migration + 1 Client Portal Checkpoint 14 schema migration + 1 Analytics permission seed migration + 1 Digital Asset Management media_assets workspace owner_type widening migration + 2 Finance F1.8 Payment Atomicity & Refund Reversal migrations + 1 Finance F2.1B Invoice Revenue Recognition migration + 1 Finance F2.1B-REVIEW refund guard migration (excluding independently-tracked, not-yet-released work still uncommitted alongside this one — see KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS), in chronological (execution) order", () => {
     const files = migrationFilesForThisRelease();
-    expect(files).toHaveLength(159);
+    expect(files).toHaveLength(161);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -1192,16 +1192,22 @@ describe("Finance Posting Engine migrations", () => {
     for (const code of ["P1100", "P1101", "P1104", "P1105", "P1106", "P1107", "P1108", "P1109", "P1110", "P1111", "P1112", "P1113", "P1114", "P1115", "P1116", "P1117"]) {
       expect(combined).toMatch(new RegExp(`errcode = '${code}'`));
     }
-    // Finance F1.8's two migrations are an intentional, sanctioned extension
-    // of this exact P1100+ range for the same Payments domain — reusing
-    // P1104/P1105/P1111 for their EXACT established meanings (duplicate
-    // posting / invalid transition / missing source document), not a
-    // collision of two different meanings sharing one code. P1118 is the
-    // next genuinely new code in the same sequence. Excluded from the
-    // "no other file" check below for that reason, not because the
+    // Finance F1.8's two migrations, and F2.1B's one migration, are an
+    // intentional, sanctioned extension of this exact P1100+ range for the
+    // same Finance Ledger domain — reusing P1104/P1105/P1109/P1111 for their
+    // EXACT established meanings (duplicate posting / invalid transition /
+    // already reversed / missing source document), not a collision of two
+    // different meanings sharing one code. P1118 (F1.8) and P1119 (F2.1B)
+    // are each the next genuinely new code in the same sequence. Excluded
+    // from the "no other file" check below for that reason, not because the
     // collision guard stopped mattering.
-    const F1_8_FILES = ["20260821100000_finance_mark_payment_succeeded_atomic.sql", "20260821100100_finance_payment_refund_reversal.sql"];
-    for (const otherFile of migrationFiles().filter((f) => !POSTING_ENGINE_FILES.includes(f) && !F1_8_FILES.includes(f))) {
+    const LATER_SANCTIONED_FINANCE_FILES = [
+      "20260821100000_finance_mark_payment_succeeded_atomic.sql",
+      "20260821100100_finance_payment_refund_reversal.sql",
+      "20260822100000_finance_invoice_revenue_recognition.sql",
+      "20260822110000_finance_invoice_revenue_recognition_refund_guard.sql",
+    ];
+    for (const otherFile of migrationFiles().filter((f) => !POSTING_ENGINE_FILES.includes(f) && !LATER_SANCTIONED_FINANCE_FILES.includes(f))) {
       const sql = readMigration(otherFile);
       for (const code of allCodes) {
         expect(sql).not.toMatch(new RegExp(`errcode = '${code}'`));
@@ -1783,6 +1789,216 @@ describe("Finance F1.8 migrations — payment atomicity + refund reversal", () =
         expect(code).not.toMatch(/ar origination|originate.{0,10}(accounts receivable|ar\b)/i);
       }
     });
+  });
+});
+
+describe("Finance F2.1B migration — invoice revenue recognition (clean cases)", () => {
+  const FILE = "20260822100000_finance_invoice_revenue_recognition.sql";
+  const sql = () => readMigration(FILE);
+
+  it("does not widen journal_entries_source_type_check — 'invoice_issued' and 'invoice_voided' were already allowed values from the reverse_journal_entry migration", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/journal_entries_source_type_check/);
+    expect(code).not.toMatch(/alter table public\.journal_entries/);
+  });
+
+  it("does not insert or alter any Chart of Accounts row — reuses only already-seeded accounts", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/insert into public\.chart_of_accounts/);
+    expect(code).not.toMatch(/alter table public\.chart_of_accounts/);
+  });
+
+  describe("post_invoice_revenue_recognition", () => {
+    it("posts the exact recognition formula: Dr AR (1100) total_minor, Cr Revenue (4000) subtotal_minor", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/v_ar_account := public\.finance_resolve_account\(v_invoice\.workspace_id, 1100\)/);
+      expect(code).toMatch(/v_revenue_account := public\.finance_resolve_account\(v_invoice\.workspace_id, 4000\)/);
+      expect(code).toMatch(/'account_id', v_ar_account\.id, 'debit_minor', v_invoice\.total_minor, 'credit_minor', 0/);
+      expect(code).toMatch(/'account_id', v_revenue_account\.id, 'debit_minor', 0, 'credit_minor', v_invoice\.subtotal_minor/);
+    });
+
+    it("conditionally posts Sales Discounts (4900) and Sales Tax Payable (2100) only when the amount is greater than zero", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/if v_invoice\.discount_minor > 0 then/);
+      expect(code).toMatch(/public\.finance_resolve_account\(v_invoice\.workspace_id, 4900\)/);
+      expect(code).toMatch(/if v_invoice\.tax_minor > 0 then/);
+      expect(code).toMatch(/public\.finance_resolve_account\(v_invoice\.workspace_id, 2100\)/);
+    });
+
+    it("is idempotent per invoice: rejects a duplicate with P1104, keyed on source_type='invoice_issued'", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/source_type = 'invoice_issued' and source_id = p_invoice_id::text/);
+      expect(code).toMatch(/errcode = 'P1104'/);
+      expect(code).toMatch(/v_posting_key := 'invoice_issued:' \|\| p_invoice_id;/);
+    });
+
+    it("does not validate invoice lifecycle status itself — same division of responsibility as post_payment_settlement", () => {
+      const code = sql();
+      const fn = code.match(/create or replace function public\.post_invoice_revenue_recognition[\s\S]*?^\$\$;/m)?.[0] ?? "";
+      expect(fn.length).toBeGreaterThan(0);
+      const stripped = fn.replace(/--.*$/gm, "");
+      expect(stripped).not.toMatch(/v_invoice\.status/);
+    });
+  });
+
+  describe("issue_invoice_and_post_revenue_recognition", () => {
+    const fn = () => {
+      const match = stripSqlComments(sql()).match(/create or replace function public\.issue_invoice_and_post_revenue_recognition[\s\S]*?^\$\$;/m)?.[0];
+      return match ?? "";
+    };
+
+    it("locks the invoice row and rejects any status other than draft with P1105, before ever posting", () => {
+      const code = fn();
+      expect(code).toMatch(/select \* into v_invoice from public\.invoices where id = p_invoice_id for update/);
+      expect(code).toMatch(/if v_invoice\.status <> 'draft' then/);
+      expect(code).toMatch(/errcode = 'P1105'/);
+      const transitionCheckIndex = code.indexOf("if v_invoice.status <> 'draft'");
+      const postIndex = code.indexOf("perform public.post_invoice_revenue_recognition(");
+      expect(transitionCheckIndex).toBeGreaterThan(-1);
+      expect(postIndex).toBeGreaterThan(transitionCheckIndex);
+    });
+
+    it("composes the EXISTING post_invoice_revenue_recognition — no duplicated account-routing logic", () => {
+      const code = fn();
+      expect(code).toMatch(/perform public\.post_invoice_revenue_recognition\(p_invoice_id, p_actor\)/);
+      expect(code).not.toMatch(/finance_resolve_account/);
+      expect(code).not.toMatch(/finance_insert_journal_entry/);
+    });
+
+    it("updates status/issue_date before posting, in one function with no explicit transaction boundary", () => {
+      const code = fn();
+      expect(code).toMatch(/set status = 'issued', issue_date = coalesce\(issue_date, current_date\), updated_at = now\(\)/);
+      expect(code).not.toMatch(/\bbegin\s*;|\bcommit\s*;/i);
+    });
+  });
+
+  describe("post_invoice_voided_reversal", () => {
+    const fn = () => {
+      const match = stripSqlComments(sql()).match(/create or replace function public\.post_invoice_voided_reversal[\s\S]*?^\$\$;/m)?.[0];
+      return match ?? "";
+    };
+
+    it("refuses to reverse an invoice with any payment applied — P1119", () => {
+      const code = fn();
+      expect(code).toMatch(/if v_invoice\.paid_minor > 0 then/);
+      expect(code).toMatch(/errcode = 'P1119'/);
+    });
+
+    it("returns a safe no-op (null) if the invoice was never issued", () => {
+      const code = fn();
+      expect(code).toMatch(/if not found then\s*\n\s*return null;/);
+    });
+
+    it("swaps every original line's debit/credit, matching reverse_journal_entry's own guarantee", () => {
+      const code = fn();
+      expect(code).toMatch(/'account_id', v_line\.account_id, 'debit_minor', v_line\.credit_minor, 'credit_minor', v_line\.debit_minor/);
+    });
+
+    it("never mutates the original entry except reversed_by_entry_id — no journal_lines UPDATE", () => {
+      const code = fn();
+      expect(code).not.toMatch(/update public\.journal_lines/);
+      expect(code).toMatch(/update public\.journal_entries set reversed_by_entry_id = v_entry\.id where id = v_original\.id/);
+    });
+
+    it("is idempotent: rejects an already-reversed entry (P1109) and a duplicate reversal posting (P1104)", () => {
+      const code = fn();
+      expect(code).toMatch(/if v_original\.reversed_by_entry_id is not null then/);
+      expect(code).toMatch(/errcode = 'P1109'/);
+      expect(code).toMatch(/source_type = 'invoice_voided' and source_id = p_invoice_id::text/);
+      expect(code).toMatch(/errcode = 'P1104'/);
+      expect(code).toMatch(/v_posting_key := 'invoice_voided:' \|\| p_invoice_id;/);
+    });
+
+    it("reads the ORIGINAL entry's actual posted lines back from journal_lines rather than re-deriving routing", () => {
+      const code = fn();
+      expect(code).toMatch(/select \* from public\.journal_lines where journal_entry_id = v_original\.id order by line_order/);
+    });
+  });
+
+  describe("void_invoice_and_reverse_revenue_recognition", () => {
+    const fn = () => {
+      const match = stripSqlComments(sql()).match(/create or replace function public\.void_invoice_and_reverse_revenue_recognition[\s\S]*?^\$\$;/m)?.[0];
+      return match ?? "";
+    };
+
+    it("locks the invoice row and rejects an already-terminal status (paid/voided/archived) with P1105", () => {
+      const code = fn();
+      expect(code).toMatch(/select \* into v_invoice from public\.invoices where id = p_invoice_id for update/);
+      expect(code).toMatch(/if v_invoice\.status not in \('draft', 'issued', 'sent', 'viewed', 'partially_paid', 'overdue'\) then/);
+      expect(code).toMatch(/errcode = 'P1105'/);
+    });
+
+    it("updates status before reversing, in one function with no explicit transaction boundary", () => {
+      const code = fn();
+      expect(code).toMatch(/set status = 'voided', voided_at = now\(\), updated_at = now\(\)/);
+      const statusIndex = code.indexOf("set status = 'voided'");
+      const reversalIndex = code.indexOf("perform public.post_invoice_voided_reversal(");
+      expect(statusIndex).toBeGreaterThan(-1);
+      expect(reversalIndex).toBeGreaterThan(statusIndex);
+      expect(code).not.toMatch(/\bbegin\s*;|\bcommit\s*;/i);
+    });
+  });
+
+  it("uses no exception handlers, matching the established no-swallowed-errors convention", () => {
+    expect(stripSqlComments(sql())).not.toMatch(/exception\s+when/i);
+  });
+
+  it("F2.1B does not implement void-after-partial-payment correction, post-issuance edits, deposit application, or refund-side Revenue reduction", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/proportional.{0,20}void|partial.{0,10}void.{0,10}reversal/i);
+    expect(code).not.toMatch(/deposit.{0,10}applied|apply.{0,10}deposit/i);
+    expect(code).not.toMatch(/4950/); // Refunds & Returns — refund-side Revenue reduction is F2.1C scope
+  });
+});
+
+describe("Finance F2.1B-REVIEW migration — refund-vs-recognized-Revenue guard", () => {
+  const FILE = "20260822110000_finance_invoice_revenue_recognition_refund_guard.sql";
+  const sql = () => stripSqlComments(readMigration(FILE));
+
+  it("redefines process_payment_refund only — no new table, no Chart of Accounts mutation, no CHECK widening", () => {
+    const code = sql();
+    expect(code).toMatch(/create or replace function public\.process_payment_refund\(/);
+    expect(code).not.toMatch(/create table/i);
+    expect(code).not.toMatch(/insert into public\.chart_of_accounts/);
+    expect(code).not.toMatch(/alter table public\.chart_of_accounts/);
+    expect(code).not.toMatch(/journal_entries_source_type_check/);
+  });
+
+  it("rejects (P1120) refunding an invoice-linked payment whose invoice has unreversed recognized Revenue, before any mutation", () => {
+    const code = sql();
+    expect(code).toMatch(/if v_original\.invoice_id is not null and exists \(/);
+    expect(code).toMatch(/source_type = 'invoice_issued'/);
+    expect(code).toMatch(/and reversed_by_entry_id is null/);
+    expect(code).toMatch(/errcode = 'P1120'/);
+    const guardIndex = code.indexOf("errcode = 'P1120'");
+    const insertIndex = code.indexOf("insert into public.payments (");
+    expect(guardIndex).toBeGreaterThan(-1);
+    expect(insertIndex).toBeGreaterThan(guardIndex);
+  });
+
+  it("does not restrict non-invoice-linked (Customer Deposits) refunds — the guard is invoice_id-scoped", () => {
+    const code = sql();
+    expect(code).toMatch(/if v_original\.invoice_id is not null and exists/);
+    expect(code).not.toMatch(/2200/); // Customer Deposits account — untouched by this guard
+  });
+
+  it("preserves every pre-existing process_payment_refund validation and the F1.8 reversal composition unchanged", () => {
+    const code = sql();
+    expect(code).toMatch(/errcode = 'P0001'/);
+    expect(code).toMatch(/errcode = 'P0002'/);
+    expect(code).toMatch(/errcode = 'P0003'/);
+    expect(code).toMatch(/errcode = 'P0004'/);
+    expect(code).toMatch(/perform public\.post_payment_refund_reversal\(v_refund\.id, v_original\.id, p_actor\)/);
+  });
+
+  it("uses no exception handlers, matching the established no-swallowed-errors convention", () => {
+    expect(sql()).not.toMatch(/exception\s+when/i);
+  });
+
+  it("does not implement Revenue-side refund correction — this is a guard, not a posting fix", () => {
+    const code = sql();
+    expect(code).not.toMatch(/4950/); // Refunds & Returns contra-revenue account — F2.1C scope
+    expect(code).not.toMatch(/4000/); // Service Revenue account — never credited/debited by this file
   });
 });
 

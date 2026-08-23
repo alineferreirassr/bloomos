@@ -290,6 +290,247 @@ describe("mockFinanceRepository Invoice status lifecycle", () => {
   });
 });
 
+describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (clean cases)", () => {
+  // BASE_INVOICE_INPUT: subtotal 100000, tax 5000, discount 2000 -> total 103000.
+  // Debits: AR 103000 + Sales Discounts 2000 = 105000. Credits: Revenue 100000 + Tax Payable 5000 = 105000.
+
+  it("issueInvoice posts Dr AR (total_minor) + Dr Sales Discounts, Cr Revenue (subtotal_minor) + Cr Sales Tax Payable, balanced", async () => {
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+
+    const issued = await mockFinanceRepository.issueInvoice(created.data.id);
+    expect(issued.success).toBe(true);
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_issued" });
+    const posted = entries.find((e) => e.source_id === created.data.id);
+    expect(posted).toBeDefined();
+    expect(posted!.posting_key).toBe(`invoice_issued:${created.data.id}`);
+
+    const detail = await mockFinanceRepository.getJournalEntry(posted!.id);
+    expect(detail.lines).toHaveLength(4);
+    const totalDebits = detail.lines!.reduce((sum, l) => sum + l.debit_minor, 0);
+    const totalCredits = detail.lines!.reduce((sum, l) => sum + l.credit_minor, 0);
+    expect(totalDebits).toBe(105000);
+    expect(totalCredits).toBe(105000);
+    expect(totalDebits).toBe(totalCredits);
+
+    const ar = detail.lines!.find((l) => l.account?.account_number === 1100);
+    const discount = detail.lines!.find((l) => l.account?.account_number === 4900);
+    const revenue = detail.lines!.find((l) => l.account?.account_number === 4000);
+    const taxPayable = detail.lines!.find((l) => l.account?.account_number === 2100);
+    expect(ar?.debit_minor).toBe(103000);
+    expect(discount?.debit_minor).toBe(2000);
+    expect(revenue?.credit_minor).toBe(100000);
+    expect(taxPayable?.credit_minor).toBe(5000);
+  });
+
+  it("does not post Sales Discounts or Sales Tax Payable lines when discount/tax are zero", async () => {
+    const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, tax_minor: 0, discount_minor: 0 });
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+
+    await mockFinanceRepository.issueInvoice(created.data.id);
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_issued" });
+    const posted = entries.find((e) => e.source_id === created.data.id);
+    const detail = await mockFinanceRepository.getJournalEntry(posted!.id);
+    expect(detail.lines).toHaveLength(2);
+    expect(detail.lines!.reduce((sum, l) => sum + l.debit_minor, 0)).toBe(100000);
+    expect(detail.lines!.reduce((sum, l) => sum + l.credit_minor, 0)).toBe(100000);
+  });
+
+  it("Example B (subtotal 100000, tax 10000, discount 0): Dr AR 110000, Cr Revenue 100000 + Cr Tax Payable 10000, no Sales Discounts line", async () => {
+    const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 100000, tax_minor: 10000, discount_minor: 0 });
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+
+    await mockFinanceRepository.issueInvoice(created.data.id);
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_issued" });
+    const posted = entries.find((e) => e.source_id === created.data.id);
+    const detail = await mockFinanceRepository.getJournalEntry(posted!.id);
+    expect(detail.lines).toHaveLength(3);
+    expect(detail.lines!.find((l) => l.account?.account_number === 1100)?.debit_minor).toBe(110000);
+    expect(detail.lines!.find((l) => l.account?.account_number === 4000)?.credit_minor).toBe(100000);
+    expect(detail.lines!.find((l) => l.account?.account_number === 2100)?.credit_minor).toBe(10000);
+    expect(detail.lines!.some((l) => l.account?.account_number === 4900)).toBe(false);
+    expect(detail.lines!.reduce((sum, l) => sum + l.debit_minor, 0)).toBe(detail.lines!.reduce((sum, l) => sum + l.credit_minor, 0));
+  });
+
+  it("Example D (subtotal 100000, tax 0, discount 5000): Dr AR 95000 + Dr Sales Discounts 5000, Cr Revenue 100000, no Sales Tax Payable line", async () => {
+    const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 100000, tax_minor: 0, discount_minor: 5000 });
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+
+    await mockFinanceRepository.issueInvoice(created.data.id);
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_issued" });
+    const posted = entries.find((e) => e.source_id === created.data.id);
+    const detail = await mockFinanceRepository.getJournalEntry(posted!.id);
+    expect(detail.lines).toHaveLength(3);
+    expect(detail.lines!.find((l) => l.account?.account_number === 1100)?.debit_minor).toBe(95000);
+    expect(detail.lines!.find((l) => l.account?.account_number === 4900)?.debit_minor).toBe(5000);
+    expect(detail.lines!.find((l) => l.account?.account_number === 4000)?.credit_minor).toBe(100000);
+    expect(detail.lines!.some((l) => l.account?.account_number === 2100)).toBe(false);
+    expect(detail.lines!.reduce((sum, l) => sum + l.debit_minor, 0)).toBe(detail.lines!.reduce((sum, l) => sum + l.credit_minor, 0));
+  });
+
+  it("retrying issueInvoice on an already-issued invoice does not duplicate the posting (fails at the status-transition check, before any second post)", async () => {
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+
+    await mockFinanceRepository.issueInvoice(created.data.id);
+    const retry = await mockFinanceRepository.issueInvoice(created.data.id);
+    expect(retry.success).toBe(false);
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_issued" });
+    expect(entries.filter((e) => e.source_id === created.data.id)).toHaveLength(1);
+  });
+
+  it("voidInvoice before any payment reverses the recognition entry — append-only, swapped debit/credit", async () => {
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+
+    await mockFinanceRepository.issueInvoice(created.data.id);
+    const voided = await mockFinanceRepository.voidInvoice(created.data.id);
+    expect(voided.success).toBe(true);
+
+    const originalEntries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_issued" });
+    const original = originalEntries.find((e) => e.source_id === created.data.id)!;
+    expect(original.reversed_by_entry_id).not.toBeNull();
+
+    const originalDetail = await mockFinanceRepository.getJournalEntry(original.id);
+    expect(originalDetail.lines!.find((l) => l.account?.account_number === 1100)?.debit_minor).toBe(103000);
+
+    const reversalEntries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_voided" });
+    const reversal = reversalEntries.find((e) => e.source_id === created.data.id);
+    expect(reversal).toBeDefined();
+    expect(reversal!.posting_key).toBe(`invoice_voided:${created.data.id}`);
+    expect(reversal!.reverses_entry_id).toBe(original.id);
+
+    const reversalDetail = await mockFinanceRepository.getJournalEntry(reversal!.id);
+    const reversalAr = reversalDetail.lines!.find((l) => l.account?.account_number === 1100);
+    expect(reversalAr?.debit_minor).toBe(0);
+    expect(reversalAr?.credit_minor).toBe(103000);
+  });
+
+  it("voidInvoice on a never-issued (draft) invoice succeeds with no recognition entry to reverse", async () => {
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+
+    const voided = await mockFinanceRepository.voidInvoice(created.data.id);
+    expect(voided.success).toBe(true);
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_voided" });
+    expect(entries.filter((e) => e.source_id === created.data.id)).toHaveLength(0);
+  });
+
+  it("voidInvoice rejects an invoice with a payment applied — clean-case-only guard, F2.1C required for correction", async () => {
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+
+    await mockFinanceRepository.issueInvoice(created.data.id);
+    await mockFinanceRepository.sendInvoice(created.data.id);
+    const payment = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: created.data.id,
+      client_id: BASE_INVOICE_INPUT.client_id,
+      event_id: null,
+      contract_id: null,
+      amount_minor: 50000,
+      payment_method: "cash",
+    });
+    expect(payment.success).toBe(true);
+
+    const voided = await mockFinanceRepository.voidInvoice(created.data.id);
+    expect(voided.success).toBe(false);
+
+    const originalEntries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_issued" });
+    const original = originalEntries.find((e) => e.source_id === created.data.id)!;
+    expect(original.reversed_by_entry_id).toBeNull();
+  });
+
+  it("F2.1B-REVIEW: updateInvoice rejects a subtotal/tax/discount change once issued — Revenue is already recognized against the current amounts", async () => {
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+
+    await mockFinanceRepository.issueInvoice(created.data.id);
+
+    const rejected = await mockFinanceRepository.updateInvoice(created.data.id, { ...BASE_INVOICE_INPUT, subtotal_minor: 200000 });
+    expect(rejected.success).toBe(false);
+
+    const rejectedTax = await mockFinanceRepository.updateInvoice(created.data.id, { ...BASE_INVOICE_INPUT, tax_minor: 9999 });
+    expect(rejectedTax.success).toBe(false);
+
+    const rejectedDiscount = await mockFinanceRepository.updateInvoice(created.data.id, { ...BASE_INVOICE_INPUT, discount_minor: 1 });
+    expect(rejectedDiscount.success).toBe(false);
+  });
+
+  it("F2.1B-REVIEW: updateInvoice still allows non-financial edits (title) once issued", async () => {
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+
+    await mockFinanceRepository.issueInvoice(created.data.id);
+
+    const allowed = await mockFinanceRepository.updateInvoice(created.data.id, { ...BASE_INVOICE_INPUT, title: "Renamed after issuance" });
+    expect(allowed.success).toBe(true);
+    if (allowed.success) expect(allowed.data.title).toBe("Renamed after issuance");
+  });
+
+  it("F2.1B-REVIEW: updateInvoice still allows financial edits while still draft (Revenue not yet recognized)", async () => {
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+
+    const allowed = await mockFinanceRepository.updateInvoice(created.data.id, { ...BASE_INVOICE_INPUT, subtotal_minor: 200000 });
+    expect(allowed.success).toBe(true);
+    if (allowed.success) expect(allowed.data.subtotal_minor).toBe(200000);
+  });
+
+  it("F2.1B-REVIEW: refundPayment rejects an invoice-linked payment whose invoice has recognized Revenue (P1120-equivalent guard)", async () => {
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+
+    await mockFinanceRepository.issueInvoice(created.data.id);
+    await mockFinanceRepository.sendInvoice(created.data.id);
+    const payment = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: created.data.id,
+      client_id: BASE_INVOICE_INPUT.client_id,
+      event_id: null,
+      contract_id: null,
+      amount_minor: 103000,
+      payment_method: "cash",
+    });
+    expect(payment.success).toBe(true);
+    if (!payment.success) return;
+
+    const refunded = await mockFinanceRepository.refundPayment(payment.data.id, 103000);
+    expect(refunded.success).toBe(false);
+  });
+
+  it("F2.1B-REVIEW: refundPayment remains unaffected for a non-invoice-linked (Customer Deposits) payment", async () => {
+    const payment = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: null,
+      event_id: null,
+      contract_id: null,
+      amount_minor: 20000,
+      payment_method: "cash",
+    });
+    expect(payment.success).toBe(true);
+    if (!payment.success) return;
+
+    const refunded = await mockFinanceRepository.refundPayment(payment.data.id, 20000);
+    expect(refunded.success).toBe(true);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Payments
 // ---------------------------------------------------------------------------

@@ -99,9 +99,11 @@ const UNKNOWN_ERROR_CODE = "unknown";
  * thrown error. P0001-P0004 are the original (migration 8) validation
  * codes; P1104/P1118 are Finance F1.8's additions, raised by the
  * post_payment_refund_reversal step process_payment_refund now composes
- * (duplicate reversal posting / no settlement entry to reverse).
+ * (duplicate reversal posting / no settlement entry to reverse); P1120 is
+ * Finance F2.1B-REVIEW's addition — refuses to refund a payment linked to
+ * an invoice with unreversed recognized Revenue.
  */
-const APP_VALIDATION_ERROR_CODES = new Set(["P0001", "P0002", "P0003", "P0004", "P1104", "P1118"]);
+const APP_VALIDATION_ERROR_CODES = new Set(["P0001", "P0002", "P0003", "P0004", "P1104", "P1118", "P1120"]);
 
 function fieldErrorsFromZod(error: {
   issues: { path: PropertyKey[]; message: string }[];
@@ -391,6 +393,23 @@ async function updateInvoice(id: string, input: InvoiceInput): Promise<DataResul
   if (!parsed.success) {
     return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
   }
+  // Finance F2.1B — once an invoice leaves draft, Revenue has been recognized
+  // against its current subtotal/tax/discount (source_type='invoice_issued').
+  // Changing any of those fields now would silently diverge the ledger from
+  // the Invoice record, with no correction posting to keep them in sync.
+  // This requires a dedicated correction flow F2.1B does not implement
+  // (F2.1C) — block the financially material fields, not the whole record,
+  // so title/description/notes/due_date remain editable post-issuance.
+  if (
+    existing.status !== "draft" &&
+    (parsed.data.subtotal_minor !== existing.subtotal_minor ||
+      parsed.data.tax_minor !== existing.tax_minor ||
+      parsed.data.discount_minor !== existing.discount_minor)
+  ) {
+    return fail(
+      "Cannot change the subtotal, tax, or discount after an invoice has been issued — Revenue has already been recognized. This requires a dedicated correction flow not yet available.",
+    );
+  }
   if (parsed.data.client_id !== existing.client_id) {
     return fail("An invoice's client can't be changed after creation.", { client_id: "Client cannot be changed." });
   }
@@ -431,6 +450,15 @@ async function updateInvoice(id: string, input: InvoiceInput): Promise<DataResul
   return ok(updated);
 }
 
+/**
+ * Finance F2.1B — atomic version, composing issue_invoice_and_post_
+ * revenue_recognition (status update + Revenue recognition posting in one
+ * transaction) exactly the same way markPaymentSucceeded composes
+ * mark_payment_succeeded_and_post_settlement. The pre-check against
+ * canTransitionInvoiceStatus stays here (same TS-then-SQL double-check
+ * pattern every other atomic Finance RPC call site already uses); the RPC
+ * itself re-validates draft -> issued and raises P1105 if violated.
+ */
 async function issueInvoice(id: string): Promise<DataResult<Invoice>> {
   const existing = await fetchInvoiceRow(id);
   if (!existing) {
@@ -441,18 +469,16 @@ async function issueInvoice(id: string): Promise<DataResult<Invoice>> {
   }
 
   const session = await requireWorkspaceSession();
+  const actor = resolveActorName(session);
   const supabase = createSupabaseClient();
-  const timestamp = new Date().toISOString();
-  const { data, error } = await supabase
-    .from("invoices")
-    .update({ status: "issued", issue_date: existing.issue_date ?? timestamp.slice(0, 10) })
-    .eq("id", id)
-    .select("*")
-    .single();
-  if (error) throw normalizeSupabaseError(error);
+  const { data, error } = await supabase.rpc("issue_invoice_and_post_revenue_recognition", {
+    p_invoice_id: id,
+    p_actor: actor,
+  });
+  if (error) return handleFinanceRpcError<Invoice>(error);
 
-  const updated = mapInvoiceRow(data);
-  await insertTimelineActivity(supabase, resolveActorName(session), updated.workspace_id, "invoice", id, "invoice_issued", `Invoice issued: "${existing.title}"`);
+  const updated = mapInvoiceRow(data as InvoiceRow);
+  await insertTimelineActivity(supabase, actor, updated.workspace_id, "invoice", id, "invoice_issued", `Invoice issued: "${existing.title}"`);
 
   return ok(updated);
 }
@@ -542,6 +568,13 @@ async function markInvoiceOverdue(id: string): Promise<DataResult<Invoice>> {
   return ok(updated);
 }
 
+/**
+ * Finance F2.1B — atomic version, composing void_invoice_and_reverse_
+ * revenue_recognition. That RPC's own post_invoice_voided_reversal call
+ * rejects (P1119) voiding an invoice with any payment applied — the
+ * clean-case-only guard from F2.1A/F2.1B's scope. A no-recognition-existed
+ * invoice (voided while still draft) reverses as a safe no-op.
+ */
 async function voidInvoice(id: string): Promise<DataResult<Invoice>> {
   const existing = await fetchInvoiceRow(id);
   if (!existing) {
@@ -552,18 +585,16 @@ async function voidInvoice(id: string): Promise<DataResult<Invoice>> {
   }
 
   const session = await requireWorkspaceSession();
+  const actor = resolveActorName(session);
   const supabase = createSupabaseClient();
-  const timestamp = new Date().toISOString();
-  const { data, error } = await supabase
-    .from("invoices")
-    .update({ status: "voided", voided_at: timestamp })
-    .eq("id", id)
-    .select("*")
-    .single();
-  if (error) throw normalizeSupabaseError(error);
+  const { data, error } = await supabase.rpc("void_invoice_and_reverse_revenue_recognition", {
+    p_invoice_id: id,
+    p_actor: actor,
+  });
+  if (error) return handleFinanceRpcError<Invoice>(error);
 
-  const updated = mapInvoiceRow(data);
-  await insertTimelineActivity(supabase, resolveActorName(session), updated.workspace_id, "invoice", id, "invoice_voided", `Invoice voided: "${existing.title}"`);
+  const updated = mapInvoiceRow(data as InvoiceRow);
+  await insertTimelineActivity(supabase, actor, updated.workspace_id, "invoice", id, "invoice_voided", `Invoice voided: "${existing.title}"`);
 
   return ok(updated);
 }

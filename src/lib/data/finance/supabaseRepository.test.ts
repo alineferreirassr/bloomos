@@ -519,6 +519,28 @@ describe("supabaseFinanceRepository.updateInvoice", () => {
     expect(payload.total_minor).toBe(200000);
     expect(payload.balance_minor).toBe(200000);
   });
+
+  it("F2.1B-REVIEW: rejects a subtotal/tax/discount change once issued — no Supabase call is even attempted", async () => {
+    const { client, calls } = createMockSupabase([{ data: invoiceRow({ status: "issued" }), error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.updateInvoice("invoice_1", { ...INVOICE_INPUT, subtotal_minor: 200000 });
+    expect(result.success).toBe(false);
+    expect(calls.some((c) => c.table === "invoices" && c.method === "update")).toBe(false);
+  });
+
+  it("F2.1B-REVIEW: still allows a non-financial edit (title) once issued", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: invoiceRow({ status: "issued" }), error: null },
+      { data: invoiceRow({ status: "issued", title: "Renamed after issuance" }), error: null },
+      { data: null, error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.updateInvoice("invoice_1", { ...INVOICE_INPUT, title: "Renamed after issuance" });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("supabaseFinanceRepository Invoice lifecycle actions", () => {
@@ -530,9 +552,9 @@ describe("supabaseFinanceRepository Invoice lifecycle actions", () => {
     expect(result.success).toBe(false);
   });
 
-  it("issueInvoice succeeds from draft and logs invoice_issued", async () => {
+  it("issueInvoice succeeds from draft via the atomic issue_invoice_and_post_revenue_recognition RPC and logs invoice_issued", async () => {
     mockSession();
-    const { client, calls } = createMockSupabase([
+    const { client, calls, rpcCalls } = createMockSupabase([
       { data: invoiceRow(), error: null },
       { data: invoiceRow({ status: "issued", issue_date: "2026-07-20" }), error: null },
       { data: null, error: null },
@@ -542,6 +564,10 @@ describe("supabaseFinanceRepository Invoice lifecycle actions", () => {
     const result = await supabaseFinanceRepository.issueInvoice("invoice_1");
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.status).toBe("issued");
+
+    expect(rpcCalls.map((c) => c.name)).toEqual(["issue_invoice_and_post_revenue_recognition"]);
+    const args = rpcCalls[0].args as Record<string, unknown>;
+    expect(args.p_invoice_id).toBe("invoice_1");
 
     const timelineInsert = calls.find((c) => c.table === "timeline_activities" && c.method === "insert");
     const payload = timelineInsert?.args[0] as { type: string };
@@ -556,9 +582,9 @@ describe("supabaseFinanceRepository Invoice lifecycle actions", () => {
     expect(result.success).toBe(false);
   });
 
-  it("voidInvoice succeeds from draft", async () => {
+  it("voidInvoice succeeds from draft via the atomic void_invoice_and_reverse_revenue_recognition RPC", async () => {
     mockSession();
-    const { client } = createMockSupabase([
+    const { client, rpcCalls } = createMockSupabase([
       { data: invoiceRow(), error: null },
       { data: invoiceRow({ status: "voided", voided_at: "2026-07-20T01:00:00Z" }), error: null },
       { data: null, error: null },
@@ -568,6 +594,9 @@ describe("supabaseFinanceRepository Invoice lifecycle actions", () => {
     const result = await supabaseFinanceRepository.voidInvoice("invoice_1");
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.status).toBe("voided");
+    expect(rpcCalls.map((c) => c.name)).toEqual(["void_invoice_and_reverse_revenue_recognition"]);
+    const args = rpcCalls[0].args as Record<string, unknown>;
+    expect(args.p_invoice_id).toBe("invoice_1");
   });
 
   it("archiveInvoice then restoreInvoice resets status to draft", async () => {
@@ -594,6 +623,70 @@ describe("supabaseFinanceRepository Invoice lifecycle actions", () => {
       expect(restored.data.status).toBe("draft");
       expect(restored.data.archived_at).toBeNull();
     }
+  });
+});
+
+describe("supabaseFinanceRepository Finance F2.1B — Invoice Revenue Recognition (clean cases)", () => {
+  it("a Revenue-recognition posting failure rolls the WHOLE atomic issuance back: fail() is returned, no Timeline entry is written", async () => {
+    mockSession();
+    const { client, calls, rpcCalls } = createMockSupabase([
+      { data: invoiceRow(), error: null },
+      { data: null, error: { code: "P1100", message: "System account 4000 not found for this workspace." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.issueInvoice("invoice_1");
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toBe("System account 4000 not found for this workspace.");
+    expect(rpcCalls.map((c) => c.name)).toEqual(["issue_invoice_and_post_revenue_recognition"]);
+    expect(calls.some((c) => c.table === "timeline_activities")).toBe(false);
+  });
+
+  it("retrying issueInvoice on an already-issued invoice is rejected (P1105) via the RPC's own re-validation, translated to fail()", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: invoiceRow({ status: "draft" }), error: null },
+      { data: null, error: { code: "P1105", message: "Cannot issue an invoice that is already issued." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.issueInvoice("invoice_1");
+    expect(result.success).toBe(false);
+    expect(rpcCalls.map((c) => c.name)).toEqual(["issue_invoice_and_post_revenue_recognition"]);
+  });
+
+  it("voidInvoice rejects an invoice with a payment applied (P1119) via the RPC's own guard, translated to fail()", async () => {
+    mockSession();
+    const { client, calls, rpcCalls } = createMockSupabase([
+      { data: invoiceRow({ status: "partially_paid", paid_minor: 50000, balance_minor: 53000 }), error: null },
+      {
+        data: null,
+        error: { code: "P1119", message: "Cannot void an invoice with payments applied. This requires a dedicated correction flow not yet available." },
+      },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.voidInvoice("invoice_1");
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe("Cannot void an invoice with payments applied. This requires a dedicated correction flow not yet available.");
+    }
+    expect(rpcCalls.map((c) => c.name)).toEqual(["void_invoice_and_reverse_revenue_recognition"]);
+    expect(calls.some((c) => c.table === "timeline_activities")).toBe(false);
+  });
+
+  it("a void reversal failure rolls the WHOLE atomic void back: fail() is returned, no Timeline entry is written", async () => {
+    mockSession();
+    const { client, calls, rpcCalls } = createMockSupabase([
+      { data: invoiceRow({ status: "issued" }), error: null },
+      { data: null, error: { code: "P1109", message: "This invoice's revenue recognition has already been reversed." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.voidInvoice("invoice_1");
+    expect(result.success).toBe(false);
+    expect(rpcCalls.map((c) => c.name)).toEqual(["void_invoice_and_reverse_revenue_recognition"]);
+    expect(calls.some((c) => c.table === "timeline_activities")).toBe(false);
   });
 });
 
@@ -855,6 +948,24 @@ describe("supabaseFinanceRepository.refundPayment", () => {
     const result = await supabaseFinanceRepository.refundPayment("payment_1", 1000);
     expect(result.success).toBe(false);
     expect(rpcCalls).toHaveLength(0);
+  });
+
+  it("F2.1B-REVIEW: translates a P1120 (Revenue recognized on the linked invoice) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: paymentRow({ status: "succeeded" }), error: null }, // fetch original payment
+      {
+        data: null,
+        error: { code: "P1120", message: "Cannot refund a payment linked to an invoice with recognized Revenue. This requires a dedicated correction flow not yet available." },
+      },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("Cannot refund a payment linked to an invoice with recognized Revenue. This requires a dedicated correction flow not yet available.");
+    expect(rpcCalls.map((c) => c.name)).toEqual(["process_payment_refund"]);
   });
 });
 
