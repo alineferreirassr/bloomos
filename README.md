@@ -99,6 +99,7 @@ npm run build
 | [`docs/services.md`](./docs/services.md) | Services module — catalog, Templates, Event Assignment |
 | [`docs/design-system-v2.md`](./docs/design-system-v2.md) | Component/layout/responsive conventions (additive to `docs/design-system.md`) |
 | [`docs/v2-checkpoint-1-foundation.md`](./docs/v2-checkpoint-1-foundation.md) | v2.0 foundation architecture — Command Palette, Search pipeline, Calendar, Notifications, Feature Flags, Observability, CI/CD |
+| [`docs/infrastructure.md`](./docs/infrastructure.md) | Environment topology, Supabase organization/project state, provisioning blockers, Founder infrastructure decisions, resume conditions |
 
 ## Philosophy
 
