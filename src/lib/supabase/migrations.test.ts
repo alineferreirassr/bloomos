@@ -43,9 +43,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation + 20 Services Foundation schema migrations + 1 Event Service Workspace media owner_type widening migration + 1 Client Portal Checkpoint 14 schema migration + 1 Analytics permission seed migration + 1 Digital Asset Management media_assets workspace owner_type widening migration + 2 Finance F1.8 Payment Atomicity & Refund Reversal migrations + 1 Finance F2.1B Invoice Revenue Recognition migration + 1 Finance F2.1B-REVIEW refund guard migration + 1 Finance F2.1C-B refund Revenue correction migration + 1 Finance F2.1C-C Customer Deposit application migration + 1 Finance F2.1C-D-B refund-correction Invoice-field sync migration + 1 Finance F2.1C-D-C Invoice Financial Adjustment migration (excluding independently-tracked, not-yet-released work still uncommitted alongside this one — see KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS), in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation + 20 Services Foundation schema migrations + 1 Event Service Workspace media owner_type widening migration + 1 Client Portal Checkpoint 14 schema migration + 1 Analytics permission seed migration + 1 Digital Asset Management media_assets workspace owner_type widening migration + 2 Finance F1.8 Payment Atomicity & Refund Reversal migrations + 1 Finance F2.1B Invoice Revenue Recognition migration + 1 Finance F2.1B-REVIEW refund guard migration + 1 Finance F2.1C-B refund Revenue correction migration + 1 Finance F2.1C-C Customer Deposit application migration + 1 Finance F2.1C-D-B refund-correction Invoice-field sync migration + 1 Finance F2.1C-D-C Invoice Financial Adjustment migration + 1 Finance F2.1C-D-D-B Partial-Payment Void migration (excluding independently-tracked, not-yet-released work still uncommitted alongside this one — see KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS), in chronological (execution) order", () => {
     const files = migrationFilesForThisRelease();
-    expect(files).toHaveLength(165);
+    expect(files).toHaveLength(166);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -1210,6 +1210,7 @@ describe("Finance Posting Engine migrations", () => {
       "20260824100000_finance_deposit_application.sql",
       "20260825100000_finance_refund_invoice_field_sync.sql",
       "20260826100000_finance_invoice_adjustment.sql",
+      "20260827100000_finance_partial_payment_void.sql",
     ];
     for (const otherFile of migrationFiles().filter((f) => !POSTING_ENGINE_FILES.includes(f) && !LATER_SANCTIONED_FINANCE_FILES.includes(f))) {
       const sql = readMigration(otherFile);
@@ -2697,6 +2698,249 @@ describe("Finance F2.1C-D-C migration — Invoice Financial Adjustment", () => {
     expect(code).not.toMatch(/create or replace function public\.process_payment_refund\(/);
     expect(code).not.toMatch(/create or replace function public\.record_deposit_application\(/);
     expect(code).not.toMatch(/create or replace function public\.post_deposit_application\(/);
+  });
+});
+
+describe("Finance F2.1C-D-D-B migration — Partial-Payment Void / Cancellation", () => {
+  const FILE = "20260827100000_finance_partial_payment_void.sql";
+  const sql = () => readMigration(FILE);
+
+  it("widens journal_entries_source_type_check to add exactly 'invoice_partial_void', preserving all 21 prior values", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/alter table public\.journal_entries drop constraint journal_entries_source_type_check;/);
+    const PRIOR_VALUES = [
+      "purchase_receipt", "invoice_issued", "invoice_voided", "payment_settlement", "payment_refund",
+      "expense_due", "expense_paid", "expense_reimbursed", "expense_due_reversal",
+      "inventory_adjustment", "inventory_writeoff", "inventory_event_checkout", "inventory_event_return",
+      "inventory_initial_stock", "vendor_payment", "vendor_refund", "stripe_payout", "manual_adjustment",
+      "reversal", "deposit_application", "invoice_adjustment",
+    ];
+    for (const value of PRIOR_VALUES) {
+      expect(code).toMatch(new RegExp(`'${value}'`));
+    }
+    expect(code).toMatch(/'invoice_partial_void'/);
+  });
+
+  it("redefines exactly three functions: post_payment_refund_reversal, record_invoice_adjustment, void_invoice_and_reverse_revenue_recognition — no new table, no Chart of Accounts mutation, no new posting-primitive function", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create or replace function public\.post_payment_refund_reversal\(/);
+    expect(code).toMatch(/create or replace function public\.record_invoice_adjustment\(/);
+    expect(code).toMatch(/create or replace function public\.void_invoice_and_reverse_revenue_recognition\(/);
+    expect(code).not.toMatch(/create or replace function public\.post_invoice_partial_void\(/);
+    expect(code).not.toMatch(/create table/i);
+    expect(code).not.toMatch(/insert into public\.chart_of_accounts/);
+    expect(code).not.toMatch(/alter table public\.chart_of_accounts/);
+  });
+
+  describe("post_payment_refund_reversal — terminal-status guard", () => {
+    const fn = () => {
+      const matches = [...stripSqlComments(sql()).matchAll(/create or replace function public\.post_payment_refund_reversal[\s\S]*?^\$\$;/gm)];
+      return matches[0]?.[0] ?? "";
+    };
+
+    it("keeps the SAME (uuid, uuid, text) signature — no cascading parameter change", () => {
+      const code = fn();
+      expect(code).toMatch(/create or replace function public\.post_payment_refund_reversal\(\s*\n\s*p_refund_payment_id uuid,\s*\n\s*p_original_payment_id uuid,\s*\n\s*p_actor text\s*\n\)/);
+    });
+
+    it("checks v_invoice.status against {voided, archived} immediately after the invoice lock, before any computation, raising P1139", () => {
+      const code = fn();
+      const lockIndex = code.indexOf("select * into v_invoice from public.invoices where id = v_refund.invoice_id for update;");
+      const guardIndex = code.indexOf("if v_invoice.status in ('voided', 'archived') then");
+      const basisQueryIndex = code.indexOf("into v_orig_total, v_orig_subtotal, v_orig_tax, v_orig_discount");
+      expect(lockIndex).toBeGreaterThan(-1);
+      expect(guardIndex).toBeGreaterThan(lockIndex);
+      expect(code).toMatch(/errcode = 'P1139'/);
+      expect(basisQueryIndex).toBeGreaterThan(guardIndex);
+    });
+
+    it("preserves the cumulative-then-diff formula, the immutable original-recognition basis, and the P1121/P1131-equivalent guards unchanged", () => {
+      const code = fn();
+      expect(code).toMatch(/v_cumulative_refunded_total := v_prior_refunded_total \+ v_refund\.amount_minor;/);
+      expect(code).toMatch(/from public\.journal_lines jl\s*\n\s*join public\.chart_of_accounts coa on coa\.id = jl\.account_id/);
+      expect(code).toMatch(/errcode = 'P1121'/);
+      expect(code).toMatch(/errcode = 'P1131'/);
+    });
+  });
+
+  describe("record_invoice_adjustment — Timeline fix", () => {
+    const fn = () => {
+      const matches = [...stripSqlComments(sql()).matchAll(/create or replace function public\.record_invoice_adjustment[\s\S]*?^\$\$;/gm)];
+      return matches[0]?.[0] ?? "";
+    };
+
+    it("keeps the SAME (uuid, integer, integer, integer, text, uuid, text) signature", () => {
+      const code = fn();
+      expect(code).toMatch(/create or replace function public\.record_invoice_adjustment\(\s*\n\s*p_invoice_id uuid,\s*\n\s*p_subtotal_minor integer,\s*\n\s*p_tax_minor integer,\s*\n\s*p_discount_minor integer,\s*\n\s*p_reason text,\s*\n\s*p_adjustment_id uuid,\s*\n\s*p_actor text\s*\n\)/);
+    });
+
+    it("now writes an 'invoice_adjusted' timeline_activities row server-side, after the invoices UPDATE and before recompute_invoice_balance", () => {
+      const code = fn();
+      const updateIndex = code.indexOf("update public.invoices");
+      const timelineIndex = code.indexOf("insert into public.timeline_activities");
+      const recomputeIndex = code.indexOf("v_recomputed := public.recompute_invoice_balance(p_invoice_id, p_actor);");
+      expect(updateIndex).toBeGreaterThan(-1);
+      expect(timelineIndex).toBeGreaterThan(updateIndex);
+      expect(recomputeIndex).toBeGreaterThan(timelineIndex);
+      expect(code).toMatch(/'invoice_adjusted'/);
+    });
+
+    it("preserves the durable-memo replay/conflict mechanism and the P1132/P1133/P1134/P1135 guards unchanged", () => {
+      const code = fn();
+      expect(code).toMatch(/v_replay_subtotal := substring\(v_existing_entry\.memo from 'subtotal_minor=\(-\?\\d\+\)'\)::integer;/);
+      expect(code).toMatch(/errcode = 'P1132'/);
+      expect(code).toMatch(/errcode = 'P1133'/);
+      expect(code).toMatch(/errcode = 'P1134'/);
+      expect(code).toMatch(/errcode = 'P1135'/);
+    });
+  });
+
+  describe("void_invoice_and_reverse_revenue_recognition — unified clean-void + Partial-Payment Cancellation", () => {
+    const fn = () => {
+      const matches = [...stripSqlComments(sql()).matchAll(/create or replace function public\.void_invoice_and_reverse_revenue_recognition[\s\S]*?^\$\$;/gm)];
+      return matches[0]?.[0] ?? "";
+    };
+
+    it("has the new (uuid, uuid, text, text) signature — p_cancellation_id and p_reason added before p_actor", () => {
+      const code = fn();
+      expect(code).toMatch(/create or replace function public\.void_invoice_and_reverse_revenue_recognition\(\s*\n\s*p_invoice_id uuid,\s*\n\s*p_cancellation_id uuid,\s*\n\s*p_reason text,\s*\n\s*p_actor text\s*\n\)/);
+    });
+
+    it("requires p_cancellation_id (P1130) and locks the invoice before the request-idempotency replay/conflict check, which itself runs BEFORE the ordinary status-eligibility rejection", () => {
+      const code = fn();
+      const keyGuardIndex = code.indexOf("if p_cancellation_id is null then");
+      const lockIndex = code.indexOf("select * into v_invoice from public.invoices where id = p_invoice_id for update;");
+      const replayIndex = code.indexOf("where source_type = 'invoice_partial_void' and source_id = p_cancellation_id::text;");
+      const statusGuardIndex = code.indexOf("if v_invoice.status not in ('draft', 'issued', 'sent', 'viewed', 'partially_paid', 'overdue') then");
+      expect(keyGuardIndex).toBeGreaterThan(-1);
+      expect(lockIndex).toBeGreaterThan(keyGuardIndex);
+      expect(replayIndex).toBeGreaterThan(lockIndex);
+      expect(statusGuardIndex).toBeGreaterThan(replayIndex);
+      expect(code).toMatch(/errcode = 'P1130'/);
+    });
+
+    it("request idempotency compares against invoice_id parsed from the existing entry's own durable memo, not the Invoice's current fields — a match replays (returns v_invoice unchanged), a mismatch is rejected (P1129)", () => {
+      const code = fn();
+      expect(code).toMatch(/v_replay_invoice_id := substring\(v_existing_entry\.memo from 'invoice_id=\(\[\^\\s\.\]\+\)'\);/);
+      expect(code).toMatch(/if v_replay_invoice_id = p_invoice_id::text then/);
+      expect(code).toMatch(/return v_invoice;/);
+      expect(code).toMatch(/errcode = 'P1129'/);
+    });
+
+    it("preserves the unchanged status-eligibility set (draft/issued/sent/viewed/partially_paid/overdue) and its P1105 message", () => {
+      const code = fn();
+      expect(code).toMatch(/if v_invoice\.status not in \('draft', 'issued', 'sent', 'viewed', 'partially_paid', 'overdue'\) then/);
+      expect(code).toMatch(/errcode = 'P1105'/);
+    });
+
+    it("Case A (paid_minor = 0): sets status/voided_at then `perform`s the UNCHANGED post_invoice_voided_reversal, never touching economic fields", () => {
+      const code = fn();
+      const caseAIndex = code.indexOf("if v_invoice.paid_minor = 0 then");
+      const performIndex = code.indexOf("perform public.post_invoice_voided_reversal(p_invoice_id, p_actor);");
+      expect(caseAIndex).toBeGreaterThan(-1);
+      expect(performIndex).toBeGreaterThan(caseAIndex);
+      // Case A's own block never sets subtotal_minor/tax_minor/discount_minor/total_minor.
+      const caseABlock = code.slice(caseAIndex, code.indexOf("if v_invoice.balance_minor = 0 then"));
+      expect(caseABlock).not.toMatch(/subtotal_minor = /);
+    });
+
+    it("Case C (balance_minor = 0): rejects with P1136 before any Deposit blocker check or posting", () => {
+      const code = fn();
+      const caseCIndex = code.indexOf("if v_invoice.balance_minor = 0 then");
+      const depositCheckIndex = code.indexOf("select exists (");
+      expect(caseCIndex).toBeGreaterThan(-1);
+      expect(code).toMatch(/errcode = 'P1136'/);
+      expect(depositCheckIndex).toBeGreaterThan(caseCIndex);
+    });
+
+    it("Case B: checks the Deposit Application blocker (P1137) BEFORE computing any allocation", () => {
+      const code = fn();
+      const depositCheckIndex = code.indexOf("select exists (");
+      const cancellableIndex = code.indexOf("v_cancellable := v_invoice.total_minor - v_invoice.paid_minor;");
+      expect(depositCheckIndex).toBeGreaterThan(-1);
+      expect(code).toMatch(/payment_type = 'adjustment'\s*\n\s*and reference like 'deposit_application_of:%'/);
+      expect(code).toMatch(/errcode = 'P1137'/);
+      expect(cancellableIndex).toBeGreaterThan(depositCheckIndex);
+    });
+
+    it("derives cancellable_minor = total_minor - paid_minor and the proportional tax/discount/subtotal split against CURRENT (not original) fields", () => {
+      const code = fn();
+      expect(code).toMatch(/v_cancellable := v_invoice\.total_minor - v_invoice\.paid_minor;/);
+      expect(code).toMatch(/v_tax_cancelled := round\(\(v_cancellable::numeric \* v_invoice\.tax_minor\) \/ v_invoice\.total_minor\);/);
+      expect(code).toMatch(/v_discount_cancelled := round\(\(v_cancellable::numeric \* v_invoice\.discount_minor\) \/ v_invoice\.total_minor\);/);
+      expect(code).toMatch(/v_subtotal_cancelled := v_cancellable \+ v_discount_cancelled - v_tax_cancelled;/);
+      // Never reads from journal_lines/chart_of_accounts (that would be the immutable ORIGINAL basis refund uses — deliberately not reused here).
+      expect(code).not.toMatch(/join public\.chart_of_accounts/);
+    });
+
+    it("rejects a negative resulting field with P1138 before any posting", () => {
+      const code = fn();
+      const guardIndex = code.indexOf("if v_new_subtotal < 0 or v_new_tax < 0 or v_new_discount < 0 or v_new_total < 0 then");
+      const postingIndex = code.indexOf("perform public.finance_insert_journal_entry(");
+      expect(guardIndex).toBeGreaterThan(-1);
+      expect(code).toMatch(/errcode = 'P1138'/);
+      expect(postingIndex).toBeGreaterThan(guardIndex);
+    });
+
+    it("posts Dr 4950 always, Dr 2100 and Cr 4900 only when their portion is greater than zero, and a final Cr 1100 AR for the full cancellable amount — no Cash (1000), no Customer Deposits (2200), no direct Revenue (4000) reversal", () => {
+      const code = fn();
+      expect(code).toMatch(/'account_id', \(public\.finance_resolve_account\(v_invoice\.workspace_id, 4950\)\)\.id,\s*\n\s*'debit_minor', v_subtotal_cancelled, 'credit_minor', 0/);
+      expect(code).toMatch(/if v_tax_cancelled > 0 then/);
+      expect(code).toMatch(/if v_discount_cancelled > 0 then/);
+      expect(code).toMatch(/'account_id', \(public\.finance_resolve_account\(v_invoice\.workspace_id, 1100\)\)\.id,\s*\n\s*'debit_minor', 0, 'credit_minor', v_cancellable/);
+      expect(code).not.toMatch(/,\s*1000\)/);
+      expect(code).not.toMatch(/,\s*2200\)/);
+      expect(code).not.toMatch(/,\s*4000\)/);
+    });
+
+    it("updates economic fields AND sets status='voided'/voided_at in ONE statement, BEFORE the Timeline insert and BEFORE recompute_invoice_balance — the critical ordering that prevents an incorrect transition to 'paid'", () => {
+      const code = fn();
+      const updateIndex = code.indexOf("update public.invoices\n  set subtotal_minor = v_new_subtotal,");
+      expect(updateIndex).toBeGreaterThan(-1);
+      const updateBlock = code.slice(updateIndex, updateIndex + 400);
+      expect(updateBlock).toMatch(/status = 'voided',\s*\n\s*voided_at = now\(\),/);
+      const timelineIndex = code.indexOf("insert into public.timeline_activities");
+      const recomputeIndex = code.indexOf("v_recomputed := public.recompute_invoice_balance(p_invoice_id, p_actor);");
+      expect(timelineIndex).toBeGreaterThan(updateIndex);
+      expect(recomputeIndex).toBeGreaterThan(timelineIndex);
+      expect(code).toMatch(/'invoice_partially_voided'/);
+    });
+
+    it("posts via finance_insert_journal_entry with current_date, never a caller-supplied entry date", () => {
+      const code = fn();
+      expect(code).toMatch(/perform public\.finance_insert_journal_entry\(\s*\n\s*v_invoice\.workspace_id,\s*\n\s*current_date,/);
+    });
+  });
+
+  it("uses no exception handlers, matching the established no-swallowed-errors convention", () => {
+    expect(stripSqlComments(sql())).not.toMatch(/exception\s+when/i);
+  });
+
+  it("does not implement Deposit Application reversal, historical backfill, or reconciliation activation, and does not modify any migration other than the three functions it explicitly redefines", () => {
+    const code = stripSqlComments(sql());
+    // "Deposit Application reversal" legitimately appears in the P1137 blocker's own error
+    // message text (explaining that no reversal capability exists yet) -- scoped here to
+    // an actual reversal-feature FUNCTION definition, not the bare phrase.
+    expect(code).not.toMatch(/create or replace function public\.\w*deposit\w*revers/i);
+    expect(code).not.toMatch(/create or replace function public\.\w*reverse\w*deposit/i);
+    expect(code).not.toMatch(/backfill/i);
+    expect(code).not.toMatch(/create or replace function public\.\w*reconcil/i);
+    expect(code).not.toMatch(/create or replace function public\.process_payment_refund\(/);
+    expect(code).not.toMatch(/create or replace function public\.record_deposit_application\(/);
+    expect(code).not.toMatch(/create or replace function public\.post_deposit_application\(/);
+    expect(code).not.toMatch(/create or replace function public\.post_invoice_voided_reversal\(/);
+    expect(code).not.toMatch(/create or replace function public\.recompute_invoice_balance\(/);
+  });
+
+  it("does not edit any already-committed migration file (20260823100000, 20260824100000, 20260825100000, 20260826100000 remain byte-identical)", () => {
+    for (const file of [
+      "20260823100000_finance_refund_revenue_correction.sql",
+      "20260824100000_finance_deposit_application.sql",
+      "20260825100000_finance_refund_invoice_field_sync.sql",
+      "20260826100000_finance_invoice_adjustment.sql",
+    ]) {
+      expect(migrationFiles()).toContain(file);
+    }
   });
 });
 

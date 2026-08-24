@@ -256,7 +256,7 @@ describe("Invoice status transitions", () => {
   it("voids an invoice", async () => {
     const created = await createInvoice(validInvoiceInput);
     if (!created.success) throw new Error("setup failed");
-    const result = await voidInvoice(created.data.id);
+    const result = await voidInvoice(created.data.id, crypto.randomUUID(), "Cancelled");
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.status).toBe("voided");
   });
@@ -264,7 +264,7 @@ describe("Invoice status transitions", () => {
   it("cannot void a paid invoice", async () => {
     const invoices = await getInvoices({ includeArchived: true, status: "paid" });
     expect(invoices.length).toBeGreaterThan(0);
-    const result = await voidInvoice(invoices[0].id);
+    const result = await voidInvoice(invoices[0].id, crypto.randomUUID(), "reason");
     expect(result.success).toBe(false);
   });
 
@@ -284,7 +284,7 @@ describe("Invoice status transitions", () => {
   it("blocks content edits once an invoice is voided or archived", async () => {
     const created = await createInvoice(validInvoiceInput);
     if (!created.success) throw new Error("setup failed");
-    await voidInvoice(created.data.id);
+    await voidInvoice(created.data.id, crypto.randomUUID(), "Cancelled");
     const result = await updateInvoice(created.data.id, validInvoiceInput);
     expect(result.success).toBe(false);
   });
@@ -767,7 +767,7 @@ describe("getInvoiceNextAction / getPaymentNextAction / getExpenseNextAction", (
   it("returns null for a voided invoice", async () => {
     const created = await createInvoice(validInvoiceInput);
     if (!created.success) throw new Error("setup failed");
-    await voidInvoice(created.data.id);
+    await voidInvoice(created.data.id, crypto.randomUUID(), "Cancelled");
     const action = await getInvoiceNextAction(created.data.id);
     expect(action).toBeNull();
   });

@@ -2623,7 +2623,7 @@ export interface Database {
         Returns: Database["public"]["Tables"]["journal_entries"]["Row"];
       };
       void_invoice_and_reverse_revenue_recognition: {
-        Args: { p_invoice_id: string; p_actor: string };
+        Args: { p_invoice_id: string; p_cancellation_id: string; p_reason: string; p_actor: string };
         Returns: Database["public"]["Tables"]["invoices"]["Row"];
       };
       record_payment_settlement: {

@@ -198,7 +198,7 @@ export function InvoiceActions({ invoice, onChanged }: InvoiceActionsProps) {
         description={`This marks "${invoice.title}" as voided — a terminal state that can't be undone from here.`}
         confirmLabel="Void"
         pendingLabel="Voiding…"
-        onConfirm={() => voidInvoice(invoice.id)}
+        onConfirm={() => voidInvoice(invoice.id, crypto.randomUUID(), "Voided from Invoice actions")}
         onConfirmed={onChanged}
       />
       <ConfirmInvoiceActionModal

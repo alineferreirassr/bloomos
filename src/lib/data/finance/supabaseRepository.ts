@@ -625,19 +625,38 @@ async function markInvoiceOverdue(id: string): Promise<DataResult<Invoice>> {
 }
 
 /**
- * Finance F2.1B — atomic version, composing void_invoice_and_reverse_
- * revenue_recognition. That RPC's own post_invoice_voided_reversal call
- * rejects (P1119) voiding an invoice with any payment applied — the
- * clean-case-only guard from F2.1A/F2.1B's scope. A no-recognition-existed
- * invoice (voided while still draft) reverses as a safe no-op.
+ * Finance F2.1C-D-D-B — unified void/cancellation, atomic version. If
+ * `existing.paid_minor` is 0, void_invoice_and_reverse_revenue_recognition
+ * behaves exactly as before (full Revenue-recognition reversal via
+ * post_invoice_voided_reversal; a no-recognition-existed invoice, voided
+ * while still draft, reverses as a safe no-op). If a payment has settled
+ * but a balance remains, the RPC instead runs its new Partial-Payment
+ * Cancellation branch — the settled portion stays recognized, only the
+ * genuinely unpaid CURRENT remainder is cancelled — and writes its own
+ * "invoice_partially_voided" Timeline entry SERVER-SIDE, inside the same
+ * transaction as its Journal Entry (matching post_payment_refund_reversal/
+ * post_deposit_application's own established pattern for money-mutating
+ * corrections), so this function only writes the client-side "invoice_voided"
+ * entry for the CLEAN branch — writing it unconditionally would duplicate
+ * the RPC's own server-side entry for the partial branch.
+ *
+ * Deliberately does NOT client-side pre-check `canTransitionInvoiceStatus`
+ * (the original implementation did) — same F2.1C-C-IDEMPOTENCY lesson as
+ * refundPayment's own fix: a pre-check here would risk spuriously
+ * rejecting a legitimate replay of an already-succeeded Partial-Payment
+ * Cancellation, since by then the invoice is (correctly) already voided.
+ * The RPC is the sole authority for anything state-dependent.
  */
-async function voidInvoice(id: string): Promise<DataResult<Invoice>> {
+async function voidInvoice(id: string, cancellationId: string, reason: string): Promise<DataResult<Invoice>> {
+  if (!cancellationId) {
+    return fail(
+      "cancellationId is required and must be a stable identifier supplied by the caller (the same value on every retry of the same void/cancellation request).",
+    );
+  }
+
   const existing = await fetchInvoiceRow(id);
   if (!existing) {
     return fail("Invoice not found.");
-  }
-  if (!canTransitionInvoiceStatus(existing.status, "voided")) {
-    return fail(`Cannot void an invoice that is already ${INVOICE_STATUS_LABELS[existing.status].toLowerCase()}.`);
   }
 
   const session = await requireWorkspaceSession();
@@ -645,12 +664,16 @@ async function voidInvoice(id: string): Promise<DataResult<Invoice>> {
   const supabase = createSupabaseClient();
   const { data, error } = await supabase.rpc("void_invoice_and_reverse_revenue_recognition", {
     p_invoice_id: id,
+    p_cancellation_id: cancellationId,
+    p_reason: reason,
     p_actor: actor,
   });
   if (error) return handleFinanceRpcError<Invoice>(error);
 
   const updated = mapInvoiceRow(data as InvoiceRow);
-  await insertTimelineActivity(supabase, actor, updated.workspace_id, "invoice", id, "invoice_voided", `Invoice voided: "${existing.title}"`);
+  if (existing.paid_minor === 0) {
+    await insertTimelineActivity(supabase, actor, updated.workspace_id, "invoice", id, "invoice_voided", `Invoice voided: "${existing.title}"`);
+  }
 
   return ok(updated);
 }

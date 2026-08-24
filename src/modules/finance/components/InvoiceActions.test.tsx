@@ -108,7 +108,7 @@ describe("InvoiceActions", () => {
     const dialog = screen.getByRole("dialog", { name: /void invoice/i });
     await user.click(within(dialog).getByRole("button", { name: /^void$/i }));
 
-    await waitFor(() => expect(dataLayer.voidInvoice).toHaveBeenCalledWith("invoice_1"));
+    await waitFor(() => expect(dataLayer.voidInvoice).toHaveBeenCalledWith("invoice_1", expect.any(String), expect.any(String)));
     expect(onChanged).toHaveBeenCalled();
   });
 

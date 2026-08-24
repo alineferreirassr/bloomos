@@ -178,7 +178,7 @@ describe("mockFinanceRepository.updateInvoice", () => {
     expect(created.success).toBe(true);
     if (!created.success) return;
 
-    const voided = await mockFinanceRepository.voidInvoice(created.data.id);
+    const voided = await mockFinanceRepository.voidInvoice(created.data.id, crypto.randomUUID(), "Cancelled");
     expect(voided.success).toBe(true);
 
     const result = await mockFinanceRepository.updateInvoice(created.data.id, BASE_INVOICE_INPUT);
@@ -247,11 +247,11 @@ describe("mockFinanceRepository Invoice status lifecycle", () => {
       expect(overdue.data.overdue_at).not.toBeNull();
     }
 
-    const voided = await mockFinanceRepository.voidInvoice(id);
+    const voided = await mockFinanceRepository.voidInvoice(id, crypto.randomUUID(), "Cancelled");
     expect(voided.success).toBe(true);
     if (voided.success) expect(voided.data.status).toBe("voided");
 
-    const cannotVoidAgain = await mockFinanceRepository.voidInvoice(id);
+    const cannotVoidAgain = await mockFinanceRepository.voidInvoice(id, crypto.randomUUID(), "Cancelled again");
     expect(cannotVoidAgain.success).toBe(false);
   });
 
@@ -392,7 +392,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
     if (!created.success) return;
 
     await mockFinanceRepository.issueInvoice(created.data.id);
-    const voided = await mockFinanceRepository.voidInvoice(created.data.id);
+    const voided = await mockFinanceRepository.voidInvoice(created.data.id, crypto.randomUUID(), "Cancelled");
     expect(voided.success).toBe(true);
 
     const originalEntries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_issued" });
@@ -419,14 +419,14 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
     expect(created.success).toBe(true);
     if (!created.success) return;
 
-    const voided = await mockFinanceRepository.voidInvoice(created.data.id);
+    const voided = await mockFinanceRepository.voidInvoice(created.data.id, crypto.randomUUID(), "Cancelled");
     expect(voided.success).toBe(true);
 
     const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_voided" });
     expect(entries.filter((e) => e.source_id === created.data.id)).toHaveLength(0);
   });
 
-  it("voidInvoice rejects an invoice with a payment applied — clean-case-only guard, F2.1C required for correction", async () => {
+  it("Finance F2.1C-D-D-B: voidInvoice on an invoice with a payment applied now SUCCEEDS via Partial-Payment Cancellation — the original invoice_issued entry is left untouched (never reversed), only a new invoice_partial_void correction posts", async () => {
     const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
     expect(created.success).toBe(true);
     if (!created.success) return;
@@ -444,12 +444,18 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
     });
     expect(payment.success).toBe(true);
 
-    const voided = await mockFinanceRepository.voidInvoice(created.data.id);
-    expect(voided.success).toBe(false);
+    const voided = await mockFinanceRepository.voidInvoice(created.data.id, crypto.randomUUID(), "Cancelling the unpaid remainder");
+    expect(voided.success).toBe(true);
+    if (!voided.success) return;
+    expect(voided.data.status).toBe("voided");
+    expect(voided.data.total_minor).toBe(50000);
 
     const originalEntries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_issued" });
     const original = originalEntries.find((e) => e.source_id === created.data.id)!;
     expect(original.reversed_by_entry_id).toBeNull();
+
+    const partialVoidEntries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_partial_void" });
+    expect(partialVoidEntries.some((e) => e.source_id !== undefined)).toBe(true);
   });
 
   it("F2.1B-REVIEW: updateInvoice rejects a subtotal/tax/discount change once issued — Revenue is already recognized against the current amounts", async () => {
@@ -686,6 +692,425 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
 
     const refunded = await mockFinanceRepository.refundPayment(payment.data.id, 20000, crypto.randomUUID());
     expect(refunded.success).toBe(true);
+  });
+});
+
+describe("mockFinanceRepository.voidInvoice — Finance F2.1C-D-D-B: Partial-Payment Void / Cancellation", () => {
+  // BASE_INVOICE_INPUT: subtotal 100000, tax 5000, discount 2000, total 103000.
+  async function createEligibleInvoice(overrides: Partial<InvoiceInput> = {}) {
+    const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, ...overrides });
+    if (!created.success) throw new Error("setup failed");
+    await mockFinanceRepository.issueInvoice(created.data.id);
+    await mockFinanceRepository.sendInvoice(created.data.id);
+    return created.data.id;
+  }
+
+  async function paySettled(invoiceId: string, amountMinor: number) {
+    const payment = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: invoiceId,
+      client_id: "client_2",
+      event_id: "event_1",
+      contract_id: "contract_1",
+      payment_type: "full_payment",
+      amount_minor: amountMinor,
+      payment_method: "cash",
+    });
+    if (!payment.success) throw new Error("setup failed");
+    return payment.data;
+  }
+
+  describe("clean void regression (paid_minor = 0)", () => {
+    it("still fully reverses recognition and marks voided, unchanged", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const result = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Cancelled before payment");
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.status).toBe("voided");
+      expect(result.data.total_minor).toBe(103000); // fields untouched — matches pre-existing clean-void behavior
+
+      const original = (await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_issued" })).find((e) => e.source_id === invoiceId)!;
+      expect(original.reversed_by_entry_id).not.toBeNull();
+      const partialVoidEntries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_partial_void" });
+      expect(partialVoidEntries.filter((e) => e.source_id !== undefined && e.source_id !== null)).toHaveLength(0);
+    });
+  });
+
+  describe("partial cancellation", () => {
+    it("one partial payment: cancels only the unpaid remainder, AR reaches zero, Revenue retained", async () => {
+      const invoiceId = await createEligibleInvoice();
+      await paySettled(invoiceId, 40000);
+
+      const result = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Client cancelled the remainder");
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+
+      // cancellable = 103000-40000=63000. taxCancelled=round(63000*5000/103000)=3058.
+      // discountCancelled=round(63000*2000/103000)=1223. subtotalCancelled=63000+1223-3058=61165.
+      expect(result.data.subtotal_minor).toBe(100000 - 61165);
+      expect(result.data.tax_minor).toBe(5000 - 3058);
+      expect(result.data.discount_minor).toBe(2000 - 1223);
+      expect(result.data.total_minor).toBe(40000);
+      expect(result.data.paid_minor).toBe(40000);
+      expect(result.data.balance_minor).toBe(0);
+      expect(result.data.status).toBe("voided");
+
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_partial_void" });
+      const detail = await mockFinanceRepository.getJournalEntry(entries[0].id);
+      expect(detail.lines).toEqual([
+        expect.objectContaining({ account_id: "account_4950", debit_minor: 61165, credit_minor: 0 }),
+        expect.objectContaining({ account_id: "account_2100", debit_minor: 3058, credit_minor: 0 }),
+        expect.objectContaining({ account_id: "account_4900", debit_minor: 0, credit_minor: 1223 }),
+        expect.objectContaining({ account_id: "account_1100", debit_minor: 0, credit_minor: 63000 }),
+      ]);
+      const totalDebit = detail.lines!.reduce((s, l) => s + l.debit_minor, 0);
+      const totalCredit = detail.lines!.reduce((s, l) => s + l.credit_minor, 0);
+      expect(totalDebit).toBe(totalCredit);
+    });
+
+    it("no tax / no discount: cancellation is a pure Refunds & Returns line against AR", async () => {
+      const invoiceId = await createEligibleInvoice({ tax_minor: 0, discount_minor: 0 });
+      await paySettled(invoiceId, 30000);
+
+      const result = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Cancelled");
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.total_minor).toBe(30000);
+
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_partial_void" });
+      const detail = await mockFinanceRepository.getJournalEntry(entries[0].id);
+      expect(detail.lines).toEqual([
+        expect.objectContaining({ account_id: "account_4950", debit_minor: 70000, credit_minor: 0 }),
+        expect.objectContaining({ account_id: "account_1100", debit_minor: 0, credit_minor: 70000 }),
+      ]);
+    });
+
+    it("tax only", async () => {
+      const invoiceId = await createEligibleInvoice({ tax_minor: 10000, discount_minor: 0 });
+      // total = 100000+10000-0 = 110000
+      await paySettled(invoiceId, 50000);
+      const result = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Cancelled");
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_partial_void" });
+      const detail = await mockFinanceRepository.getJournalEntry(entries[0].id);
+      expect(detail.lines!.some((l) => l.account_id === "account_4900")).toBe(false);
+      expect(detail.lines!.some((l) => l.account_id === "account_2100" && l.debit_minor > 0)).toBe(true);
+    });
+
+    it("discount only", async () => {
+      const invoiceId = await createEligibleInvoice({ tax_minor: 0, discount_minor: 10000 });
+      // total = 100000+0-10000 = 90000
+      await paySettled(invoiceId, 40000);
+      const result = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Cancelled");
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_partial_void" });
+      const detail = await mockFinanceRepository.getJournalEntry(entries[0].id);
+      expect(detail.lines!.some((l) => l.account_id === "account_2100")).toBe(false);
+      expect(detail.lines!.some((l) => l.account_id === "account_4900" && l.credit_minor > 0)).toBe(true);
+    });
+
+    it("never touches Cash (1000) or Customer Deposits (2200)", async () => {
+      const invoiceId = await createEligibleInvoice();
+      await paySettled(invoiceId, 40000);
+      const result = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Cancelled");
+      expect(result.success).toBe(true);
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_partial_void" });
+      const detail = await mockFinanceRepository.getJournalEntry(entries[0].id);
+      expect(detail.lines!.some((l) => l.account_id === "account_1000" || l.account_id === "account_2200")).toBe(false);
+    });
+
+    it("records an invoice_partially_voided timeline entry, distinct from clean void's invoice_voided", async () => {
+      const invoiceId = await createEligibleInvoice();
+      await paySettled(invoiceId, 40000);
+      await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Cancelled");
+      const timeline = await mockFinanceRepository.getTimelineByInvoiceId(invoiceId);
+      expect(timeline.some((t) => t.type === "invoice_partially_voided")).toBe(true);
+      expect(timeline.some((t) => t.type === "invoice_voided")).toBe(false);
+    });
+  });
+
+  describe("fully-paid rejection", () => {
+    it("rejects when balance_minor is already 0 — nothing to cancel", async () => {
+      const invoiceId = await createEligibleInvoice();
+      await paySettled(invoiceId, 103000);
+      const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+      expect(invoice.status).toBe("paid");
+
+      const result = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Should be rejected");
+      expect(result.success).toBe(false);
+
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_partial_void" });
+      expect(entries).toHaveLength(0);
+    });
+  });
+
+  describe("Customer Deposit Application blocker", () => {
+    it("blocks void when an unresolved Deposit Application exists", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const deposit = await mockFinanceRepository.createPayment({
+        ...BASE_PAYMENT_INPUT,
+        invoice_id: null,
+        client_id: "client_2",
+        event_id: "event_1",
+        contract_id: "contract_1",
+        payment_type: "deposit",
+        amount_minor: 40000,
+        payment_method: "cash",
+      });
+      if (!deposit.success) throw new Error("setup failed");
+      await mockFinanceRepository.applyDepositToInvoice(deposit.data.id, invoiceId, 40000, crypto.randomUUID());
+
+      const result = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Should be blocked");
+      expect(result.success).toBe(false);
+    });
+
+    it("cash + Deposit Application mixed settlement also blocks", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const deposit = await mockFinanceRepository.createPayment({
+        ...BASE_PAYMENT_INPUT,
+        invoice_id: null,
+        client_id: "client_2",
+        event_id: "event_1",
+        contract_id: "contract_1",
+        payment_type: "deposit",
+        amount_minor: 20000,
+        payment_method: "cash",
+      });
+      if (!deposit.success) throw new Error("setup failed");
+      await mockFinanceRepository.applyDepositToInvoice(deposit.data.id, invoiceId, 20000, crypto.randomUUID());
+      await paySettled(invoiceId, 20000);
+
+      const result = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Should be blocked");
+      expect(result.success).toBe(false);
+    });
+
+    it("an unrelated Customer Deposit not applied to THIS invoice does not block", async () => {
+      const invoiceId = await createEligibleInvoice();
+      await paySettled(invoiceId, 40000);
+      // An unapplied deposit exists in the workspace but was never applied to this invoice.
+      await mockFinanceRepository.createPayment({
+        ...BASE_PAYMENT_INPUT,
+        invoice_id: null,
+        client_id: "client_2",
+        event_id: "event_1",
+        contract_id: "contract_1",
+        payment_type: "deposit",
+        amount_minor: 15000,
+        payment_method: "cash",
+      });
+
+      const result = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Cancelled");
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe("refund interaction", () => {
+    it("operates against CURRENT (post-refund) fields, not the original recognition amounts", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const payment = await paySettled(invoiceId, 103000);
+      await mockFinanceRepository.refundPayment(payment.id, 30000, crypto.randomUUID());
+
+      // After the refund correction: total_minor = 103000-30000 = 73000, paid_minor = 73000.
+      const afterRefund = await mockFinanceRepository.getInvoiceById(invoiceId);
+      expect(afterRefund.total_minor).toBe(73000);
+      expect(afterRefund.paid_minor).toBe(73000);
+      expect(afterRefund.balance_minor).toBe(0);
+      // Nothing left to cancel — the refund already brought this invoice to its paid floor.
+      const result = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Should be rejected");
+      expect(result.success).toBe(false);
+    });
+
+    it("a genuinely partial refund still leaves a cancellable remainder, correctly computed from CURRENT fields", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const payment = await paySettled(invoiceId, 40000);
+      await mockFinanceRepository.refundPayment(payment.id, 15000, crypto.randomUUID());
+
+      const afterRefund = await mockFinanceRepository.getInvoiceById(invoiceId);
+      // paid_minor after refund = 40000-15000 = 25000; total_minor synced down too (F2.1C-D-B).
+      expect(afterRefund.paid_minor).toBe(25000);
+      expect(afterRefund.balance_minor).toBeGreaterThan(0);
+
+      const result = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Cancelling the rest");
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.total_minor).toBe(afterRefund.paid_minor);
+      expect(result.data.balance_minor).toBe(0);
+    });
+  });
+
+  describe("adjustment interaction", () => {
+    it("upward adjustment then cancellation uses the CURRENT (adjusted) proportions", async () => {
+      const invoiceId = await createEligibleInvoice();
+      await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 120000, tax_minor: 5000, discount_minor: 2000, reason: "Undercharged" },
+        crypto.randomUUID(),
+      );
+      await paySettled(invoiceId, 50000);
+
+      const result = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Cancelling remainder");
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.total_minor).toBe(50000);
+      expect(result.data.balance_minor).toBe(0);
+    });
+
+    it("downward adjustment then cancellation uses the CURRENT (reduced) proportions", async () => {
+      const invoiceId = await createEligibleInvoice();
+      await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 65000, tax_minor: 5000, discount_minor: 2000, reason: "Overcharged" },
+        crypto.randomUUID(),
+      );
+      // new total = 65000+5000-2000 = 68000
+      await paySettled(invoiceId, 30000);
+
+      const result = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Cancelling remainder");
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.total_minor).toBe(30000);
+    });
+
+    it("tax-rate-changing adjustment then cancellation never produces a negative field", async () => {
+      const invoiceId = await createEligibleInvoice({ tax_minor: 20000, discount_minor: 0 });
+      // original total = 100000+20000 = 120000
+      await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 100000, tax_minor: 1000, discount_minor: 0, reason: "Corrected tax rate" },
+        crypto.randomUUID(),
+      );
+      // new total = 101000
+      await paySettled(invoiceId, 40000);
+
+      const result = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Cancelling remainder");
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.tax_minor).toBeGreaterThanOrEqual(0);
+      expect(result.data.subtotal_minor).toBeGreaterThanOrEqual(0);
+      expect(result.data.total_minor).toBe(40000);
+    });
+  });
+
+  describe("idempotency", () => {
+    it("first cancellation succeeds; a same-key replay returns the (already-voided) invoice with no second Journal Entry or field mutation", async () => {
+      const invoiceId = await createEligibleInvoice();
+      await paySettled(invoiceId, 40000);
+      const key = crypto.randomUUID();
+
+      const first = await mockFinanceRepository.voidInvoice(invoiceId, key, "Cancelling remainder");
+      expect(first.success).toBe(true);
+      const replay = await mockFinanceRepository.voidInvoice(invoiceId, key, "Cancelling remainder");
+      expect(replay.success).toBe(true);
+      if (!first.success || !replay.success) return;
+      expect(replay.data).toEqual(first.data);
+
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_partial_void" });
+      expect(entries).toHaveLength(1);
+    });
+
+    it("a same-key request against a DIFFERENT invoice is rejected as a conflict", async () => {
+      const invoiceA = await createEligibleInvoice();
+      await paySettled(invoiceA, 40000);
+      const invoiceB = await createEligibleInvoice();
+      await paySettled(invoiceB, 30000);
+      const key = crypto.randomUUID();
+
+      const first = await mockFinanceRepository.voidInvoice(invoiceA, key, "Cancelling A");
+      expect(first.success).toBe(true);
+
+      const conflict = await mockFinanceRepository.voidInvoice(invoiceB, key, "Cancelling B");
+      expect(conflict.success).toBe(false);
+    });
+
+    it("a DIFFERENT key against an already-voided invoice is rejected (terminal, not idempotency)", async () => {
+      const invoiceId = await createEligibleInvoice();
+      await paySettled(invoiceId, 40000);
+      const first = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "First");
+      expect(first.success).toBe(true);
+
+      const second = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Second attempt");
+      expect(second.success).toBe(false);
+    });
+
+    it("rejects a missing (empty-string) cancellationId", async () => {
+      const invoiceId = await createEligibleInvoice();
+      await paySettled(invoiceId, 40000);
+      const result = await mockFinanceRepository.voidInvoice(invoiceId, "", "reason");
+      expect(result.success).toBe(false);
+    });
+  });
+});
+
+describe("mockFinanceRepository.refundPayment — terminal-status guard (Finance F2.1C-D-D-B)", () => {
+  it("rejects a refund linked to an invoice that was partially voided", async () => {
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    if (!created.success) throw new Error("setup failed");
+    await mockFinanceRepository.issueInvoice(created.data.id);
+    await mockFinanceRepository.sendInvoice(created.data.id);
+    const payment = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: created.data.id,
+      client_id: "client_2",
+      event_id: "event_1",
+      contract_id: "contract_1",
+      payment_type: "full_payment",
+      amount_minor: 40000,
+      payment_method: "cash",
+    });
+    if (!payment.success) throw new Error("setup failed");
+
+    const voided = await mockFinanceRepository.voidInvoice(created.data.id, crypto.randomUUID(), "Cancelling remainder");
+    expect(voided.success).toBe(true);
+
+    const refund = await mockFinanceRepository.refundPayment(payment.data.id, 10000, crypto.randomUUID());
+    expect(refund.success).toBe(false);
+  });
+
+  it("rejects a refund linked to a cleanly-voided invoice", async () => {
+    // Clean void requires paid_minor = 0, so this exercises the archived path instead —
+    // a payment still refundable in principle, against an invoice archived afterward.
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    if (!created.success) throw new Error("setup failed");
+    await mockFinanceRepository.issueInvoice(created.data.id);
+    await mockFinanceRepository.sendInvoice(created.data.id);
+    const payment = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: created.data.id,
+      client_id: "client_2",
+      event_id: "event_1",
+      contract_id: "contract_1",
+      payment_type: "full_payment",
+      amount_minor: 103000,
+      payment_method: "cash",
+    });
+    if (!payment.success) throw new Error("setup failed");
+    await mockFinanceRepository.archiveInvoice(created.data.id);
+
+    const refund = await mockFinanceRepository.refundPayment(payment.data.id, 10000, crypto.randomUUID());
+    expect(refund.success).toBe(false);
+  });
+
+  it("an active (non-terminal) invoice's refund remains unaffected", async () => {
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    if (!created.success) throw new Error("setup failed");
+    await mockFinanceRepository.issueInvoice(created.data.id);
+    await mockFinanceRepository.sendInvoice(created.data.id);
+    const payment = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: created.data.id,
+      client_id: "client_2",
+      event_id: "event_1",
+      contract_id: "contract_1",
+      payment_type: "full_payment",
+      amount_minor: 40000,
+      payment_method: "cash",
+    });
+    if (!payment.success) throw new Error("setup failed");
+
+    const refund = await mockFinanceRepository.refundPayment(payment.data.id, 10000, crypto.randomUUID());
+    expect(refund.success).toBe(true);
   });
 });
 
@@ -1527,7 +1952,7 @@ describe("mockFinanceRepository.recordInvoiceAdjustment — Finance F2.1C-D-C", 
       const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
       if (!created.success) throw new Error("setup failed");
       await mockFinanceRepository.issueInvoice(created.data.id);
-      await mockFinanceRepository.voidInvoice(created.data.id);
+      await mockFinanceRepository.voidInvoice(created.data.id, crypto.randomUUID(), "Cancelled");
 
       const result = await mockFinanceRepository.recordInvoiceAdjustment(
         created.data.id,
@@ -2173,7 +2598,7 @@ describe("mockFinanceRepository — Finance F2.1C-C: Customer Deposit applicatio
     expect(created.success).toBe(true);
     if (!created.success) return;
     await mockFinanceRepository.issueInvoice(created.data.id);
-    await mockFinanceRepository.voidInvoice(created.data.id);
+    await mockFinanceRepository.voidInvoice(created.data.id, crypto.randomUUID(), "Cancelled");
 
     const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, created.data.id, 10000, crypto.randomUUID());
     expect(applied.success).toBe(false);

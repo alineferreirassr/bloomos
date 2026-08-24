@@ -614,12 +614,19 @@ describe("supabaseFinanceRepository Invoice lifecycle actions", () => {
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const result = await supabaseFinanceRepository.voidInvoice("invoice_1");
+    const result = await supabaseFinanceRepository.voidInvoice("invoice_1", "void-key-1", "No longer needed");
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.status).toBe("voided");
     expect(rpcCalls.map((c) => c.name)).toEqual(["void_invoice_and_reverse_revenue_recognition"]);
     const args = rpcCalls[0].args as Record<string, unknown>;
     expect(args.p_invoice_id).toBe("invoice_1");
+    expect(args.p_cancellation_id).toBe("void-key-1");
+    expect(args.p_reason).toBe("No longer needed");
+  });
+
+  it("rejects a missing (empty-string) cancellationId before ever calling the RPC", async () => {
+    const result = await supabaseFinanceRepository.voidInvoice("invoice_1", "", "reason");
+    expect(result.success).toBe(false);
   });
 
   it("archiveInvoice then restoreInvoice resets status to draft", async () => {
@@ -678,24 +685,73 @@ describe("supabaseFinanceRepository Finance F2.1B — Invoice Revenue Recognitio
     expect(rpcCalls.map((c) => c.name)).toEqual(["issue_invoice_and_post_revenue_recognition"]);
   });
 
-  it("voidInvoice rejects an invoice with a payment applied (P1119) via the RPC's own guard, translated to fail()", async () => {
+  it("Finance F2.1C-D-D-B: voidInvoice on a partially-paid invoice now SUCCEEDS via Partial-Payment Cancellation (P1119 is retired) — the RPC composes the cancellation server-side, invisible to this repository call, and writes its OWN Timeline entry server-side (no client-side insert for this branch)", async () => {
     mockSession();
     const { client, calls, rpcCalls } = createMockSupabase([
       { data: invoiceRow({ status: "partially_paid", paid_minor: 50000, balance_minor: 53000 }), error: null },
-      {
-        data: null,
-        error: { code: "P1119", message: "Cannot void an invoice with payments applied. This requires a dedicated correction flow not yet available." },
-      },
+      { data: invoiceRow({ status: "voided", paid_minor: 50000, balance_minor: 0, total_minor: 50000 }), error: null },
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const result = await supabaseFinanceRepository.voidInvoice("invoice_1");
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error).toBe("Cannot void an invoice with payments applied. This requires a dedicated correction flow not yet available.");
+    const result = await supabaseFinanceRepository.voidInvoice("invoice_1", "void-key-2", "Cancelling the unpaid remainder");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.status).toBe("voided");
+      expect(result.data.total_minor).toBe(50000);
     }
     expect(rpcCalls.map((c) => c.name)).toEqual(["void_invoice_and_reverse_revenue_recognition"]);
+    // No client-side Timeline insert for the partial branch -- the RPC already wrote "invoice_partially_voided" server-side.
     expect(calls.some((c) => c.table === "timeline_activities")).toBe(false);
+  });
+
+  it("Finance F2.1C-D-D-B: translates a P1136 (no outstanding balance — fully paid) RPC error into a DataResult failure", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: invoiceRow({ status: "paid", paid_minor: 103000, balance_minor: 0 }), error: null },
+      { data: null, error: { code: "P1136", message: "This invoice has no outstanding balance to cancel — it is fully paid. Use a refund or an invoice financial adjustment instead." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.voidInvoice("invoice_1", "void-key-3", "reason");
+    expect(result.success).toBe(false);
+  });
+
+  it("Finance F2.1C-D-D-B: translates a P1137 (unresolved Customer Deposit Application blocks void) RPC error into a DataResult failure", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: invoiceRow({ status: "partially_paid", paid_minor: 30000, balance_minor: 73000 }), error: null },
+      { data: null, error: { code: "P1137", message: "Cannot void this invoice — it has an unresolved Customer Deposit Application. Deposit Application reversal is not yet available." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.voidInvoice("invoice_1", "void-key-4", "reason");
+    expect(result.success).toBe(false);
+  });
+
+  it("Finance F2.1C-D-D-B-IDEMPOTENCY: a same-key replay of a completed partial cancellation returns the (already-voided) invoice", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: invoiceRow({ status: "voided", paid_minor: 50000, balance_minor: 0, total_minor: 50000 }), error: null },
+      { data: invoiceRow({ status: "voided", paid_minor: 50000, balance_minor: 0, total_minor: 50000 }), error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.voidInvoice("invoice_1", "void-key-2", "Cancelling the unpaid remainder");
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.status).toBe("voided");
+  });
+
+  it("Finance F2.1C-D-D-B-IDEMPOTENCY: translates a P1129 (idempotency key reused for a different invoice) RPC error into a DataResult failure", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: invoiceRow({ status: "partially_paid", paid_minor: 20000, balance_minor: 83000 }), error: null },
+      { data: null, error: { code: "P1129", message: "This idempotency key was already used for a different void/cancellation request." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.voidInvoice("invoice_1", "void-key-2", "reason");
+    expect(result.success).toBe(false);
+    expect(rpcCalls.map((c) => c.name)).toEqual(["void_invoice_and_reverse_revenue_recognition"]);
   });
 
   it("a void reversal failure rolls the WHOLE atomic void back: fail() is returned, no Timeline entry is written", async () => {
@@ -706,7 +762,7 @@ describe("supabaseFinanceRepository Finance F2.1B — Invoice Revenue Recognitio
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const result = await supabaseFinanceRepository.voidInvoice("invoice_1");
+    const result = await supabaseFinanceRepository.voidInvoice("invoice_1", "void-key-5", "reason");
     expect(result.success).toBe(false);
     expect(rpcCalls.map((c) => c.name)).toEqual(["void_invoice_and_reverse_revenue_recognition"]);
     expect(calls.some((c) => c.table === "timeline_activities")).toBe(false);

@@ -468,28 +468,173 @@ async function markInvoiceOverdue(id: string): Promise<DataResult<Invoice>> {
   return ok(updated);
 }
 
-async function voidInvoice(id: string): Promise<DataResult<Invoice>> {
+/** Durable-memo parse for invoice_partial_void replay/conflict detection — same pattern parseInvoiceAdjustmentTarget established (F2.1C-D-C-REVIEW): compare against what was DURABLY recorded for this cancellationId, never against later mutable state. */
+function parseInvoicePartialVoidInvoiceId(memo: string | null): string | null {
+  // [^\s.]+ (not \S+) — the memo's own format has no space between the id
+  // and the trailing period ("invoice_id=<id>. Settled..."), and a UUID id
+  // never contains a period, so \S+ would greedily capture it too.
+  const match = memo?.match(/invoice_id=([^\s.]+)/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Finance F2.1C-D-D-B. Unified void/cancellation operation.
+ *
+ * paid_minor === 0 (Case A): unchanged clean-void behavior — the entire
+ * invoice_issued recognition is fully reversed via reverseInvoiceRevenueRecognitionMock.
+ *
+ * balance_minor === 0 while paid_minor > 0 (Case C): nothing left to
+ * cancel — rejected. Use refundPayment or recordInvoiceAdjustment instead.
+ *
+ * 0 < paid_minor and balance_minor > 0 (Case B): Partial-Payment
+ * Cancellation — the settled economic portion remains recognized Revenue;
+ * only the genuinely unpaid CURRENT remainder is cancelled via a single
+ * balanced append-only Journal Entry (source_type 'invoice_partial_void'),
+ * using the SAME proportional-allocation technique and account routing
+ * Invoice Financial Adjustment already established, applied toward a
+ * server-computed target (the settled amount) rather than a caller-supplied
+ * one. Cash and Customer Deposits are never touched.
+ */
+async function voidInvoice(id: string, cancellationId: string, reason: string): Promise<DataResult<Invoice>> {
   const existing = readInvoices().find((i) => i.id === id);
   if (!existing) {
     return fail("Invoice not found.");
   }
+  if (!cancellationId) {
+    return fail(
+      "cancellationId is required and must be a stable identifier supplied by the caller (the same value on every retry of the same void/cancellation request).",
+    );
+  }
+
+  // Finance F2.1C-D-D-B request idempotency: scoped to the Partial-Payment
+  // Cancellation path only (source_type 'invoice_partial_void') — clean
+  // void's own existing idempotency (a hard reject on retry, via
+  // canTransitionInvoiceStatus + post_invoice_voided_reversal's internal
+  // duplicate-posting guard) is deliberately UNCHANGED, per this
+  // checkpoint's "preserve existing clean-void behavior" mandate. Checked
+  // BEFORE the ordinary terminal-status rejection below so a genuine retry
+  // of an already-succeeded partial cancellation replays correctly instead
+  // of failing merely because the Invoice is now (correctly) voided.
+  const existingEntry = readJournalEntries().find((e) => e.source_type === "invoice_partial_void" && e.source_id === cancellationId);
+  if (existingEntry) {
+    if (parseInvoicePartialVoidInvoiceId(existingEntry.memo) === id) {
+      return ok(existing);
+    }
+    return fail("This idempotency key was already used for a different void/cancellation request.");
+  }
+
   if (!canTransitionInvoiceStatus(existing.status, "voided")) {
     return fail(`Cannot void an invoice that is already ${INVOICE_STATUS_LABELS[existing.status].toLowerCase()}.`);
   }
-  // Finance F2.1B — mirrors post_invoice_voided_reversal's P1119 guard:
-  // void-after-partial-payment needs a proportional correction model this
-  // clean-case migration does not implement (F2.1C).
-  if (existing.paid_minor > 0) {
-    return fail("Cannot void an invoice with payments applied. This requires a dedicated correction flow not yet available.");
+
+  if (existing.paid_minor === 0) {
+    // Case A: unchanged clean-void behavior.
+    const timestamp = nowIso();
+    const updated: Invoice = { ...existing, status: "voided", voided_at: timestamp, updated_at: timestamp };
+    writeInvoices(readInvoices().map((i) => (i.id === id ? updated : i)));
+    reverseInvoiceRevenueRecognitionMock(updated);
+    recordTimelineActivity(existing.workspace_id, "invoice", id, "invoice_voided", `Invoice voided: "${existing.title}"`);
+    return ok(updated);
   }
 
-  const timestamp = nowIso();
-  const updated: Invoice = { ...existing, status: "voided", voided_at: timestamp, updated_at: timestamp };
-  writeInvoices(readInvoices().map((i) => (i.id === id ? updated : i)));
-  reverseInvoiceRevenueRecognitionMock(updated);
-  recordTimelineActivity(existing.workspace_id, "invoice", id, "invoice_voided", `Invoice voided: "${existing.title}"`);
+  if (existing.balance_minor === 0) {
+    // Case C: fully settled — nothing left to cancel.
+    return fail("This invoice has no outstanding balance to cancel — it is fully paid. Use a refund or an invoice financial adjustment instead.");
+  }
 
-  return ok(updated);
+  // Case B: Partial-Payment Cancellation.
+  // Finance F2.1C-D-D-A decision D2: an unresolved Customer Deposit
+  // Application permanently blocks void — no reversal capability exists
+  // yet to un-strand the deposit's 2200 Customer Deposits position.
+  const hasUnresolvedDepositApplication = readPayments().some(
+    (p) =>
+      p.invoice_id === id &&
+      p.payment_type === "adjustment" &&
+      p.reference?.startsWith("deposit_application_of:") &&
+      PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status),
+  );
+  if (hasUnresolvedDepositApplication) {
+    return fail("Cannot void this invoice — it has an unresolved Customer Deposit Application. Deposit Application reversal is not yet available.");
+  }
+
+  // Finance F2.1C-D-D-A decision: allocation basis is the Invoice's CURRENT
+  // economic fields (already reflecting any prior refund/adjustment), NOT
+  // the immutable original recognition — deliberately the OPPOSITE of
+  // refund's own basis, because void is a single terminal event (no
+  // multi-call cumulative-consistency problem to solve) and must cancel
+  // proportional to what's actually still billed right now.
+  const cancellableMinor = subtractMinor(existing.total_minor, existing.paid_minor);
+  const taxCancelled = Math.round((cancellableMinor * existing.tax_minor) / existing.total_minor);
+  const discountCancelled = Math.round((cancellableMinor * existing.discount_minor) / existing.total_minor);
+  const subtotalCancelled = subtractMinor(addMinor(cancellableMinor, discountCancelled), taxCancelled);
+
+  const newSubtotal = subtractMinor(existing.subtotal_minor, subtotalCancelled);
+  const newTax = subtractMinor(existing.tax_minor, taxCancelled);
+  const newDiscount = subtractMinor(existing.discount_minor, discountCancelled);
+  const newTotal = subtractMinor(existing.total_minor, cancellableMinor);
+
+  if (newSubtotal < 0 || newTax < 0 || newDiscount < 0 || newTotal < 0) {
+    return fail("Unable to compute a balanced cancellation for this invoice.");
+  }
+
+  const lines: { account_id: string; debit_minor: number; credit_minor: number }[] = [
+    { account_id: findAccountByNumber(existing.workspace_id, 4950).id, debit_minor: subtotalCancelled, credit_minor: 0 },
+  ];
+  if (taxCancelled > 0) {
+    lines.push({ account_id: findAccountByNumber(existing.workspace_id, 2100).id, debit_minor: taxCancelled, credit_minor: 0 });
+  }
+  if (discountCancelled > 0) {
+    lines.push({ account_id: findAccountByNumber(existing.workspace_id, 4900).id, debit_minor: 0, credit_minor: discountCancelled });
+  }
+  lines.push({ account_id: findAccountByNumber(existing.workspace_id, 1100).id, debit_minor: 0, credit_minor: cancellableMinor });
+
+  const timestamp = nowIso();
+  try {
+    insertMockJournalEntry({
+      workspace_id: existing.workspace_id,
+      entry_date: timestamp.slice(0, 10),
+      source_type: "invoice_partial_void",
+      source_id: cancellationId,
+      posting_key: `invoice_partial_void:${cancellationId}`,
+      memo: `Invoice partially voided: invoice_id=${id}. Settled ${existing.paid_minor} retained, ${cancellableMinor} cancelled. Reason: ${reason}`,
+      posted_by: CURRENT_ACTOR,
+      lines,
+    });
+  } catch (postingError) {
+    return fail(postingError instanceof Error ? postingError.message : String(postingError));
+  }
+
+  const corrected: Invoice = {
+    ...existing,
+    subtotal_minor: newSubtotal,
+    tax_minor: newTax,
+    discount_minor: newDiscount,
+    total_minor: newTotal,
+    status: "voided",
+    voided_at: timestamp,
+    updated_at: timestamp,
+  };
+  writeInvoices(readInvoices().map((i) => (i.id === id ? corrected : i)));
+  // Finance F2.1C-D-D-B: status is already set to 'voided' above, BEFORE
+  // recomputing paid/balance — applyPaymentToInvoice's own status-
+  // transition rules only fire for {sent,viewed,partially_paid,paid,
+  // overdue}, so calling it AFTER 'voided' is already set correctly
+  // leaves 'voided' untouched while still recomputing paid_minor/
+  // balance_minor against the new, corrected total_minor. Reversing this
+  // order (recomputing before setting 'voided') would risk the Invoice
+  // transitioning to 'paid' instead, since new_total now exactly equals
+  // paid_minor.
+  const recomputed = applyPaymentToInvoice(id) ?? corrected;
+
+  recordTimelineActivity(
+    existing.workspace_id,
+    "invoice",
+    id,
+    "invoice_partially_voided",
+    `Invoice partially voided: ${existing.paid_minor} retained, ${cancellableMinor} cancelled (${reason})`,
+  );
+
+  return ok(recomputed);
 }
 
 async function archiveInvoice(id: string): Promise<DataResult<Invoice>> {
@@ -1284,6 +1429,15 @@ async function refundPayment(originalPaymentId: string, amountMinor: number, ref
       const invoice = readInvoices().find((i) => i.id === original.invoice_id);
       if (!invoice) {
         return fail("The invoice linked to this payment no longer exists — cannot compute a refund correction.");
+      }
+      // Finance F2.1C-D-D-B: a Partial-Payment Void permanently fixes the
+      // Invoice's current economic fields at the settled amount and marks
+      // it terminal — before Partial Void existed, a paid Invoice could
+      // never reach `voided`/`archived`, so this check was unreachable.
+      // Now it is: refunding against a terminal Invoice would mutate
+      // fields that are supposed to be permanently frozen once voided.
+      if (isInvoiceTerminal(invoice.status)) {
+        return fail(`Cannot refund a payment linked to an invoice that is ${INVOICE_STATUS_LABELS[invoice.status].toLowerCase()}.`);
       }
 
       // Finance F2.1C-D-B: the proportional formula's basis (original

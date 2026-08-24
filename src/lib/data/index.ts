@@ -1356,8 +1356,8 @@ export async function markInvoiceOverdue(id: string): Promise<DataResult<Invoice
   return financeRepository().markInvoiceOverdue(id);
 }
 
-export async function voidInvoice(id: string): Promise<DataResult<Invoice>> {
-  return financeRepository().voidInvoice(id);
+export async function voidInvoice(id: string, cancellationId: string, reason: string): Promise<DataResult<Invoice>> {
+  return financeRepository().voidInvoice(id, cancellationId, reason);
 }
 
 export async function archiveInvoice(id: string): Promise<DataResult<Invoice>> {

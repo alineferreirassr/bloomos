@@ -32,10 +32,13 @@ import { type DataResult, fail } from "@/lib/data/result";
  *     REVIEW's post_deposit_application for the identical reason — an
  *     invoice_id-is-null + status-is-consumable Payment is not proof Cash
  *     actually moved into Customer Deposits for it)
- *   - void rejected, payments applied:      P1119 (Finance F2.1B —
- *     post_invoice_voided_reversal, refuses to reverse Revenue recognition
- *     for an invoice with any payment applied; void-after-partial-payment
- *     needs a proportional correction model not yet built)
+ *   - void rejected, payments applied:      P1119 — RETIRED as of Finance
+ *     F2.1C-D-D-B (mirrors P1120's own retirement precedent): originally
+ *     post_invoice_voided_reversal's blanket rejection of any invoice with
+ *     a payment applied, because void-after-partial-payment had no
+ *     proportional correction model. Partial-Payment Void (source_type
+ *     'invoice_partial_void') now runs in its place for that case. No SQL
+ *     path raises P1119 any longer.
  *   - unbalanced refund correction:          P1121 (Finance F2.1C-B —
  *     post_payment_refund_reversal, defensive guard against a negative
  *     computed Refunds & Returns portion; should be unreachable given
@@ -77,6 +80,20 @@ import { type DataResult, fail } from "@/lib/data/result";
  *     subtotal) reaching the RPC directly — defensive, unreachable via the
  *     TS repository layer's own schema validation, mirroring P1121/P1131's
  *     "should be unreachable, never silently corrupts" precedent)
+ *   - partial-payment void validation:      P1136-P1139 (Finance F2.1C-D-D-B
+ *     — void_invoice_and_reverse_revenue_recognition's Partial-Payment
+ *     Cancellation branch: P1136 the invoice has no outstanding balance to
+ *     cancel (fully paid — use a refund or invoice adjustment instead),
+ *     P1137 an unresolved Customer Deposit Application blocks void (no
+ *     reversal capability exists yet to un-strand it), P1138 a defensive
+ *     guard against the computed cancellation producing a negative
+ *     resulting Invoice field (should be unreachable — the cancellable
+ *     amount is always strictly less than the invoice's current total),
+ *     P1139 post_payment_refund_reversal's new guard rejecting a refund
+ *     linked to an already-terminal (voided/archived) invoice — immaterial
+ *     before Partial Void existed, since only a zero-paid invoice could
+ *     ever reach `voided`; now a paid invoice can too, and its economic
+ *     fields must stay frozen once terminal)
  *
  * P1120 (Finance F2.1B-REVIEW's "refund rejected, Revenue recognized" —
  * process_payment_refund's blanket rejection of any invoice-linked refund
@@ -130,7 +147,6 @@ export const FINANCE_VALIDATION_ERROR_CODES = new Set([
   "P1116",
   "P1117",
   "P1118",
-  "P1119",
   "P1121",
   "P1122",
   "P1123",
@@ -146,6 +162,10 @@ export const FINANCE_VALIDATION_ERROR_CODES = new Set([
   "P1133",
   "P1134",
   "P1135",
+  "P1136",
+  "P1137",
+  "P1138",
+  "P1139",
   "P1200",
 ]);
 

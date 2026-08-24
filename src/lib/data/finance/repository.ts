@@ -149,7 +149,26 @@ export interface FinanceRepository {
   sendInvoice(id: string): Promise<DataResult<Invoice>>;
   markInvoiceViewed(id: string): Promise<DataResult<Invoice>>;
   markInvoiceOverdue(id: string): Promise<DataResult<Invoice>>;
-  voidInvoice(id: string): Promise<DataResult<Invoice>>;
+  /**
+   * Finance F2.1C-D-D-B. Unified void/cancellation. If `invoice.paid_minor`
+   * is 0, behaves exactly as before (full reversal of Revenue recognition).
+   * If a payment has settled but a balance remains, the settled economic
+   * portion stays recognized and only the genuinely unpaid CURRENT
+   * remainder is cancelled via one balanced append-only Journal Entry
+   * (source_type 'invoice_partial_void') — Cash and Customer Deposits are
+   * never touched, no automatic refund or deposit is created. Rejects if
+   * the invoice has no outstanding balance (fully paid — use `refundPayment`
+   * or `recordInvoiceAdjustment` instead) or if an unresolved Customer
+   * Deposit Application exists on the invoice (no reversal capability
+   * exists yet).
+   *
+   * `cancellationId` is a REQUIRED, caller-supplied request-level
+   * idempotency key — same contract as `refundPayment`'s `refundPaymentId`
+   * (see its doc comment), scoped to the Partial-Payment Cancellation path
+   * only (clean void's own existing behavior on retry is unchanged: a hard
+   * reject, not a replay). `reason` is required for audit/timeline context.
+   */
+  voidInvoice(id: string, cancellationId: string, reason: string): Promise<DataResult<Invoice>>;
   archiveInvoice(id: string): Promise<DataResult<Invoice>>;
   restoreInvoice(id: string): Promise<DataResult<Invoice>>;
   duplicateInvoice(id: string): Promise<DataResult<Invoice>>;

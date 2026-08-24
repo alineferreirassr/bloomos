@@ -57,6 +57,13 @@ export const TIMELINE_ACTIVITY_TYPES = [
   // 'invoice_adjustment') remains the accounting source of truth, this is
   // operational history only.
   "invoice_adjusted",
+  // Finance F2.1C-D-D-B — Partial-Payment Void / Cancellation. Distinct
+  // from the existing "invoice_voided" (which always means zero Revenue
+  // was ever retained) specifically so Timeline alone can distinguish a
+  // clean void from a cancellation that retained some settled Revenue —
+  // the append-only correction Journal Entry (source_type
+  // 'invoice_partial_void') remains the accounting source of truth.
+  "invoice_partially_voided",
   "payment_created",
   "payment_processing",
   "payment_succeeded",
@@ -523,6 +530,7 @@ export const TIMELINE_ACTIVITY_LABELS: Record<TimelineActivityType, string> = {
   invoice_archived: "Invoice archived",
   invoice_restored: "Invoice restored",
   invoice_adjusted: "Invoice financial adjustment recorded",
+  invoice_partially_voided: "Invoice partially voided",
   payment_created: "Payment created",
   payment_processing: "Payment processing",
   payment_succeeded: "Payment succeeded",
