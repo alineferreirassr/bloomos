@@ -23,6 +23,7 @@ import {
 import { canTransitionExpenseStatus, isExpenseTerminal, getExpenseNextRecommendedAction } from "@/core/workflows/expenseWorkflow";
 import {
   invoiceSchema,
+  invoiceAdjustmentSchema,
   paymentSchema,
   expenseSchema,
   manualAdjustmentInputSchema,
@@ -30,6 +31,7 @@ import {
   expenseTransitionInputSchema,
   accountingPeriodCreateInputSchema,
   type InvoiceInput,
+  type InvoiceAdjustmentInput,
   type PaymentInput,
   type ExpenseInput,
   type ManualAdjustmentInput,
@@ -130,6 +132,23 @@ const APP_VALIDATION_ERROR_CODES = new Set(["P0001", "P0002", "P0003", "P0004", 
 const DEPOSIT_APPLICATION_VALIDATION_ERROR_CODES = new Set([
   "P1111", "P1104", "P1118", "P1122", "P1123", "P1124", "P1125", "P1126", "P1127", "P1128", "P1129", "P1130",
 ]);
+
+/**
+ * errcodes raised by record_invoice_adjustment for expected, user-facing
+ * validation failures — Finance F2.1C-D-C. P1111 is reused with its
+ * established meaning (invoice not found); P1129/P1130 are reused with
+ * their established Finance F2.1C-C-IDEMPOTENCY meanings (idempotency key
+ * reused for a different payload, missing required idempotency key) —
+ * shared with process_payment_refund/record_deposit_application's own use
+ * of the same two codes, not a duplicate mechanism. P1132-P1135 are this
+ * checkpoint's new codes: invoice not in an adjustment-eligible status,
+ * no-op adjustment (requested values match the invoice's current values),
+ * downward correction would drop the total below the amount already
+ * collected, and a defensive invalid-financial-values guard (unreachable
+ * via this repository's own schema validation below, mirroring P1121/
+ * P1131's "should be unreachable" precedent).
+ */
+const INVOICE_ADJUSTMENT_VALIDATION_ERROR_CODES = new Set(["P1111", "P1129", "P1130", "P1132", "P1133", "P1134", "P1135"]);
 
 function fieldErrorsFromZod(error: {
   issues: { path: PropertyKey[]; message: string }[];
@@ -737,6 +756,51 @@ async function duplicateInvoice(id: string): Promise<DataResult<Invoice>> {
 async function getInvoiceNextAction(invoiceId: string): Promise<string | null> {
   const invoice = await getInvoiceById(invoiceId);
   return getInvoiceNextRecommendedAction(invoice);
+}
+
+/**
+ * Finance F2.1C-D-C. Only shape-validates client-side (subtotal/tax/
+ * discount non-negative, discount <= subtotal) — deliberately NOT a
+ * client-side state-eligibility/no-op/overpayment pre-check, matching
+ * applyDepositToInvoice's own established design: those checks depend on
+ * CURRENT database state and would risk spuriously rejecting a legitimate
+ * replay against state that has already moved on since a prior successful
+ * call (the exact staleness bug fixed in F2.1C-C-IDEMPOTENCY). The RPC is
+ * the sole authority for anything state-dependent.
+ */
+async function recordInvoiceAdjustment(invoiceId: string, input: InvoiceAdjustmentInput, adjustmentId: string): Promise<DataResult<Invoice>> {
+  const parsed = invoiceAdjustmentSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+  if (!adjustmentId) {
+    return fail(
+      "adjustmentId is required and must be a stable identifier supplied by the caller (the same value on every retry of the same adjustment request).",
+    );
+  }
+
+  const session = await requireWorkspaceSession();
+  const actor = resolveActorName(session);
+  const supabase = createSupabaseClient();
+
+  const { data, error } = await supabase.rpc("record_invoice_adjustment", {
+    p_invoice_id: invoiceId,
+    p_subtotal_minor: parsed.data.subtotal_minor,
+    p_tax_minor: parsed.data.tax_minor,
+    p_discount_minor: parsed.data.discount_minor,
+    p_reason: parsed.data.reason,
+    p_adjustment_id: adjustmentId,
+    p_actor: actor,
+  });
+  if (error) {
+    const code = (error as { code?: string }).code;
+    if (code && INVOICE_ADJUSTMENT_VALIDATION_ERROR_CODES.has(code)) {
+      return fail(error.message);
+    }
+    throw normalizeSupabaseError(error);
+  }
+
+  return ok(mapInvoiceRow(data));
 }
 
 // ---------------------------------------------------------------------------
@@ -2451,6 +2515,7 @@ export const supabaseFinanceRepository: FinanceRepository = {
   restoreInvoice,
   duplicateInvoice,
   getInvoiceNextAction,
+  recordInvoiceAdjustment,
   getPayments,
   getPaymentById,
   createPayment,

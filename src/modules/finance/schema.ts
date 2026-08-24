@@ -58,6 +58,28 @@ export const invoiceSchema = z
 
 export type InvoiceInput = z.infer<typeof invoiceSchema>;
 
+/**
+ * Finance F2.1C-D-C. The corrected subtotal/tax/discount an already-issued
+ * Invoice should now read as — total is always server-derived
+ * (new_subtotal + new_tax - new_discount), never accepted from the caller.
+ * currency is deliberately absent: it is financially immutable after
+ * issuance (Founder decision D3, already enforced by updateInvoice's own
+ * guard), so an adjustment can never touch it.
+ */
+export const invoiceAdjustmentSchema = z
+  .object({
+    subtotal_minor: moneyMinor,
+    tax_minor: moneyMinor,
+    discount_minor: moneyMinor,
+    reason: z.string().trim().min(1, "A reason is required"),
+  })
+  .refine((data) => data.discount_minor <= data.subtotal_minor, {
+    message: "Discount cannot exceed the subtotal",
+    path: ["discount_minor"],
+  });
+
+export type InvoiceAdjustmentInput = z.infer<typeof invoiceAdjustmentSchema>;
+
 export const paymentSchema = z.object({
   invoice_id: z.string().trim().nullable(),
   client_id: z.string().trim().min(1, "Client is required"),

@@ -17,6 +17,7 @@ import type { PostingStatus } from "@/core/enums/postingStatus";
 import type { AccountingPeriodStatus } from "@/core/enums/accountingPeriodStatus";
 import type {
   InvoiceInput,
+  InvoiceAdjustmentInput,
   PaymentInput,
   ExpenseInput,
   ManualAdjustmentInput,
@@ -153,6 +154,29 @@ export interface FinanceRepository {
   restoreInvoice(id: string): Promise<DataResult<Invoice>>;
   duplicateInvoice(id: string): Promise<DataResult<Invoice>>;
   getInvoiceNextAction(invoiceId: string): Promise<string | null>;
+  /**
+   * Finance F2.1C-D-C. Post-issuance financial correction for an Invoice
+   * that has already left draft — the current subtotal/tax/discount are
+   * changed to `input`'s values (total is always server-derived), a single
+   * balanced append-only Journal Entry (source_type 'invoice_adjustment')
+   * captures the signed delta, and the Invoice's own current economic
+   * fields plus paid_minor/balance_minor/status are recomputed atomically.
+   * Only invoices in {issued, sent, viewed, partially_paid, paid, overdue}
+   * are eligible — draft invoices use `updateInvoice` instead, voided/
+   * archived invoices are terminal. Rejects a downward correction that
+   * would drop the total below what has already been collected (via cash
+   * payment or Customer Deposit Application) — refund the excess first.
+   * Rejects a no-op (all three fields already match the request).
+   *
+   * `adjustmentId` is a REQUIRED, caller-supplied request-level idempotency
+   * key — same contract as `refundPayment`'s `refundPaymentId` (see its doc
+   * comment): generate once per intended correction, reuse on retry, never
+   * regenerate. A repeat call with the same key and the same target
+   * subtotal/tax/discount replays the original result (the Invoice,
+   * unchanged); a repeat with the same key but a different target fails as
+   * a conflict.
+   */
+  recordInvoiceAdjustment(invoiceId: string, input: InvoiceAdjustmentInput, adjustmentId: string): Promise<DataResult<Invoice>>;
 
   /** `context` optionally injects an already-authenticated server Supabase client + Workspace session — see EventsRepository's identical doc comment. Ignored by the mock implementation. */
   getPayments(filters?: PaymentFilters, context?: ServerRepositoryContext): Promise<Payment[]>;

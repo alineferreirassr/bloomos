@@ -65,6 +65,18 @@ import { type DataResult, fail } from "@/lib/data/result";
  *     invoices.*_minor to the refund correction; should be unreachable
  *     given the existing refundable-amount ceiling, never silently writes
  *     a negative Invoice field)
+ *   - invoice adjustment validation:        P1132-P1135 (Finance F2.1C-D-C —
+ *     record_invoice_adjustment: P1132 the invoice is not in an
+ *     adjustment-eligible status (draft — use updateInvoice instead — or a
+ *     terminal voided/archived invoice), P1133 the requested subtotal/tax/
+ *     discount all match the invoice's current values (no-op, nothing to
+ *     post), P1134 the corrected total would drop below the amount already
+ *     collected via cash payment or Customer Deposit Application (refund
+ *     the excess first — never silently creates negative AR), P1135
+ *     invalid financial values (negative amount or discount exceeding
+ *     subtotal) reaching the RPC directly — defensive, unreachable via the
+ *     TS repository layer's own schema validation, mirroring P1121/P1131's
+ *     "should be unreachable, never silently corrupts" precedent)
  *
  * P1120 (Finance F2.1B-REVIEW's "refund rejected, Revenue recognized" —
  * process_payment_refund's blanket rejection of any invoice-linked refund
@@ -130,6 +142,10 @@ export const FINANCE_VALIDATION_ERROR_CODES = new Set([
   "P1129",
   "P1130",
   "P1131",
+  "P1132",
+  "P1133",
+  "P1134",
+  "P1135",
   "P1200",
 ]);
 

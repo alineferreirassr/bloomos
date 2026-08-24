@@ -51,6 +51,12 @@ export const TIMELINE_ACTIVITY_TYPES = [
   "invoice_voided",
   "invoice_archived",
   "invoice_restored",
+  // Finance F2.1C-D-C — Invoice Financial Adjustment. Recorded whenever a
+  // post-issuance correction changes an Invoice's recognized subtotal/tax/
+  // discount; the append-only correction Journal Entry (source_type
+  // 'invoice_adjustment') remains the accounting source of truth, this is
+  // operational history only.
+  "invoice_adjusted",
   "payment_created",
   "payment_processing",
   "payment_succeeded",
@@ -516,6 +522,7 @@ export const TIMELINE_ACTIVITY_LABELS: Record<TimelineActivityType, string> = {
   invoice_voided: "Invoice voided",
   invoice_archived: "Invoice archived",
   invoice_restored: "Invoice restored",
+  invoice_adjusted: "Invoice financial adjustment recorded",
   payment_created: "Payment created",
   payment_processing: "Payment processing",
   payment_succeeded: "Payment succeeded",

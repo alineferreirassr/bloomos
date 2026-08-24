@@ -43,9 +43,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation + 20 Services Foundation schema migrations + 1 Event Service Workspace media owner_type widening migration + 1 Client Portal Checkpoint 14 schema migration + 1 Analytics permission seed migration + 1 Digital Asset Management media_assets workspace owner_type widening migration + 2 Finance F1.8 Payment Atomicity & Refund Reversal migrations + 1 Finance F2.1B Invoice Revenue Recognition migration + 1 Finance F2.1B-REVIEW refund guard migration + 1 Finance F2.1C-B refund Revenue correction migration + 1 Finance F2.1C-C Customer Deposit application migration + 1 Finance F2.1C-D-B refund-correction Invoice-field sync migration (excluding independently-tracked, not-yet-released work still uncommitted alongside this one — see KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS), in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation + 20 Services Foundation schema migrations + 1 Event Service Workspace media owner_type widening migration + 1 Client Portal Checkpoint 14 schema migration + 1 Analytics permission seed migration + 1 Digital Asset Management media_assets workspace owner_type widening migration + 2 Finance F1.8 Payment Atomicity & Refund Reversal migrations + 1 Finance F2.1B Invoice Revenue Recognition migration + 1 Finance F2.1B-REVIEW refund guard migration + 1 Finance F2.1C-B refund Revenue correction migration + 1 Finance F2.1C-C Customer Deposit application migration + 1 Finance F2.1C-D-B refund-correction Invoice-field sync migration + 1 Finance F2.1C-D-C Invoice Financial Adjustment migration (excluding independently-tracked, not-yet-released work still uncommitted alongside this one — see KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS), in chronological (execution) order", () => {
     const files = migrationFilesForThisRelease();
-    expect(files).toHaveLength(164);
+    expect(files).toHaveLength(165);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -1209,6 +1209,7 @@ describe("Finance Posting Engine migrations", () => {
       "20260823100000_finance_refund_revenue_correction.sql",
       "20260824100000_finance_deposit_application.sql",
       "20260825100000_finance_refund_invoice_field_sync.sql",
+      "20260826100000_finance_invoice_adjustment.sql",
     ];
     for (const otherFile of migrationFiles().filter((f) => !POSTING_ENGINE_FILES.includes(f) && !LATER_SANCTIONED_FINANCE_FILES.includes(f))) {
       const sql = readMigration(otherFile);
@@ -2536,6 +2537,166 @@ describe("Finance F2.1C-D-B migration — refund-correction Invoice-field synchr
     // the function BODY only, proving no new code path reads/writes account 2200.
     const reversalFn = code.match(/create or replace function public\.post_payment_refund_reversal[\s\S]*?^\$\$;/m)?.[0] ?? "";
     expect(reversalFn).not.toMatch(/2200/);
+  });
+});
+
+describe("Finance F2.1C-D-C migration — Invoice Financial Adjustment", () => {
+  const FILE = "20260826100000_finance_invoice_adjustment.sql";
+  const sql = () => readMigration(FILE);
+
+  it("widens journal_entries_source_type_check to add exactly 'invoice_adjustment', preserving every one of the 20 prior values", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/alter table public\.journal_entries drop constraint journal_entries_source_type_check;/);
+    const PRIOR_VALUES = [
+      "purchase_receipt", "invoice_issued", "invoice_voided", "payment_settlement", "payment_refund",
+      "expense_due", "expense_paid", "expense_reimbursed", "expense_due_reversal",
+      "inventory_adjustment", "inventory_writeoff", "inventory_event_checkout", "inventory_event_return",
+      "inventory_initial_stock", "vendor_payment", "vendor_refund", "stripe_payout", "manual_adjustment",
+      "reversal", "deposit_application",
+    ];
+    for (const value of PRIOR_VALUES) {
+      expect(code).toMatch(new RegExp(`'${value}'`));
+    }
+    expect(code).toMatch(/'invoice_adjustment'/);
+  });
+
+  it("defines only record_invoice_adjustment — no new table, no Chart of Accounts mutation, no separate posting-primitive function, no RLS/policy changes", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create or replace function public\.record_invoice_adjustment\(/);
+    expect(code).not.toMatch(/create or replace function public\.post_invoice_adjustment\(/);
+    expect(code).not.toMatch(/create table/i);
+    expect(code).not.toMatch(/insert into public\.chart_of_accounts/);
+    expect(code).not.toMatch(/alter table public\.chart_of_accounts/);
+    expect(code).not.toMatch(/create policy|alter policy|row level security/i);
+  });
+
+  describe("record_invoice_adjustment", () => {
+    const fn = () => {
+      const match = stripSqlComments(sql()).match(/create or replace function public\.record_invoice_adjustment[\s\S]*?^\$\$;/m)?.[0];
+      return match ?? "";
+    };
+
+    it("requires p_adjustment_id (P1130) and validates non-negative fields with discount not exceeding subtotal (P1135) before ever locking the invoice", () => {
+      const code = fn();
+      const keyGuardIndex = code.indexOf("if p_adjustment_id is null then");
+      const shapeGuardIndex = code.indexOf("p_discount_minor > p_subtotal_minor");
+      const lockIndex = code.indexOf("select * into v_invoice from public.invoices where id = p_invoice_id for update;");
+      expect(keyGuardIndex).toBeGreaterThan(-1);
+      expect(shapeGuardIndex).toBeGreaterThan(-1);
+      expect(lockIndex).toBeGreaterThan(shapeGuardIndex);
+      expect(code).toMatch(/errcode = 'P1130'/);
+      expect(code).toMatch(/errcode = 'P1135'/);
+    });
+
+    it("locks the invoice row (for update) BEFORE the request-idempotency replay/conflict check, mirroring F2.1C-B-REVIEW's own lock-before-check pattern", () => {
+      const code = fn();
+      const lockIndex = code.indexOf("for update;");
+      const replayIndex = code.indexOf("where source_type = 'invoice_adjustment' and source_id = p_adjustment_id::text;");
+      expect(lockIndex).toBeGreaterThan(-1);
+      expect(replayIndex).toBeGreaterThan(lockIndex);
+    });
+
+    it("F2.1C-D-C-REVIEW: request idempotency compares against the REQUESTED target parsed from the existing entry's own durable memo, NOT the Invoice's current fields — a replay match returns the invoice unchanged, a mismatch is rejected as a conflict (P1129)", () => {
+      const code = fn();
+      // The original, review-flagged formula (comparing against v_invoice's CURRENT fields) must be gone...
+      expect(code).not.toMatch(/if v_invoice\.subtotal_minor = p_subtotal_minor and v_invoice\.tax_minor = p_tax_minor and v_invoice\.discount_minor = p_discount_minor then/);
+      // ...replaced by parsing the durable target back out of the existing entry's memo.
+      expect(code).toMatch(/v_replay_subtotal := substring\(v_existing_entry\.memo from 'subtotal_minor=\(-\?\\d\+\)'\)::integer;/);
+      expect(code).toMatch(/v_replay_tax := substring\(v_existing_entry\.memo from 'tax_minor=\(-\?\\d\+\)'\)::integer;/);
+      expect(code).toMatch(/v_replay_discount := substring\(v_existing_entry\.memo from 'discount_minor=\(-\?\\d\+\)'\)::integer;/);
+      expect(code).toMatch(/if v_replay_subtotal = p_subtotal_minor and v_replay_tax = p_tax_minor and v_replay_discount = p_discount_minor then/);
+      expect(code).toMatch(/return v_invoice;/);
+      expect(code).toMatch(/errcode = 'P1129'/);
+    });
+
+    it("F2.1C-D-C-REVIEW: the posted memo embeds the REQUESTED target (subtotal_minor=/tax_minor=/discount_minor=) as its own parseable prefix, matching exactly what the replay-check regexes above extract", () => {
+      const code = fn();
+      expect(code).toMatch(/'Invoice financial adjustment target: subtotal_minor=%s tax_minor=%s discount_minor=%s\. Was subtotal %s→%s, tax %s→%s, discount %s→%s\. Reason: %s',\s*\n\s*p_subtotal_minor, p_tax_minor, p_discount_minor,/);
+    });
+
+    it("gates on the SAME adjustment-eligible status set record_deposit_application already established, plus 'paid' — draft (P1132) and every other non-member status (P1132) are rejected", () => {
+      const code = fn();
+      expect(code).toMatch(/if v_invoice\.status not in \('issued', 'sent', 'viewed', 'partially_paid', 'paid', 'overdue'\) then/);
+      expect(code).toMatch(/if v_invoice\.status = 'draft' then/);
+      expect(code).toMatch(/errcode = 'P1132'/);
+    });
+
+    it("rejects a no-op (P1133) when all three requested fields already match the invoice's current values, before computing any delta or posting", () => {
+      const code = fn();
+      const noOpIndex = code.indexOf("if p_subtotal_minor = v_old_subtotal and p_tax_minor = v_old_tax and p_discount_minor = v_old_discount then");
+      const deltaIndex = code.indexOf("v_delta_subtotal := p_subtotal_minor - v_old_subtotal;");
+      expect(noOpIndex).toBeGreaterThan(-1);
+      expect(code).toMatch(/errcode = 'P1133'/);
+      expect(deltaIndex).toBeGreaterThan(noOpIndex);
+    });
+
+    it("anti-overpayment: rejects (P1134) a corrected total below v_invoice.paid_minor — the settled amount, before computing any delta or posting", () => {
+      const code = fn();
+      const guardIndex = code.indexOf("if v_new_total < v_invoice.paid_minor then");
+      const deltaIndex = code.indexOf("v_delta_subtotal := p_subtotal_minor - v_old_subtotal;");
+      expect(guardIndex).toBeGreaterThan(-1);
+      expect(code).toMatch(/errcode = 'P1134'/);
+      expect(deltaIndex).toBeGreaterThan(guardIndex);
+    });
+
+    it("derives v_new_total server-side as subtotal + tax - discount and computes v_delta_total as v_delta_subtotal + v_delta_tax - v_delta_discount — never accepts a caller-supplied total", () => {
+      const code = fn();
+      expect(code).toMatch(/v_new_total := p_subtotal_minor \+ p_tax_minor - p_discount_minor;/);
+      expect(code).toMatch(/v_delta_total := v_delta_subtotal \+ v_delta_tax - v_delta_discount;/);
+      expect(code).not.toMatch(/p_total_minor/);
+    });
+
+    it("posts AR/Revenue-or-Refunds/Tax/Discount lines conditioned on their own delta's sign, each branch omitted entirely when that delta is zero", () => {
+      const code = fn();
+      expect(code).toMatch(/if v_delta_total > 0 then[\s\S]*?1100[\s\S]*?elsif v_delta_total < 0 then[\s\S]*?1100/);
+      expect(code).toMatch(/if v_delta_subtotal > 0 then[\s\S]*?4000[\s\S]*?elsif v_delta_subtotal < 0 then[\s\S]*?4950/);
+      expect(code).toMatch(/if v_delta_tax > 0 then[\s\S]*?2100[\s\S]*?elsif v_delta_tax < 0 then[\s\S]*?2100/);
+      expect(code).toMatch(/if v_delta_discount > 0 then[\s\S]*?4900[\s\S]*?elsif v_delta_discount < 0 then[\s\S]*?4900/);
+    });
+
+    it("never touches account 1000 Cash or 2200 Customer Deposits — no cash/deposit movement from a pure financial correction", () => {
+      const code = fn();
+      expect(code).not.toMatch(/,\s*1000\)/);
+      expect(code).not.toMatch(/,\s*2200\)/);
+    });
+
+    it("posts via finance_insert_journal_entry with current_date, never a caller-supplied p_entry_date — no backdating into the original issue period", () => {
+      const code = fn();
+      expect(code).toMatch(/perform public\.finance_insert_journal_entry\(\s*\n\s*v_invoice\.workspace_id,\s*\n\s*current_date,/);
+      expect(code).not.toMatch(/p_entry_date/);
+    });
+
+    it("updates invoices.subtotal_minor/tax_minor/discount_minor/total_minor and updated_at, scoped to p_invoice_id, BEFORE calling recompute_invoice_balance (reused, not re-derived) for paid_minor/balance_minor/status", () => {
+      const code = fn();
+      expect(code).toMatch(/update public\.invoices\s*\n\s*set subtotal_minor = p_subtotal_minor,\s*\n\s*tax_minor = p_tax_minor,\s*\n\s*discount_minor = p_discount_minor,\s*\n\s*total_minor = v_new_total,\s*\n\s*updated_at = now\(\)\s*\n\s*where id = p_invoice_id;/);
+      const updateIndex = code.indexOf("update public.invoices");
+      const recomputeIndex = code.indexOf("v_recomputed := public.recompute_invoice_balance(p_invoice_id, p_actor);");
+      expect(updateIndex).toBeGreaterThan(-1);
+      expect(recomputeIndex).toBeGreaterThan(updateIndex);
+      expect(code).toMatch(/return v_recomputed;/);
+    });
+
+    it("returns public.invoices, not public.journal_entries — the Invoice's own updated row is the caller-facing result", () => {
+      const rawCode = stripSqlComments(sql());
+      expect(rawCode).toMatch(/create or replace function public\.record_invoice_adjustment\([\s\S]*?\)\s*\nreturns public\.invoices/);
+    });
+  });
+
+  it("uses no exception handlers, matching the established no-swallowed-errors convention", () => {
+    expect(stripSqlComments(sql())).not.toMatch(/exception\s+when/i);
+  });
+
+  it("does not implement Partial-Payment Void, Deposit Application reversal, historical backfill, reconciliation activation, or a Credit/Debit Note table, and does not modify any already-committed migration's own function", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/proportional.{0,20}void|partial.{0,10}void.{0,10}reversal/i);
+    expect(code).not.toMatch(/deposit.{0,10}application.{0,10}revers|reverse.{0,10}deposit/i);
+    expect(code).not.toMatch(/backfill/i);
+    expect(code).not.toMatch(/create or replace function public\.\w*reconcil/i);
+    expect(code).not.toMatch(/create table.*(credit_note|debit_note)/i);
+    expect(code).not.toMatch(/create or replace function public\.post_payment_refund_reversal\(/);
+    expect(code).not.toMatch(/create or replace function public\.process_payment_refund\(/);
+    expect(code).not.toMatch(/create or replace function public\.record_deposit_application\(/);
+    expect(code).not.toMatch(/create or replace function public\.post_deposit_application\(/);
   });
 });
 

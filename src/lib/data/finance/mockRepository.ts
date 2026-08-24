@@ -22,6 +22,7 @@ import {
 import { canTransitionExpenseStatus, isExpenseTerminal, getExpenseNextRecommendedAction } from "@/core/workflows/expenseWorkflow";
 import {
   invoiceSchema,
+  invoiceAdjustmentSchema,
   paymentSchema,
   expenseSchema,
   manualAdjustmentInputSchema,
@@ -29,6 +30,7 @@ import {
   expenseTransitionInputSchema,
   accountingPeriodCreateInputSchema,
   type InvoiceInput,
+  type InvoiceAdjustmentInput,
   type PaymentInput,
   type ExpenseInput,
   type ManualAdjustmentInput,
@@ -566,6 +568,178 @@ async function duplicateInvoice(id: string): Promise<DataResult<Invoice>> {
 async function getInvoiceNextAction(invoiceId: string): Promise<string | null> {
   const invoice = await getInvoiceById(invoiceId);
   return getInvoiceNextRecommendedAction(invoice);
+}
+
+/** Same eligible set record_deposit_application already established, plus "paid" (a fully-paid invoice is still a legitimate correction target — e.g. an upward correction after undercharging). Draft uses the normal updateInvoice financial-edit path instead (no Revenue recognized yet, nothing to correct against); voided/archived are terminal. */
+const INVOICE_ADJUSTMENT_ELIGIBLE_STATUSES = new Set<InvoiceStatus>(["issued", "sent", "viewed", "partially_paid", "paid", "overdue"]);
+
+/**
+ * Extracts the REQUESTED subtotal/tax/discount target an invoice_adjustment
+ * Journal Entry's memo durably records — see recordInvoiceAdjustment's
+ * request-idempotency comment (F2.1C-D-C-REVIEW) for why comparing against
+ * this parsed, immutable target rather than the Invoice's own (potentially
+ * further-mutated-since) current fields is required for a stale retry to
+ * replay correctly after a later, unrelated adjustment. Returns null if the
+ * memo doesn't match the expected format (should be unreachable — only
+ * recordInvoiceAdjustment itself ever writes this memo shape).
+ */
+function parseInvoiceAdjustmentTarget(memo: string | null): { subtotal_minor: number; tax_minor: number; discount_minor: number } | null {
+  const match = memo?.match(/subtotal_minor=(-?\d+) tax_minor=(-?\d+) discount_minor=(-?\d+)/);
+  if (!match) return null;
+  return { subtotal_minor: Number(match[1]), tax_minor: Number(match[2]), discount_minor: Number(match[3]) };
+}
+
+/**
+ * Finance F2.1C-D-C. Post-issuance financial correction for an
+ * already-issued Invoice: the current subtotal/tax/discount are changed to
+ * `input`'s values (total is always server-derived), a single balanced
+ * append-only Journal Entry (source_type 'invoice_adjustment') captures
+ * the signed delta against the SAME accounts Revenue Recognition and
+ * Refund correction already use, and the Invoice's own current fields plus
+ * paid_minor/balance_minor/status are recomputed atomically. Deltas are
+ * computed against the Invoice's CURRENT economic fields — F2.1C-D-B keeps
+ * those synchronized with every prior refund correction, so an adjustment
+ * naturally composes with refund history instead of needing to reconstruct
+ * or double-count it.
+ */
+async function recordInvoiceAdjustment(invoiceId: string, input: InvoiceAdjustmentInput, adjustmentId: string): Promise<DataResult<Invoice>> {
+  const invoice = readInvoices().find((i) => i.id === invoiceId);
+  if (!invoice) {
+    return fail("Invoice not found.");
+  }
+  if (!adjustmentId) {
+    return fail(
+      "adjustmentId is required and must be a stable identifier supplied by the caller (the same value on every retry of the same adjustment request).",
+    );
+  }
+
+  // Finance F2.1C-D-C-REVIEW: no separate Credit/Debit Note table exists
+  // (this checkpoint's own scope explicitly excludes one), so the
+  // already-posted correction Journal Entry's own memo carries the
+  // REQUESTED target durably (parsed back via parseInvoiceAdjustmentTarget
+  // below) — comparing against the Invoice's CURRENT fields instead (the
+  // original F2.1C-D-C design) was found, on independent review, to
+  // incorrectly reject a legitimate stale retry once a LATER, different
+  // adjustment had moved the Invoice on in the meantime: adjustment A (key
+  // K) sets the invoice to 120000, adjustment B (a different key) later
+  // moves it to 130000, and a delayed retry of K then compared its own
+  // target (120000) against the CURRENT invoice (130000) — a spurious
+  // mismatch, even though K's own request had already succeeded exactly as
+  // asked. Journal Entries are append-only (the memo of an existing entry
+  // never changes), making it a durable, correction-scoped record of what
+  // THIS adjustmentId specifically requested, independent of anything that
+  // happened to the Invoice afterward.
+  const existingEntry = readJournalEntries().find((e) => e.source_type === "invoice_adjustment" && e.source_id === adjustmentId);
+  if (existingEntry) {
+    const requestedTarget = parseInvoiceAdjustmentTarget(existingEntry.memo);
+    if (
+      requestedTarget &&
+      requestedTarget.subtotal_minor === input.subtotal_minor &&
+      requestedTarget.tax_minor === input.tax_minor &&
+      requestedTarget.discount_minor === input.discount_minor
+    ) {
+      return ok(invoice);
+    }
+    return fail("This idempotency key was already used for a different adjustment request.");
+  }
+
+  if (!INVOICE_ADJUSTMENT_ELIGIBLE_STATUSES.has(invoice.status)) {
+    if (invoice.status === "draft") {
+      return fail("Draft invoices are not yet issued — use the normal invoice edit instead of a financial adjustment.");
+    }
+    return fail(`Cannot financially adjust an invoice that is ${INVOICE_STATUS_LABELS[invoice.status].toLowerCase()}.`);
+  }
+
+  const parsed = invoiceAdjustmentSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  const oldSubtotal = invoice.subtotal_minor;
+  const oldTax = invoice.tax_minor;
+  const oldDiscount = invoice.discount_minor;
+  const { subtotal_minor: newSubtotal, tax_minor: newTax, discount_minor: newDiscount, reason } = parsed.data;
+  const newTotal = subtractMinor(addMinor(newSubtotal, newTax), newDiscount);
+
+  if (newSubtotal === oldSubtotal && newTax === oldTax && newDiscount === oldDiscount) {
+    return fail("No financial change was requested — the corrected subtotal, tax, and discount all match the invoice's current values.");
+  }
+
+  // Finance F2.1C-D-C: the settled economic amount is exactly paid_minor —
+  // it already nets cash payments, Customer Deposit Applications (both
+  // count toward it via applyPaymentToInvoice's grossPaid), and prior
+  // refunds. A downward correction may never drop the total below what
+  // has genuinely already been collected against this invoice; the
+  // Founder decision on partial-payment cancellation (D1) is explicitly
+  // deferred to Partial-Payment Void (F2.1C-D-D) — this checkpoint simply
+  // refuses the correction rather than inventing an implicit refund.
+  if (newTotal < invoice.paid_minor) {
+    return fail(`Cannot reduce the invoice below the amount already collected (${invoice.paid_minor} minor units). Refund the excess first.`);
+  }
+
+  const deltaSubtotal = subtractMinor(newSubtotal, oldSubtotal);
+  const deltaTax = subtractMinor(newTax, oldTax);
+  const deltaDiscount = subtractMinor(newDiscount, oldDiscount);
+  const deltaTotal = subtractMinor(deltaSubtotal + deltaTax, deltaDiscount);
+
+  const lines: { account_id: string; debit_minor: number; credit_minor: number }[] = [];
+  if (deltaTotal > 0) {
+    lines.push({ account_id: findAccountByNumber(invoice.workspace_id, 1100).id, debit_minor: deltaTotal, credit_minor: 0 });
+  } else if (deltaTotal < 0) {
+    lines.push({ account_id: findAccountByNumber(invoice.workspace_id, 1100).id, debit_minor: 0, credit_minor: -deltaTotal });
+  }
+  if (deltaSubtotal > 0) {
+    lines.push({ account_id: findAccountByNumber(invoice.workspace_id, 4000).id, debit_minor: 0, credit_minor: deltaSubtotal });
+  } else if (deltaSubtotal < 0) {
+    lines.push({ account_id: findAccountByNumber(invoice.workspace_id, 4950).id, debit_minor: -deltaSubtotal, credit_minor: 0 });
+  }
+  if (deltaTax > 0) {
+    lines.push({ account_id: findAccountByNumber(invoice.workspace_id, 2100).id, debit_minor: 0, credit_minor: deltaTax });
+  } else if (deltaTax < 0) {
+    lines.push({ account_id: findAccountByNumber(invoice.workspace_id, 2100).id, debit_minor: -deltaTax, credit_minor: 0 });
+  }
+  if (deltaDiscount > 0) {
+    lines.push({ account_id: findAccountByNumber(invoice.workspace_id, 4900).id, debit_minor: deltaDiscount, credit_minor: 0 });
+  } else if (deltaDiscount < 0) {
+    lines.push({ account_id: findAccountByNumber(invoice.workspace_id, 4900).id, debit_minor: 0, credit_minor: -deltaDiscount });
+  }
+
+  const timestamp = nowIso();
+  try {
+    insertMockJournalEntry({
+      workspace_id: invoice.workspace_id,
+      entry_date: timestamp.slice(0, 10),
+      source_type: "invoice_adjustment",
+      source_id: adjustmentId,
+      posting_key: `invoice_adjustment:${adjustmentId}`,
+      memo: `Invoice financial adjustment target: subtotal_minor=${newSubtotal} tax_minor=${newTax} discount_minor=${newDiscount}. Was subtotal ${oldSubtotal}→${newSubtotal}, tax ${oldTax}→${newTax}, discount ${oldDiscount}→${newDiscount}. Reason: ${reason}`,
+      posted_by: CURRENT_ACTOR,
+      lines,
+    });
+  } catch (postingError) {
+    return fail(postingError instanceof Error ? postingError.message : String(postingError));
+  }
+
+  const corrected: Invoice = {
+    ...invoice,
+    subtotal_minor: newSubtotal,
+    tax_minor: newTax,
+    discount_minor: newDiscount,
+    total_minor: newTotal,
+    updated_at: timestamp,
+  };
+  writeInvoices(readInvoices().map((i) => (i.id === invoiceId ? corrected : i)));
+  const recomputed = applyPaymentToInvoice(invoiceId) ?? corrected;
+
+  recordTimelineActivity(
+    invoice.workspace_id,
+    "invoice",
+    invoiceId,
+    "invoice_adjusted",
+    `Invoice financial adjustment: total ${invoice.total_minor} → ${newTotal} (${reason})`,
+  );
+
+  return ok(recomputed);
 }
 
 /**
@@ -2653,6 +2827,7 @@ export const mockFinanceRepository: FinanceRepository = {
   restoreInvoice,
   duplicateInvoice,
   getInvoiceNextAction,
+  recordInvoiceAdjustment,
   getPayments,
   getPaymentById,
   createPayment,

@@ -2512,6 +2512,18 @@ export interface Database {
         Args: { p_application_payment_id: string; p_deposit_payment_id: string; p_actor: string };
         Returns: Database["public"]["Tables"]["journal_entries"]["Row"];
       };
+      record_invoice_adjustment: {
+        Args: {
+          p_invoice_id: string;
+          p_subtotal_minor: number;
+          p_tax_minor: number;
+          p_discount_minor: number;
+          p_reason: string;
+          p_adjustment_id: string;
+          p_actor: string;
+        };
+        Returns: Database["public"]["Tables"]["invoices"]["Row"];
+      };
       create_document_version: {
         Args: {
           p_document_id: string;

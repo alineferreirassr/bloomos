@@ -1278,6 +1278,522 @@ describe("Finance F2.1C-D-B: currency is financially immutable after issuance", 
   });
 });
 
+describe("mockFinanceRepository.recordInvoiceAdjustment — Finance F2.1C-D-C", () => {
+  // BASE_INVOICE_INPUT: subtotal 100000, tax 5000, discount 2000, total 103000.
+  async function createEligibleInvoice(overrides: Partial<InvoiceInput> = {}) {
+    const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, ...overrides });
+    if (!created.success) throw new Error("setup failed");
+    await mockFinanceRepository.issueInvoice(created.data.id);
+    await mockFinanceRepository.sendInvoice(created.data.id);
+    return created.data.id;
+  }
+
+  async function paySettled(invoiceId: string, amountMinor: number) {
+    const payment = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: invoiceId,
+      client_id: "client_2",
+      event_id: "event_1",
+      contract_id: "contract_1",
+      payment_type: "full_payment",
+      amount_minor: amountMinor,
+      payment_method: "cash",
+    });
+    if (!payment.success) throw new Error("setup failed");
+    return payment.data;
+  }
+
+  describe("basic delta scenarios", () => {
+    it("subtotal increase only: Cr 4000, Dr AR, no tax/discount lines", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 120000, tax_minor: 5000, discount_minor: 2000, reason: "Added scope" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.subtotal_minor).toBe(120000);
+      expect(result.data.total_minor).toBe(123000);
+      expect(result.data.balance_minor).toBe(123000);
+
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_adjustment" });
+      const detail = await mockFinanceRepository.getJournalEntry(entries.find((e) => e.source_id === entries[0].source_id)!.id);
+      expect(detail.lines).toEqual([
+        expect.objectContaining({ account_id: "account_1100", debit_minor: 20000, credit_minor: 0 }),
+        expect.objectContaining({ account_id: "account_4000", debit_minor: 0, credit_minor: 20000 }),
+      ]);
+    });
+
+    it("subtotal decrease only: Dr 4950 Refunds & Returns, Cr AR", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 80000, tax_minor: 5000, discount_minor: 2000, reason: "Overcharged" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.subtotal_minor).toBe(80000);
+      expect(result.data.total_minor).toBe(83000);
+
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_adjustment" });
+      const detail = await mockFinanceRepository.getJournalEntry(entries[0].id);
+      expect(detail.lines).toEqual([
+        expect.objectContaining({ account_id: "account_1100", debit_minor: 0, credit_minor: 20000 }),
+        expect.objectContaining({ account_id: "account_4950", debit_minor: 20000, credit_minor: 0 }),
+      ]);
+    });
+
+    it("tax increase only: Cr 2100", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 100000, tax_minor: 6000, discount_minor: 2000, reason: "Tax rate correction" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.tax_minor).toBe(6000);
+      expect(result.data.total_minor).toBe(104000);
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_adjustment" });
+      const detail = await mockFinanceRepository.getJournalEntry(entries[0].id);
+      expect(detail.lines!.some((l) => l.account_id === "account_2100" && l.credit_minor === 1000 && l.debit_minor === 0)).toBe(true);
+    });
+
+    it("tax decrease only: Dr 2100", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 100000, tax_minor: 3000, discount_minor: 2000, reason: "Tax rate correction" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_adjustment" });
+      const detail = await mockFinanceRepository.getJournalEntry(entries[0].id);
+      expect(detail.lines!.some((l) => l.account_id === "account_2100" && l.debit_minor === 2000 && l.credit_minor === 0)).toBe(true);
+    });
+
+    it("discount increase only: Dr 4900", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 100000, tax_minor: 5000, discount_minor: 5000, reason: "Extra discount granted" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.discount_minor).toBe(5000);
+      expect(result.data.total_minor).toBe(100000);
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_adjustment" });
+      const detail = await mockFinanceRepository.getJournalEntry(entries[0].id);
+      expect(detail.lines!.some((l) => l.account_id === "account_4900" && l.debit_minor === 3000 && l.credit_minor === 0)).toBe(true);
+    });
+
+    it("discount decrease only: Cr 4900", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 100000, tax_minor: 5000, discount_minor: 500, reason: "Discount revoked" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_adjustment" });
+      const detail = await mockFinanceRepository.getJournalEntry(entries[0].id);
+      expect(detail.lines!.some((l) => l.account_id === "account_4900" && l.credit_minor === 1500 && l.debit_minor === 0)).toBe(true);
+    });
+
+    it("combined subtotal + tax + discount change posts a single balanced entry", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 110000, tax_minor: 4000, discount_minor: 3000, reason: "Full re-quote" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      // old: subtotal 100000/tax 5000/discount 2000 (total 103000).
+      // new: subtotal 110000/tax 4000/discount 3000 -> new_total = 111000.
+      // deltas: subtotal +10000, tax -1000, discount +1000, total +8000.
+      expect(result.data.total_minor).toBe(111000);
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_adjustment" });
+      const detail = await mockFinanceRepository.getJournalEntry(entries[0].id);
+      expect(detail.lines).toEqual([
+        expect.objectContaining({ account_id: "account_1100", debit_minor: 8000, credit_minor: 0 }),
+        expect.objectContaining({ account_id: "account_4000", debit_minor: 0, credit_minor: 10000 }),
+        expect.objectContaining({ account_id: "account_2100", debit_minor: 1000, credit_minor: 0 }),
+        expect.objectContaining({ account_id: "account_4900", debit_minor: 1000, credit_minor: 0 }),
+      ]);
+      const totalDebit = detail.lines!.reduce((sum, l) => sum + l.debit_minor, 0);
+      const totalCredit = detail.lines!.reduce((sum, l) => sum + l.credit_minor, 0);
+      expect(totalDebit).toBe(totalCredit);
+      expect(totalDebit).toBe(10000);
+    });
+
+    it("zero-net-total: subtotal increase offset by an equal discount increase posts NO AR line but still posts Revenue/Discount lines", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 110000, tax_minor: 5000, discount_minor: 12000, reason: "Repriced with matching extra discount" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      // delta_subtotal=10000, delta_discount=10000 -> delta_total=0
+      expect(result.data.total_minor).toBe(103000);
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_adjustment" });
+      const detail = await mockFinanceRepository.getJournalEntry(entries[0].id);
+      expect(detail.lines!.some((l) => l.account_id === "account_1100")).toBe(false);
+      expect(detail.lines).toEqual([
+        expect.objectContaining({ account_id: "account_4000", debit_minor: 0, credit_minor: 10000 }),
+        expect.objectContaining({ account_id: "account_4900", debit_minor: 10000, credit_minor: 0 }),
+      ]);
+    });
+
+    it("rejects a no-op adjustment (requested values match current values) and posts nothing", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 100000, tax_minor: 5000, discount_minor: 2000, reason: "No real change" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(false);
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_adjustment" });
+      expect(entries).toHaveLength(0);
+    });
+  });
+
+  describe("invoice state eligibility", () => {
+    it("allows an adjustment on an issued (not yet sent) invoice", async () => {
+      const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+      if (!created.success) throw new Error("setup failed");
+      await mockFinanceRepository.issueInvoice(created.data.id);
+
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        created.data.id,
+        { subtotal_minor: 90000, tax_minor: 5000, discount_minor: 2000, reason: "Correction before sending" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(true);
+    });
+
+    it("allows an adjustment on a partially_paid invoice", async () => {
+      const invoiceId = await createEligibleInvoice();
+      await paySettled(invoiceId, 40000);
+      const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+      expect(invoice.status).toBe("partially_paid");
+
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 110000, tax_minor: 5000, discount_minor: 2000, reason: "Upward correction while partially paid" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(true);
+    });
+
+    it("allows an upward adjustment on a fully paid invoice", async () => {
+      const invoiceId = await createEligibleInvoice();
+      await paySettled(invoiceId, 103000);
+      const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+      expect(invoice.status).toBe("paid");
+
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 120000, tax_minor: 5000, discount_minor: 2000, reason: "Undercharged, billing more" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.total_minor).toBe(123000);
+      expect(result.data.balance_minor).toBe(20000);
+      expect(result.data.status).toBe("partially_paid");
+    });
+
+    it("rejects an adjustment on a draft invoice — use updateInvoice instead", async () => {
+      const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+      if (!created.success) throw new Error("setup failed");
+
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        created.data.id,
+        { subtotal_minor: 90000, tax_minor: 5000, discount_minor: 2000, reason: "Should be rejected" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects an adjustment on a voided invoice", async () => {
+      const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+      if (!created.success) throw new Error("setup failed");
+      await mockFinanceRepository.issueInvoice(created.data.id);
+      await mockFinanceRepository.voidInvoice(created.data.id);
+
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        created.data.id,
+        { subtotal_minor: 90000, tax_minor: 5000, discount_minor: 2000, reason: "Should be rejected" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects an adjustment on an archived invoice", async () => {
+      const invoiceId = await createEligibleInvoice();
+      await mockFinanceRepository.archiveInvoice(invoiceId);
+
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 90000, tax_minor: 5000, discount_minor: 2000, reason: "Should be rejected" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("anti-overpayment safety", () => {
+    it("allows a downward correction that stays at or above the settled (paid) amount", async () => {
+      const invoiceId = await createEligibleInvoice();
+      await paySettled(invoiceId, 60000);
+
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 60000, tax_minor: 0, discount_minor: 0, reason: "Reduced to exactly what was collected" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.total_minor).toBe(60000);
+      expect(result.data.balance_minor).toBe(0);
+      expect(result.data.status).toBe("paid");
+    });
+
+    it("rejects a downward correction that would drop the total below the already-collected amount", async () => {
+      const invoiceId = await createEligibleInvoice();
+      await paySettled(invoiceId, 80000);
+
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 50000, tax_minor: 0, discount_minor: 0, reason: "Would create phantom overpayment" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(false);
+
+      const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+      expect(invoice.subtotal_minor).toBe(100000); // unchanged
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_adjustment" });
+      expect(entries).toHaveLength(0);
+    });
+
+    it("Customer Deposit Applications count toward the settled amount for anti-overpayment safety", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const deposit = await mockFinanceRepository.createPayment({
+        ...BASE_PAYMENT_INPUT,
+        invoice_id: null,
+        client_id: "client_2",
+        event_id: "event_1",
+        contract_id: "contract_1",
+        payment_type: "deposit",
+        amount_minor: 70000,
+        payment_method: "cash",
+      });
+      if (!deposit.success) throw new Error("setup failed");
+      const applied = await mockFinanceRepository.applyDepositToInvoice(deposit.data.id, invoiceId, 70000, crypto.randomUUID());
+      expect(applied.success).toBe(true);
+
+      // Settled amount is now 70000 via the deposit application alone — a
+      // correction down to 50000 (below that) must be rejected even though
+      // NO cash payment (only a deposit application) was ever recorded.
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 50000, tax_minor: 0, discount_minor: 0, reason: "Would create phantom overpayment via deposit" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(false);
+
+      const okResult = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 70000, tax_minor: 0, discount_minor: 0, reason: "Reduced to exactly the applied deposit amount" },
+        crypto.randomUUID(),
+      );
+      expect(okResult.success).toBe(true);
+    });
+
+    it("mixed cash payment + Customer Deposit Application both count toward the settled amount", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const deposit = await mockFinanceRepository.createPayment({
+        ...BASE_PAYMENT_INPUT,
+        invoice_id: null,
+        client_id: "client_2",
+        event_id: "event_1",
+        contract_id: "contract_1",
+        payment_type: "deposit",
+        amount_minor: 30000,
+        payment_method: "cash",
+      });
+      if (!deposit.success) throw new Error("setup failed");
+      await mockFinanceRepository.applyDepositToInvoice(deposit.data.id, invoiceId, 30000, crypto.randomUUID());
+      await paySettled(invoiceId, 40000);
+
+      const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+      expect(invoice.paid_minor).toBe(70000);
+
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 68000, tax_minor: 0, discount_minor: 0, reason: "Would drop below the combined 70000 settled" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("refund interaction — operates against CURRENT (post-refund) fields", () => {
+    it("an adjustment after a partial refund correctly composes with the refund's own correction, not the original recognition amounts", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const payment = await paySettled(invoiceId, 103000);
+      await mockFinanceRepository.refundPayment(payment.id, 30000, crypto.randomUUID());
+
+      // After the refund correction: total_minor = 103000 - 30000 = 73000 (see F2.1C-D-B).
+      const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+      expect(invoice.total_minor).toBe(73000);
+
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: invoice.subtotal_minor, tax_minor: invoice.tax_minor, discount_minor: invoice.discount_minor - 1000, reason: "Extra discount after refund" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      // delta_discount = -1000 -> delta_total = +1000
+      expect(result.data.total_minor).toBe(74000);
+    });
+  });
+
+  describe("ledger correctness", () => {
+    it("never touches Cash (1000) or Customer Deposits (2200)", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 110000, tax_minor: 6000, discount_minor: 3000, reason: "Full re-quote" },
+        crypto.randomUUID(),
+      );
+      expect(result.success).toBe(true);
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_adjustment" });
+      const detail = await mockFinanceRepository.getJournalEntry(entries[0].id);
+      expect(detail.lines!.some((l) => l.account_id === "account_1000" || l.account_id === "account_2200")).toBe(false);
+    });
+  });
+
+  describe("idempotency — Finance F2.1C-D-C", () => {
+    it("a same-key replay with the SAME target values returns the invoice unchanged and posts no second entry", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const key = crypto.randomUUID();
+      const input = { subtotal_minor: 90000, tax_minor: 5000, discount_minor: 2000, reason: "First attempt" };
+
+      const first = await mockFinanceRepository.recordInvoiceAdjustment(invoiceId, input, key);
+      expect(first.success).toBe(true);
+      const replay = await mockFinanceRepository.recordInvoiceAdjustment(invoiceId, input, key);
+      expect(replay.success).toBe(true);
+      if (!first.success || !replay.success) return;
+      expect(replay.data).toEqual(first.data);
+
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_adjustment" });
+      expect(entries).toHaveLength(1);
+    });
+
+    it("Finance F2.1C-D-C-REVIEW: a stale retry of an EARLIER adjustment replays correctly even after a LATER, different adjustment has since moved the invoice on further", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const keyA = crypto.randomUUID();
+      const keyB = crypto.randomUUID();
+
+      // Adjustment A (key A) sets subtotal 100000 -> 120000.
+      const adjustmentA = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 120000, tax_minor: 5000, discount_minor: 2000, reason: "First correction" },
+        keyA,
+      );
+      expect(adjustmentA.success).toBe(true);
+
+      // Adjustment B (a DIFFERENT key) later moves it further: 120000 -> 130000.
+      const adjustmentB = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 130000, tax_minor: 5000, discount_minor: 2000, reason: "Second, independent correction" },
+        keyB,
+      );
+      expect(adjustmentB.success).toBe(true);
+
+      // A delayed retry of A arrives now, asking again for A's OWN original
+      // target (120000) -- NOT the invoice's current state (130000, set by
+      // B). Comparing against current state would incorrectly report this
+      // as a conflict (120000 != 130000) even though A's own request had
+      // already succeeded exactly as asked. This must replay cleanly.
+      const retryOfA = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 120000, tax_minor: 5000, discount_minor: 2000, reason: "First correction" },
+        keyA,
+      );
+      expect(retryOfA.success).toBe(true);
+      if (!retryOfA.success) return;
+      // The replay is honest about current state (which now also reflects
+      // B) rather than pretending only A's own effect exists.
+      expect(retryOfA.data.subtotal_minor).toBe(130000);
+
+      // No third Journal Entry was posted for the replay of A.
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_adjustment" });
+      expect(entries).toHaveLength(2);
+    });
+
+    it("a same-key retry with a DIFFERENT target is rejected as a conflict, not replayed", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const key = crypto.randomUUID();
+      const first = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 90000, tax_minor: 5000, discount_minor: 2000, reason: "First attempt" },
+        key,
+      );
+      expect(first.success).toBe(true);
+
+      const conflicting = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 80000, tax_minor: 5000, discount_minor: 2000, reason: "Different target, same key" },
+        key,
+      );
+      expect(conflicting.success).toBe(false);
+    });
+
+    it("a DIFFERENT key represents a distinct, intentional second adjustment", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const first = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 90000, tax_minor: 5000, discount_minor: 2000, reason: "First correction" },
+        crypto.randomUUID(),
+      );
+      expect(first.success).toBe(true);
+
+      const second = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 95000, tax_minor: 5000, discount_minor: 2000, reason: "Second, independent correction" },
+        crypto.randomUUID(),
+      );
+      expect(second.success).toBe(true);
+      if (!second.success) return;
+      expect(second.data.subtotal_minor).toBe(95000);
+
+      const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "invoice_adjustment" });
+      expect(entries).toHaveLength(2);
+    });
+
+    it("rejects a missing (empty-string) idempotency key", async () => {
+      const invoiceId = await createEligibleInvoice();
+      const result = await mockFinanceRepository.recordInvoiceAdjustment(
+        invoiceId,
+        { subtotal_minor: 90000, tax_minor: 5000, discount_minor: 2000, reason: "Missing key" },
+        "",
+      );
+      expect(result.success).toBe(false);
+    });
+  });
+});
+
 describe("mockFinanceRepository.getPaymentRefundableAmount", () => {
   it("returns 0 for a payment that isn't refundable", async () => {
     const refundable = await mockFinanceRepository.getPaymentRefundableAmount("payment_4");

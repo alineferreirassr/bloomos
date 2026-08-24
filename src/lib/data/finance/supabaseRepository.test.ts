@@ -1211,6 +1211,176 @@ describe("supabaseFinanceRepository.getDepositApplicableAmount", () => {
   });
 });
 
+describe("supabaseFinanceRepository.recordInvoiceAdjustment — Finance F2.1C-D-C", () => {
+  it("rejects invalid field shapes and a missing idempotency key before ever calling the RPC", async () => {
+    const negative = await supabaseFinanceRepository.recordInvoiceAdjustment(
+      "invoice_1",
+      { subtotal_minor: -100, tax_minor: 0, discount_minor: 0, reason: "bad" },
+      "adj-key-1",
+    );
+    expect(negative.success).toBe(false);
+
+    const discountExceedsSubtotal = await supabaseFinanceRepository.recordInvoiceAdjustment(
+      "invoice_1",
+      { subtotal_minor: 1000, tax_minor: 0, discount_minor: 2000, reason: "bad" },
+      "adj-key-1",
+    );
+    expect(discountExceedsSubtotal.success).toBe(false);
+
+    const blankReason = await supabaseFinanceRepository.recordInvoiceAdjustment(
+      "invoice_1",
+      { subtotal_minor: 1000, tax_minor: 0, discount_minor: 0, reason: "" },
+      "adj-key-1",
+    );
+    expect(blankReason.success).toBe(false);
+
+    const noKey = await supabaseFinanceRepository.recordInvoiceAdjustment(
+      "invoice_1",
+      { subtotal_minor: 1000, tax_minor: 0, discount_minor: 0, reason: "ok" },
+      "",
+    );
+    expect(noKey.success).toBe(false);
+  });
+
+  it("calls record_invoice_adjustment with the invoice/fields/reason/idempotency key and translates the result", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([{ data: invoiceRow({ subtotal_minor: 120000, total_minor: 123000 }), error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.recordInvoiceAdjustment(
+      "invoice_1",
+      { subtotal_minor: 120000, tax_minor: 5000, discount_minor: 2000, reason: "Added scope" },
+      "adj-key-1",
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.subtotal_minor).toBe(120000);
+    expect(rpcCalls).toEqual([
+      {
+        name: "record_invoice_adjustment",
+        args: {
+          p_invoice_id: "invoice_1",
+          p_subtotal_minor: 120000,
+          p_tax_minor: 5000,
+          p_discount_minor: 2000,
+          p_reason: "Added scope",
+          p_adjustment_id: "adj-key-1",
+          p_actor: expect.any(String),
+        },
+      },
+    ]);
+  });
+
+  it("translates a P1132 (invoice not in an adjustment-eligible status) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([{ data: null, error: { code: "P1132", message: "Cannot financially adjust an invoice that is voided." } }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.recordInvoiceAdjustment(
+      "invoice_1",
+      { subtotal_minor: 90000, tax_minor: 5000, discount_minor: 2000, reason: "Should fail" },
+      "adj-key-1",
+    );
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("Cannot financially adjust an invoice that is voided.");
+    expect(rpcCalls.map((c) => c.name)).toEqual(["record_invoice_adjustment"]);
+  });
+
+  it("translates a P1133 (no-op adjustment) RPC error into a DataResult failure", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: null, error: { code: "P1133", message: "No financial change was requested — the corrected subtotal, tax, and discount all match the invoice's current values." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.recordInvoiceAdjustment(
+      "invoice_1",
+      { subtotal_minor: 100000, tax_minor: 5000, discount_minor: 2000, reason: "No real change" },
+      "adj-key-1",
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("translates a P1134 (downward correction creates overpayment) RPC error into a DataResult failure", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: null, error: { code: "P1134", message: "Cannot reduce the invoice below the amount already collected (80000 minor units). Refund the excess first." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.recordInvoiceAdjustment(
+      "invoice_1",
+      { subtotal_minor: 50000, tax_minor: 0, discount_minor: 0, reason: "Would overpay" },
+      "adj-key-1",
+    );
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("Cannot reduce the invoice below the amount already collected (80000 minor units). Refund the excess first.");
+  });
+
+  it("F2.1C-D-C-IDEMPOTENCY: a same-key replay returns the existing (unchanged) invoice (RPC replays server-side)", async () => {
+    mockSession();
+    const { client } = createMockSupabase([{ data: invoiceRow({ subtotal_minor: 90000, total_minor: 93000 }), error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.recordInvoiceAdjustment(
+      "invoice_1",
+      { subtotal_minor: 90000, tax_minor: 5000, discount_minor: 2000, reason: "First attempt" },
+      "adj-key-1",
+    );
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.subtotal_minor).toBe(90000);
+  });
+
+  it("translates a P1129 (idempotency key reused for a different target) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: null, error: { code: "P1129", message: "This idempotency key was already used for a different adjustment request." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.recordInvoiceAdjustment(
+      "invoice_1",
+      { subtotal_minor: 80000, tax_minor: 5000, discount_minor: 2000, reason: "Different target, same key" },
+      "adj-key-1",
+    );
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("This idempotency key was already used for a different adjustment request.");
+    expect(rpcCalls.map((c) => c.name)).toEqual(["record_invoice_adjustment"]);
+  });
+
+  it("translates a P1130 (missing required idempotency key reaching the RPC) RPC error into a DataResult failure", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: null, error: { code: "P1130", message: "p_adjustment_id is required and must be a stable identifier supplied by the caller (the same value on every retry of the same adjustment request)." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.recordInvoiceAdjustment(
+      "invoice_1",
+      { subtotal_minor: 90000, tax_minor: 5000, discount_minor: 2000, reason: "ok" },
+      "adj-key-1",
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("re-throws an unrecognized RPC error rather than swallowing it as a DataResult failure", async () => {
+    mockSession();
+    const { client } = createMockSupabase([{ data: null, error: { code: "42501", message: "permission denied" } }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await expect(
+      supabaseFinanceRepository.recordInvoiceAdjustment(
+        "invoice_1",
+        { subtotal_minor: 90000, tax_minor: 5000, discount_minor: 2000, reason: "ok" },
+        "adj-key-1",
+      ),
+    ).rejects.toThrow();
+  });
+});
+
 describe("supabaseFinanceRepository.createExpense / updateExpense — Event/Contract must belong to Client", () => {
   it("rejects an event that doesn't belong to the selected client", async () => {
     const { client } = createMockSupabase([{ data: { client_id: "client_2" }, error: null }]);
