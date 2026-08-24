@@ -253,6 +253,36 @@ export function invoiceFormToInput(data: InvoiceFormInput): InvoiceInput {
   };
 }
 
+/**
+ * Finance F2.1C-D-E-B. Client-side companion to invoiceAdjustmentSchema
+ * above — mirrors invoiceFormSchema/invoiceFormToInput exactly: money
+ * fields are decimal major-unit strings, converted through majorToMinor()
+ * before reaching the authoritative schema. currency stays absent here for
+ * the same reason it's absent above (financially immutable post-issuance).
+ */
+export const invoiceAdjustmentFormSchema = z
+  .object({
+    subtotal: majorAmountString,
+    tax: majorAmountString,
+    discount: majorAmountString,
+    reason: z.string().trim().min(1, "A reason is required"),
+  })
+  .refine((data) => Number(data.discount) <= Number(data.subtotal), {
+    message: "Discount cannot exceed the subtotal",
+    path: ["discount"],
+  });
+
+export type InvoiceAdjustmentFormInput = z.infer<typeof invoiceAdjustmentFormSchema>;
+
+export function invoiceAdjustmentFormToInput(data: InvoiceAdjustmentFormInput): InvoiceAdjustmentInput {
+  return {
+    subtotal_minor: majorToMinor(Number(data.subtotal)),
+    tax_minor: majorToMinor(Number(data.tax)),
+    discount_minor: majorToMinor(Number(data.discount)),
+    reason: data.reason,
+  };
+}
+
 export const paymentFormSchema = z.object({
   invoice_id: z.string().trim(),
   client_id: z.string().trim().min(1, "Client is required"),

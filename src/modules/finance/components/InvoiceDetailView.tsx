@@ -30,6 +30,7 @@ import { Timeline } from "@/modules/timeline/components/Timeline";
 import { formatEventDate } from "@/modules/events/dateFormat";
 import { formatMoney } from "@/lib/money";
 import { isInvoiceTerminal } from "@/core/workflows/invoiceWorkflow";
+import { PAYMENT_STATUSES_COUNTING_TOWARD_PAID } from "@/core/enums/paymentStatus";
 import { InvoiceStatusBadge } from "@/modules/finance/components/InvoiceStatusBadge";
 import { PaymentStatusBadge } from "@/modules/finance/components/PaymentStatusBadge";
 import { PaymentTypeBadge } from "@/modules/finance/components/PaymentTypeBadge";
@@ -108,6 +109,13 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
 
   const { invoice, client, event, contract, payments, notes, timeline, nextAction } = state;
   const notesReadOnly = isInvoiceTerminal(invoice.status);
+  const hasUnresolvedDepositApplication = payments.some(
+    (payment) =>
+      payment.payment_type === "adjustment" &&
+      payment.reference?.startsWith("deposit_application_of:") &&
+      PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(payment.status),
+  );
+  const isPartiallyVoided = invoice.status === "voided" && invoice.paid_minor > 0;
 
   return (
     <div className="space-y-6">
@@ -119,6 +127,12 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
           <h2 className="font-serif text-3xl font-semibold text-text">{invoice.title}</h2>
           <InvoiceStatusBadge status={invoice.status} />
         </div>
+        {isPartiallyVoided ? (
+          <p className="mt-1 text-sm text-text-muted">
+            This invoice was partially cancelled — {formatMoney(invoice.paid_minor, invoice.currency)} was already
+            settled and retained; the unpaid remainder was cancelled.
+          </p>
+        ) : null}
         <p className="mt-1 text-sm text-text-muted">
           {invoice.invoice_number}
           {client ? (
@@ -153,7 +167,11 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
         </p>
 
         <div className="mt-4">
-          <InvoiceActions invoice={invoice} onChanged={refetch} />
+          <InvoiceActions
+            invoice={invoice}
+            onChanged={refetch}
+            hasUnresolvedDepositApplication={hasUnresolvedDepositApplication}
+          />
         </div>
       </div>
 

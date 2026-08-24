@@ -154,6 +154,7 @@ import type { ContractInput, ContractExhibitInput } from "@/modules/contracts/sc
 import { computeContractStats } from "@/modules/contracts/contractStats";
 import type {
   InvoiceInput,
+  InvoiceAdjustmentInput,
   PaymentInput,
   ExpenseInput,
   ManualAdjustmentInput,
@@ -1358,6 +1359,14 @@ export async function markInvoiceOverdue(id: string): Promise<DataResult<Invoice
 
 export async function voidInvoice(id: string, cancellationId: string, reason: string): Promise<DataResult<Invoice>> {
   return financeRepository().voidInvoice(id, cancellationId, reason);
+}
+
+export async function recordInvoiceAdjustment(
+  invoiceId: string,
+  input: InvoiceAdjustmentInput,
+  adjustmentId: string,
+): Promise<DataResult<Invoice>> {
+  return financeRepository().recordInvoiceAdjustment(invoiceId, input, adjustmentId);
 }
 
 export async function archiveInvoice(id: string): Promise<DataResult<Invoice>> {

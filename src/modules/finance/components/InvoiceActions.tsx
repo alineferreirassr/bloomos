@@ -12,19 +12,42 @@ import {
   markInvoiceViewed,
   restoreInvoice,
   sendInvoice,
-  voidInvoice,
 } from "@/lib/data";
 import type { Invoice } from "@/types/invoice";
 import { canTransitionInvoiceStatus, isInvoiceTerminal } from "@/core/workflows/invoiceWorkflow";
 import { ConfirmInvoiceActionModal } from "@/modules/finance/components/ConfirmInvoiceActionModal";
+import { InvoiceAdjustmentModal } from "@/modules/finance/components/InvoiceAdjustmentModal";
+import { VoidInvoiceModal } from "@/modules/finance/components/VoidInvoiceModal";
 import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 interface InvoiceActionsProps {
   invoice: Invoice;
   onChanged: () => void;
+  /**
+   * Derived client-side from the Invoice's already-fetched payments (see
+   * InvoiceDetailView) using the same real, shared
+   * PAYMENT_STATUSES_COUNTING_TOWARD_PAID constant the engine's own P1137
+   * guard uses — a cheap boolean over data already on hand, not a
+   * duplication of accounting logic. Used to proactively disable Void
+   * rather than wait for the server rejection; the server guard remains
+   * the authoritative fallback if this goes stale between fetch and click.
+   */
+  hasUnresolvedDepositApplication?: boolean;
 }
 
-type ModalKind = "void" | "archive" | null;
+// Finance F2.1C-D-E-B — Invoice Financial Adjustment is available for any
+// non-terminal, non-draft status; draft continues using the normal Edit
+// Invoice flow instead of a separate Adjust action.
+const ADJUSTMENT_ELIGIBLE_STATUSES: Invoice["status"][] = [
+  "issued",
+  "sent",
+  "viewed",
+  "partially_paid",
+  "paid",
+  "overdue",
+];
+
+type ModalKind = "adjust" | "void" | "archive" | null;
 
 /**
  * Every transition here goes through the existing dedicated data-layer
@@ -36,7 +59,7 @@ type ModalKind = "void" | "archive" | null;
  * forward-motion steps, Restore is reversible, and Duplicate is purely
  * additive — same reasoning as ContractActions.
  */
-export function InvoiceActions({ invoice, onChanged }: InvoiceActionsProps) {
+export function InvoiceActions({ invoice, onChanged, hasUnresolvedDepositApplication = false }: InvoiceActionsProps) {
   const { can } = useMemberSession();
   const canUpdate = can("finance.update");
   const canCreate = can("finance.create");
@@ -55,6 +78,7 @@ export function InvoiceActions({ invoice, onChanged }: InvoiceActionsProps) {
   const canVoid = canTransitionInvoiceStatus(invoice.status, "voided");
   const canArchive = canTransitionInvoiceStatus(invoice.status, "archived");
   const canRecordPayment = !isInvoiceTerminal(invoice.status) && invoice.status !== "paid";
+  const canAdjust = ADJUSTMENT_ELIGIBLE_STATUSES.includes(invoice.status);
 
   const runAction = async (name: string, action: () => Promise<{ success: boolean; error?: string }>) => {
     setBusyAction(name);
@@ -172,8 +196,13 @@ export function InvoiceActions({ invoice, onChanged }: InvoiceActionsProps) {
             <Button>Record Payment</Button>
           </Link>
         ) : null}
+        {canAdjust && canUpdate ? (
+          <Button variant="secondary" onClick={() => setModal("adjust")}>
+            Adjust Invoice
+          </Button>
+        ) : null}
         {canVoid && canUpdate ? (
-          <Button variant="secondary" onClick={() => setModal("void")}>
+          <Button variant="secondary" onClick={() => setModal("void")} disabled={hasUnresolvedDepositApplication}>
             Void
           </Button>
         ) : null}
@@ -191,16 +220,20 @@ export function InvoiceActions({ invoice, onChanged }: InvoiceActionsProps) {
         </p>
       ) : null}
 
-      <ConfirmInvoiceActionModal
-        open={modal === "void"}
+      {canVoid && canUpdate && hasUnresolvedDepositApplication ? (
+        <p className="text-xs text-text-muted">
+          This invoice can&apos;t be voided because a Customer Deposit has been applied to it. Deposit Application
+          reversal is not available yet.
+        </p>
+      ) : null}
+
+      <InvoiceAdjustmentModal
+        open={modal === "adjust"}
+        invoice={invoice}
         onClose={() => setModal(null)}
-        title="Void Invoice"
-        description={`This marks "${invoice.title}" as voided — a terminal state that can't be undone from here.`}
-        confirmLabel="Void"
-        pendingLabel="Voiding…"
-        onConfirm={() => voidInvoice(invoice.id, crypto.randomUUID(), "Voided from Invoice actions")}
-        onConfirmed={onChanged}
+        onChanged={onChanged}
       />
+      <VoidInvoiceModal open={modal === "void"} invoice={invoice} onClose={() => setModal(null)} onChanged={onChanged} />
       <ConfirmInvoiceActionModal
         open={modal === "archive"}
         onClose={() => setModal(null)}

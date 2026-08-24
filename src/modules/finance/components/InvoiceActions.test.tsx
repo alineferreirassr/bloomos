@@ -37,6 +37,7 @@ vi.mock("@/lib/data", () => ({
   restoreInvoice: vi.fn(),
   sendInvoice: vi.fn(),
   voidInvoice: vi.fn(),
+  recordInvoiceAdjustment: vi.fn(),
 }));
 
 import * as dataLayer from "@/lib/data";
@@ -98,7 +99,7 @@ describe("InvoiceActions", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("voids through a confirmation modal", async () => {
+  it("voids through a confirmation modal, requiring a real user-entered reason", async () => {
     const user = userEvent.setup();
     vi.mocked(dataLayer.voidInvoice).mockResolvedValue({ success: true, data: makeInvoice({ status: "voided" }) });
     const onChanged = vi.fn();
@@ -106,10 +107,76 @@ describe("InvoiceActions", () => {
 
     await user.click(screen.getByRole("button", { name: /^void$/i }));
     const dialog = screen.getByRole("dialog", { name: /void invoice/i });
+    expect(within(dialog).getByRole("button", { name: /^void$/i })).toBeDisabled();
+    await user.type(within(dialog).getByLabelText(/reason/i), "Client requested cancellation");
     await user.click(within(dialog).getByRole("button", { name: /^void$/i }));
 
-    await waitFor(() => expect(dataLayer.voidInvoice).toHaveBeenCalledWith("invoice_1", expect.any(String), expect.any(String)));
+    await waitFor(() =>
+      expect(dataLayer.voidInvoice).toHaveBeenCalledWith("invoice_1", expect.any(String), "Client requested cancellation"),
+    );
     expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("shows Adjust Invoice for every eligible status and hides it for draft/voided/archived", () => {
+    for (const status of ["issued", "sent", "viewed", "partially_paid", "paid", "overdue"] as const) {
+      const { unmount } = renderInvoiceActions({ invoice: makeInvoice({ status, due_date: "2026-01-01" }), onChanged: vi.fn() });
+      expect(screen.getByRole("button", { name: /^adjust invoice$/i })).toBeInTheDocument();
+      unmount();
+    }
+    for (const status of ["draft", "voided", "archived"] as const) {
+      const { unmount } = renderInvoiceActions({ invoice: makeInvoice({ status }), onChanged: vi.fn() });
+      expect(screen.queryByRole("button", { name: /^adjust invoice$/i })).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("adjusts an invoice through the Adjust Invoice modal", async () => {
+    const user = userEvent.setup();
+    vi.mocked(dataLayer.recordInvoiceAdjustment).mockResolvedValue({
+      success: true,
+      data: makeInvoice({ id: "invoice_1", status: "issued" }),
+    });
+    const onChanged = vi.fn();
+    renderInvoiceActions({
+      invoice: makeInvoice({ id: "invoice_1", status: "issued", subtotal_minor: 10000, tax_minor: 0, discount_minor: 0, total_minor: 10000 }),
+      onChanged,
+    });
+
+    await user.click(screen.getByRole("button", { name: /^adjust invoice$/i }));
+    const dialog = screen.getByRole("dialog", { name: /adjust invoice/i });
+    const subtotalInput = within(dialog).getByLabelText(/new subtotal/i);
+    await user.clear(subtotalInput);
+    await user.type(subtotalInput, "120");
+    await user.type(within(dialog).getByLabelText(/reason/i), "Added a service after booking");
+    await user.click(within(dialog).getByRole("button", { name: /^adjust invoice$/i }));
+
+    await waitFor(() =>
+      expect(dataLayer.recordInvoiceAdjustment).toHaveBeenCalledWith(
+        "invoice_1",
+        expect.objectContaining({ subtotal_minor: 12000, reason: "Added a service after booking" }),
+        expect.any(String),
+      ),
+    );
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("disables Void when hasUnresolvedDepositApplication is true and re-enables it when false", () => {
+    const invoice = makeInvoice({ status: "issued", paid_minor: 5000, balance_minor: 5000 });
+    const { unmount } = render(
+      <MemberSessionProvider snapshot={fullPermissionSnapshot}>
+        <InvoiceActions invoice={invoice} onChanged={vi.fn()} hasUnresolvedDepositApplication />
+      </MemberSessionProvider>,
+    );
+    expect(screen.getByRole("button", { name: /^void$/i })).toBeDisabled();
+    expect(screen.getByText(/can't be voided because a customer deposit/i)).toBeInTheDocument();
+    unmount();
+
+    render(
+      <MemberSessionProvider snapshot={fullPermissionSnapshot}>
+        <InvoiceActions invoice={invoice} onChanged={vi.fn()} hasUnresolvedDepositApplication={false} />
+      </MemberSessionProvider>,
+    );
+    expect(screen.getByRole("button", { name: /^void$/i })).toBeEnabled();
   });
 
   it("archives through a confirmation modal", async () => {
