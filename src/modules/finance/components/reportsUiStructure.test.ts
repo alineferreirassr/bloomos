@@ -183,6 +183,7 @@ describe("Finance Reports UI structural guardrails", () => {
       "20260822110000_finance_invoice_revenue_recognition_refund_guard.sql",
       "20260823100000_finance_refund_revenue_correction.sql",
       "20260824100000_finance_deposit_application.sql",
+      "20260825100000_finance_refund_invoice_field_sync.sql",
     ];
     const financeFilesAfter = files.filter(
       (f) => f > "20260805100000_finance_report_rpcs.sql" && f.includes("finance") && !LATER_SANCTIONED_FINANCE_FILES.includes(f),

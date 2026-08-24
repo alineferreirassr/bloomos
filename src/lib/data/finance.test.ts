@@ -601,10 +601,18 @@ describe("refundPayment", () => {
 
     await refundPayment(payment.data.id, 20000, crypto.randomUUID());
 
+    // Finance F2.1C-D-B: this invoice-linked refund posts a Revenue
+    // correction (20000 of the 50000 subtotal is no longer recognized), so
+    // total_minor is synchronized down to 30000 alongside it — the true
+    // economic total after the refund, not the stale original 50000. Net
+    // cash actually retained (50000 paid - 20000 refunded = 30000) now
+    // exactly matches that corrected total, so balance_minor is 0 and the
+    // invoice reads as fully paid rather than phantom-owing 20000 more.
     updatedInvoice = await getInvoiceById(invoice.data.id);
+    expect(updatedInvoice.total_minor).toBe(30000);
     expect(updatedInvoice.paid_minor).toBe(30000);
-    expect(updatedInvoice.balance_minor).toBe(20000);
-    expect(updatedInvoice.status).toBe("partially_paid");
+    expect(updatedInvoice.balance_minor).toBe(0);
+    expect(updatedInvoice.status).toBe("paid");
   });
 
   it("records a payment_refunded timeline entry", async () => {

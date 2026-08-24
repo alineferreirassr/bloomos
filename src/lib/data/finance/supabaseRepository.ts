@@ -107,8 +107,11 @@ const UNKNOWN_ERROR_CODE = "unknown";
  * P1129/P1130 are Finance F2.1C-C-IDEMPOTENCY's additions — a request-level
  * idempotency key conflict, and a missing required idempotency key,
  * shared with record_deposit_application's own use of the same two codes.
+ * P1131 is Finance F2.1C-D-B's addition — a defensive guard against the
+ * refund correction's Invoice-field synchronization going negative,
+ * expected to be unreachable given the existing refundable ceiling.
  */
-const APP_VALIDATION_ERROR_CODES = new Set(["P0001", "P0002", "P0003", "P0004", "P1104", "P1118", "P1121", "P1129", "P1130"]);
+const APP_VALIDATION_ERROR_CODES = new Set(["P0001", "P0002", "P0003", "P0004", "P1104", "P1118", "P1121", "P1129", "P1130", "P1131"]);
 
 /**
  * errcodes raised by record_deposit_application for expected, user-facing
@@ -423,6 +426,12 @@ async function updateInvoice(id: string, input: InvoiceInput): Promise<DataResul
   // This requires a dedicated correction flow F2.1B does not implement
   // (F2.1C) — block the financially material fields, not the whole record,
   // so title/description/notes/due_date remain editable post-issuance.
+  // Finance F2.1C-D-B (Founder decision D3): currency joins this same guard
+  // — every recognized Journal Entry line for this invoice was posted in
+  // its issued currency, and every refund/deposit-application correction
+  // (F2.1C-B/F2.1C-C/F2.1C-D-B) assumes that currency never changes underneath
+  // them. There is no FX-conversion correction flow, so this is a permanent
+  // lock, not a deferred-flow block like subtotal/tax/discount above.
   if (
     existing.status !== "draft" &&
     (parsed.data.subtotal_minor !== existing.subtotal_minor ||
@@ -432,6 +441,11 @@ async function updateInvoice(id: string, input: InvoiceInput): Promise<DataResul
     return fail(
       "Cannot change the subtotal, tax, or discount after an invoice has been issued — Revenue has already been recognized. This requires a dedicated correction flow not yet available.",
     );
+  }
+  if (existing.status !== "draft" && parsed.data.currency !== existing.currency) {
+    return fail("Cannot change the currency after an invoice has been issued — Revenue has already been recognized in the original currency.", {
+      currency: "Currency cannot be changed after issuance.",
+    });
   }
   if (parsed.data.client_id !== existing.client_id) {
     return fail("An invoice's client can't be changed after creation.", { client_id: "Client cannot be changed." });

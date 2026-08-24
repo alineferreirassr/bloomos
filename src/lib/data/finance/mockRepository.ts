@@ -266,6 +266,12 @@ async function updateInvoice(id: string, input: InvoiceInput): Promise<DataResul
   // This requires a dedicated correction flow F2.1B does not implement
   // (F2.1C) — block the financially material fields, not the whole record,
   // so title/description/notes/due_date remain editable post-issuance.
+  // Finance F2.1C-D-B (Founder decision D3): currency joins this same guard
+  // — every recognized Journal Entry line for this invoice was posted in
+  // its issued currency, and every refund/deposit-application correction
+  // (F2.1C-B/F2.1C-C/F2.1C-D-B) assumes that currency never changes underneath
+  // them. There is no FX-conversion correction flow, so this is a permanent
+  // lock, not a deferred-flow block like subtotal/tax/discount above.
   if (
     existing.status !== "draft" &&
     (parsed.data.subtotal_minor !== existing.subtotal_minor ||
@@ -275,6 +281,11 @@ async function updateInvoice(id: string, input: InvoiceInput): Promise<DataResul
     return fail(
       "Cannot change the subtotal, tax, or discount after an invoice has been issued — Revenue has already been recognized. This requires a dedicated correction flow not yet available.",
     );
+  }
+  if (existing.status !== "draft" && parsed.data.currency !== existing.currency) {
+    return fail("Cannot change the currency after an invoice has been issued — Revenue has already been recognized in the original currency.", {
+      currency: "Currency cannot be changed after issuance.",
+    });
   }
   if (parsed.data.client_id !== existing.client_id) {
     return fail("An invoice's client can't be changed after creation.", { client_id: "Client cannot be changed." });
@@ -1086,6 +1097,11 @@ async function refundPayment(originalPaymentId: string, amountMinor: number, ref
   // events occur or however unevenly they're split — verified by
   // simulation across 2-way, 3-way, 7-way, and adversarial 10-way-equal-
   // split refund sequences.
+  // Finance F2.1C-D-B: computed BEFORE posting (pure, no store mutation) and
+  // applied to the store only after posting succeeds, alongside the other
+  // post-success writes below — never left partially applied.
+  let invoiceCorrection: Invoice | null = null;
+
   if (original.invoice_id !== null) {
     const recognitionEntry = readJournalEntries().find(
       (e) => e.source_type === "invoice_issued" && e.source_id === original.invoice_id && e.reversed_by_entry_id === null,
@@ -1096,6 +1112,33 @@ async function refundPayment(originalPaymentId: string, amountMinor: number, ref
         return fail("The invoice linked to this payment no longer exists — cannot compute a refund correction.");
       }
 
+      // Finance F2.1C-D-B: the proportional formula's basis (original
+      // subtotal/tax/discount/total) is read fresh from the ORIGINAL
+      // invoice_issued journal entry's own posted lines — NEVER from
+      // invoice.tax_minor/discount_minor/total_minor, which this same
+      // function now updates as a side effect below (see that update for
+      // why). Reading the mutable invoice fields as the formula's divisor
+      // would corrupt every refund AFTER the first one — proven by
+      // simulation: a 2-way partial refund sequence that does NOT fully
+      // drain the invoice (e.g. 30000+20000 of a 103000 total) drifts net
+      // Sales Discounts by 1 cent once the divisor shrinks between refund
+      // events, reintroducing exactly the class of drift F2.1C-B-REVIEW's
+      // cumulative-then-diff technique was built to eliminate.
+      // journal_lines is append-only and immutable, making it the correct,
+      // permanent basis — resolved by account NUMBER (1100 AR = original
+      // total, 4000 Revenue = original subtotal, 2100 Tax = original tax,
+      // 4900 Discount = original discount), not by re-reading the invoice.
+      const recognitionLines = readJournalLines().filter((l) => l.journal_entry_id === recognitionEntry.id);
+      const arAccountId = findAccountByNumber(invoice.workspace_id, 1100).id;
+      const revenueAccountId = findAccountByNumber(invoice.workspace_id, 4000).id;
+      const taxAccountId = findAccountByNumber(invoice.workspace_id, 2100).id;
+      const discountAccountId = findAccountByNumber(invoice.workspace_id, 4900).id;
+      const origTotal = sumMinor(recognitionLines.filter((l) => l.account_id === arAccountId).map((l) => l.debit_minor));
+      const origSubtotal = sumMinor(recognitionLines.filter((l) => l.account_id === revenueAccountId).map((l) => l.credit_minor));
+      const origTax = sumMinor(recognitionLines.filter((l) => l.account_id === taxAccountId).map((l) => l.credit_minor));
+      const origDiscount = sumMinor(recognitionLines.filter((l) => l.account_id === discountAccountId).map((l) => l.debit_minor));
+      void origSubtotal; // not needed for the proportional formula itself, only origTotal/origTax/origDiscount are — kept for clarity/traceability
+
       const priorRefundedTotal = sumMinor(
         readPayments()
           .filter(
@@ -1105,12 +1148,12 @@ async function refundPayment(originalPaymentId: string, amountMinor: number, ref
       );
       const cumulativeRefundedTotal = priorRefundedTotal + amountMinor;
 
-      const taxCum = Math.round((cumulativeRefundedTotal * invoice.tax_minor) / invoice.total_minor);
-      const discountCum = Math.round((cumulativeRefundedTotal * invoice.discount_minor) / invoice.total_minor);
+      const taxCum = Math.round((cumulativeRefundedTotal * origTax) / origTotal);
+      const discountCum = Math.round((cumulativeRefundedTotal * origDiscount) / origTotal);
       const revenueCum = cumulativeRefundedTotal + discountCum - taxCum;
 
-      const taxPrior = Math.round((priorRefundedTotal * invoice.tax_minor) / invoice.total_minor);
-      const discountPrior = Math.round((priorRefundedTotal * invoice.discount_minor) / invoice.total_minor);
+      const taxPrior = Math.round((priorRefundedTotal * origTax) / origTotal);
+      const discountPrior = Math.round((priorRefundedTotal * origDiscount) / origTotal);
       const revenuePrior = priorRefundedTotal + discountPrior - taxPrior;
 
       const taxPortion = taxCum - taxPrior;
@@ -1129,6 +1172,28 @@ async function refundPayment(originalPaymentId: string, amountMinor: number, ref
         lines.push({ account_id: findAccountByNumber(invoice.workspace_id, 4900).id, debit_minor: 0, credit_minor: discountPortion });
       }
       lines.push({ account_id: creditLine.account_id, debit_minor: 0, credit_minor: amountMinor });
+
+      // Finance F2.1C-D-B: synchronize the Invoice's CURRENT economic
+      // fields with this refund's correction, so applyPaymentToInvoice
+      // (called separately, below) produces a balance_minor that matches
+      // the TRUE ledger AR position — fixing the mismatch F2.1C-D-A
+      // discovered (balance_minor previously stayed at the stale original
+      // total forever, regardless of how much Revenue correction had
+      // already posted). Uses invoice's CURRENT (possibly
+      // already-corrected-by-a-prior-refund) fields as the decrement base
+      // — intentionally DIFFERENT from the proportional formula's basis
+      // above, which must stay anchored to the ORIGINAL, immutable ledger
+      // amounts; the two are deliberately decoupled.
+      const newSubtotal = subtractMinor(invoice.subtotal_minor, revenuePortion);
+      const newTax = subtractMinor(invoice.tax_minor, taxPortion);
+      const newDiscount = subtractMinor(invoice.discount_minor, discountPortion);
+      const newTotal = subtractMinor(addMinor(newSubtotal, newTax), newDiscount);
+
+      if (newSubtotal < 0 || newTax < 0 || newDiscount < 0 || newTotal < 0) {
+        return fail("Unable to compute a balanced refund correction for this invoice.");
+      }
+
+      invoiceCorrection = { ...invoice, subtotal_minor: newSubtotal, tax_minor: newTax, discount_minor: newDiscount, total_minor: newTotal, updated_at: timestamp };
     }
   }
 
@@ -1180,6 +1245,13 @@ async function refundPayment(originalPaymentId: string, amountMinor: number, ref
     updated_at: timestamp,
   };
   writePayments(readPayments().map((p) => (p.id === originalPaymentId ? originalUpdated : p)));
+
+  // Finance F2.1C-D-B: apply the invoice correction (computed above,
+  // before posting) BEFORE recomputing the balance, so applyPaymentToInvoice
+  // sees the corrected total_minor rather than the stale original.
+  if (invoiceCorrection) {
+    writeInvoices(readInvoices().map((i) => (i.id === invoiceCorrection!.id ? invoiceCorrection! : i)));
+  }
 
   if (original.invoice_id) {
     applyPaymentToInvoice(original.invoice_id);

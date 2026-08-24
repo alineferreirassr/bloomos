@@ -59,6 +59,12 @@ import { type DataResult, fail } from "@/lib/data/result";
  *     share this one code: p_refund_payment_id / p_application_payment_id
  *     is null; both are required, no default, reusing the established
  *     record_purchase_receipt / p_receipt_event_id convention)
+ *   - unbalanced refund invoice-field sync:  P1131 (Finance F2.1C-D-B —
+ *     post_payment_refund_reversal, defensive guard against the computed
+ *     new subtotal/tax/discount/total going negative when synchronizing
+ *     invoices.*_minor to the refund correction; should be unreachable
+ *     given the existing refundable-amount ceiling, never silently writes
+ *     a negative Invoice field)
  *
  * P1120 (Finance F2.1B-REVIEW's "refund rejected, Revenue recognized" —
  * process_payment_refund's blanket rejection of any invoice-linked refund
@@ -123,6 +129,7 @@ export const FINANCE_VALIDATION_ERROR_CODES = new Set([
   "P1128",
   "P1129",
   "P1130",
+  "P1131",
   "P1200",
 ]);
 

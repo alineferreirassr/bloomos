@@ -1110,6 +1110,172 @@ describe("mockFinanceRepository.refundPayment", () => {
       expect(detail.lines!.some((l) => l.account_id === "account_4000")).toBe(false);
     });
   });
+
+  describe("Finance F2.1C-D-B: refund-correction Invoice-field synchronization", () => {
+    // BASE_INVOICE_INPUT: subtotal 100000, tax 5000, discount 2000, total 103000 —
+    // deliberately reused as-is (not a special-cased shape) so these tests exercise
+    // the same tax/discount split every other Invoice test in this file already uses.
+    async function createIssuedInvoice(overrides: Partial<InvoiceInput> = {}) {
+      const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, ...overrides });
+      if (!created.success) throw new Error("setup failed");
+      await mockFinanceRepository.issueInvoice(created.data.id);
+      await mockFinanceRepository.sendInvoice(created.data.id);
+      return created.data.id;
+    }
+
+    async function paySettled(invoiceId: string, amountMinor: number) {
+      const payment = await mockFinanceRepository.createPayment({
+        ...BASE_PAYMENT_INPUT,
+        invoice_id: invoiceId,
+        client_id: "client_2",
+        event_id: "event_1",
+        contract_id: "contract_1",
+        payment_type: "full_payment",
+        amount_minor: amountMinor,
+        payment_method: "cash",
+      });
+      if (!payment.success) throw new Error("setup failed");
+      return payment.data;
+    }
+
+    it("a full refund of a fully-paid invoice zeroes subtotal/tax/discount/total and leaves no phantom AR", async () => {
+      const invoiceId = await createIssuedInvoice();
+      const payment = await paySettled(invoiceId, 103000);
+
+      const refund = await mockFinanceRepository.refundPayment(payment.id, 103000, crypto.randomUUID());
+      expect(refund.success).toBe(true);
+
+      const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+      expect(invoice.subtotal_minor).toBe(0);
+      expect(invoice.tax_minor).toBe(0);
+      expect(invoice.discount_minor).toBe(0);
+      expect(invoice.total_minor).toBe(0);
+      expect(invoice.paid_minor).toBe(0);
+      expect(invoice.balance_minor).toBe(0);
+    });
+
+    it("a partial refund of a partially-collected invoice decrements subtotal/tax/discount/total by the SAME portions the ledger posting used, and balance_minor matches the true ledger AR", async () => {
+      const invoiceId = await createIssuedInvoice();
+      const payment = await paySettled(invoiceId, 40000);
+
+      const refund = await mockFinanceRepository.refundPayment(payment.id, 40000, crypto.randomUUID());
+      expect(refund.success).toBe(true);
+
+      // origTax=5000, origDiscount=2000, origTotal=103000, cumulative refunded=40000.
+      // tax_cum = round(40000*5000/103000) = 1942; discount_cum = round(40000*2000/103000) = 777.
+      // revenue_cum = 40000 + 777 - 1942 = 38835.
+      const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+      expect(invoice.subtotal_minor).toBe(100000 - 38835);
+      expect(invoice.tax_minor).toBe(5000 - 1942);
+      expect(invoice.discount_minor).toBe(2000 - 777);
+      expect(invoice.total_minor).toBe(103000 - 40000);
+      // The invoice was only ever paid 40000, all of which was just refunded —
+      // no cash remains applied, and the corrected total already reflects that
+      // the un-refunded portion (63000) was never collected in the first place.
+      expect(invoice.paid_minor).toBe(0);
+      expect(invoice.balance_minor).toBe(63000);
+    });
+
+    it("two partial refunds that do NOT fully drain the invoice stay anchored to the ORIGINAL ledger amounts — no cent drift from a mutating basis", async () => {
+      const invoiceId = await createIssuedInvoice();
+      const payment = await paySettled(invoiceId, 103000);
+
+      const firstRefund = await mockFinanceRepository.refundPayment(payment.id, 30000, crypto.randomUUID());
+      expect(firstRefund.success).toBe(true);
+
+      // Cumulative 30000: tax_cum = round(30000*5000/103000) = 1456, discount_cum = round(30000*2000/103000) = 583,
+      // revenue_cum = 30000 + 583 - 1456 = 29127.
+      let invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+      expect(invoice.subtotal_minor).toBe(100000 - 29127);
+      expect(invoice.tax_minor).toBe(5000 - 1456);
+      expect(invoice.discount_minor).toBe(2000 - 583);
+      expect(invoice.total_minor).toBe(103000 - 30000);
+
+      const secondRefund = await mockFinanceRepository.refundPayment(payment.id, 20000, crypto.randomUUID());
+      expect(secondRefund.success).toBe(true);
+
+      // Cumulative 50000 (30000 + 20000, still short of the full 103000 — a genuinely
+      // partial, non-full-draining sequence): tax_cum = round(50000*5000/103000) = 2427,
+      // discount_cum = round(50000*2000/103000) = 971, revenue_cum = 50000 + 971 - 2427 = 48544.
+      // If the formula's basis were the invoice's own already-decremented fields (the bug
+      // this checkpoint fixes) rather than the immutable original ledger amounts, this
+      // second refund's portions would drift by a cent from the values below.
+      invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+      expect(invoice.subtotal_minor).toBe(100000 - 48544);
+      expect(invoice.tax_minor).toBe(5000 - 2427);
+      expect(invoice.discount_minor).toBe(2000 - 971);
+      expect(invoice.total_minor).toBe(103000 - 50000);
+      expect(invoice.paid_minor).toBe(103000 - 50000);
+      expect(invoice.balance_minor).toBe(0);
+      expect(invoice.status).toBe("paid");
+    });
+
+    it("a same-key refund replay does not double-decrement the invoice's fields", async () => {
+      const invoiceId = await createIssuedInvoice();
+      const payment = await paySettled(invoiceId, 40000);
+      const key = crypto.randomUUID();
+
+      const first = await mockFinanceRepository.refundPayment(payment.id, 15000, key);
+      expect(first.success).toBe(true);
+      const afterFirst = await mockFinanceRepository.getInvoiceById(invoiceId);
+
+      const replay = await mockFinanceRepository.refundPayment(payment.id, 15000, key);
+      expect(replay.success).toBe(true);
+      const afterReplay = await mockFinanceRepository.getInvoiceById(invoiceId);
+
+      expect(afterReplay.subtotal_minor).toBe(afterFirst.subtotal_minor);
+      expect(afterReplay.tax_minor).toBe(afterFirst.tax_minor);
+      expect(afterReplay.discount_minor).toBe(afterFirst.discount_minor);
+      expect(afterReplay.total_minor).toBe(afterFirst.total_minor);
+      expect(afterReplay.balance_minor).toBe(afterFirst.balance_minor);
+    });
+
+    it("a refund that is not invoice-linked (Customer Deposits) never touches any Invoice's fields", async () => {
+      const invoiceId = await createIssuedInvoice();
+      const before = await mockFinanceRepository.getInvoiceById(invoiceId);
+
+      const depositPayment = await mockFinanceRepository.createPayment({
+        ...BASE_PAYMENT_INPUT,
+        invoice_id: null,
+        client_id: "client_2",
+        event_id: "event_1",
+        contract_id: "contract_1",
+        payment_type: "deposit",
+        amount_minor: 20000,
+        payment_method: "cash",
+      });
+      if (!depositPayment.success) throw new Error("setup failed");
+
+      const refund = await mockFinanceRepository.refundPayment(depositPayment.data.id, 20000, crypto.randomUUID());
+      expect(refund.success).toBe(true);
+
+      const after = await mockFinanceRepository.getInvoiceById(invoiceId);
+      expect(after).toEqual(before);
+    });
+  });
+});
+
+describe("Finance F2.1C-D-B: currency is financially immutable after issuance", () => {
+  it("allows changing currency on a draft invoice", async () => {
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    if (!created.success) throw new Error("setup failed");
+
+    const updated = await mockFinanceRepository.updateInvoice(created.data.id, { ...BASE_INVOICE_INPUT, currency: "EUR" });
+    expect(updated.success).toBe(true);
+    if (updated.success) expect(updated.data.currency).toBe("EUR");
+  });
+
+  it("rejects changing currency after an invoice has been issued", async () => {
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    if (!created.success) throw new Error("setup failed");
+    await mockFinanceRepository.issueInvoice(created.data.id);
+
+    const updated = await mockFinanceRepository.updateInvoice(created.data.id, { ...BASE_INVOICE_INPUT, currency: "EUR" });
+    expect(updated.success).toBe(false);
+
+    const unchanged = await mockFinanceRepository.getInvoiceById(created.data.id);
+    expect(unchanged.currency).toBe("USD");
+  });
 });
 
 describe("mockFinanceRepository.getPaymentRefundableAmount", () => {

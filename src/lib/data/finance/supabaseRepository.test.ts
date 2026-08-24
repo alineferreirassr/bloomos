@@ -541,6 +541,29 @@ describe("supabaseFinanceRepository.updateInvoice", () => {
     const result = await supabaseFinanceRepository.updateInvoice("invoice_1", { ...INVOICE_INPUT, title: "Renamed after issuance" });
     expect(result.success).toBe(true);
   });
+
+  it("Finance F2.1C-D-B (Founder decision D3): allows changing currency on a draft invoice", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: invoiceRow({ status: "draft" }), error: null },
+      { data: invoiceRow({ status: "draft", currency: "EUR" }), error: null },
+      { data: null, error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.updateInvoice("invoice_1", { ...INVOICE_INPUT, currency: "EUR" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.currency).toBe("EUR");
+  });
+
+  it("Finance F2.1C-D-B (Founder decision D3): rejects a currency change once issued — no Supabase call is even attempted", async () => {
+    const { client, calls } = createMockSupabase([{ data: invoiceRow({ status: "issued" }), error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.updateInvoice("invoice_1", { ...INVOICE_INPUT, currency: "EUR" });
+    expect(result.success).toBe(false);
+    expect(calls.some((c) => c.table === "invoices" && c.method === "update")).toBe(false);
+  });
 });
 
 describe("supabaseFinanceRepository Invoice lifecycle actions", () => {
@@ -1022,6 +1045,20 @@ describe("supabaseFinanceRepository.refundPayment", () => {
     // proves the translation path independent of the client-side short-circuit tested above.
     const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000, "refund-key-1");
     expect(result.success).toBe(false);
+  });
+
+  it("F2.1C-D-B: translates a P1131 (refund-correction invoice-field sync went negative — defensive guard) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: null, error: { code: "P1131", message: "Unable to apply this refund correction — it would leave the invoice's recognized amounts negative." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000, "refund-key-1");
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("Unable to apply this refund correction — it would leave the invoice's recognized amounts negative.");
+    expect(rpcCalls.map((c) => c.name)).toEqual(["process_payment_refund"]);
   });
 });
 
