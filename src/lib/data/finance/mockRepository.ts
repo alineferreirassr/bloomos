@@ -979,6 +979,13 @@ function refundReferenceFor(originalPaymentId: string): string {
  * id is pre-generated and the reversal is posted BEFORE any store mutation.
  * If posting throws, this returns fail() with the store completely
  * untouched — no refund row, no original-status change, no Timeline entry.
+ *
+ * Finance F2.1C-B: when the refunded payment is invoice-linked and that
+ * invoice still has unreversed recognized Revenue, composes a proportional
+ * Revenue correction into this SAME entry (Dr 4950 Refunds & Returns + Dr
+ * 2100 Sales Tax Payable, if any + Cr 4900 Sales Discounts, if any + Cr
+ * 1100 AR netting the settlement-reversal's own AR debit to zero) —
+ * replacing F2.1B-REVIEW's P1120 blanket rejection with the real posting.
  */
 async function refundPayment(originalPaymentId: string, amountMinor: number): Promise<DataResult<Payment>> {
   const original = readPayments().find((p) => p.id === originalPaymentId);
@@ -987,18 +994,6 @@ async function refundPayment(originalPaymentId: string, amountMinor: number): Pr
   }
   if (!isPaymentRefundable(original.status)) {
     return fail(`Cannot refund a payment that is ${PAYMENT_STATUS_LABELS[original.status].toLowerCase()}.`);
-  }
-  // Finance F2.1B-REVIEW: mirrors process_payment_refund's P1120 guard — the
-  // existing settlement-only reversal below would otherwise leave a phantom
-  // AR balance and an overstated Revenue balance for an invoice-linked
-  // payment whose invoice has recognized Revenue.
-  if (
-    original.invoice_id !== null &&
-    readJournalEntries().some(
-      (e) => e.source_type === "invoice_issued" && e.source_id === original.invoice_id && e.reversed_by_entry_id === null,
-    )
-  ) {
-    return fail("Cannot refund a payment linked to an invoice with recognized Revenue. This requires a dedicated correction flow not yet available.");
   }
   if (!Number.isInteger(amountMinor) || amountMinor <= 0) {
     return fail("Enter a refund amount greater than zero.");
@@ -1032,6 +1027,76 @@ async function refundPayment(originalPaymentId: string, amountMinor: number): Pr
     return fail("The original settlement entry is malformed — cannot determine accounts to reverse.");
   }
 
+  const lines: { account_id: string; debit_minor: number; credit_minor: number }[] = [
+    { account_id: creditLine.account_id, debit_minor: amountMinor, credit_minor: 0 },
+    { account_id: cashLine.account_id, debit_minor: 0, credit_minor: amountMinor },
+  ];
+
+  // Finance F2.1C-B: compose the Revenue-side correction into this SAME
+  // entry, exactly when the refunded payment is invoice-linked and that
+  // invoice still has an unreversed Revenue-recognition entry — the same
+  // condition F2.1B-REVIEW's now-retired P1120 guard used to reject on.
+  // Mirrors post_payment_refund_reversal's SQL line-for-line.
+  //
+  // Finance F2.1C-B-REVIEW: the three portions are computed CUMULATIVELY
+  // against every completed refund linked to this invoice (this one plus
+  // every other, regardless of which original payment they refunded) and
+  // taken as the difference from the previous cumulative state — NOT
+  // rounded independently per refund. Independent per-refund rounding let
+  // 3+ partial refunds summing to the full invoice amount drift net
+  // Revenue/Sales Discounts by 1+ cents versus a single full refund, even
+  // though each individual entry still balanced on its own. The
+  // cumulative-then-diff technique telescopes to exactly zero drift once
+  // the running total reaches the invoice total, however many refund
+  // events occur or however unevenly they're split — verified by
+  // simulation across 2-way, 3-way, 7-way, and adversarial 10-way-equal-
+  // split refund sequences.
+  if (original.invoice_id !== null) {
+    const recognitionEntry = readJournalEntries().find(
+      (e) => e.source_type === "invoice_issued" && e.source_id === original.invoice_id && e.reversed_by_entry_id === null,
+    );
+    if (recognitionEntry) {
+      const invoice = readInvoices().find((i) => i.id === original.invoice_id);
+      if (!invoice) {
+        return fail("The invoice linked to this payment no longer exists — cannot compute a refund correction.");
+      }
+
+      const priorRefundedTotal = sumMinor(
+        readPayments()
+          .filter(
+            (p) => p.invoice_id === invoice.id && p.payment_type === "refund" && p.id !== refundId && PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status),
+          )
+          .map((p) => p.amount_minor),
+      );
+      const cumulativeRefundedTotal = priorRefundedTotal + amountMinor;
+
+      const taxCum = Math.round((cumulativeRefundedTotal * invoice.tax_minor) / invoice.total_minor);
+      const discountCum = Math.round((cumulativeRefundedTotal * invoice.discount_minor) / invoice.total_minor);
+      const revenueCum = cumulativeRefundedTotal + discountCum - taxCum;
+
+      const taxPrior = Math.round((priorRefundedTotal * invoice.tax_minor) / invoice.total_minor);
+      const discountPrior = Math.round((priorRefundedTotal * invoice.discount_minor) / invoice.total_minor);
+      const revenuePrior = priorRefundedTotal + discountPrior - taxPrior;
+
+      const taxPortion = taxCum - taxPrior;
+      const discountPortion = discountCum - discountPrior;
+      const revenuePortion = revenueCum - revenuePrior;
+
+      if (revenuePortion < 0) {
+        return fail("Unable to compute a balanced refund correction for this invoice.");
+      }
+
+      lines.push({ account_id: findAccountByNumber(invoice.workspace_id, 4950).id, debit_minor: revenuePortion, credit_minor: 0 });
+      if (taxPortion > 0) {
+        lines.push({ account_id: findAccountByNumber(invoice.workspace_id, 2100).id, debit_minor: taxPortion, credit_minor: 0 });
+      }
+      if (discountPortion > 0) {
+        lines.push({ account_id: findAccountByNumber(invoice.workspace_id, 4900).id, debit_minor: 0, credit_minor: discountPortion });
+      }
+      lines.push({ account_id: creditLine.account_id, debit_minor: 0, credit_minor: amountMinor });
+    }
+  }
+
   try {
     insertMockJournalEntry({
       workspace_id: original.workspace_id,
@@ -1041,10 +1106,7 @@ async function refundPayment(originalPaymentId: string, amountMinor: number): Pr
       posting_key: `payment_refund:${refundId}`,
       memo: `Refund reversal of payment settlement ${settlementEntry.id} (${amountMinor} minor units)`,
       posted_by: CURRENT_ACTOR,
-      lines: [
-        { account_id: creditLine.account_id, debit_minor: amountMinor, credit_minor: 0 },
-        { account_id: cashLine.account_id, debit_minor: 0, credit_minor: amountMinor },
-      ],
+      lines,
     });
   } catch (postingError) {
     return fail(postingError instanceof Error ? postingError.message : String(postingError));

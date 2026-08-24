@@ -491,27 +491,185 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
     if (allowed.success) expect(allowed.data.subtotal_minor).toBe(200000);
   });
 
-  it("F2.1B-REVIEW: refundPayment rejects an invoice-linked payment whose invoice has recognized Revenue (P1120-equivalent guard)", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
-    expect(created.success).toBe(true);
-    if (!created.success) return;
-
+  // Finance F2.1C-B: BASE_INVOICE_INPUT -> subtotal 100000, tax 5000, discount 2000, total 103000.
+  // Full refund (R=103000): tax_portion=round(103000*5000/103000)=5000, discount_portion=round(103000*2000/103000)=2000,
+  // revenue_portion=103000+2000-5000=100000. Combined entry: Dr AR 103000, Dr 4950 100000, Dr 2100 5000 (=208000)
+  // / Cr Cash 103000, Cr 4900 2000, Cr AR 103000 (=208000). Balances.
+  async function issueInvoiceAndPayInFull(invoiceInput = BASE_INVOICE_INPUT, amountMinor = 103000) {
+    const created = await mockFinanceRepository.createInvoice(invoiceInput);
+    if (!created.success) throw new Error("invoice creation failed");
     await mockFinanceRepository.issueInvoice(created.data.id);
     await mockFinanceRepository.sendInvoice(created.data.id);
     const payment = await mockFinanceRepository.createPayment({
       ...BASE_PAYMENT_INPUT,
       invoice_id: created.data.id,
-      client_id: BASE_INVOICE_INPUT.client_id,
+      client_id: invoiceInput.client_id,
       event_id: null,
       contract_id: null,
-      amount_minor: 103000,
+      amount_minor: amountMinor,
       payment_method: "cash",
     });
-    expect(payment.success).toBe(true);
-    if (!payment.success) return;
+    if (!payment.success) throw new Error("payment creation failed");
+    return { invoiceId: created.data.id, paymentId: payment.data.id };
+  }
 
-    const refunded = await mockFinanceRepository.refundPayment(payment.data.id, 103000);
-    expect(refunded.success).toBe(false);
+  it("F2.1C-B: full refund with tax+discount posts a balanced 6-line correction (Dr AR/4950/2100, Cr Cash/4900/AR)", async () => {
+    const { paymentId } = await issueInvoiceAndPayInFull();
+
+    const refunded = await mockFinanceRepository.refundPayment(paymentId, 103000);
+    expect(refunded.success).toBe(true);
+    if (!refunded.success) return;
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_refund" });
+    const entry = entries.find((e) => e.source_id === refunded.data.id)!;
+    expect(entry).toBeDefined();
+
+    const detail = await mockFinanceRepository.getJournalEntry(entry.id);
+    const lines = detail.lines!;
+    expect(lines).toHaveLength(6);
+
+    const totalDebit = lines.reduce((sum, l) => sum + l.debit_minor, 0);
+    const totalCredit = lines.reduce((sum, l) => sum + l.credit_minor, 0);
+    expect(totalDebit).toBe(totalCredit);
+    expect(totalDebit).toBe(208000);
+
+    const arLines = lines.filter((l) => l.account?.account_number === 1100);
+    expect(arLines.find((l) => l.debit_minor === 103000)).toBeDefined();
+    expect(arLines.find((l) => l.credit_minor === 103000)).toBeDefined();
+    expect(lines.find((l) => l.account?.account_number === 1000)?.credit_minor).toBe(103000);
+    expect(lines.find((l) => l.account?.account_number === 4950)?.debit_minor).toBe(100000);
+    expect(lines.find((l) => l.account?.account_number === 2100)?.debit_minor).toBe(5000);
+    expect(lines.find((l) => l.account?.account_number === 4900)?.credit_minor).toBe(2000);
+  });
+
+  it("F2.1C-B: full refund with no tax/discount posts a balanced 4-line correction (no 2100/4900 lines)", async () => {
+    const invoiceInput: InvoiceInput = { ...BASE_INVOICE_INPUT, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 };
+    const { paymentId } = await issueInvoiceAndPayInFull(invoiceInput, 50000);
+
+    const refunded = await mockFinanceRepository.refundPayment(paymentId, 50000);
+    expect(refunded.success).toBe(true);
+    if (!refunded.success) return;
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_refund" });
+    const entry = entries.find((e) => e.source_id === refunded.data.id)!;
+    const detail = await mockFinanceRepository.getJournalEntry(entry.id);
+    const lines = detail.lines!;
+    expect(lines).toHaveLength(4);
+    expect(lines.some((l) => l.account?.account_number === 2100)).toBe(false);
+    expect(lines.some((l) => l.account?.account_number === 4900)).toBe(false);
+    expect(lines.find((l) => l.account?.account_number === 4950)?.debit_minor).toBe(50000);
+
+    const totalDebit = lines.reduce((sum, l) => sum + l.debit_minor, 0);
+    const totalCredit = lines.reduce((sum, l) => sum + l.credit_minor, 0);
+    expect(totalDebit).toBe(totalCredit);
+  });
+
+  it("F2.1C-B: partial refund with tax+discount uses residual rounding so the entry still balances exactly", async () => {
+    const { paymentId } = await issueInvoiceAndPayInFull();
+
+    // R=10000 against total=103000: tax_portion=round(10000*5000/103000)=485,
+    // discount_portion=round(10000*2000/103000)=194, revenue_portion=10000+194-485=9709.
+    const refunded = await mockFinanceRepository.refundPayment(paymentId, 10000);
+    expect(refunded.success).toBe(true);
+    if (!refunded.success) return;
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_refund" });
+    const entry = entries.find((e) => e.source_id === refunded.data.id)!;
+    const detail = await mockFinanceRepository.getJournalEntry(entry.id);
+    const lines = detail.lines!;
+
+    expect(lines.find((l) => l.account?.account_number === 4950)?.debit_minor).toBe(9709);
+    expect(lines.find((l) => l.account?.account_number === 2100)?.debit_minor).toBe(485);
+    expect(lines.find((l) => l.account?.account_number === 4900)?.credit_minor).toBe(194);
+
+    const totalDebit = lines.reduce((sum, l) => sum + l.debit_minor, 0);
+    const totalCredit = lines.reduce((sum, l) => sum + l.credit_minor, 0);
+    expect(totalDebit).toBe(totalCredit);
+  });
+
+  it("F2.1C-B: multiple sequential partial refunds each post their own balanced correction and sum to the full refund", async () => {
+    const { paymentId } = await issueInvoiceAndPayInFull();
+
+    const first = await mockFinanceRepository.refundPayment(paymentId, 50000);
+    expect(first.success).toBe(true);
+    if (!first.success) return;
+    const second = await mockFinanceRepository.refundPayment(paymentId, 53000);
+    expect(second.success).toBe(true);
+    if (!second.success) return;
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_refund" });
+    const paymentEntries = entries.filter((e) => e.source_id === first.data.id || e.source_id === second.data.id);
+    expect(paymentEntries).toHaveLength(2);
+
+    let revenueCorrectionTotal = 0;
+    for (const entry of paymentEntries) {
+      const detail = await mockFinanceRepository.getJournalEntry(entry.id);
+      const lines = detail.lines!;
+      const totalDebit = lines.reduce((sum, l) => sum + l.debit_minor, 0);
+      const totalCredit = lines.reduce((sum, l) => sum + l.credit_minor, 0);
+      expect(totalDebit).toBe(totalCredit);
+      revenueCorrectionTotal += lines.find((l) => l.account?.account_number === 4950)?.debit_minor ?? 0;
+    }
+    // First refund (50000): tax=round(50000*5000/103000)=2427, discount=round(50000*2000/103000)=971, revenue=50000+971-2427=48544.
+    // Second refund (53000): tax=round(53000*5000/103000)=2573, discount=round(53000*2000/103000)=1029, revenue=53000+1029-2573=51456.
+    // Combined revenue portions (48544+51456=100000) exactly match the full-refund case's single 100000 revenue_portion.
+    expect(revenueCorrectionTotal).toBe(100000);
+
+    const overRefund = await mockFinanceRepository.refundPayment(paymentId, 1);
+    expect(overRefund.success).toBe(false);
+  });
+
+  it("F2.1C-B-REVIEW: three partial refunds summing to the full amount produce ZERO cumulative drift in net Revenue/Tax/Discounts — regression for the independent-per-refund-rounding defect", async () => {
+    const { paymentId } = await issueInvoiceAndPayInFull();
+
+    // 30000 + 40000 + 33000 = 103000 (full). Independent per-refund rounding on this exact
+    // split left net Revenue and net Sales Discounts each off by 1 cent (100001 and 2001
+    // instead of 100000 and 2000) even though every individual entry balanced on its own —
+    // this is the defect the cumulative-then-diff formula fixes. See the migration's header
+    // comment for the full derivation.
+    const first = await mockFinanceRepository.refundPayment(paymentId, 30000);
+    expect(first.success).toBe(true);
+    if (!first.success) return;
+    const second = await mockFinanceRepository.refundPayment(paymentId, 40000);
+    expect(second.success).toBe(true);
+    if (!second.success) return;
+    const third = await mockFinanceRepository.refundPayment(paymentId, 33000);
+    expect(third.success).toBe(true);
+    if (!third.success) return;
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_refund" });
+    const ids = new Set([first.data.id, second.data.id, third.data.id]);
+    const paymentEntries = entries.filter((e) => e.source_id != null && ids.has(e.source_id));
+    expect(paymentEntries).toHaveLength(3);
+
+    let revenueTotal = 0;
+    let taxTotal = 0;
+    let discountTotal = 0;
+    for (const entry of paymentEntries) {
+      const detail = await mockFinanceRepository.getJournalEntry(entry.id);
+      const lines = detail.lines!;
+      const totalDebit = lines.reduce((sum, l) => sum + l.debit_minor, 0);
+      const totalCredit = lines.reduce((sum, l) => sum + l.credit_minor, 0);
+      expect(totalDebit).toBe(totalCredit); // each entry still balances individually
+      revenueTotal += lines.find((l) => l.account?.account_number === 4950)?.debit_minor ?? 0;
+      taxTotal += lines.find((l) => l.account?.account_number === 2100)?.debit_minor ?? 0;
+      discountTotal += lines.find((l) => l.account?.account_number === 4900)?.credit_minor ?? 0;
+    }
+
+    // Exact zero-drift assertions — the defect would show 100001/2001 here, not 100000/2000.
+    expect(revenueTotal).toBe(100000);
+    expect(taxTotal).toBe(5000);
+    expect(discountTotal).toBe(2000);
+  });
+
+  it("F2.1C-B: refunding more than the refundable ceiling is still rejected (unchanged by the Revenue correction)", async () => {
+    const { paymentId } = await issueInvoiceAndPayInFull();
+
+    const overRefund = await mockFinanceRepository.refundPayment(paymentId, 103001);
+    expect(overRefund.success).toBe(false);
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_refund" });
+    expect(entries.filter((e) => e.source_id != null)).toHaveLength(0);
   });
 
   it("F2.1B-REVIEW: refundPayment remains unaffected for a non-invoice-linked (Customer Deposits) payment", async () => {

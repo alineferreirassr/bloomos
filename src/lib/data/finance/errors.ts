@@ -33,12 +33,19 @@ import { type DataResult, fail } from "@/lib/data/result";
  *     post_invoice_voided_reversal, refuses to reverse Revenue recognition
  *     for an invoice with any payment applied; void-after-partial-payment
  *     needs a proportional correction model not yet built)
- *   - refund rejected, Revenue recognized:  P1120 (Finance F2.1B-REVIEW —
- *     process_payment_refund, refuses to refund a payment linked to an
- *     invoice with unreversed recognized Revenue; the existing settlement-
- *     only reversal would otherwise leave a phantom AR balance and an
- *     overstated Revenue balance until Revenue-side refund correction
- *     exists)
+ *   - unbalanced refund correction:          P1121 (Finance F2.1C-B —
+ *     post_payment_refund_reversal, defensive guard against a negative
+ *     computed Refunds & Returns portion; should be unreachable given
+ *     existing Invoice validation, never silently posts a negative debit)
+ *
+ * P1120 (Finance F2.1B-REVIEW's "refund rejected, Revenue recognized" —
+ * process_payment_refund's blanket rejection of any invoice-linked refund
+ * against recognized Revenue) is RETIRED as of Finance F2.1C-B: the real
+ * proportional correction (Dr 4950 Refunds & Returns / Dr 2100 Sales Tax
+ * Payable / Cr 4900 Sales Discounts / Cr 1100 AR, composed into the same
+ * payment_refund entry) now runs in its place. No SQL path raises P1120
+ * any longer — removed from the recognized set below rather than left as
+ * unreachable dead weight.
  *   - required receipt event id:            P0010 (Purchases-owned range,
  *     reachable here since record_payment_settlement/record_expense_
  *     transition/record_manual_adjustment/reverse_journal_entry/
@@ -84,7 +91,7 @@ export const FINANCE_VALIDATION_ERROR_CODES = new Set([
   "P1117",
   "P1118",
   "P1119",
-  "P1120",
+  "P1121",
   "P1200",
 ]);
 

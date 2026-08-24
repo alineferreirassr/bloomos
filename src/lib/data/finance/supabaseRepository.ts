@@ -99,11 +99,13 @@ const UNKNOWN_ERROR_CODE = "unknown";
  * thrown error. P0001-P0004 are the original (migration 8) validation
  * codes; P1104/P1118 are Finance F1.8's additions, raised by the
  * post_payment_refund_reversal step process_payment_refund now composes
- * (duplicate reversal posting / no settlement entry to reverse); P1120 is
- * Finance F2.1B-REVIEW's addition — refuses to refund a payment linked to
- * an invoice with unreversed recognized Revenue.
+ * (duplicate reversal posting / no settlement entry to reverse); P1121 is
+ * Finance F2.1C-B's addition — a defensive guard against an unbalanced
+ * refund-vs-Revenue correction, expected to be unreachable. F2.1B-REVIEW's
+ * P1120 (blanket rejection of invoice-linked refunds against recognized
+ * Revenue) is retired as of F2.1C-B — no SQL path raises it any longer.
  */
-const APP_VALIDATION_ERROR_CODES = new Set(["P0001", "P0002", "P0003", "P0004", "P1104", "P1118", "P1120"]);
+const APP_VALIDATION_ERROR_CODES = new Set(["P0001", "P0002", "P0003", "P0004", "P1104", "P1118", "P1121"]);
 
 function fieldErrorsFromZod(error: {
   issues: { path: PropertyKey[]; message: string }[];

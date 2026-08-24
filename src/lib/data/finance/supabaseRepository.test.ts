@@ -950,13 +950,27 @@ describe("supabaseFinanceRepository.refundPayment", () => {
     expect(rpcCalls).toHaveLength(0);
   });
 
-  it("F2.1B-REVIEW: translates a P1120 (Revenue recognized on the linked invoice) RPC error into a DataResult failure rather than throwing", async () => {
+  it("F2.1C-B: an invoice-linked refund against recognized Revenue now succeeds (P1120 retired) — the Revenue correction is composed server-side by process_payment_refund, invisible to this repository call", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: paymentRow({ status: "succeeded" }), error: null }, // fetch original payment
+      { data: paymentRow({ id: "payment_2", payment_type: "refund", amount_minor: 20000 }), error: null }, // process_payment_refund rpc — now posts the Revenue correction internally instead of rejecting
+      { data: null, error: null }, // recompute_invoice_balance rpc
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000);
+    expect(result.success).toBe(true);
+    expect(rpcCalls.map((c) => c.name)).toEqual(["process_payment_refund", "recompute_invoice_balance"]);
+  });
+
+  it("F2.1C-B: translates a P1121 (unbalanced refund correction — defensive guard) RPC error into a DataResult failure rather than throwing", async () => {
     mockSession();
     const { client, rpcCalls } = createMockSupabase([
       { data: paymentRow({ status: "succeeded" }), error: null }, // fetch original payment
       {
         data: null,
-        error: { code: "P1120", message: "Cannot refund a payment linked to an invoice with recognized Revenue. This requires a dedicated correction flow not yet available." },
+        error: { code: "P1121", message: "Unable to compute a balanced refund correction for this invoice." },
       },
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
@@ -964,7 +978,7 @@ describe("supabaseFinanceRepository.refundPayment", () => {
     const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000);
     expect(result.success).toBe(false);
     if (result.success) return;
-    expect(result.error).toBe("Cannot refund a payment linked to an invoice with recognized Revenue. This requires a dedicated correction flow not yet available.");
+    expect(result.error).toBe("Unable to compute a balanced refund correction for this invoice.");
     expect(rpcCalls.map((c) => c.name)).toEqual(["process_payment_refund"]);
   });
 });

@@ -43,9 +43,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation + 20 Services Foundation schema migrations + 1 Event Service Workspace media owner_type widening migration + 1 Client Portal Checkpoint 14 schema migration + 1 Analytics permission seed migration + 1 Digital Asset Management media_assets workspace owner_type widening migration + 2 Finance F1.8 Payment Atomicity & Refund Reversal migrations + 1 Finance F2.1B Invoice Revenue Recognition migration + 1 Finance F2.1B-REVIEW refund guard migration (excluding independently-tracked, not-yet-released work still uncommitted alongside this one — see KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS), in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation + 20 Services Foundation schema migrations + 1 Event Service Workspace media owner_type widening migration + 1 Client Portal Checkpoint 14 schema migration + 1 Analytics permission seed migration + 1 Digital Asset Management media_assets workspace owner_type widening migration + 2 Finance F1.8 Payment Atomicity & Refund Reversal migrations + 1 Finance F2.1B Invoice Revenue Recognition migration + 1 Finance F2.1B-REVIEW refund guard migration + 1 Finance F2.1C-B refund Revenue correction migration (excluding independently-tracked, not-yet-released work still uncommitted alongside this one — see KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS), in chronological (execution) order", () => {
     const files = migrationFilesForThisRelease();
-    expect(files).toHaveLength(161);
+    expect(files).toHaveLength(162);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -1206,6 +1206,7 @@ describe("Finance Posting Engine migrations", () => {
       "20260821100100_finance_payment_refund_reversal.sql",
       "20260822100000_finance_invoice_revenue_recognition.sql",
       "20260822110000_finance_invoice_revenue_recognition_refund_guard.sql",
+      "20260823100000_finance_refund_revenue_correction.sql",
     ];
     for (const otherFile of migrationFiles().filter((f) => !POSTING_ENGINE_FILES.includes(f) && !LATER_SANCTIONED_FINANCE_FILES.includes(f))) {
       const sql = readMigration(otherFile);
@@ -1999,6 +2000,169 @@ describe("Finance F2.1B-REVIEW migration — refund-vs-recognized-Revenue guard"
     const code = sql();
     expect(code).not.toMatch(/4950/); // Refunds & Returns contra-revenue account — F2.1C scope
     expect(code).not.toMatch(/4000/); // Service Revenue account — never credited/debited by this file
+  });
+});
+
+describe("Finance F2.1C-B migration — refund Revenue correction", () => {
+  const FILE = "20260823100000_finance_refund_revenue_correction.sql";
+  const sql = () => readMigration(FILE);
+
+  it("redefines only post_payment_refund_reversal and process_payment_refund — no new table, no Chart of Accounts mutation, no CHECK widening, no new source_type/posting_key identity", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create or replace function public\.post_payment_refund_reversal\(/);
+    expect(code).toMatch(/create or replace function public\.process_payment_refund\(/);
+    expect(code).not.toMatch(/create table/i);
+    expect(code).not.toMatch(/insert into public\.chart_of_accounts/);
+    expect(code).not.toMatch(/alter table public\.chart_of_accounts/);
+    expect(code).not.toMatch(/journal_entries_source_type_check/);
+    expect(code).toMatch(/'payment_refund:' \|\| p_refund_payment_id/);
+    expect(code).not.toMatch(/source_type\s*,?\s*'invoice_refund'|'refund_revenue/);
+  });
+
+  it("removes the retired P1120 guard entirely — no path in this file raises it", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/errcode = 'P1120'/);
+    expect(code).not.toMatch(/Cannot refund a payment linked to an invoice with recognized Revenue/);
+  });
+
+  describe("post_payment_refund_reversal", () => {
+    const fn = () => {
+      const match = stripSqlComments(sql()).match(/create or replace function public\.post_payment_refund_reversal[\s\S]*?^\$\$;/m)?.[0];
+      return match ?? "";
+    };
+
+    it("preserves the existing 2-line settlement reversal verbatim (Dr credit_line / Cr cash_line, both v_refund.amount_minor) as the base of v_lines", () => {
+      const code = fn();
+      expect(code).toMatch(/v_lines := jsonb_build_array\(\s*\n\s*jsonb_build_object\('account_id', v_credit_line\.account_id, 'debit_minor', v_refund\.amount_minor, 'credit_minor', 0\),\s*\n\s*jsonb_build_object\('account_id', v_cash_line\.account_id, 'debit_minor', 0, 'credit_minor', v_refund\.amount_minor\)\s*\n\s*\);/);
+    });
+
+    it("gates the Revenue correction on invoice_id is not null AND an unreversed invoice_issued entry — exactly the retired P1120 condition, now a branch instead of a rejection", () => {
+      const code = fn();
+      expect(code).toMatch(/if v_refund\.invoice_id is not null then/);
+      expect(code).toMatch(/source_type = 'invoice_issued'\s*\n\s*and source_id = v_refund\.invoice_id::text\s*\n\s*and reversed_by_entry_id is null/);
+    });
+
+    it("F2.1C-B-REVIEW: computes portions CUMULATIVELY (this refund + every other completed refund on the invoice) and takes the diff from the prior cumulative state — never rounds a single refund's own amount_minor independently", () => {
+      const code = fn();
+      // The retired independent-per-refund formula must be gone...
+      expect(code).not.toMatch(/v_tax_portion := round\(\(v_refund\.amount_minor::numeric \* v_invoice\.tax_minor\) \/ v_invoice\.total_minor\);/);
+      expect(code).not.toMatch(/v_discount_portion := round\(\(v_refund\.amount_minor::numeric \* v_invoice\.discount_minor\) \/ v_invoice\.total_minor\);/);
+      expect(code).not.toMatch(/v_revenue_portion := v_refund\.amount_minor \+ v_discount_portion - v_tax_portion;/);
+      // ...replaced by the cumulative-then-diff formula.
+      expect(code).toMatch(/where invoice_id = v_refund\.invoice_id\s*\n\s*and payment_type = 'refund'\s*\n\s*and id <> v_refund\.id\s*\n\s*and status in \('succeeded', 'partially_refunded', 'refunded'\)/);
+      expect(code).toMatch(/v_cumulative_refunded_total := v_prior_refunded_total \+ v_refund\.amount_minor;/);
+      expect(code).toMatch(/v_tax_cum := round\(\(v_cumulative_refunded_total::numeric \* v_invoice\.tax_minor\) \/ v_invoice\.total_minor\);/);
+      expect(code).toMatch(/v_discount_cum := round\(\(v_cumulative_refunded_total::numeric \* v_invoice\.discount_minor\) \/ v_invoice\.total_minor\);/);
+      expect(code).toMatch(/v_revenue_cum := v_cumulative_refunded_total \+ v_discount_cum - v_tax_cum;/);
+      expect(code).toMatch(/v_tax_prior := round\(\(v_prior_refunded_total::numeric \* v_invoice\.tax_minor\) \/ v_invoice\.total_minor\);/);
+      expect(code).toMatch(/v_discount_prior := round\(\(v_prior_refunded_total::numeric \* v_invoice\.discount_minor\) \/ v_invoice\.total_minor\);/);
+      expect(code).toMatch(/v_revenue_prior := v_prior_refunded_total \+ v_discount_prior - v_tax_prior;/);
+      expect(code).toMatch(/v_tax_portion := v_tax_cum - v_tax_prior;/);
+      expect(code).toMatch(/v_discount_portion := v_discount_cum - v_discount_prior;/);
+      expect(code).toMatch(/v_revenue_portion := v_revenue_cum - v_revenue_prior;/);
+      expect(code).not.toMatch(/v_revenue_portion := round\(/);
+      expect(code).not.toMatch(/v_revenue_cum := round\(/);
+    });
+
+    it("F2.1C-B-REVIEW: locks the invoice row (for update) before computing the cumulative refund total, closing the race where two concurrent refunds against the same invoice via different original payments could both compute a stale prior-refunded total", () => {
+      const code = fn();
+      expect(code).toMatch(/select \* into v_invoice from public\.invoices where id = v_refund\.invoice_id for update;/);
+      const lockIndex = code.indexOf("select * into v_invoice from public.invoices where id = v_refund.invoice_id for update;");
+      const priorSumIndex = code.indexOf("select coalesce(sum(amount_minor), 0) into v_prior_refunded_total");
+      expect(lockIndex).toBeGreaterThan(-1);
+      expect(priorSumIndex).toBeGreaterThan(lockIndex);
+    });
+
+    it("rejects a negative computed revenue_portion with P1121 before appending any line — defensive, never posts a negative debit", () => {
+      const code = fn();
+      const guardIndex = code.indexOf("if v_revenue_portion < 0 then");
+      const appendIndex = code.indexOf("(public.finance_resolve_account(v_invoice.workspace_id, 4950))");
+      expect(guardIndex).toBeGreaterThan(-1);
+      expect(code).toMatch(/errcode = 'P1121'/);
+      expect(appendIndex).toBeGreaterThan(guardIndex);
+    });
+
+    it("appends Dr 4950 always, Dr 2100 and Cr 4900 only when their portion is greater than zero, and a final Cr AR netting the base Dr AR line to zero", () => {
+      const code = fn();
+      expect(code).toMatch(/'account_id', \(public\.finance_resolve_account\(v_invoice\.workspace_id, 4950\)\)\.id,\s*\n\s*'debit_minor', v_revenue_portion, 'credit_minor', 0/);
+      expect(code).toMatch(/if v_tax_portion > 0 then/);
+      expect(code).toMatch(/'account_id', \(public\.finance_resolve_account\(v_invoice\.workspace_id, 2100\)\)\.id,\s*\n\s*'debit_minor', v_tax_portion, 'credit_minor', 0/);
+      expect(code).toMatch(/if v_discount_portion > 0 then/);
+      expect(code).toMatch(/'account_id', \(public\.finance_resolve_account\(v_invoice\.workspace_id, 4900\)\)\.id,\s*\n\s*'debit_minor', 0, 'credit_minor', v_discount_portion/);
+      expect(code).toMatch(/jsonb_build_object\('account_id', v_credit_line\.account_id, 'debit_minor', 0, 'credit_minor', v_refund\.amount_minor\)\s*\n\s*\);\s*\n\s*end if;\s*\n\s*end if;/);
+    });
+
+    it("never touches account 4000 Service Revenue directly — 4950 is the approved contra-revenue account", () => {
+      const code = fn();
+      expect(code).not.toMatch(/,\s*4000\)/);
+    });
+
+    it("is a no-op branch (falls through to the unchanged 2-line entry) for non-invoice-linked or already-reversed-invoice refunds", () => {
+      const code = fn();
+      expect(code).toMatch(/if found then/);
+      // The branch is entered only `if found` on the recognition-entry lookup; nothing outside
+      // the `if v_refund.invoice_id is not null ... if found then ... end if; end if;` block
+      // conditions on invoice_id, so a null invoice_id or a reversed/void invoice falls straight
+      // through to v_entry := public.finance_insert_journal_entry(...) with the original 2 lines.
+      const insertIndex = code.indexOf("v_entry := public.finance_insert_journal_entry(");
+      const foundIndex = code.indexOf("if found then");
+      expect(foundIndex).toBeGreaterThan(-1);
+      expect(insertIndex).toBeGreaterThan(foundIndex);
+    });
+
+    it("preserves idempotency (P1104 duplicate) and the P1118 no-settlement-entry guard unchanged from F1.8", () => {
+      const code = fn();
+      expect(code).toMatch(/source_type = 'payment_refund' and source_id = p_refund_payment_id::text/);
+      expect(code).toMatch(/errcode = 'P1104'/);
+      expect(code).toMatch(/errcode = 'P1118'/);
+    });
+
+    it("reads the ORIGINAL settlement's actual posted account_ids back from journal_lines rather than re-deriving routing from invoice_id, unchanged from F1.8", () => {
+      const code = fn();
+      expect(code).toMatch(/select \* into v_cash_line from public\.journal_lines where journal_entry_id = v_settlement_entry\.id and debit_minor > 0/);
+      expect(code).toMatch(/select \* into v_credit_line from public\.journal_lines where journal_entry_id = v_settlement_entry\.id and credit_minor > 0/);
+    });
+  });
+
+  describe("process_payment_refund", () => {
+    const fn = () => {
+      const match = stripSqlComments(sql()).match(/create or replace function public\.process_payment_refund[\s\S]*?^\$\$;/m)?.[0];
+      return match ?? "";
+    };
+
+    it("preserves every pre-existing validation (P0001-P0004) and the composition into post_payment_refund_reversal, unchanged", () => {
+      const code = fn();
+      expect(code).toMatch(/errcode = 'P0001'/);
+      expect(code).toMatch(/errcode = 'P0002'/);
+      expect(code).toMatch(/errcode = 'P0003'/);
+      expect(code).toMatch(/errcode = 'P0004'/);
+      expect(code).toMatch(/perform public\.post_payment_refund_reversal\(v_refund\.id, v_original\.id, p_actor\)/);
+    });
+
+    it("no longer contains the P1120 pre-check that used to block invoice-linked refunds against recognized Revenue", () => {
+      const code = fn();
+      expect(code).not.toMatch(/errcode = 'P1120'/);
+      expect(code).not.toMatch(/if v_original\.invoice_id is not null and exists \(/);
+    });
+  });
+
+  it("uses no exception handlers, matching the established no-swallowed-errors convention", () => {
+    expect(stripSqlComments(sql())).not.toMatch(/exception\s+when/i);
+  });
+
+  it("F2.1C-B does not implement Customer Deposit application, Invoice Financial Adjustment, partial-void correction, or historical backfill", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/deposit.{0,10}applied|apply.{0,10}deposit/i);
+    expect(code).not.toMatch(/proportional.{0,20}void|partial.{0,10}void.{0,10}reversal/i);
+    expect(code).not.toMatch(/backfill/i);
+    // 2200 (Customer Deposits) legitimately appears in the pre-existing, unchanged doc comment
+    // describing the base 2-line reversal's two possible credit_line accounts (1100 AR or 2200
+    // Customer Deposits) -- scoped here to the FUNCTION BODIES only, proving no new code path
+    // reads/writes account 2200 (deposit-application logic would need to look it up explicitly).
+    const reversalFn = code.match(/create or replace function public\.post_payment_refund_reversal[\s\S]*?^\$\$;/m)?.[0] ?? "";
+    const processFn = code.match(/create or replace function public\.process_payment_refund[\s\S]*?^\$\$;/m)?.[0] ?? "";
+    expect(reversalFn).not.toMatch(/2200/);
+    expect(processFn).not.toMatch(/2200/);
   });
 });
 
