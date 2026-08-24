@@ -43,9 +43,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation + 20 Services Foundation schema migrations + 1 Event Service Workspace media owner_type widening migration + 1 Client Portal Checkpoint 14 schema migration + 1 Analytics permission seed migration + 1 Digital Asset Management media_assets workspace owner_type widening migration + 2 Finance F1.8 Payment Atomicity & Refund Reversal migrations + 1 Finance F2.1B Invoice Revenue Recognition migration + 1 Finance F2.1B-REVIEW refund guard migration + 1 Finance F2.1C-B refund Revenue correction migration (excluding independently-tracked, not-yet-released work still uncommitted alongside this one — see KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS), in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation + 20 Services Foundation schema migrations + 1 Event Service Workspace media owner_type widening migration + 1 Client Portal Checkpoint 14 schema migration + 1 Analytics permission seed migration + 1 Digital Asset Management media_assets workspace owner_type widening migration + 2 Finance F1.8 Payment Atomicity & Refund Reversal migrations + 1 Finance F2.1B Invoice Revenue Recognition migration + 1 Finance F2.1B-REVIEW refund guard migration + 1 Finance F2.1C-B refund Revenue correction migration + 1 Finance F2.1C-C Customer Deposit application migration (excluding independently-tracked, not-yet-released work still uncommitted alongside this one — see KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS), in chronological (execution) order", () => {
     const files = migrationFilesForThisRelease();
-    expect(files).toHaveLength(162);
+    expect(files).toHaveLength(163);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -1207,6 +1207,7 @@ describe("Finance Posting Engine migrations", () => {
       "20260822100000_finance_invoice_revenue_recognition.sql",
       "20260822110000_finance_invoice_revenue_recognition_refund_guard.sql",
       "20260823100000_finance_refund_revenue_correction.sql",
+      "20260824100000_finance_deposit_application.sql",
     ];
     for (const otherFile of migrationFiles().filter((f) => !POSTING_ENGINE_FILES.includes(f) && !LATER_SANCTIONED_FINANCE_FILES.includes(f))) {
       const sql = readMigration(otherFile);
@@ -2163,6 +2164,245 @@ describe("Finance F2.1C-B migration — refund Revenue correction", () => {
     const processFn = code.match(/create or replace function public\.process_payment_refund[\s\S]*?^\$\$;/m)?.[0] ?? "";
     expect(reversalFn).not.toMatch(/2200/);
     expect(processFn).not.toMatch(/2200/);
+  });
+});
+
+describe("Finance F2.1C-C migration — Customer Deposit application", () => {
+  const FILE = "20260824100000_finance_deposit_application.sql";
+  const sql = () => readMigration(FILE);
+
+  it("widens journal_entries_source_type_check to add deposit_application, preserving every previously-allowed value", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/alter table public\.journal_entries drop constraint journal_entries_source_type_check;/);
+    expect(code).toMatch(/alter table public\.journal_entries\s*\n\s*add constraint journal_entries_source_type_check check \(/);
+    for (const value of [
+      "purchase_receipt", "invoice_issued", "invoice_voided", "payment_settlement", "payment_refund",
+      "expense_due", "expense_paid", "expense_reimbursed", "expense_due_reversal",
+      "inventory_adjustment", "inventory_writeoff", "inventory_event_checkout", "inventory_event_return",
+      "inventory_initial_stock", "vendor_payment", "vendor_refund", "stripe_payout", "manual_adjustment",
+      "reversal", "deposit_application",
+    ]) {
+      expect(code).toMatch(new RegExp(`'${value}'`));
+    }
+  });
+
+  it("does not insert or alter any Chart of Accounts row — reuses only already-seeded accounts (2200, 1100)", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/insert into public\.chart_of_accounts/);
+    expect(code).not.toMatch(/alter table public\.chart_of_accounts/);
+  });
+
+  it("does not widen payments_payment_type_check or payments_payment_method_check — 'adjustment' and 'other' were already allowed values", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/payments_payment_type_check/);
+    expect(code).not.toMatch(/payments_payment_method_check/);
+    expect(code).not.toMatch(/alter table public\.payments/);
+  });
+
+  describe("post_deposit_application", () => {
+    const fn = () => {
+      const match = stripSqlComments(sql()).match(/create or replace function public\.post_deposit_application[\s\S]*?^\$\$;/m)?.[0];
+      return match ?? "";
+    };
+
+    it("posts exactly Dr 2200 Customer Deposits / Cr 1100 Accounts Receivable, no Cash line, no Revenue-affecting account", () => {
+      const code = fn();
+      expect(code).toMatch(/\(public\.finance_resolve_account\(v_application\.workspace_id, 2200\)\)\.id,\s*\n\s*'debit_minor', v_application\.amount_minor, 'credit_minor', 0/);
+      expect(code).toMatch(/\(public\.finance_resolve_account\(v_application\.workspace_id, 1100\)\)\.id,\s*\n\s*'debit_minor', 0, 'credit_minor', v_application\.amount_minor/);
+      expect(code).not.toMatch(/,\s*1000\)/);
+      expect(code).not.toMatch(/,\s*4000\)/);
+      expect(code).not.toMatch(/,\s*4950\)/);
+      expect(code).not.toMatch(/,\s*4900\)/);
+      expect(code).not.toMatch(/,\s*2100\)/);
+    });
+
+    it("is idempotent per application row: rejects a duplicate with P1104, keyed on source_type='deposit_application'", () => {
+      const code = fn();
+      expect(code).toMatch(/source_type = 'deposit_application' and source_id = p_application_payment_id::text/);
+      expect(code).toMatch(/errcode = 'P1104'/);
+      expect(code).toMatch(/v_posting_key := 'deposit_application:' \|\| p_application_payment_id;/);
+    });
+
+    it("does not re-validate the application ceiling itself — trusts the caller already enforced it before inserting the row", () => {
+      const code = fn();
+      expect(code).not.toMatch(/P1122|P1123|P1124|P1125|P1126|P1127|P1128/);
+    });
+
+    it("F2.1C-C-REVIEW: fails with P1118 rather than inventing an application when no payment_settlement entry exists for the deposit — mirrors post_payment_refund_reversal's identical guard", () => {
+      const code = fn();
+      expect(code).toMatch(/if not exists \(\s*\n\s*select 1 from public\.journal_entries\s*\n\s*where source_type = 'payment_settlement' and source_id = p_deposit_payment_id::text\s*\n\s*\) then/);
+      expect(code).toMatch(/errcode = 'P1118'/);
+      const guardIndex = code.indexOf("source_type = 'payment_settlement' and source_id = p_deposit_payment_id::text");
+      const postingIndex = code.indexOf("v_posting_key := 'deposit_application:' || p_application_payment_id;");
+      expect(guardIndex).toBeGreaterThan(-1);
+      expect(postingIndex).toBeGreaterThan(guardIndex);
+    });
+  });
+
+  describe("record_deposit_application", () => {
+    const fn = () => {
+      const match = stripSqlComments(sql()).match(/create or replace function public\.record_deposit_application[\s\S]*?^\$\$;/m)?.[0];
+      return match ?? "";
+    };
+
+    it("locks the deposit Payment row before the Invoice row — same order F2.1C-B-REVIEW established, no new lock-order cycle", () => {
+      const code = fn();
+      const depositLockIndex = code.indexOf("select * into v_deposit from public.payments where id = p_deposit_payment_id for update;");
+      const invoiceLockIndex = code.indexOf("select * into v_invoice from public.invoices where id = p_invoice_id for update;");
+      expect(depositLockIndex).toBeGreaterThan(-1);
+      expect(invoiceLockIndex).toBeGreaterThan(depositLockIndex);
+    });
+
+    it("rejects (P1128) a null/non-positive amount before ever touching the database", () => {
+      const code = fn();
+      expect(code).toMatch(/if p_amount_minor is null or p_amount_minor <= 0 then/);
+      expect(code).toMatch(/errcode = 'P1128'/);
+    });
+
+    it("rejects (P1124) a source payment that is invoice-linked or not in a consumable status", () => {
+      const code = fn();
+      expect(code).toMatch(/if v_deposit\.invoice_id is not null then/);
+      expect(code).toMatch(/if v_deposit\.status not in \('succeeded', 'partially_refunded'\) then/);
+      const errcodeMatches = code.match(/errcode = 'P1124'/g) ?? [];
+      expect(errcodeMatches.length).toBe(2);
+    });
+
+    it("rejects (P1125) a workspace/client mismatch and (P1126) a currency mismatch between deposit and invoice", () => {
+      const code = fn();
+      expect(code).toMatch(/if v_deposit\.workspace_id <> v_invoice\.workspace_id or v_deposit\.client_id <> v_invoice\.client_id then/);
+      expect(code).toMatch(/errcode = 'P1125'/);
+      expect(code).toMatch(/if v_deposit\.currency <> v_invoice\.currency then/);
+      expect(code).toMatch(/errcode = 'P1126'/);
+    });
+
+    it("rejects (P1127) an invoice not in an application-eligible status — issued/sent/viewed/partially_paid/overdue only", () => {
+      const code = fn();
+      expect(code).toMatch(/if v_invoice\.status not in \('issued', 'sent', 'viewed', 'partially_paid', 'overdue'\) then/);
+      expect(code).toMatch(/errcode = 'P1127'/);
+    });
+
+    it("computes the available-deposit ceiling as amount minus prior refunds minus prior applications, and rejects over-application with P1122", () => {
+      const code = fn();
+      expect(code).toMatch(/where reference = 'refund_of:' \|\| v_deposit\.id::text/);
+      expect(code).toMatch(/where reference = 'deposit_application_of:' \|\| v_deposit\.id::text/);
+      expect(code).toMatch(/v_available := greatest\(0, v_deposit\.amount_minor - v_prior_refunds - v_prior_applications\);/);
+      expect(code).toMatch(/if p_amount_minor > v_available then/);
+      expect(code).toMatch(/errcode = 'P1122'/);
+    });
+
+    it("rejects (P1123) an amount exceeding the invoice's own outstanding balance_minor, independent of the deposit ceiling", () => {
+      const code = fn();
+      expect(code).toMatch(/if p_amount_minor > v_invoice\.balance_minor then/);
+      expect(code).toMatch(/errcode = 'P1123'/);
+    });
+
+    it("inserts the application Payment as payment_type='adjustment', payment_method='other', status='succeeded', reference='deposit_application_of:<deposit_id>'", () => {
+      const code = fn();
+      expect(code).toMatch(/'adjustment', 'succeeded', p_amount_minor, v_deposit\.currency, 'other',/);
+      expect(code).toMatch(/v_reference := 'deposit_application_of:' \|\| v_deposit\.id::text;/);
+    });
+
+    it("composes post_deposit_application then recompute_invoice_balance, in that order, no explicit transaction boundary", () => {
+      const code = fn();
+      const insertIndex = code.indexOf("returning * into v_application;");
+      const postIndex = code.indexOf("perform public.post_deposit_application(v_application.id, v_deposit.id, p_actor);");
+      const recomputeIndex = code.indexOf("perform public.recompute_invoice_balance(p_invoice_id, p_actor);");
+      expect(insertIndex).toBeGreaterThan(-1);
+      expect(postIndex).toBeGreaterThan(insertIndex);
+      expect(recomputeIndex).toBeGreaterThan(postIndex);
+      expect(code).not.toMatch(/\bbegin\s*;|\bcommit\s*;/i);
+    });
+
+    it("F2.1C-C-IDEMPOTENCY: p_application_payment_id is a required request-level idempotency key — P1130 if null", () => {
+      const code = fn();
+      expect(code).toMatch(/if p_application_payment_id is null then/);
+      expect(code).toMatch(/errcode = 'P1130'/);
+    });
+
+    it("F2.1C-C-IDEMPOTENCY: checks for an existing row by p_application_payment_id BEFORE any eligibility validation, and replays (returns it) on a matching payload", () => {
+      const code = fn();
+      const lockIndex = code.indexOf("select * into v_deposit from public.payments where id = p_deposit_payment_id for update;");
+      const replayCheckIndex = code.indexOf("select * into v_existing from public.payments where id = p_application_payment_id;");
+      const eligibilityIndex = code.indexOf("if v_deposit.invoice_id is not null then");
+      expect(lockIndex).toBeGreaterThan(-1);
+      expect(replayCheckIndex).toBeGreaterThan(lockIndex);
+      expect(eligibilityIndex).toBeGreaterThan(replayCheckIndex);
+      expect(code).toMatch(/if found then\s*\n\s*if v_existing\.reference is distinct from v_reference or v_existing\.invoice_id is distinct from p_invoice_id or v_existing\.amount_minor <> p_amount_minor then/);
+      expect(code).toMatch(/return v_existing;/);
+    });
+
+    it("F2.1C-C-IDEMPOTENCY: rejects (P1129) a repeat key used for a different (deposit, invoice, amount) payload — never silently replays a mismatched request", () => {
+      const code = fn();
+      expect(code).toMatch(/errcode = 'P1129'/);
+      expect(code).toMatch(/already used for a different deposit application request/);
+    });
+
+    it("F2.1C-C-IDEMPOTENCY: inserts the application Payment using the caller-supplied p_application_payment_id as its own id — not an internally-generated one", () => {
+      const code = fn();
+      expect(code).toMatch(/insert into public\.payments \(\s*\n\s*id, workspace_id, invoice_id, client_id, event_id, contract_id,/);
+      expect(code).toMatch(/\) values \(\s*\n\s*p_application_payment_id, v_deposit\.workspace_id, p_invoice_id,/);
+    });
+  });
+
+  it("process_payment_refund's refundable ceiling now also subtracts prior deposit applications of the same payment", () => {
+    const code = stripSqlComments(sql());
+    const fn = code.match(/create or replace function public\.process_payment_refund[\s\S]*?^\$\$;/m)?.[0] ?? "";
+    expect(fn).toMatch(/where reference = 'deposit_application_of:' \|\| v_original\.id::text/);
+    expect(fn).toMatch(/v_refundable := greatest\(0, v_original\.amount_minor - v_prior_refunds - v_prior_applications\);/);
+  });
+
+  describe("process_payment_refund — Finance F2.1C-C-IDEMPOTENCY", () => {
+    const fn = () => {
+      const match = stripSqlComments(sql()).match(/create or replace function public\.process_payment_refund[\s\S]*?^\$\$;/m)?.[0];
+      return match ?? "";
+    };
+
+    it("p_refund_payment_id is a required request-level idempotency key — P1130 if null", () => {
+      const code = fn();
+      expect(code).toMatch(/if p_refund_payment_id is null then/);
+      expect(code).toMatch(/errcode = 'P1130'/);
+    });
+
+    it("checks for an existing row by p_refund_payment_id AFTER locking the original payment but BEFORE the status/ceiling checks, and replays on a matching payload", () => {
+      const code = fn();
+      const lockIndex = code.indexOf("select * into v_original from public.payments where id = p_original_payment_id for update;");
+      const replayCheckIndex = code.indexOf("select * into v_existing from public.payments where id = p_refund_payment_id;");
+      const statusCheckIndex = code.indexOf("if v_original.status not in ('succeeded', 'partially_refunded') then");
+      expect(lockIndex).toBeGreaterThan(-1);
+      expect(replayCheckIndex).toBeGreaterThan(lockIndex);
+      expect(statusCheckIndex).toBeGreaterThan(replayCheckIndex);
+      expect(code).toMatch(/if found then\s*\n\s*if v_existing\.reference is distinct from v_reference or v_existing\.amount_minor <> p_amount_minor then/);
+      expect(code).toMatch(/return v_existing;/);
+    });
+
+    it("rejects (P1129) a repeat key used for a different (original payment, amount) payload — never silently replays a mismatched request", () => {
+      const code = fn();
+      expect(code).toMatch(/errcode = 'P1129'/);
+      expect(code).toMatch(/already used for a different refund request/);
+    });
+
+    it("inserts the refund Payment using the caller-supplied p_refund_payment_id as its own id — not an internally-generated one", () => {
+      const code = fn();
+      expect(code).toMatch(/insert into public\.payments \(\s*\n\s*id, workspace_id, invoice_id, client_id, event_id, contract_id,/);
+      expect(code).toMatch(/\) values \(\s*\n\s*p_refund_payment_id, v_original\.workspace_id, v_original\.invoice_id,/);
+    });
+  });
+
+  it("does not implement application reversal, Invoice Financial Adjustment, or Partial-Payment Void correction", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/create or replace function public\.reverse_deposit_application/);
+    expect(code).not.toMatch(/proportional.{0,20}void|partial.{0,10}void.{0,10}reversal/i);
+    expect(code).not.toMatch(/payments_status_check/);
+    expect(code).not.toMatch(/backfill/i);
+    // "reconciliation" legitimately appears in the reused P1118 error message text
+    // ("resolve via reconciliation, not an invented application" -- the exact same
+    // wording pattern the original P1118 message already used) -- scoped here to
+    // an actual reconciliation-feature function definition, not the bare word.
+    expect(code).not.toMatch(/create or replace function public\.\w*reconcil/i);
+  });
+
+  it("uses no exception handlers, matching the established no-swallowed-errors convention", () => {
+    expect(stripSqlComments(sql())).not.toMatch(/exception\s+when/i);
   });
 });
 

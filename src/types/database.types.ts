@@ -2497,11 +2497,19 @@ export interface Database {
         Returns: Database["public"]["Tables"]["invoices"]["Row"];
       };
       process_payment_refund: {
-        Args: { p_original_payment_id: string; p_amount_minor: number; p_actor: string };
+        Args: { p_original_payment_id: string; p_amount_minor: number; p_refund_payment_id: string; p_actor: string };
         Returns: Database["public"]["Tables"]["payments"]["Row"];
       };
       post_payment_refund_reversal: {
         Args: { p_refund_payment_id: string; p_original_payment_id: string; p_actor: string };
+        Returns: Database["public"]["Tables"]["journal_entries"]["Row"];
+      };
+      record_deposit_application: {
+        Args: { p_deposit_payment_id: string; p_invoice_id: string; p_amount_minor: number; p_application_payment_id: string; p_actor: string };
+        Returns: Database["public"]["Tables"]["payments"]["Row"];
+      };
+      post_deposit_application: {
+        Args: { p_application_payment_id: string; p_deposit_payment_id: string; p_actor: string };
         Returns: Database["public"]["Tables"]["journal_entries"]["Row"];
       };
       create_document_version: {

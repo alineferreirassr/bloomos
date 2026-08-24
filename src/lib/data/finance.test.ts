@@ -525,7 +525,7 @@ describe("refundPayment", () => {
   it("creates a refund-type Payment and marks the original refunded when fully refunded", async () => {
     const original = await createPayment({ ...validPaymentInput, amount_minor: 50000, payment_method: "cash" });
     if (!original.success) throw new Error("setup failed");
-    const refund = await refundPayment(original.data.id, 50000);
+    const refund = await refundPayment(original.data.id, 50000, crypto.randomUUID());
     expect(refund.success).toBe(true);
     if (refund.success) {
       expect(refund.data.payment_type).toBe("refund");
@@ -539,7 +539,7 @@ describe("refundPayment", () => {
   it("marks the original partially_refunded when less than the full amount is refunded", async () => {
     const original = await createPayment({ ...validPaymentInput, amount_minor: 50000, payment_method: "cash" });
     if (!original.success) throw new Error("setup failed");
-    await refundPayment(original.data.id, 20000);
+    await refundPayment(original.data.id, 20000, crypto.randomUUID());
     const updatedOriginal = await getPaymentById(original.data.id);
     expect(updatedOriginal.status).toBe("partially_refunded");
   });
@@ -547,23 +547,23 @@ describe("refundPayment", () => {
   it("prevents refunding more than the refundable amount", async () => {
     const original = await createPayment({ ...validPaymentInput, amount_minor: 50000, payment_method: "cash" });
     if (!original.success) throw new Error("setup failed");
-    const result = await refundPayment(original.data.id, 60000);
+    const result = await refundPayment(original.data.id, 60000, crypto.randomUUID());
     expect(result.success).toBe(false);
   });
 
   it("prevents a second refund from exceeding what remains after the first", async () => {
     const original = await createPayment({ ...validPaymentInput, amount_minor: 50000, payment_method: "cash" });
     if (!original.success) throw new Error("setup failed");
-    await refundPayment(original.data.id, 30000);
-    const secondRefund = await refundPayment(original.data.id, 30000);
+    await refundPayment(original.data.id, 30000, crypto.randomUUID());
+    const secondRefund = await refundPayment(original.data.id, 30000, crypto.randomUUID());
     expect(secondRefund.success).toBe(false);
   });
 
   it("allows a second refund that fits within the remaining refundable amount", async () => {
     const original = await createPayment({ ...validPaymentInput, amount_minor: 50000, payment_method: "cash" });
     if (!original.success) throw new Error("setup failed");
-    await refundPayment(original.data.id, 30000);
-    const secondRefund = await refundPayment(original.data.id, 20000);
+    await refundPayment(original.data.id, 30000, crypto.randomUUID());
+    const secondRefund = await refundPayment(original.data.id, 20000, crypto.randomUUID());
     expect(secondRefund.success).toBe(true);
     const updatedOriginal = await getPaymentById(original.data.id);
     expect(updatedOriginal.status).toBe("refunded");
@@ -572,15 +572,15 @@ describe("refundPayment", () => {
   it("cannot refund a pending payment", async () => {
     const created = await createPayment({ ...validPaymentInput, payment_method: "credit_card" });
     if (!created.success) throw new Error("setup failed");
-    const result = await refundPayment(created.data.id, 10000);
+    const result = await refundPayment(created.data.id, 10000, crypto.randomUUID());
     expect(result.success).toBe(false);
   });
 
   it("rejects a zero or negative refund amount", async () => {
     const original = await createPayment({ ...validPaymentInput, amount_minor: 50000, payment_method: "cash" });
     if (!original.success) throw new Error("setup failed");
-    expect((await refundPayment(original.data.id, 0)).success).toBe(false);
-    expect((await refundPayment(original.data.id, -100)).success).toBe(false);
+    expect((await refundPayment(original.data.id, 0, crypto.randomUUID())).success).toBe(false);
+    expect((await refundPayment(original.data.id, -100, crypto.randomUUID())).success).toBe(false);
   });
 
   it("recomputes the linked Invoice's paid/balance/status after a refund", async () => {
@@ -599,7 +599,7 @@ describe("refundPayment", () => {
     let updatedInvoice = await getInvoiceById(invoice.data.id);
     expect(updatedInvoice.status).toBe("paid");
 
-    await refundPayment(payment.data.id, 20000);
+    await refundPayment(payment.data.id, 20000, crypto.randomUUID());
 
     updatedInvoice = await getInvoiceById(invoice.data.id);
     expect(updatedInvoice.paid_minor).toBe(30000);
@@ -610,7 +610,7 @@ describe("refundPayment", () => {
   it("records a payment_refunded timeline entry", async () => {
     const original = await createPayment({ ...validPaymentInput, amount_minor: 50000, payment_method: "cash" });
     if (!original.success) throw new Error("setup failed");
-    const refund = await refundPayment(original.data.id, 50000);
+    const refund = await refundPayment(original.data.id, 50000, crypto.randomUUID());
     if (!refund.success) throw new Error("expected success");
     const timeline = await getTimelineByPaymentId(refund.data.id);
     expect(timeline.some((t) => t.type === "payment_refunded")).toBe(true);

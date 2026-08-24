@@ -6,7 +6,7 @@ import { resetExpensesStore } from "@/lib/data/mock/expensesStore";
 import { resetTimelineStore } from "@/lib/data/mock/timelineStore";
 import { resetNotesStore } from "@/lib/data/mock/notesStore";
 import { resetChartOfAccountsStore } from "@/lib/data/mock/chartOfAccountsStore";
-import { resetJournalEntriesStore } from "@/lib/data/mock/journalEntriesStore";
+import { resetJournalEntriesStore, readJournalEntries, writeJournalEntries } from "@/lib/data/mock/journalEntriesStore";
 import { resetJournalLinesStore } from "@/lib/data/mock/journalLinesStore";
 import { resetAccountingPeriodsStore } from "@/lib/data/mock/accountingPeriodsStore";
 import { resetAuditLogStore, mockAuditLogRepository } from "@/lib/data/core/audit/mockRepository";
@@ -516,7 +516,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
   it("F2.1C-B: full refund with tax+discount posts a balanced 6-line correction (Dr AR/4950/2100, Cr Cash/4900/AR)", async () => {
     const { paymentId } = await issueInvoiceAndPayInFull();
 
-    const refunded = await mockFinanceRepository.refundPayment(paymentId, 103000);
+    const refunded = await mockFinanceRepository.refundPayment(paymentId, 103000, crypto.randomUUID());
     expect(refunded.success).toBe(true);
     if (!refunded.success) return;
 
@@ -546,7 +546,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
     const invoiceInput: InvoiceInput = { ...BASE_INVOICE_INPUT, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 };
     const { paymentId } = await issueInvoiceAndPayInFull(invoiceInput, 50000);
 
-    const refunded = await mockFinanceRepository.refundPayment(paymentId, 50000);
+    const refunded = await mockFinanceRepository.refundPayment(paymentId, 50000, crypto.randomUUID());
     expect(refunded.success).toBe(true);
     if (!refunded.success) return;
 
@@ -569,7 +569,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
 
     // R=10000 against total=103000: tax_portion=round(10000*5000/103000)=485,
     // discount_portion=round(10000*2000/103000)=194, revenue_portion=10000+194-485=9709.
-    const refunded = await mockFinanceRepository.refundPayment(paymentId, 10000);
+    const refunded = await mockFinanceRepository.refundPayment(paymentId, 10000, crypto.randomUUID());
     expect(refunded.success).toBe(true);
     if (!refunded.success) return;
 
@@ -590,10 +590,10 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
   it("F2.1C-B: multiple sequential partial refunds each post their own balanced correction and sum to the full refund", async () => {
     const { paymentId } = await issueInvoiceAndPayInFull();
 
-    const first = await mockFinanceRepository.refundPayment(paymentId, 50000);
+    const first = await mockFinanceRepository.refundPayment(paymentId, 50000, crypto.randomUUID());
     expect(first.success).toBe(true);
     if (!first.success) return;
-    const second = await mockFinanceRepository.refundPayment(paymentId, 53000);
+    const second = await mockFinanceRepository.refundPayment(paymentId, 53000, crypto.randomUUID());
     expect(second.success).toBe(true);
     if (!second.success) return;
 
@@ -615,7 +615,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
     // Combined revenue portions (48544+51456=100000) exactly match the full-refund case's single 100000 revenue_portion.
     expect(revenueCorrectionTotal).toBe(100000);
 
-    const overRefund = await mockFinanceRepository.refundPayment(paymentId, 1);
+    const overRefund = await mockFinanceRepository.refundPayment(paymentId, 1, crypto.randomUUID());
     expect(overRefund.success).toBe(false);
   });
 
@@ -627,13 +627,13 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
     // instead of 100000 and 2000) even though every individual entry balanced on its own —
     // this is the defect the cumulative-then-diff formula fixes. See the migration's header
     // comment for the full derivation.
-    const first = await mockFinanceRepository.refundPayment(paymentId, 30000);
+    const first = await mockFinanceRepository.refundPayment(paymentId, 30000, crypto.randomUUID());
     expect(first.success).toBe(true);
     if (!first.success) return;
-    const second = await mockFinanceRepository.refundPayment(paymentId, 40000);
+    const second = await mockFinanceRepository.refundPayment(paymentId, 40000, crypto.randomUUID());
     expect(second.success).toBe(true);
     if (!second.success) return;
-    const third = await mockFinanceRepository.refundPayment(paymentId, 33000);
+    const third = await mockFinanceRepository.refundPayment(paymentId, 33000, crypto.randomUUID());
     expect(third.success).toBe(true);
     if (!third.success) return;
 
@@ -665,7 +665,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
   it("F2.1C-B: refunding more than the refundable ceiling is still rejected (unchanged by the Revenue correction)", async () => {
     const { paymentId } = await issueInvoiceAndPayInFull();
 
-    const overRefund = await mockFinanceRepository.refundPayment(paymentId, 103001);
+    const overRefund = await mockFinanceRepository.refundPayment(paymentId, 103001, crypto.randomUUID());
     expect(overRefund.success).toBe(false);
 
     const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_refund" });
@@ -684,7 +684,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
     expect(payment.success).toBe(true);
     if (!payment.success) return;
 
-    const refunded = await mockFinanceRepository.refundPayment(payment.data.id, 20000);
+    const refunded = await mockFinanceRepository.refundPayment(payment.data.id, 20000, crypto.randomUUID());
     expect(refunded.success).toBe(true);
   });
 });
@@ -956,7 +956,7 @@ describe("mockFinanceRepository.markPaymentFailed / cancelPayment", () => {
 describe("mockFinanceRepository.refundPayment", () => {
   it("cannot refund a payment that isn't refundable (e.g. failed)", async () => {
     // payment_4 is seeded as "failed".
-    const result = await mockFinanceRepository.refundPayment("payment_4", 1000);
+    const result = await mockFinanceRepository.refundPayment("payment_4", 1000, crypto.randomUUID());
     expect(result.success).toBe(false);
   });
 
@@ -969,7 +969,7 @@ describe("mockFinanceRepository.refundPayment", () => {
     const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_settlement" });
     expect(entries.some((e) => e.source_id === "payment_1")).toBe(false);
 
-    const result = await mockFinanceRepository.refundPayment("payment_1", 1000);
+    const result = await mockFinanceRepository.refundPayment("payment_1", 1000, crypto.randomUUID());
     expect(result.success).toBe(false);
 
     const after = await mockFinanceRepository.getPaymentById("payment_1");
@@ -995,7 +995,7 @@ describe("mockFinanceRepository.refundPayment", () => {
       let invoice = await mockFinanceRepository.getInvoiceById("invoice_4");
       expect(invoice.balance_minor).toBe(20000);
 
-      const refund = await mockFinanceRepository.refundPayment(payment.id, 30000);
+      const refund = await mockFinanceRepository.refundPayment(payment.id, 30000, crypto.randomUUID());
       expect(refund.success).toBe(true);
       if (!refund.success) return;
 
@@ -1021,7 +1021,7 @@ describe("mockFinanceRepository.refundPayment", () => {
       const settlement = settlementEntries.find((e) => e.source_id === payment.id)!;
       const settlementBefore = await mockFinanceRepository.getJournalEntry(settlement.id);
 
-      const refund = await mockFinanceRepository.refundPayment(payment.id, 15000);
+      const refund = await mockFinanceRepository.refundPayment(payment.id, 15000, crypto.randomUUID());
       expect(refund.success).toBe(true);
       if (!refund.success) return;
 
@@ -1041,8 +1041,8 @@ describe("mockFinanceRepository.refundPayment", () => {
     it("two legitimate partial refunds against the same original payment produce two distinct postings with distinct posting_keys", async () => {
       const payment = await createSettledPayment({ invoice_id: "invoice_4", amount_minor: 40000 });
 
-      const firstRefund = await mockFinanceRepository.refundPayment(payment.id, 10000);
-      const secondRefund = await mockFinanceRepository.refundPayment(payment.id, 15000);
+      const firstRefund = await mockFinanceRepository.refundPayment(payment.id, 10000, crypto.randomUUID());
+      const secondRefund = await mockFinanceRepository.refundPayment(payment.id, 15000, crypto.randomUUID());
       expect(firstRefund.success).toBe(true);
       expect(secondRefund.success).toBe(true);
       if (!firstRefund.success || !secondRefund.success) return;
@@ -1054,7 +1054,7 @@ describe("mockFinanceRepository.refundPayment", () => {
       expect(new Set(forThisPayment.map((e) => e.posting_key)).size).toBe(2);
 
       // Refundable is now 40000 - 10000 - 15000 = 15000 — a further 20000 must be rejected.
-      const thirdRefund = await mockFinanceRepository.refundPayment(payment.id, 20000);
+      const thirdRefund = await mockFinanceRepository.refundPayment(payment.id, 20000, crypto.randomUUID());
       expect(thirdRefund.success).toBe(false);
       const refundable = await mockFinanceRepository.getPaymentRefundableAmount(payment.id);
       expect(refundable).toBe(15000);
@@ -1063,7 +1063,7 @@ describe("mockFinanceRepository.refundPayment", () => {
     it("a full unapplied/deposit refund posts Dr 2200 Customer Deposits / Cr 1000 Cash", async () => {
       const payment = await createSettledPayment({ invoice_id: null, amount_minor: 20000 });
 
-      const refund = await mockFinanceRepository.refundPayment(payment.id, 20000);
+      const refund = await mockFinanceRepository.refundPayment(payment.id, 20000, crypto.randomUUID());
       expect(refund.success).toBe(true);
       if (!refund.success) return;
 
@@ -1079,7 +1079,7 @@ describe("mockFinanceRepository.refundPayment", () => {
     it("a partial unapplied/deposit refund posts a proportional reversal", async () => {
       const payment = await createSettledPayment({ invoice_id: null, amount_minor: 20000 });
 
-      const refund = await mockFinanceRepository.refundPayment(payment.id, 8000);
+      const refund = await mockFinanceRepository.refundPayment(payment.id, 8000, crypto.randomUUID());
       expect(refund.success).toBe(true);
       if (!refund.success) return;
 
@@ -1091,7 +1091,7 @@ describe("mockFinanceRepository.refundPayment", () => {
 
     it("rejects a refund exceeding the remaining refundable amount, and never posts a reversal for the rejected attempt", async () => {
       const payment = await createSettledPayment({ invoice_id: null, amount_minor: 20000 });
-      const result = await mockFinanceRepository.refundPayment(payment.id, 30000);
+      const result = await mockFinanceRepository.refundPayment(payment.id, 30000, crypto.randomUUID());
       expect(result.success).toBe(false);
 
       const reversalEntries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_refund" });
@@ -1100,7 +1100,7 @@ describe("mockFinanceRepository.refundPayment", () => {
 
     it("Finance F1.8 — Revenue account 4000 is never touched by a refund reversal", async () => {
       const payment = await createSettledPayment({ invoice_id: "invoice_4", amount_minor: 10000 });
-      const refund = await mockFinanceRepository.refundPayment(payment.id, 10000);
+      const refund = await mockFinanceRepository.refundPayment(payment.id, 10000, crypto.randomUUID());
       expect(refund.success).toBe(true);
       if (!refund.success) return;
 
@@ -1116,6 +1116,588 @@ describe("mockFinanceRepository.getPaymentRefundableAmount", () => {
   it("returns 0 for a payment that isn't refundable", async () => {
     const refundable = await mockFinanceRepository.getPaymentRefundableAmount("payment_4");
     expect(refundable).toBe(0);
+  });
+});
+
+describe("mockFinanceRepository.refundPayment — Finance F2.1C-C-IDEMPOTENCY", () => {
+  async function createSettledCashPayment(amountMinor: number, invoiceId: string | null = null) {
+    const payment = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: invoiceId,
+      client_id: BASE_INVOICE_INPUT.client_id,
+      event_id: null,
+      contract_id: null,
+      amount_minor: amountMinor,
+      payment_method: "cash",
+    });
+    if (!payment.success) throw new Error("payment creation failed");
+    return payment.data.id;
+  }
+
+  it("a same-key retry replays the original refund — no second Payment row, no second Journal Entry", async () => {
+    const paymentId = await createSettledCashPayment(50000);
+    const key = "retry-key-1";
+
+    const first = await mockFinanceRepository.refundPayment(paymentId, 20000, key);
+    expect(first.success).toBe(true);
+    const second = await mockFinanceRepository.refundPayment(paymentId, 20000, key);
+    expect(second.success).toBe(true);
+    if (!first.success || !second.success) return;
+
+    expect(second.data.id).toBe(first.data.id);
+
+    const allPayments = await mockFinanceRepository.getPayments();
+    expect(allPayments.filter((p) => p.id === first.data.id)).toHaveLength(1);
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_refund" });
+    expect(entries.filter((e) => e.source_id === first.data.id)).toHaveLength(1);
+
+    // The replay did not consume additional refundable balance — only the ORIGINAL 20000 was ever deducted.
+    const refundable = await mockFinanceRepository.getPaymentRefundableAmount(paymentId);
+    expect(refundable).toBe(30000);
+  });
+
+  it("a same-key retry with a DIFFERENT amount is rejected as a conflict, not replayed", async () => {
+    const paymentId = await createSettledCashPayment(50000);
+    const key = "retry-key-2";
+
+    const first = await mockFinanceRepository.refundPayment(paymentId, 20000, key);
+    expect(first.success).toBe(true);
+
+    const conflicting = await mockFinanceRepository.refundPayment(paymentId, 25000, key);
+    expect(conflicting.success).toBe(false);
+    if (conflicting.success) return;
+    expect(conflicting.error).toMatch(/idempotency key was already used/);
+  });
+
+  it("a same-key retry against a DIFFERENT original payment is rejected as a conflict", async () => {
+    const paymentA = await createSettledCashPayment(50000);
+    const paymentB = await createSettledCashPayment(50000);
+    const key = "retry-key-3";
+
+    const first = await mockFinanceRepository.refundPayment(paymentA, 10000, key);
+    expect(first.success).toBe(true);
+
+    const conflicting = await mockFinanceRepository.refundPayment(paymentB, 10000, key);
+    expect(conflicting.success).toBe(false);
+  });
+
+  it("a DIFFERENT key represents a distinct, intentional second refund, subject to the refundable ceiling", async () => {
+    const paymentId = await createSettledCashPayment(50000);
+
+    const first = await mockFinanceRepository.refundPayment(paymentId, 20000, "retry-key-4a");
+    expect(first.success).toBe(true);
+    const second = await mockFinanceRepository.refundPayment(paymentId, 20000, "retry-key-4b");
+    expect(second.success).toBe(true);
+    if (!first.success || !second.success) return;
+    expect(second.data.id).not.toBe(first.data.id);
+
+    const refundable = await mockFinanceRepository.getPaymentRefundableAmount(paymentId);
+    expect(refundable).toBe(10000);
+
+    // A third, over-ceiling distinct key is still correctly rejected.
+    const third = await mockFinanceRepository.refundPayment(paymentId, 20000, "retry-key-4c");
+    expect(third.success).toBe(false);
+  });
+
+  it("rejects a missing (empty-string) idempotency key", async () => {
+    const paymentId = await createSettledCashPayment(50000);
+    const result = await mockFinanceRepository.refundPayment(paymentId, 20000, "");
+    expect(result.success).toBe(false);
+  });
+
+  it("posting-level idempotency (P1104-equivalent) still exists independently — a fresh refund row cannot be posted twice for the same key without a normal replay", async () => {
+    // This is implicitly covered by the same-key replay test above: the second
+    // call never re-invokes the posting step at all (it returns the existing
+    // row before posting is attempted), proving the replay check runs BEFORE,
+    // not instead of, the posting layer's own duplicate guard.
+    const paymentId = await createSettledCashPayment(50000);
+    const key = "retry-key-5";
+    const first = await mockFinanceRepository.refundPayment(paymentId, 20000, key);
+    expect(first.success).toBe(true);
+    const entriesAfterFirst = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_refund" });
+    const second = await mockFinanceRepository.refundPayment(paymentId, 20000, key);
+    expect(second.success).toBe(true);
+    const entriesAfterSecond = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_refund" });
+    expect(entriesAfterSecond.length).toBe(entriesAfterFirst.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Finance F2.1C-C — Customer Deposit → Invoice application
+// ---------------------------------------------------------------------------
+
+describe("mockFinanceRepository — Finance F2.1C-C: Customer Deposit application", () => {
+  async function createDeposit(amountMinor = 60000) {
+    const deposit = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: null,
+      client_id: BASE_INVOICE_INPUT.client_id,
+      event_id: null,
+      contract_id: null,
+      amount_minor: amountMinor,
+      payment_method: "cash",
+    });
+    if (!deposit.success) throw new Error("deposit creation failed");
+    return deposit.data.id;
+  }
+
+  async function createIssuedInvoice(invoiceInput = BASE_INVOICE_INPUT) {
+    const created = await mockFinanceRepository.createInvoice(invoiceInput);
+    if (!created.success) throw new Error("invoice creation failed");
+    await mockFinanceRepository.issueInvoice(created.data.id);
+    await mockFinanceRepository.sendInvoice(created.data.id);
+    return created.data.id;
+  }
+
+  async function findApplicationEntry(applicationId: string) {
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "deposit_application" });
+    const entry = entries.find((e) => e.source_id === applicationId)!;
+    expect(entry).toBeDefined();
+    return mockFinanceRepository.getJournalEntry(entry.id);
+  }
+
+  // A. Basic application
+
+  it("full deposit application pays the invoice in full — Dr 2200 Customer Deposits / Cr 1100 AR, no Cash line", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 103000, crypto.randomUUID());
+    expect(applied.success).toBe(true);
+    if (!applied.success) return;
+    expect(applied.data.payment_type).toBe("adjustment");
+    expect(applied.data.payment_method).toBe("other");
+    expect(applied.data.status).toBe("succeeded");
+    expect(applied.data.invoice_id).toBe(invoiceId);
+    expect(applied.data.reference).toBe(`deposit_application_of:${depositId}`);
+
+    const detail = await findApplicationEntry(applied.data.id);
+    const lines = detail.lines!;
+    expect(lines).toHaveLength(2);
+    expect(lines.some((l) => l.account?.account_number === 1000)).toBe(false);
+    expect(lines.find((l) => l.account?.account_number === 2200)?.debit_minor).toBe(103000);
+    expect(lines.find((l) => l.account?.account_number === 1100)?.credit_minor).toBe(103000);
+
+    const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+    expect(invoice.status).toBe("paid");
+    expect(invoice.paid_minor).toBe(103000);
+    expect(invoice.balance_minor).toBe(0);
+  });
+
+  it("partial deposit application moves the invoice to partially_paid", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 40000, crypto.randomUUID());
+    expect(applied.success).toBe(true);
+
+    const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+    expect(invoice.status).toBe("partially_paid");
+    expect(invoice.paid_minor).toBe(40000);
+    expect(invoice.balance_minor).toBe(63000);
+  });
+
+  // B. Multiple applications
+
+  it("one deposit applied across multiple invoices", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceA = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 40000, tax_minor: 0, discount_minor: 0 });
+    const invoiceB = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 30000, tax_minor: 0, discount_minor: 0 });
+
+    const first = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceA, 40000, crypto.randomUUID());
+    expect(first.success).toBe(true);
+    const second = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceB, 30000, crypto.randomUUID());
+    expect(second.success).toBe(true);
+
+    const invA = await mockFinanceRepository.getInvoiceById(invoiceA);
+    const invB = await mockFinanceRepository.getInvoiceById(invoiceB);
+    expect(invA.status).toBe("paid");
+    expect(invB.status).toBe("paid");
+
+    const remaining = await mockFinanceRepository.getDepositApplicableAmount(depositId);
+    expect(remaining).toBe(33000);
+  });
+
+  it("multiple applications against one invoice, plus an ordinary payment, both count toward paid_minor", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+
+    const firstApplication = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 30000, crypto.randomUUID());
+    expect(firstApplication.success).toBe(true);
+
+    const ordinaryPayment = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: invoiceId,
+      client_id: BASE_INVOICE_INPUT.client_id,
+      event_id: null,
+      contract_id: null,
+      amount_minor: 20000,
+      payment_method: "cash",
+    });
+    expect(ordinaryPayment.success).toBe(true);
+
+    const secondApplication = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 53000, crypto.randomUUID());
+    expect(secondApplication.success).toBe(true);
+
+    const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+    expect(invoice.paid_minor).toBe(103000);
+    expect(invoice.status).toBe("paid");
+  });
+
+  // C. Ceiling
+
+  it("rejects applying more than the deposit's available balance", async () => {
+    const depositId = await createDeposit(50000);
+    const invoiceId = await createIssuedInvoice();
+
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 50001, crypto.randomUUID());
+    expect(applied.success).toBe(false);
+  });
+
+  it("a prior refund of the deposit reduces its available application balance", async () => {
+    const depositId = await createDeposit(100000);
+    const invoiceId = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 100000, tax_minor: 0, discount_minor: 0 });
+
+    const refunded = await mockFinanceRepository.refundPayment(depositId, 40000, crypto.randomUUID());
+    expect(refunded.success).toBe(true);
+
+    const available = await mockFinanceRepository.getDepositApplicableAmount(depositId);
+    expect(available).toBe(60000);
+
+    const overApplied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 60001, crypto.randomUUID());
+    expect(overApplied.success).toBe(false);
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 60000, crypto.randomUUID());
+    expect(applied.success).toBe(true);
+  });
+
+  it("a prior application of the deposit reduces its available refund balance", async () => {
+    const depositId = await createDeposit(100000);
+    const invoiceId = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 100000, tax_minor: 0, discount_minor: 0 });
+
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 40000, crypto.randomUUID());
+    expect(applied.success).toBe(true);
+
+    const refundable = await mockFinanceRepository.getPaymentRefundableAmount(depositId);
+    expect(refundable).toBe(60000);
+
+    const overRefunded = await mockFinanceRepository.refundPayment(depositId, 60001, crypto.randomUUID());
+    expect(overRefunded.success).toBe(false);
+    const refunded = await mockFinanceRepository.refundPayment(depositId, 60000, crypto.randomUUID());
+    expect(refunded.success).toBe(true);
+  });
+
+  it("combined refund + application together cannot exceed the original deposit amount", async () => {
+    const depositId = await createDeposit(100000);
+    const invoiceId = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 100000, tax_minor: 0, discount_minor: 0 });
+
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 30000, crypto.randomUUID());
+    expect(applied.success).toBe(true);
+    const refunded = await mockFinanceRepository.refundPayment(depositId, 30000, crypto.randomUUID());
+    expect(refunded.success).toBe(true);
+
+    expect(await mockFinanceRepository.getDepositApplicableAmount(depositId)).toBe(40000);
+    expect(await mockFinanceRepository.getPaymentRefundableAmount(depositId)).toBe(40000);
+
+    const overApplied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 40001, crypto.randomUUID());
+    expect(overApplied.success).toBe(false);
+  });
+
+  // D. Validation
+
+  it("rejects a source payment that is already invoice-linked", async () => {
+    const invoiceId = await createIssuedInvoice();
+    const linkedPayment = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: invoiceId,
+      client_id: BASE_INVOICE_INPUT.client_id,
+      event_id: null,
+      contract_id: null,
+      amount_minor: 20000,
+      payment_method: "cash",
+    });
+    expect(linkedPayment.success).toBe(true);
+    if (!linkedPayment.success) return;
+
+    const otherInvoiceId = await createIssuedInvoice();
+    const applied = await mockFinanceRepository.applyDepositToInvoice(linkedPayment.data.id, otherInvoiceId, 10000, crypto.randomUUID());
+    expect(applied.success).toBe(false);
+  });
+
+  it("rejects a non-succeeded source payment", async () => {
+    const pending = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: null,
+      client_id: BASE_INVOICE_INPUT.client_id,
+      event_id: null,
+      contract_id: null,
+      amount_minor: 20000,
+      payment_method: "credit_card",
+    });
+    expect(pending.success).toBe(true);
+    if (!pending.success) return;
+    expect(pending.data.status).toBe("pending");
+
+    const invoiceId = await createIssuedInvoice();
+    const applied = await mockFinanceRepository.applyDepositToInvoice(pending.data.id, invoiceId, 10000, crypto.randomUUID());
+    expect(applied.success).toBe(false);
+  });
+
+  it("rejects a currency mismatch between deposit and invoice", async () => {
+    const deposit = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: null,
+      client_id: BASE_INVOICE_INPUT.client_id,
+      event_id: null,
+      contract_id: null,
+      amount_minor: 20000,
+      currency: "EUR",
+      payment_method: "cash",
+    });
+    expect(deposit.success).toBe(true);
+    if (!deposit.success) return;
+
+    const invoiceId = await createIssuedInvoice();
+    const applied = await mockFinanceRepository.applyDepositToInvoice(deposit.data.id, invoiceId, 10000, crypto.randomUUID());
+    expect(applied.success).toBe(false);
+  });
+
+  it("rejects an invoice that does not exist", async () => {
+    const depositId = await createDeposit();
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, "nonexistent_invoice", 10000, crypto.randomUUID());
+    expect(applied.success).toBe(false);
+  });
+
+  it("rejects a zero or negative amount", async () => {
+    const depositId = await createDeposit();
+    const invoiceId = await createIssuedInvoice();
+    expect((await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 0, crypto.randomUUID())).success).toBe(false);
+    expect((await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, -100, crypto.randomUUID())).success).toBe(false);
+  });
+
+  it("rejects applying to a draft invoice (Revenue not yet recognized)", async () => {
+    const depositId = await createDeposit();
+    const draft = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    expect(draft.success).toBe(true);
+    if (!draft.success) return;
+
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, draft.data.id, 10000, crypto.randomUUID());
+    expect(applied.success).toBe(false);
+  });
+
+  it("rejects applying to a voided invoice", async () => {
+    const depositId = await createDeposit();
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+    await mockFinanceRepository.issueInvoice(created.data.id);
+    await mockFinanceRepository.voidInvoice(created.data.id);
+
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, created.data.id, 10000, crypto.randomUUID());
+    expect(applied.success).toBe(false);
+  });
+
+  it("rejects applying more than the invoice's own outstanding balance, even if the deposit can cover it", async () => {
+    const depositId = await createDeposit(200000);
+    const invoiceId = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 });
+
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 50001, crypto.randomUUID());
+    expect(applied.success).toBe(false);
+
+    const availableAfterFailure = await mockFinanceRepository.getDepositApplicableAmount(depositId);
+    expect(availableAfterFailure).toBe(200000);
+  });
+
+  it("rejects a deposit and invoice belonging to different clients", async () => {
+    const deposit = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: null,
+      client_id: "client_3",
+      event_id: null,
+      contract_id: null,
+      amount_minor: 20000,
+      payment_method: "cash",
+    });
+    expect(deposit.success).toBe(true);
+    if (!deposit.success) return;
+
+    const invoiceId = await createIssuedInvoice(); // client_2
+    const applied = await mockFinanceRepository.applyDepositToInvoice(deposit.data.id, invoiceId, 10000, crypto.randomUUID());
+    expect(applied.success).toBe(false);
+  });
+
+  it("F2.1C-C-REVIEW: rejects applying a deposit with no settlement entry — invoice_id-is-null + status-is-consumable alone is not proof Cash actually moved into Customer Deposits", async () => {
+    const depositId = await createDeposit(50000);
+    const invoiceId = await createIssuedInvoice();
+
+    // Simulate a payment that predates ledger posting (or whose settlement entry was
+    // otherwise never created) — the same class of state F1.8's P1118 guard exists for.
+    const settlementEntry = readJournalEntries().find((e) => e.source_type === "payment_settlement" && e.source_id === depositId)!;
+    expect(settlementEntry).toBeDefined();
+    writeJournalEntries(readJournalEntries().filter((e) => e.id !== settlementEntry.id));
+
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 10000, crypto.randomUUID());
+    expect(applied.success).toBe(false);
+    if (applied.success) return;
+    expect(applied.error).toMatch(/No settlement entry exists/);
+  });
+
+  // E. Idempotency / posting identity
+
+  it("each application posts under its own unique posting_key — no collision across repeated applications of the same deposit", async () => {
+    const depositId = await createDeposit(60000);
+    const invoiceA = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 30000, tax_minor: 0, discount_minor: 0 });
+    const invoiceB = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 30000, tax_minor: 0, discount_minor: 0 });
+
+    const first = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceA, 30000, crypto.randomUUID());
+    const second = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceB, 30000, crypto.randomUUID());
+    expect(first.success).toBe(true);
+    expect(second.success).toBe(true);
+    if (!first.success || !second.success) return;
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "deposit_application" });
+    const postingKeys = entries.filter((e) => e.source_id === first.data.id || e.source_id === second.data.id).map((e) => e.posting_key);
+    expect(new Set(postingKeys).size).toBe(2);
+  });
+
+  // H. Regression
+
+  it("does not affect an ordinary invoice-linked payment's own settlement/refund flow", async () => {
+    const invoiceId = await createIssuedInvoice();
+    const payment = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: invoiceId,
+      client_id: BASE_INVOICE_INPUT.client_id,
+      event_id: null,
+      contract_id: null,
+      amount_minor: 103000,
+      payment_method: "cash",
+    });
+    expect(payment.success).toBe(true);
+    if (!payment.success) return;
+
+    const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+    expect(invoice.status).toBe("paid");
+
+    const refunded = await mockFinanceRepository.refundPayment(payment.data.id, 103000, crypto.randomUUID());
+    expect(refunded.success).toBe(true);
+  });
+
+  it("account 4000/4950/4900/2100/1000 are never touched by a deposit application entry", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 103000, crypto.randomUUID());
+    expect(applied.success).toBe(true);
+    if (!applied.success) return;
+
+    const detail = await findApplicationEntry(applied.data.id);
+    const touchedAccountNumbers = new Set(detail.lines!.map((l) => l.account?.account_number));
+    expect(touchedAccountNumbers.has(4000)).toBe(false);
+    expect(touchedAccountNumbers.has(4950)).toBe(false);
+    expect(touchedAccountNumbers.has(4900)).toBe(false);
+    expect(touchedAccountNumbers.has(2100)).toBe(false);
+    expect(touchedAccountNumbers.has(1000)).toBe(false);
+  });
+
+  // F2.1C-C-IDEMPOTENCY
+
+  it("a same-key retry replays the original application — no second Payment row, no second Journal Entry, Invoice paid_minor not doubled", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+    const key = "app-retry-key-1";
+
+    const first = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 40000, key);
+    expect(first.success).toBe(true);
+    const second = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 40000, key);
+    expect(second.success).toBe(true);
+    if (!first.success || !second.success) return;
+
+    expect(second.data.id).toBe(first.data.id);
+
+    const allPayments = await mockFinanceRepository.getPayments();
+    expect(allPayments.filter((p) => p.id === first.data.id)).toHaveLength(1);
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "deposit_application" });
+    expect(entries.filter((e) => e.source_id === first.data.id)).toHaveLength(1);
+
+    const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+    expect(invoice.paid_minor).toBe(40000); // not 80000 — the replay did not double-apply
+
+    const available = await mockFinanceRepository.getDepositApplicableAmount(depositId);
+    expect(available).toBe(63000); // only the ORIGINAL 40000 was ever deducted
+  });
+
+  it("a same-key retry with a DIFFERENT amount is rejected as a conflict, not replayed", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+    const key = "app-retry-key-2";
+
+    const first = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 40000, key);
+    expect(first.success).toBe(true);
+
+    const conflicting = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 50000, key);
+    expect(conflicting.success).toBe(false);
+    if (conflicting.success) return;
+    expect(conflicting.error).toMatch(/idempotency key was already used/);
+  });
+
+  it("a same-key retry against a DIFFERENT invoice is rejected as a conflict", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceA = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 40000, tax_minor: 0, discount_minor: 0 });
+    const invoiceB = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 40000, tax_minor: 0, discount_minor: 0 });
+    const key = "app-retry-key-3";
+
+    const first = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceA, 40000, key);
+    expect(first.success).toBe(true);
+
+    const conflicting = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceB, 40000, key);
+    expect(conflicting.success).toBe(false);
+  });
+
+  it("a same-key retry against a DIFFERENT deposit is rejected as a conflict", async () => {
+    const depositA = await createDeposit(103000);
+    const depositB = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+    const key = "app-retry-key-4";
+
+    const first = await mockFinanceRepository.applyDepositToInvoice(depositA, invoiceId, 40000, key);
+    expect(first.success).toBe(true);
+
+    const conflicting = await mockFinanceRepository.applyDepositToInvoice(depositB, invoiceId, 40000, key);
+    expect(conflicting.success).toBe(false);
+  });
+
+  it("a DIFFERENT key represents a distinct, intentional second application, subject to available Deposit and Invoice balance", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+
+    const first = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 40000, "app-retry-key-5a");
+    expect(first.success).toBe(true);
+    const second = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 40000, "app-retry-key-5b");
+    expect(second.success).toBe(true);
+    if (!first.success || !second.success) return;
+    expect(second.data.id).not.toBe(first.data.id);
+
+    const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+    expect(invoice.paid_minor).toBe(80000);
+
+    // A third, over-ceiling distinct key is still correctly rejected (invoice balance now only 23000).
+    const third = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 40000, "app-retry-key-5c");
+    expect(third.success).toBe(false);
+  });
+
+  it("rejects a missing (empty-string) idempotency key", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+    const result = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 40000, "");
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("mockFinanceRepository.getDepositApplicableAmount", () => {
+  it("returns 0 for a payment that isn't an unapplied Customer Deposit", async () => {
+    const amount = await mockFinanceRepository.getDepositApplicableAmount("payment_4");
+    expect(amount).toBe(0);
   });
 });
 

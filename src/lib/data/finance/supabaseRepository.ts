@@ -104,8 +104,29 @@ const UNKNOWN_ERROR_CODE = "unknown";
  * refund-vs-Revenue correction, expected to be unreachable. F2.1B-REVIEW's
  * P1120 (blanket rejection of invoice-linked refunds against recognized
  * Revenue) is retired as of F2.1C-B — no SQL path raises it any longer.
+ * P1129/P1130 are Finance F2.1C-C-IDEMPOTENCY's additions — a request-level
+ * idempotency key conflict, and a missing required idempotency key,
+ * shared with record_deposit_application's own use of the same two codes.
  */
-const APP_VALIDATION_ERROR_CODES = new Set(["P0001", "P0002", "P0003", "P0004", "P1104", "P1118", "P1121"]);
+const APP_VALIDATION_ERROR_CODES = new Set(["P0001", "P0002", "P0003", "P0004", "P1104", "P1118", "P1121", "P1129", "P1130"]);
+
+/**
+ * errcodes raised by record_deposit_application for expected, user-facing
+ * validation failures — Finance F2.1C-C. P1111/P1104/P1118 are reused with
+ * their established meanings (not found / duplicate posting / no
+ * settlement entry to build from — the last one added in F2.1C-C-REVIEW,
+ * mirroring post_payment_refund_reversal's identical guard); P1122-P1128
+ * are this checkpoint's new codes (over-application against the deposit
+ * ceiling, over-application against the invoice's own balance, source
+ * not an unapplied Customer Deposit, workspace/client mismatch, currency
+ * mismatch, invoice not in an application-eligible status, invalid amount);
+ * P1129/P1130 are Finance F2.1C-C-IDEMPOTENCY's additions — a request-level
+ * idempotency key conflict, and a missing required idempotency key, shared
+ * with process_payment_refund's own use of the same two codes.
+ */
+const DEPOSIT_APPLICATION_VALIDATION_ERROR_CODES = new Set([
+  "P1111", "P1104", "P1118", "P1122", "P1123", "P1124", "P1125", "P1126", "P1127", "P1128", "P1129", "P1130",
+]);
 
 function fieldErrorsFromZod(error: {
   issues: { path: PropertyKey[]; message: string }[];
@@ -1082,6 +1103,10 @@ function refundReferenceFor(originalPaymentId: string): string {
   return `refund_of:${originalPaymentId}`;
 }
 
+function depositApplicationReferenceFor(depositPaymentId: string): string {
+  return `deposit_application_of:${depositPaymentId}`;
+}
+
 /**
  * Delegates the atomic core (refundable-ceiling check, refund Payment
  * insert, original Payment status update, Timeline entry) to
@@ -1101,16 +1126,24 @@ function refundReferenceFor(originalPaymentId: string): string {
  * same params, same return shape as before F1.8. See the migration's own
  * comment for why this can't reuse the whole-entry reverse_journal_entry.
  */
-async function refundPayment(originalPaymentId: string, amountMinor: number): Promise<DataResult<Payment>> {
-  const original = await fetchPaymentRow(originalPaymentId);
-  if (!original) {
-    return fail("Payment not found.");
-  }
-  if (!isPaymentRefundable(original.status)) {
-    return fail(`Cannot refund a payment that is ${PAYMENT_STATUS_LABELS[original.status].toLowerCase()}.`);
-  }
+/**
+ * Finance F2.1C-C-IDEMPOTENCY: `refundPaymentId` is a REQUIRED, caller-
+ * supplied request-level idempotency key — see FinanceRepository's doc
+ * comment. The prior client-side `isPaymentRefundable(original.status)`
+ * pre-check is REMOVED here: on a REPLAY, `original.status` may already
+ * have changed to refunded/partially_refunded as a RESULT of the first
+ * call, which would make that pre-check incorrectly reject a legitimate
+ * replay before the RPC's own replay-aware logic ever runs. Validation now
+ * happens exclusively inside process_payment_refund, matching
+ * applyDepositToInvoice's existing (no-client-pre-check) pattern —
+ * consistent between the two, and correct on replay for both.
+ */
+async function refundPayment(originalPaymentId: string, amountMinor: number, refundPaymentId: string): Promise<DataResult<Payment>> {
   if (!Number.isInteger(amountMinor) || amountMinor <= 0) {
     return fail("Enter a refund amount greater than zero.");
+  }
+  if (!refundPaymentId) {
+    return fail("refundPaymentId is required and must be a stable identifier supplied by the caller (the same value on every retry of the same refund request).");
   }
 
   const session = await requireWorkspaceSession();
@@ -1120,6 +1153,7 @@ async function refundPayment(originalPaymentId: string, amountMinor: number): Pr
   const { data, error } = await supabase.rpc("process_payment_refund", {
     p_original_payment_id: originalPaymentId,
     p_amount_minor: amountMinor,
+    p_refund_payment_id: refundPaymentId,
     p_actor: actor,
   });
   if (error) {
@@ -1131,11 +1165,21 @@ async function refundPayment(originalPaymentId: string, amountMinor: number): Pr
   }
 
   const refund = mapPaymentRow(data);
-  if (original.invoice_id) {
-    await recomputeInvoiceBalance(supabase, original.invoice_id, actor);
+  if (refund.invoice_id) {
+    await recomputeInvoiceBalance(supabase, refund.invoice_id, actor);
   }
 
   return ok(refund);
+}
+
+const PAID_EQUIVALENT_STATUSES = new Set(["succeeded", "partially_refunded", "refunded"]);
+
+async function sumPaymentsByReference(supabase: ReturnType<typeof createSupabaseClient>, reference: string): Promise<number> {
+  const { data, error } = await supabase.from("payments").select("amount_minor, status").eq("reference", reference);
+  if (error) throw normalizeSupabaseError(error);
+  return (data ?? [])
+    .filter((p: { status: string }) => PAID_EQUIVALENT_STATUSES.has(p.status))
+    .reduce((sum: number, p: { amount_minor: number }) => sum + p.amount_minor, 0);
 }
 
 async function getPaymentRefundableAmount(paymentId: string): Promise<number> {
@@ -1143,17 +1187,13 @@ async function getPaymentRefundableAmount(paymentId: string): Promise<number> {
   if (!payment || !isPaymentRefundable(payment.status)) return 0;
 
   const supabase = createSupabaseClient();
-  const { data, error } = await supabase
-    .from("payments")
-    .select("amount_minor, status")
-    .eq("reference", refundReferenceFor(paymentId));
-  if (error) throw normalizeSupabaseError(error);
+  const priorRefunds = await sumPaymentsByReference(supabase, refundReferenceFor(paymentId));
+  // Finance F2.1C-C: a Customer Deposit already applied to an invoice is no
+  // longer available to refund — always computed, naturally zero for an
+  // invoice-linked payment since nothing can reference it as an application.
+  const priorApplications = await sumPaymentsByReference(supabase, depositApplicationReferenceFor(paymentId));
 
-  const priorRefunds = (data ?? [])
-    .filter((p: { status: string }) => p.status === "succeeded" || p.status === "partially_refunded" || p.status === "refunded")
-    .reduce((sum: number, p: { amount_minor: number }) => sum + p.amount_minor, 0);
-
-  return Math.max(0, payment.amount_minor - priorRefunds);
+  return Math.max(0, payment.amount_minor - priorRefunds - priorApplications);
 }
 
 async function cancelPayment(id: string): Promise<DataResult<Payment>> {
@@ -1184,6 +1224,59 @@ async function cancelPayment(id: string): Promise<DataResult<Payment>> {
 async function getPaymentNextAction(paymentId: string): Promise<string | null> {
   const payment = await getPaymentById(paymentId);
   return getPaymentNextRecommendedAction(payment);
+}
+
+/**
+ * Finance F2.1C-C. Same shape as refundPayment: client-side only checks the
+ * conditions cheap/obvious enough to short-circuit before a round trip
+ * (amount positivity), everything else (ceiling, workspace/client/currency
+ * consistency, invoice status eligibility) is enforced server-side by
+ * record_deposit_application and translated back through DEPOSIT_
+ * APPLICATION_VALIDATION_ERROR_CODES.
+ *
+ * Finance F2.1C-C-IDEMPOTENCY: `applicationPaymentId` is a REQUIRED,
+ * caller-supplied request-level idempotency key — same contract as
+ * refundPayment's `refundPaymentId` (see its doc comment).
+ */
+async function applyDepositToInvoice(depositPaymentId: string, invoiceId: string, amountMinor: number, applicationPaymentId: string): Promise<DataResult<Payment>> {
+  if (!Number.isInteger(amountMinor) || amountMinor <= 0) {
+    return fail("Enter a deposit application amount greater than zero.");
+  }
+  if (!applicationPaymentId) {
+    return fail("applicationPaymentId is required and must be a stable identifier supplied by the caller (the same value on every retry of the same deposit application request).");
+  }
+
+  const session = await requireWorkspaceSession();
+  const actor = resolveActorName(session);
+  const supabase = createSupabaseClient();
+
+  const { data, error } = await supabase.rpc("record_deposit_application", {
+    p_deposit_payment_id: depositPaymentId,
+    p_invoice_id: invoiceId,
+    p_amount_minor: amountMinor,
+    p_application_payment_id: applicationPaymentId,
+    p_actor: actor,
+  });
+  if (error) {
+    const code = (error as { code?: string }).code;
+    if (code && DEPOSIT_APPLICATION_VALIDATION_ERROR_CODES.has(code)) {
+      return fail(error.message);
+    }
+    throw normalizeSupabaseError(error);
+  }
+
+  return ok(mapPaymentRow(data));
+}
+
+async function getDepositApplicableAmount(depositPaymentId: string): Promise<number> {
+  const deposit = await fetchPaymentRow(depositPaymentId);
+  if (!deposit || deposit.invoice_id !== null || !isPaymentRefundable(deposit.status)) return 0;
+
+  const supabase = createSupabaseClient();
+  const priorRefunds = await sumPaymentsByReference(supabase, refundReferenceFor(depositPaymentId));
+  const priorApplications = await sumPaymentsByReference(supabase, depositApplicationReferenceFor(depositPaymentId));
+
+  return Math.max(0, deposit.amount_minor - priorRefunds - priorApplications);
 }
 
 // ---------------------------------------------------------------------------
@@ -2355,6 +2448,8 @@ export const supabaseFinanceRepository: FinanceRepository = {
   refundPayment,
   getPaymentRefundableAmount,
   getPaymentNextAction,
+  applyDepositToInvoice,
+  getDepositApplicableAmount,
   getExpenses,
   getExpenseById,
   createExpense,

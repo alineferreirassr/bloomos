@@ -45,7 +45,12 @@ export async function refundStripePaymentAction(paymentId: string, amountMinor: 
     return { success: false, error: error instanceof Error ? error.message : "Stripe rejected this refund." };
   }
 
-  const bloomResult = await refundBloomPayment(paymentId, amountMinor);
+  // p_refund_payment_id is now a required, caller-supplied idempotency key
+  // (Finance F2.1C-C-IDEMPOTENCY). This action has no retryable client
+  // concept yet, so a fresh id per invocation preserves the exact behavior
+  // it already had before the correction — same reasoning as
+  // receivePurchaseItem's established p_receipt_event_id call site.
+  const bloomResult = await refundBloomPayment(paymentId, amountMinor, crypto.randomUUID());
   if (!bloomResult.success) return { success: false, error: bloomResult.error };
 
   await getCoreAuditLogService().recordAuditEvent(session.workspace.id, {

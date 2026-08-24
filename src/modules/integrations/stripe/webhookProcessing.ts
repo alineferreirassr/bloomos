@@ -246,7 +246,14 @@ export async function processStripeWebhookEvent(workspaceId: string, connectionI
       if (original.status === "refunded" || original.status === "partially_refunded") {
         return { handled: true, summary: `Payment ${original.id} already reconciled — no-op.` };
       }
-      const result = await refundBloomPayment(original.id, charge.amount_refunded);
+      // p_refund_payment_id is now a required, caller-supplied idempotency key
+      // (Finance F2.1C-C-IDEMPOTENCY). This handler has no existing webhook-
+      // event dedup of its own to derive a stable key from, so a fresh id
+      // per invocation preserves the exact behavior this call already had
+      // before the correction (each processed webhook delivery is its own
+      // distinct refund attempt) — same reasoning as receivePurchaseItem's
+      // established p_receipt_event_id call site.
+      const result = await refundBloomPayment(original.id, charge.amount_refunded, crypto.randomUUID());
       if (!result.success) throw new Error(result.error);
       await dispatchPaymentEvent("payment.refunded", "refund.issued", workspaceId, result.data);
       return { handled: true, summary: `Payment ${original.id} refunded from a real Stripe Dashboard refund.` };

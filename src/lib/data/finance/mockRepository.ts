@@ -986,12 +986,36 @@ function refundReferenceFor(originalPaymentId: string): string {
  * 2100 Sales Tax Payable, if any + Cr 4900 Sales Discounts, if any + Cr
  * 1100 AR netting the settlement-reversal's own AR debit to zero) —
  * replacing F2.1B-REVIEW's P1120 blanket rejection with the real posting.
+ *
+ * Finance F2.1C-C-IDEMPOTENCY: `refundPaymentId` is now a REQUIRED,
+ * caller-supplied request-level idempotency key, not an internally-
+ * generated row id — mirrors record_purchase_receipt's established
+ * p_receipt_event_id convention. A repeat call with the same key and the
+ * same (originalPaymentId, amountMinor) payload is a REPLAY — returns the
+ * existing refund Payment unchanged, without re-running the checks below
+ * (which could spuriously fail against CURRENT state that moved on since
+ * the original, already-successful call — e.g. `original.status` is
+ * expected to have changed as a RESULT of that call). A payload mismatch
+ * is a genuine conflict, never silently replayed.
  */
-async function refundPayment(originalPaymentId: string, amountMinor: number): Promise<DataResult<Payment>> {
+async function refundPayment(originalPaymentId: string, amountMinor: number, refundPaymentId: string): Promise<DataResult<Payment>> {
   const original = readPayments().find((p) => p.id === originalPaymentId);
   if (!original) {
     return fail("Payment not found.");
   }
+  if (!refundPaymentId) {
+    return fail("refundPaymentId is required and must be a stable identifier supplied by the caller (the same value on every retry of the same refund request).");
+  }
+
+  const refundReference = refundReferenceFor(originalPaymentId);
+  const existingRefund = readPayments().find((p) => p.id === refundPaymentId);
+  if (existingRefund) {
+    if (existingRefund.reference !== refundReference || existingRefund.amount_minor !== amountMinor) {
+      return fail("This idempotency key was already used for a different refund request.");
+    }
+    return ok(existingRefund);
+  }
+
   if (!isPaymentRefundable(original.status)) {
     return fail(`Cannot refund a payment that is ${PAYMENT_STATUS_LABELS[original.status].toLowerCase()}.`);
   }
@@ -1004,13 +1028,24 @@ async function refundPayment(originalPaymentId: string, amountMinor: number): Pr
       .filter((p) => p.reference === refundReferenceFor(originalPaymentId) && PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status))
       .map((p) => p.amount_minor),
   );
-  const refundable = Math.max(0, subtractMinor(original.amount_minor, priorRefunds));
+  // Finance F2.1C-C: a Customer Deposit already applied to an invoice is no
+  // longer available to refund — a deposit could otherwise be refunded AND
+  // applied for more than it ever held. Always computed (not gated on
+  // invoice_id === null) since an invoice-linked original payment can never
+  // have a deposit_application_of:<id> row referencing it — this sum is
+  // naturally zero for that case, so no branching is needed.
+  const priorApplications = sumMinor(
+    readPayments()
+      .filter((p) => p.reference === depositApplicationReferenceFor(originalPaymentId) && PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status))
+      .map((p) => p.amount_minor),
+  );
+  const refundable = Math.max(0, subtractMinor(subtractMinor(original.amount_minor, priorRefunds), priorApplications));
   if (amountMinor > refundable) {
     return fail(`Cannot refund more than the refundable amount (${refundable} minor units remaining).`);
   }
 
   const timestamp = nowIso();
-  const refundId = generateId("payment");
+  const refundId = refundPaymentId;
 
   const settlementEntry = readJournalEntries().find(
     (e) => e.workspace_id === original.workspace_id && e.source_type === "payment_settlement" && e.source_id === original.id,
@@ -1164,7 +1199,195 @@ async function getPaymentRefundableAmount(paymentId: string): Promise<number> {
       )
       .map((p) => p.amount_minor),
   );
-  return Math.max(0, subtractMinor(payment.amount_minor, priorRefunds));
+  const priorApplications = sumMinor(
+    readPayments()
+      .filter((p) => p.reference === depositApplicationReferenceFor(paymentId) && PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status))
+      .map((p) => p.amount_minor),
+  );
+  return Math.max(0, subtractMinor(subtractMinor(payment.amount_minor, priorRefunds), priorApplications));
+}
+
+// ---------------------------------------------------------------------------
+// Customer Deposit → Invoice application (Finance F2.1C-C)
+// ---------------------------------------------------------------------------
+
+function depositApplicationReferenceFor(depositPaymentId: string): string {
+  return `deposit_application_of:${depositPaymentId}`;
+}
+
+const DEPOSIT_APPLICATION_ELIGIBLE_INVOICE_STATUSES = new Set(["issued", "sent", "viewed", "partially_paid", "overdue"]);
+
+/**
+ * Finance F2.1C-C — mirrors record_deposit_application's available-deposit
+ * formula: the deposit's own amount_minor minus every prior completed
+ * refund AND every prior completed application of it. Returns 0 for a
+ * payment that either doesn't exist or isn't an unapplied Customer
+ * Deposit in a consumable status, exactly like getPaymentRefundableAmount
+ * does for a non-refundable payment.
+ */
+async function getDepositApplicableAmount(depositPaymentId: string): Promise<number> {
+  const deposit = readPayments().find((p) => p.id === depositPaymentId);
+  if (!deposit || deposit.invoice_id !== null || !isPaymentRefundable(deposit.status)) return 0;
+
+  const priorRefunds = sumMinor(
+    readPayments()
+      .filter((p) => p.reference === refundReferenceFor(depositPaymentId) && PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status))
+      .map((p) => p.amount_minor),
+  );
+  const priorApplications = sumMinor(
+    readPayments()
+      .filter((p) => p.reference === depositApplicationReferenceFor(depositPaymentId) && PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status))
+      .map((p) => p.amount_minor),
+  );
+  return Math.max(0, subtractMinor(subtractMinor(deposit.amount_minor, priorRefunds), priorApplications));
+}
+
+/**
+ * Finance F2.1C-C — mirrors record_deposit_application's SQL exactly:
+ * validates the deposit is an unapplied Customer Deposit in a consumable
+ * status, workspace/client/currency consistency, invoice application-
+ * eligible status, and the available-deposit + invoice-balance ceilings;
+ * inserts the application Payment row (payment_type='adjustment',
+ * payment_method='other', status='succeeded', reference=
+ * 'deposit_application_of:<deposit_id>'); posts Dr 2200 Customer Deposits
+ * / Cr 1100 Accounts Receivable (no Cash line — Cash already moved when
+ * the deposit was originally collected); recomputes the invoice balance.
+ * Atomic by ORDERING, same technique as refundPayment: the application's
+ * id is pre-generated and posting is attempted BEFORE any store mutation.
+ */
+/**
+ * Finance F2.1C-C-IDEMPOTENCY: `applicationPaymentId` is a REQUIRED,
+ * caller-supplied request-level idempotency key, not an internally-
+ * generated row id — same contract as refundPayment's `refundPaymentId`
+ * (see its doc comment). Checked immediately after locating the deposit
+ * (before any other validation, which could spuriously fail against
+ * CURRENT state on a replay) — a repeat with the same key and the same
+ * (deposit, invoice, amount) payload returns the existing application
+ * Payment unchanged; a payload mismatch is a genuine conflict.
+ */
+async function applyDepositToInvoice(depositPaymentId: string, invoiceId: string, amountMinor: number, applicationPaymentId: string): Promise<DataResult<Payment>> {
+  if (!Number.isInteger(amountMinor) || amountMinor <= 0) {
+    return fail("Enter a deposit application amount greater than zero.");
+  }
+  if (!applicationPaymentId) {
+    return fail("applicationPaymentId is required and must be a stable identifier supplied by the caller (the same value on every retry of the same deposit application request).");
+  }
+
+  const deposit = readPayments().find((p) => p.id === depositPaymentId);
+  if (!deposit) {
+    return fail("Deposit payment not found.");
+  }
+
+  const applicationReference = depositApplicationReferenceFor(depositPaymentId);
+  const existingApplication = readPayments().find((p) => p.id === applicationPaymentId);
+  if (existingApplication) {
+    if (existingApplication.reference !== applicationReference || existingApplication.invoice_id !== invoiceId || existingApplication.amount_minor !== amountMinor) {
+      return fail("This idempotency key was already used for a different deposit application request.");
+    }
+    return ok(existingApplication);
+  }
+
+  if (deposit.invoice_id !== null) {
+    return fail("This payment is already linked to an invoice and is not an unapplied Customer Deposit.");
+  }
+  if (!isPaymentRefundable(deposit.status)) {
+    return fail(`Cannot apply a deposit payment that is ${PAYMENT_STATUS_LABELS[deposit.status].toLowerCase()}.`);
+  }
+  // Finance F2.1C-C-REVIEW: mirrors refundPayment's P1118-equivalent guard
+  // exactly — status alone doesn't PROVE Cash actually moved into Customer
+  // Deposits for this payment. Fails safely (never invents an application
+  // against a deposit that predates ledger posting or was never settled)
+  // rather than trusting invoice_id-is-null + status-is-consumable alone.
+  const depositSettlementEntry = readJournalEntries().find(
+    (e) => e.workspace_id === deposit.workspace_id && e.source_type === "payment_settlement" && e.source_id === deposit.id,
+  );
+  if (!depositSettlementEntry) {
+    return fail(
+      "No settlement entry exists for the deposit payment — cannot apply. It predates ledger posting or was never settled; resolve via reconciliation, not an invented application.",
+    );
+  }
+
+  const invoice = readInvoices().find((i) => i.id === invoiceId);
+  if (!invoice) {
+    return fail("Invoice not found.");
+  }
+  if (deposit.workspace_id !== invoice.workspace_id || deposit.client_id !== invoice.client_id) {
+    return fail("The deposit and the target invoice must belong to the same workspace and client.");
+  }
+  if (deposit.currency !== invoice.currency) {
+    return fail("The deposit currency does not match the invoice currency.");
+  }
+  if (!DEPOSIT_APPLICATION_ELIGIBLE_INVOICE_STATUSES.has(invoice.status)) {
+    return fail(`Cannot apply a deposit to an invoice that is ${INVOICE_STATUS_LABELS[invoice.status].toLowerCase()}.`);
+  }
+
+  const priorRefunds = sumMinor(
+    readPayments()
+      .filter((p) => p.reference === refundReferenceFor(depositPaymentId) && PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status))
+      .map((p) => p.amount_minor),
+  );
+  const priorApplications = sumMinor(
+    readPayments()
+      .filter((p) => p.reference === depositApplicationReferenceFor(depositPaymentId) && PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status))
+      .map((p) => p.amount_minor),
+  );
+  const available = Math.max(0, subtractMinor(subtractMinor(deposit.amount_minor, priorRefunds), priorApplications));
+  if (amountMinor > available) {
+    return fail(`Cannot apply more than the available deposit balance (${available} minor units remaining).`);
+  }
+  if (amountMinor > invoice.balance_minor) {
+    return fail(`Cannot apply more than the invoice's outstanding balance (${invoice.balance_minor} minor units remaining).`);
+  }
+
+  const timestamp = nowIso();
+  const applicationId = applicationPaymentId;
+
+  try {
+    insertMockJournalEntry({
+      workspace_id: deposit.workspace_id,
+      entry_date: timestamp.slice(0, 10),
+      source_type: "deposit_application",
+      source_id: applicationId,
+      posting_key: `deposit_application:${applicationId}`,
+      memo: `Customer Deposit applied to invoice (deposit ${deposit.id})`,
+      posted_by: CURRENT_ACTOR,
+      lines: [
+        { account_id: findAccountByNumber(deposit.workspace_id, 2200).id, debit_minor: amountMinor, credit_minor: 0 },
+        { account_id: findAccountByNumber(deposit.workspace_id, 1100).id, debit_minor: 0, credit_minor: amountMinor },
+      ],
+    });
+  } catch (postingError) {
+    return fail(postingError instanceof Error ? postingError.message : String(postingError));
+  }
+
+  const application: Payment = {
+    id: applicationId,
+    workspace_id: deposit.workspace_id,
+    invoice_id: invoiceId,
+    client_id: deposit.client_id,
+    event_id: deposit.event_id,
+    contract_id: deposit.contract_id,
+    payment_type: "adjustment",
+    status: "succeeded",
+    amount_minor: amountMinor,
+    currency: deposit.currency,
+    payment_method: "other",
+    reference: depositApplicationReferenceFor(depositPaymentId),
+    transaction_date: timestamp.slice(0, 10),
+    received_at: timestamp,
+    failed_at: null,
+    refunded_at: null,
+    notes: `Customer Deposit ${deposit.id} applied to invoice.`,
+    document_id: null,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+  writePayments([...readPayments(), application]);
+  recordTimelineActivity(application.workspace_id, "payment", application.id, "deposit_applied", "Customer Deposit applied to invoice");
+
+  applyPaymentToInvoice(invoiceId);
+
+  return ok(application);
 }
 
 async function cancelPayment(id: string): Promise<DataResult<Payment>> {
@@ -2369,6 +2592,8 @@ export const mockFinanceRepository: FinanceRepository = {
   refundPayment,
   getPaymentRefundableAmount,
   getPaymentNextAction,
+  applyDepositToInvoice,
+  getDepositApplicableAmount,
   getExpenses,
   getExpenseById,
   createExpense,

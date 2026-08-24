@@ -52,7 +52,7 @@ describe("RefundPaymentModal", () => {
     await waitFor(() => expect(screen.getByLabelText(/refund amount/i)).toHaveValue(100));
     await user.click(screen.getByRole("button", { name: /^refund$/i }));
 
-    await waitFor(() => expect(dataLayer.refundPayment).toHaveBeenCalledWith("payment_1", 10000));
+    await waitFor(() => expect(dataLayer.refundPayment).toHaveBeenCalledWith("payment_1", 10000, expect.any(String)));
     expect(onRefunded).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
   });
@@ -82,7 +82,34 @@ describe("RefundPaymentModal", () => {
 
     await user.click(screen.getByRole("button", { name: /^refund$/i }));
 
-    await waitFor(() => expect(dataLayer.refundPayment).toHaveBeenCalledWith("payment_1", 4000));
+    await waitFor(() => expect(dataLayer.refundPayment).toHaveBeenCalledWith("payment_1", 4000, expect.any(String)));
+  });
+
+  it("F2.1C-C-IDEMPOTENCY: reuses the SAME idempotency key across multiple submit attempts within one modal open", async () => {
+    const user = userEvent.setup();
+    vi.mocked(dataLayer.getPaymentRefundableAmount).mockResolvedValue(10000);
+    vi.mocked(dataLayer.refundPayment).mockResolvedValueOnce({ success: false, error: "Transient failure." }).mockResolvedValueOnce({
+      success: true,
+      data: makePayment({ id: "payment_1", status: "refunded" }),
+    });
+    render(
+      <RefundPaymentModal
+        open
+        onClose={vi.fn()}
+        payment={makePayment({ id: "payment_1", amount_minor: 10000, currency: "USD" })}
+        onRefunded={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByLabelText(/refund amount/i)).toHaveValue(100));
+    await user.click(screen.getByRole("button", { name: /^refund$/i }));
+    await waitFor(() => expect(dataLayer.refundPayment).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole("button", { name: /^refund$/i }));
+    await waitFor(() => expect(dataLayer.refundPayment).toHaveBeenCalledTimes(2));
+
+    const firstKey = vi.mocked(dataLayer.refundPayment).mock.calls[0][2];
+    const secondKey = vi.mocked(dataLayer.refundPayment).mock.calls[1][2];
+    expect(firstKey).toBe(secondKey);
   });
 
   it("disables submit and shows an error when the entered amount exceeds the refundable amount", async () => {

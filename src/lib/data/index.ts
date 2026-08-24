@@ -1433,8 +1433,8 @@ export async function cancelPayment(id: string): Promise<DataResult<Payment>> {
   return financeRepository().cancelPayment(id);
 }
 
-export async function refundPayment(originalPaymentId: string, amountMinor: number): Promise<DataResult<Payment>> {
-  return financeRepository().refundPayment(originalPaymentId, amountMinor);
+export async function refundPayment(originalPaymentId: string, amountMinor: number, refundPaymentId: string): Promise<DataResult<Payment>> {
+  return financeRepository().refundPayment(originalPaymentId, amountMinor, refundPaymentId);
 }
 
 export async function getPaymentRefundableAmount(paymentId: string): Promise<number> {
@@ -1443,6 +1443,14 @@ export async function getPaymentRefundableAmount(paymentId: string): Promise<num
 
 export async function getPaymentNextAction(paymentId: string): Promise<string | null> {
   return financeRepository().getPaymentNextAction(paymentId);
+}
+
+export async function applyDepositToInvoice(depositPaymentId: string, invoiceId: string, amountMinor: number, applicationPaymentId: string): Promise<DataResult<Payment>> {
+  return financeRepository().applyDepositToInvoice(depositPaymentId, invoiceId, amountMinor, applicationPaymentId);
+}
+
+export async function getDepositApplicableAmount(depositPaymentId: string): Promise<number> {
+  return financeRepository().getDepositApplicableAmount(depositPaymentId);
 }
 
 export async function getExpenses(filters: ExpenseFilters = {}, context?: ServerRepositoryContext): Promise<Expense[]> {

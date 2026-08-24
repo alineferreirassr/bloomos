@@ -163,9 +163,32 @@ export interface FinanceRepository {
   markPaymentSucceeded(id: string): Promise<DataResult<Payment>>;
   markPaymentFailed(id: string): Promise<DataResult<Payment>>;
   cancelPayment(id: string): Promise<DataResult<Payment>>;
-  refundPayment(originalPaymentId: string, amountMinor: number): Promise<DataResult<Payment>>;
+  /**
+   * Finance F2.1C-C-IDEMPOTENCY. `refundPaymentId` is a REQUIRED, caller-
+   * supplied request-level idempotency key (generate with `crypto.
+   * randomUUID()` ONCE per intended refund action and reuse the SAME value
+   * on any retry of that same request — never regenerate on retry, that
+   * defeats the purpose). A repeat call with the same key and the same
+   * (originalPaymentId, amountMinor) payload replays the original refund
+   * unchanged rather than creating a second one; a repeat with the same key
+   * but a different payload fails as a conflict. A different key represents
+   * a distinct, intentional second refund, subject to the refundable ceiling.
+   */
+  refundPayment(originalPaymentId: string, amountMinor: number, refundPaymentId: string): Promise<DataResult<Payment>>;
   getPaymentRefundableAmount(paymentId: string): Promise<number>;
   getPaymentNextAction(paymentId: string): Promise<string | null>;
+
+  /**
+   * Finance F2.1C-C. Applies part or all of an unapplied Customer Deposit (a Payment with invoice_id null) to a target Invoice — Dr 2200 Customer Deposits / Cr 1100 Accounts Receivable, no Cash line. Returns the new application Payment (payment_type='adjustment', reference='deposit_application_of:<depositPaymentId>').
+   *
+   * Finance F2.1C-C-IDEMPOTENCY. `applicationPaymentId` is a REQUIRED, caller-
+   * supplied request-level idempotency key — same contract as `refundPayment`'s
+   * `refundPaymentId` (see its doc comment): generate once per intended
+   * application action, reuse on retry, never regenerate.
+   */
+  applyDepositToInvoice(depositPaymentId: string, invoiceId: string, amountMinor: number, applicationPaymentId: string): Promise<DataResult<Payment>>;
+  /** The deposit's own amount minus every prior completed refund and every prior completed application of it. 0 if the payment isn't an unapplied Customer Deposit in a consumable status. */
+  getDepositApplicableAmount(depositPaymentId: string): Promise<number>;
 
   /** `context` optionally injects an already-authenticated server Supabase client + Workspace session — see EventsRepository's identical doc comment. Ignored by the mock implementation. */
   getExpenses(filters?: ExpenseFilters, context?: ServerRepositoryContext): Promise<Expense[]>;

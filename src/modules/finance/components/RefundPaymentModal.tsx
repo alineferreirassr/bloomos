@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { FormField } from "@/components/forms/FormField";
@@ -29,6 +29,15 @@ export function RefundPaymentModal({ open, onClose, payment, onRefunded }: Refun
   const [amount, setAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Finance F2.1C-C-IDEMPOTENCY: generated ONCE per modal open (one
+  // intended "refund this payment" user operation), reused across any
+  // retry of this same submit attempt — never regenerated on retry, or
+  // the idempotency key would defeat its own purpose. Derived with
+  // useMemo (not set inside the effect below) so opening the modal never
+  // triggers an extra render — a fresh key is produced only when `open`
+  // itself changes, correctly treating a reopen as a new, distinct
+  // potential operation.
+  const refundPaymentId = useMemo(() => (open ? crypto.randomUUID() : null), [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -46,10 +55,10 @@ export function RefundPaymentModal({ open, onClose, payment, onRefunded }: Refun
   const isFullRefund = refundableMinor !== null && amountMinor === refundableMinor;
 
   const handleConfirm = async () => {
-    if (amountMinor === null || amountMinor <= 0 || exceedsRefundable) return;
+    if (amountMinor === null || amountMinor <= 0 || exceedsRefundable || !refundPaymentId) return;
     setSubmitting(true);
     setError(null);
-    const result = await refundPayment(payment.id, amountMinor);
+    const result = await refundPayment(payment.id, amountMinor, refundPaymentId);
     setSubmitting(false);
     if (!result.success) {
       setError(result.error);
@@ -102,7 +111,7 @@ export function RefundPaymentModal({ open, onClose, payment, onRefunded }: Refun
       <div className="mt-5 flex items-center gap-3">
         <Button
           onClick={handleConfirm}
-          disabled={submitting || amountMinor === null || amountMinor <= 0 || exceedsRefundable}
+          disabled={submitting || amountMinor === null || amountMinor <= 0 || exceedsRefundable || !refundPaymentId}
         >
           {submitting ? "Refunding…" : "Refund"}
         </Button>

@@ -26,9 +26,12 @@ import { type DataResult, fail } from "@/lib/data/result";
  *   - missing source document:              P1111
  *   - blank reversal reason / memo:         P1112, P1113
  *   - invalid/overlapping period range:     P1116
- *   - no settlement entry to reverse:       P1118 (Finance F1.8 —
+ *   - no settlement entry to reverse/apply from: P1118 (Finance F1.8 —
  *     post_payment_refund_reversal, refuses to invent a reversal for a
- *     payment that predates ledger posting)
+ *     payment that predates ledger posting; reused by Finance F2.1C-C-
+ *     REVIEW's post_deposit_application for the identical reason — an
+ *     invoice_id-is-null + status-is-consumable Payment is not proof Cash
+ *     actually moved into Customer Deposits for it)
  *   - void rejected, payments applied:      P1119 (Finance F2.1B —
  *     post_invoice_voided_reversal, refuses to reverse Revenue recognition
  *     for an invoice with any payment applied; void-after-partial-payment
@@ -37,6 +40,25 @@ import { type DataResult, fail } from "@/lib/data/result";
  *     post_payment_refund_reversal, defensive guard against a negative
  *     computed Refunds & Returns portion; should be unreachable given
  *     existing Invoice validation, never silently posts a negative debit)
+ *   - deposit application validation:       P1122-P1128 (Finance F2.1C-C —
+ *     record_deposit_application: P1122 amount exceeds the available
+ *     deposit balance, P1123 amount exceeds the invoice's own outstanding
+ *     balance, P1124 source payment is not an unapplied Customer Deposit
+ *     in a consumable status, P1125 deposit/invoice workspace or client
+ *     mismatch, P1126 deposit/invoice currency mismatch, P1127 invoice not
+ *     in an application-eligible status, P1128 invalid (non-positive)
+ *     amount)
+ *   - request idempotency-key conflict:     P1129 (Finance F2.1C-C-
+ *     IDEMPOTENCY — process_payment_refund and record_deposit_application
+ *     share this one code: the caller reused a p_refund_payment_id /
+ *     p_application_payment_id for a materially different payload than
+ *     the request it was originally used for — a genuine conflict, never
+ *     silently replayed)
+ *   - request idempotency key required:     P1130 (Finance F2.1C-C-
+ *     IDEMPOTENCY — process_payment_refund and record_deposit_application
+ *     share this one code: p_refund_payment_id / p_application_payment_id
+ *     is null; both are required, no default, reusing the established
+ *     record_purchase_receipt / p_receipt_event_id convention)
  *
  * P1120 (Finance F2.1B-REVIEW's "refund rejected, Revenue recognized" —
  * process_payment_refund's blanket rejection of any invoice-linked refund
@@ -92,6 +114,15 @@ export const FINANCE_VALIDATION_ERROR_CODES = new Set([
   "P1118",
   "P1119",
   "P1121",
+  "P1122",
+  "P1123",
+  "P1124",
+  "P1125",
+  "P1126",
+  "P1127",
+  "P1128",
+  "P1129",
+  "P1130",
   "P1200",
 ]);
 

@@ -87,7 +87,7 @@ describe("refundStripePaymentAction", () => {
     const result = await refundStripePaymentAction("payment_1", 25000, "requested_by_customer", "Client changed their mind");
 
     expect(fakeProvider.createRefund).toHaveBeenCalledWith(expect.objectContaining({ paymentIntentId: "pi_real_123", amountMinor: 25000, reason: "requested_by_customer" }));
-    expect(refundPayment).toHaveBeenCalledWith("payment_1", 25000);
+    expect(refundPayment).toHaveBeenCalledWith("payment_1", 25000, expect.any(String));
     expect(vi.mocked(getCoreAuditLogService)().recordAuditEvent).toHaveBeenCalledWith("ws_1", expect.objectContaining({ action: "payment.refunded", ownerType: "payment", ownerId: "payment_1" }));
 
     expect(result.success).toBe(true);

@@ -865,39 +865,58 @@ describe("supabaseFinanceRepository.refundPayment", () => {
   it("calls process_payment_refund then recompute_invoice_balance, in order, for an invoice-linked payment", async () => {
     mockSession();
     const { client, rpcCalls } = createMockSupabase([
-      { data: paymentRow({ status: "succeeded" }), error: null }, // fetch original payment
       { data: paymentRow({ id: "payment_2", payment_type: "refund", amount_minor: 20000 }), error: null }, // process_payment_refund rpc
       { data: null, error: null }, // recompute_invoice_balance rpc
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000);
+    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000, "refund-key-1");
     expect(result.success).toBe(true);
     expect(rpcCalls.map((c) => c.name)).toEqual(["process_payment_refund", "recompute_invoice_balance"]);
+    expect(rpcCalls[0].args).toEqual({ p_original_payment_id: "payment_1", p_amount_minor: 20000, p_refund_payment_id: "refund-key-1", p_actor: expect.any(String) });
   });
 
-  it("does not call recompute_invoice_balance when the original payment has no linked invoice", async () => {
+  it("does not call recompute_invoice_balance when the returned refund has no linked invoice", async () => {
     mockSession();
     const { client, rpcCalls } = createMockSupabase([
-      { data: paymentRow({ status: "succeeded", invoice_id: null }), error: null }, // fetch original payment
       { data: paymentRow({ id: "payment_2", payment_type: "refund", invoice_id: null, amount_minor: 20000 }), error: null }, // process_payment_refund rpc
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000);
+    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000, "refund-key-1");
     expect(result.success).toBe(true);
+    expect(rpcCalls.map((c) => c.name)).toEqual(["process_payment_refund"]);
+  });
+
+  it("rejects a zero/negative amount, and a missing idempotency key, before ever calling the RPC", async () => {
+    const zero = await supabaseFinanceRepository.refundPayment("payment_1", 0, "refund-key-1");
+    expect(zero.success).toBe(false);
+    const negative = await supabaseFinanceRepository.refundPayment("payment_1", -100, "refund-key-1");
+    expect(negative.success).toBe(false);
+    const noKey = await supabaseFinanceRepository.refundPayment("payment_1", 1000, "");
+    expect(noKey.success).toBe(false);
+  });
+
+  it("translates a P0003 (payment not in a refundable status) RPC error into a DataResult failure rather than throwing — validation now happens exclusively server-side", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([{ data: null, error: { code: "P0003", message: "Cannot refund a payment that is failed." } }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.refundPayment("payment_1", 1000, "refund-key-1");
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("Cannot refund a payment that is failed.");
     expect(rpcCalls.map((c) => c.name)).toEqual(["process_payment_refund"]);
   });
 
   it("translates a P0004 (excess refund) RPC error into a DataResult failure rather than throwing", async () => {
     mockSession();
     const { client, rpcCalls } = createMockSupabase([
-      { data: paymentRow({ status: "succeeded" }), error: null }, // fetch original payment
       { data: null, error: { code: "P0004", message: "Cannot refund more than the refundable amount (10000 minor units remaining)." } }, // process_payment_refund rpc
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const result = await supabaseFinanceRepository.refundPayment("payment_1", 50000);
+    const result = await supabaseFinanceRepository.refundPayment("payment_1", 50000, "refund-key-1");
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error).toBe("Cannot refund more than the refundable amount (10000 minor units remaining).");
@@ -907,7 +926,6 @@ describe("supabaseFinanceRepository.refundPayment", () => {
   it("Finance F1.8 — translates a P1118 (no settlement entry to reverse — legacy payment) RPC error into a DataResult failure rather than throwing", async () => {
     mockSession();
     const { client, rpcCalls } = createMockSupabase([
-      { data: paymentRow({ status: "succeeded" }), error: null }, // fetch original payment
       {
         data: null,
         error: {
@@ -919,7 +937,7 @@ describe("supabaseFinanceRepository.refundPayment", () => {
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000);
+    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000, "refund-key-1");
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error).toMatch(/No settlement entry exists/);
@@ -928,38 +946,25 @@ describe("supabaseFinanceRepository.refundPayment", () => {
 
   it("Finance F1.8 — translates a P1104 (duplicate reversal posting) RPC error into a DataResult failure rather than throwing", async () => {
     mockSession();
-    const { client, rpcCalls } = createMockSupabase([
-      { data: paymentRow({ status: "succeeded" }), error: null }, // fetch original payment
-      { data: null, error: { code: "P1104", message: "This refund has already been posted." } }, // process_payment_refund rpc
-    ]);
+    const { client, rpcCalls } = createMockSupabase([{ data: null, error: { code: "P1104", message: "This refund has already been posted." } }]); // process_payment_refund rpc
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000);
+    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000, "refund-key-1");
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error).toBe("This refund has already been posted.");
     expect(rpcCalls.map((c) => c.name)).toEqual(["process_payment_refund"]);
   });
 
-  it("rejects a payment that isn't refundable before ever calling the RPC", async () => {
-    const { client, rpcCalls } = createMockSupabase([{ data: paymentRow({ status: "failed" }), error: null }]);
-    vi.mocked(createClient).mockReturnValue(client as never);
-
-    const result = await supabaseFinanceRepository.refundPayment("payment_1", 1000);
-    expect(result.success).toBe(false);
-    expect(rpcCalls).toHaveLength(0);
-  });
-
   it("F2.1C-B: an invoice-linked refund against recognized Revenue now succeeds (P1120 retired) — the Revenue correction is composed server-side by process_payment_refund, invisible to this repository call", async () => {
     mockSession();
     const { client, rpcCalls } = createMockSupabase([
-      { data: paymentRow({ status: "succeeded" }), error: null }, // fetch original payment
       { data: paymentRow({ id: "payment_2", payment_type: "refund", amount_minor: 20000 }), error: null }, // process_payment_refund rpc — now posts the Revenue correction internally instead of rejecting
       { data: null, error: null }, // recompute_invoice_balance rpc
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000);
+    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000, "refund-key-1");
     expect(result.success).toBe(true);
     expect(rpcCalls.map((c) => c.name)).toEqual(["process_payment_refund", "recompute_invoice_balance"]);
   });
@@ -967,35 +972,73 @@ describe("supabaseFinanceRepository.refundPayment", () => {
   it("F2.1C-B: translates a P1121 (unbalanced refund correction — defensive guard) RPC error into a DataResult failure rather than throwing", async () => {
     mockSession();
     const { client, rpcCalls } = createMockSupabase([
-      { data: paymentRow({ status: "succeeded" }), error: null }, // fetch original payment
-      {
-        data: null,
-        error: { code: "P1121", message: "Unable to compute a balanced refund correction for this invoice." },
-      },
+      { data: null, error: { code: "P1121", message: "Unable to compute a balanced refund correction for this invoice." } },
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000);
+    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000, "refund-key-1");
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error).toBe("Unable to compute a balanced refund correction for this invoice.");
     expect(rpcCalls.map((c) => c.name)).toEqual(["process_payment_refund"]);
   });
+
+  it("F2.1C-C-IDEMPOTENCY: a same-key replay returns the existing refund (RPC replays server-side; this call still recomputes the invoice balance, which is itself idempotent)", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: paymentRow({ id: "payment_2", payment_type: "refund", amount_minor: 20000 }), error: null }, // process_payment_refund rpc replays, returns the original row
+      { data: null, error: null }, // recompute_invoice_balance rpc
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000, "refund-key-1");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.id).toBe("payment_2");
+  });
+
+  it("F2.1C-C-IDEMPOTENCY: translates a P1129 (idempotency key reused for a different payload) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: null, error: { code: "P1129", message: "This idempotency key was already used for a different refund request." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000, "refund-key-1");
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("This idempotency key was already used for a different refund request.");
+    expect(rpcCalls.map((c) => c.name)).toEqual(["process_payment_refund"]);
+  });
+
+  it("F2.1C-C-IDEMPOTENCY: translates a P1130 (missing required idempotency key) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: null, error: { code: "P1130", message: "p_refund_payment_id is required and must be a stable identifier supplied by the caller (the same value on every retry of the same refund request)." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    // Bypasses the client-side empty-string guard by using a non-empty key that the (hypothetical) RPC still rejects —
+    // proves the translation path independent of the client-side short-circuit tested above.
+    const result = await supabaseFinanceRepository.refundPayment("payment_1", 20000, "refund-key-1");
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("supabaseFinanceRepository.getPaymentRefundableAmount", () => {
-  it("sums prior refunds via the reference = 'refund_of:{id}' convention", async () => {
+  it("sums prior refunds AND prior deposit applications via the reference = 'refund_of:{id}' / 'deposit_application_of:{id}' conventions", async () => {
     const { client, calls } = createMockSupabase([
       { data: paymentRow({ status: "succeeded", amount_minor: 100000 }), error: null }, // fetch payment
       { data: [{ amount_minor: 30000, status: "succeeded" }], error: null }, // refunds lookup
+      { data: [{ amount_minor: 15000, status: "succeeded" }], error: null }, // deposit applications lookup
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
     const refundable = await supabaseFinanceRepository.getPaymentRefundableAmount("payment_1");
-    expect(refundable).toBe(70000);
+    expect(refundable).toBe(55000);
 
-    const refundsLookup = calls.find((c) => c.table === "payments" && c.method === "eq" && c.args[0] === "reference");
-    expect(refundsLookup?.args[1]).toBe("refund_of:payment_1");
+    const referenceLookups = calls.filter((c) => c.table === "payments" && c.method === "eq" && c.args[0] === "reference").map((c) => c.args[1]);
+    expect(referenceLookups).toEqual(["refund_of:payment_1", "deposit_application_of:payment_1"]);
   });
 
   it("returns 0 for a payment that isn't refundable", async () => {
@@ -1004,6 +1047,130 @@ describe("supabaseFinanceRepository.getPaymentRefundableAmount", () => {
 
     const refundable = await supabaseFinanceRepository.getPaymentRefundableAmount("payment_1");
     expect(refundable).toBe(0);
+  });
+});
+
+describe("supabaseFinanceRepository.applyDepositToInvoice — Finance F2.1C-C", () => {
+  it("rejects a zero/negative amount, and a missing idempotency key, before ever calling the RPC", async () => {
+    const zero = await supabaseFinanceRepository.applyDepositToInvoice("payment_1", "invoice_1", 0, "app-key-1");
+    expect(zero.success).toBe(false);
+    const negative = await supabaseFinanceRepository.applyDepositToInvoice("payment_1", "invoice_1", -500, "app-key-1");
+    expect(negative.success).toBe(false);
+    const noKey = await supabaseFinanceRepository.applyDepositToInvoice("payment_1", "invoice_1", 40000, "");
+    expect(noKey.success).toBe(false);
+  });
+
+  it("calls record_deposit_application with the deposit/invoice/amount/idempotency key and translates the result", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: paymentRow({ id: "payment_2", invoice_id: "invoice_1", payment_type: "adjustment", payment_method: "other", amount_minor: 40000 }), error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.applyDepositToInvoice("payment_1", "invoice_1", 40000, "app-key-1");
+    expect(result.success).toBe(true);
+    expect(rpcCalls).toEqual([
+      {
+        name: "record_deposit_application",
+        args: { p_deposit_payment_id: "payment_1", p_invoice_id: "invoice_1", p_amount_minor: 40000, p_application_payment_id: "app-key-1", p_actor: expect.any(String) },
+      },
+    ]);
+  });
+
+  it("translates a P1122 (exceeds available deposit balance) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: null, error: { code: "P1122", message: "Cannot apply more than the available deposit balance (10000 minor units remaining)." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.applyDepositToInvoice("payment_1", "invoice_1", 40000, "app-key-1");
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("Cannot apply more than the available deposit balance (10000 minor units remaining).");
+    expect(rpcCalls.map((c) => c.name)).toEqual(["record_deposit_application"]);
+  });
+
+  it("translates a P1123 (exceeds invoice's outstanding balance) RPC error into a DataResult failure", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: null, error: { code: "P1123", message: "Cannot apply more than the invoice's outstanding balance (5000 minor units remaining)." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.applyDepositToInvoice("payment_1", "invoice_1", 40000, "app-key-1");
+    expect(result.success).toBe(false);
+  });
+
+  it("translates a P1124 (source not an unapplied Customer Deposit) RPC error into a DataResult failure", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: null, error: { code: "P1124", message: "This payment is already linked to an invoice and is not an unapplied Customer Deposit." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.applyDepositToInvoice("payment_1", "invoice_1", 40000, "app-key-1");
+    expect(result.success).toBe(false);
+  });
+
+  it("F2.1C-C-IDEMPOTENCY: a same-key replay returns the existing application (RPC replays server-side)", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: paymentRow({ id: "payment_2", invoice_id: "invoice_1", payment_type: "adjustment", payment_method: "other", amount_minor: 40000 }), error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.applyDepositToInvoice("payment_1", "invoice_1", 40000, "app-key-1");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.id).toBe("payment_2");
+  });
+
+  it("F2.1C-C-IDEMPOTENCY: translates a P1129 (idempotency key reused for a different payload) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: null, error: { code: "P1129", message: "This idempotency key was already used for a different deposit application request." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.applyDepositToInvoice("payment_1", "invoice_1", 40000, "app-key-1");
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("This idempotency key was already used for a different deposit application request.");
+    expect(rpcCalls.map((c) => c.name)).toEqual(["record_deposit_application"]);
+  });
+
+  it("re-throws an unrecognized RPC error rather than swallowing it as a DataResult failure", async () => {
+    mockSession();
+    const { client } = createMockSupabase([{ data: null, error: { code: "42501", message: "permission denied" } }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await expect(supabaseFinanceRepository.applyDepositToInvoice("payment_1", "invoice_1", 40000, "app-key-1")).rejects.toThrow();
+  });
+});
+
+describe("supabaseFinanceRepository.getDepositApplicableAmount", () => {
+  it("returns 0 for an invoice-linked payment (not an unapplied Customer Deposit)", async () => {
+    const { client } = createMockSupabase([{ data: paymentRow({ invoice_id: "invoice_1", status: "succeeded" }), error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const available = await supabaseFinanceRepository.getDepositApplicableAmount("payment_1");
+    expect(available).toBe(0);
+  });
+
+  it("sums prior refunds AND prior applications for an unapplied Customer Deposit", async () => {
+    const { client, calls } = createMockSupabase([
+      { data: paymentRow({ invoice_id: null, status: "succeeded", amount_minor: 100000 }), error: null },
+      { data: [{ amount_minor: 10000, status: "succeeded" }], error: null }, // refunds lookup
+      { data: [{ amount_minor: 20000, status: "succeeded" }], error: null }, // applications lookup
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const available = await supabaseFinanceRepository.getDepositApplicableAmount("payment_1");
+    expect(available).toBe(70000);
+
+    const referenceLookups = calls.filter((c) => c.table === "payments" && c.method === "eq" && c.args[0] === "reference").map((c) => c.args[1]);
+    expect(referenceLookups).toEqual(["refund_of:payment_1", "deposit_application_of:payment_1"]);
   });
 });
 
