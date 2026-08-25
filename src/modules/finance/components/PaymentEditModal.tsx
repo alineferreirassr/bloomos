@@ -51,17 +51,31 @@ export function PaymentEditModal({ payment, open, onClose, onSaved }: PaymentEdi
 
   const submit = handleSubmit(async (values) => {
     setFormError(null);
-    const result = await updatePayment(payment.id, paymentFormToInput(values));
-    if (!result.success) {
-      setFormError(result.error);
-      if (result.fieldErrors) {
-        for (const [field, message] of Object.entries(result.fieldErrors)) {
-          setError(field as keyof PaymentFormInput, { message });
+    try {
+      const result = await updatePayment(payment.id, paymentFormToInput(values));
+      if (!result.success) {
+        setFormError(result.error);
+        if (result.fieldErrors) {
+          for (const [field, message] of Object.entries(result.fieldErrors)) {
+            setError(field as keyof PaymentFormInput, { message });
+          }
         }
+        return;
       }
-      return;
+      onSaved();
+    } catch {
+      // A genuinely unexpected failure (network/auth/out-of-taxonomy RPC
+      // error) throws rather than resolving a DataResult — same contract
+      // every Finance mutation shares (see ReverseDepositApplicationModal's
+      // identical fix). React Hook Form already resets formState.isSubmitting
+      // on a thrown submit callback, so no local submitting state is needed
+      // here — without this catch, the Founder would simply see no feedback
+      // at all. Deliberately does NOT call onSaved(): that callback also
+      // closes the modal, and the update may or may not have actually
+      // committed, so the safest response is to surface the fallback and
+      // let the Founder retry or close explicitly.
+      setFormError("Something went wrong. Please try again.");
     }
-    onSaved();
   });
 
   return (

@@ -14,7 +14,8 @@ interface ConfirmExpenseActionModalProps {
   confirmLabel: string;
   pendingLabel: string;
   onConfirm: () => Promise<DataResult<Expense>>;
-  onConfirmed: (expense: Expense) => void;
+  /** Called with the updated Expense on success, or with no argument on an unexpected thrown failure (see handleConfirm's catch) — every real caller today only ever uses this to trigger a refetch, so the argument is safely optional. */
+  onConfirmed: (expense?: Expense) => void;
 }
 
 /**
@@ -40,14 +41,28 @@ export function ConfirmExpenseActionModal({
   const handleConfirm = async () => {
     setSubmitting(true);
     setError(null);
-    const result = await onConfirm();
-    setSubmitting(false);
-    if (!result.success) {
-      setError(result.error);
-      return;
+    try {
+      const result = await onConfirm();
+      setSubmitting(false);
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      onConfirmed(result.data);
+      onClose();
+    } catch {
+      // A genuinely unexpected failure (network/auth/out-of-taxonomy RPC
+      // error) throws rather than resolving a DataResult — same contract
+      // every Finance mutation shares (see ReverseDepositApplicationModal's
+      // identical fix). Without this, the request would never resolve
+      // `submitting`, permanently disabling both buttons. Refetch: the
+      // underlying status transition may have already committed before a
+      // separate follow-up Timeline write threw — refetching reconciles the
+      // Founder's view with whatever actually committed.
+      setSubmitting(false);
+      setError("Something went wrong. Please try again.");
+      onConfirmed();
     }
-    onConfirmed(result.data);
-    onClose();
   };
 
   return (
