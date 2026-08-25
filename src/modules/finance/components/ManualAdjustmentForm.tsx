@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
@@ -16,6 +16,7 @@ import {
   manualAdjustmentFormSchema,
   manualAdjustmentFormToInput,
   type ManualAdjustmentFormInput,
+  type ManualAdjustmentInput,
 } from "@/modules/finance/schema";
 import { formatMoney, majorToMinor } from "@/lib/money";
 
@@ -26,6 +27,11 @@ const emptyDefaults: ManualAdjustmentFormInput = {
   memo: "",
   lines: [{ ...emptyLine }, { ...emptyLine }],
 };
+
+/** Plain JSON-shaped payload (strings/numbers/null, fixed key order from manualAdjustmentFormToInput) — string comparison is a safe, simple deep-equality check. */
+function manualAdjustmentPayloadsEqual(a: ManualAdjustmentInput, b: ManualAdjustmentInput): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
 /**
  * account_id options come from listChartOfAccounts (active only) — no
@@ -52,6 +58,23 @@ export function ManualAdjustmentForm() {
   const { fields, append, remove } = useFieldArray({ control, name: "lines" });
   const lines = watch("lines");
 
+  /**
+   * Finance F2.1C-F-D-C: manualAdjustmentId is generated lazily, exactly
+   * once per page mount (this page has no open/close modal lifecycle to key
+   * a useMemo off of — a fresh mount, via navigating here again, is what
+   * naturally starts the next logical adjustment's identity). lastPayload
+   * tracks what was actually submitted under the current id: unset on the
+   * very first submit (reuse the id as-is), unchanged on a retry (reuse the
+   * same id), and a new id is generated only when the Founder edits the
+   * form after a failed attempt — this keeps the id and its payload always
+   * consistent with the engine's own same-key/same-payload replay contract,
+   * so an edited retry never spuriously conflicts with its own prior attempt.
+   */
+  const requestRef = useRef<{ id: string; lastPayload: ManualAdjustmentInput | null } | null>(null);
+  if (requestRef.current === null) {
+    requestRef.current = { id: crypto.randomUUID(), lastPayload: null };
+  }
+
   useEffect(() => {
     let cancelled = false;
     getChartOfAccounts().then((result) => {
@@ -68,12 +91,32 @@ export function ManualAdjustmentForm() {
 
   const submit = handleSubmit(async (values) => {
     setFormError(null);
-    const result = await recordManualAdjustment(manualAdjustmentFormToInput(values));
-    if (!result.success) {
-      setFormError(result.error);
-      return;
+    const payload = manualAdjustmentFormToInput(values);
+    const request = requestRef.current!;
+    const payloadChanged = request.lastPayload !== null && !manualAdjustmentPayloadsEqual(request.lastPayload, payload);
+    const manualAdjustmentId = payloadChanged ? crypto.randomUUID() : request.id;
+    requestRef.current = { id: manualAdjustmentId, lastPayload: payload };
+
+    try {
+      const result = await recordManualAdjustment(payload, manualAdjustmentId);
+      if (!result.success) {
+        setFormError(result.error);
+        return;
+      }
+      router.push(`/finance/journal/${result.data.id}`);
+    } catch {
+      // A genuinely unexpected failure (network/auth/out-of-taxonomy RPC
+      // error) throws rather than resolving a DataResult — same contract
+      // every Finance mutation shares. React Hook Form already resets
+      // formState.isSubmitting on a thrown submit callback, so no local
+      // submitting state is needed here. The adjustment may or may not have
+      // actually posted, so the safest response keeps the form open with
+      // the entered values intact and reuses the SAME manualAdjustmentId on
+      // retry: if it did post, the retry safely replays the existing entry
+      // via the engine's own posting_key lookup instead of posting a
+      // second one; if it didn't, the retry posts it for the first time.
+      setFormError("Something went wrong. Please try again.");
     }
-    router.push(`/finance/journal/${result.data.id}`);
   });
 
   return (

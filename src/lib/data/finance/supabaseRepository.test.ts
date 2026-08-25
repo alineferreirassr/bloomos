@@ -1858,10 +1858,13 @@ describe("supabaseFinanceRepository.recordManualAdjustment", () => {
     const { client, rpcCalls } = createMockSupabase([]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const blankMemo = await supabaseFinanceRepository.recordManualAdjustment({ ...MANUAL_ADJUSTMENT_INPUT, memo: "" });
+    const blankMemo = await supabaseFinanceRepository.recordManualAdjustment({ ...MANUAL_ADJUSTMENT_INPUT, memo: "" }, crypto.randomUUID());
     expect(blankMemo.success).toBe(false);
 
-    const oneLine = await supabaseFinanceRepository.recordManualAdjustment({ ...MANUAL_ADJUSTMENT_INPUT, lines: [MANUAL_ADJUSTMENT_INPUT.lines[0]] });
+    const oneLine = await supabaseFinanceRepository.recordManualAdjustment(
+      { ...MANUAL_ADJUSTMENT_INPUT, lines: [MANUAL_ADJUSTMENT_INPUT.lines[0]] },
+      crypto.randomUUID(),
+    );
     expect(oneLine.success).toBe(false);
 
     expect(rpcCalls).toHaveLength(0);
@@ -1871,22 +1874,28 @@ describe("supabaseFinanceRepository.recordManualAdjustment", () => {
     const { client, rpcCalls } = createMockSupabase([]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const zeroLine = await supabaseFinanceRepository.recordManualAdjustment({
-      ...MANUAL_ADJUSTMENT_INPUT,
-      lines: [
-        { account_id: "account_1000", debit_minor: 0, credit_minor: 0, line_memo: null },
-        { account_id: "account_2000", debit_minor: 0, credit_minor: 0, line_memo: null },
-      ],
-    });
+    const zeroLine = await supabaseFinanceRepository.recordManualAdjustment(
+      {
+        ...MANUAL_ADJUSTMENT_INPUT,
+        lines: [
+          { account_id: "account_1000", debit_minor: 0, credit_minor: 0, line_memo: null },
+          { account_id: "account_2000", debit_minor: 0, credit_minor: 0, line_memo: null },
+        ],
+      },
+      crypto.randomUUID(),
+    );
     expect(zeroLine.success).toBe(false);
 
-    const doubleSided = await supabaseFinanceRepository.recordManualAdjustment({
-      ...MANUAL_ADJUSTMENT_INPUT,
-      lines: [
-        { account_id: "account_1000", debit_minor: 100, credit_minor: 100, line_memo: null },
-        { account_id: "account_2000", debit_minor: 0, credit_minor: 100, line_memo: null },
-      ],
-    });
+    const doubleSided = await supabaseFinanceRepository.recordManualAdjustment(
+      {
+        ...MANUAL_ADJUSTMENT_INPUT,
+        lines: [
+          { account_id: "account_1000", debit_minor: 100, credit_minor: 100, line_memo: null },
+          { account_id: "account_2000", debit_minor: 0, credit_minor: 100, line_memo: null },
+        ],
+      },
+      crypto.randomUUID(),
+    );
     expect(doubleSided.success).toBe(false);
 
     expect(rpcCalls).toHaveLength(0);
@@ -1899,31 +1908,60 @@ describe("supabaseFinanceRepository.recordManualAdjustment", () => {
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const result = await supabaseFinanceRepository.recordManualAdjustment({
-      ...MANUAL_ADJUSTMENT_INPUT,
-      lines: [
-        { account_id: "account_1000", debit_minor: 5000, credit_minor: 0, line_memo: null },
-        { account_id: "account_2000", debit_minor: 0, credit_minor: 4000, line_memo: null },
-      ],
-    });
+    const result = await supabaseFinanceRepository.recordManualAdjustment(
+      {
+        ...MANUAL_ADJUSTMENT_INPUT,
+        lines: [
+          { account_id: "account_1000", debit_minor: 5000, credit_minor: 0, line_memo: null },
+          { account_id: "account_2000", debit_minor: 0, credit_minor: 4000, line_memo: null },
+        ],
+      },
+      crypto.randomUUID(),
+    );
     expect(result.success).toBe(false);
     expect(rpcCalls).toHaveLength(1);
   });
 
-  it("calls record_manual_adjustment with lines carrying no plug/balancing entry, maps the result, and writes exactly one Audit entry", async () => {
+  it("calls record_manual_adjustment with lines carrying no plug/balancing entry plus p_manual_adjustment_id, maps the result, and writes exactly one Audit entry", async () => {
     mockSession();
-    const { client, rpcCalls } = createMockSupabase([{ data: journalEntryRow({ source_type: "manual_adjustment", source_id: null, posting_key: null }), error: null }]);
+    const { client, rpcCalls } = createMockSupabase([{ data: journalEntryRow({ source_type: "manual_adjustment", source_id: null, posting_key: "manual_adjustment:key-1" }), error: null }]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const result = await supabaseFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT);
+    const result = await supabaseFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT, "key-1");
     expect(result.success).toBe(true);
     expect(rpcCalls[0].name).toBe("record_manual_adjustment");
     const args = rpcCalls[0].args as Record<string, unknown>;
     expect(args.p_lines).toHaveLength(2);
+    expect(args.p_manual_adjustment_id).toBe("key-1");
 
     expect(recordAuditEventMock).toHaveBeenCalledTimes(1);
     const [, auditInput] = recordAuditEventMock.mock.calls[0];
     expect(auditInput.ownerType).toBe("journal_entry");
+  });
+
+  it("Finance F2.1C-F-D-C-IDEMPOTENCY: translates a P1129 (idempotency key reused for a different manual adjustment payload) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: null, error: { code: "P1129", message: "This idempotency key was already used for a different manual adjustment request." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT, "key-1");
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("This idempotency key was already used for a different manual adjustment request.");
+    expect(rpcCalls.map((c) => c.name)).toEqual(["record_manual_adjustment"]);
+  });
+
+  it("Finance F2.1C-F-D-C-IDEMPOTENCY: translates a P1130 (missing required manualAdjustmentId) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: null, error: { code: "P1130", message: "p_manual_adjustment_id is required and must be a stable identifier supplied by the caller (the same value on every retry of the same manual adjustment request)." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT, "key-1");
+    expect(result.success).toBe(false);
   });
 });
 

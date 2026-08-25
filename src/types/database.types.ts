@@ -2679,6 +2679,7 @@ export interface Database {
           p_memo: string;
           p_lines: Json;
           p_actor: string;
+          p_manual_adjustment_id: string;
         };
         Returns: Database["public"]["Tables"]["journal_entries"]["Row"];
       };

@@ -2447,8 +2447,8 @@ async function recordExpenseTransition(expenseId: string, input: ExpenseTransiti
   return ok(expense);
 }
 
-/** Balance equality (total debits = total credits) is validated by record_manual_adjustment's own P1106 check, not re-checked here — see modules/finance/schema.ts's manualAdjustmentInputSchema doc comment. */
-async function recordManualAdjustment(input: ManualAdjustmentInput): Promise<DataResult<JournalEntry>> {
+/** Balance equality (total debits = total credits) is validated by record_manual_adjustment's own P1106 check, not re-checked here — see modules/finance/schema.ts's manualAdjustmentInputSchema doc comment. Finance F2.1C-F-D-C: manualAdjustmentId is a required, caller-generated request-idempotency key, passed through as p_manual_adjustment_id — never embedded in the validated ManualAdjustmentInput payload. A same-key replay (P1129 conflict) or null key (P1130) both already fall inside the shared FINANCE_VALIDATION_ERROR_CODES set handleFinanceRpcError checks, so no new error-handling path is needed here. */
+async function recordManualAdjustment(input: ManualAdjustmentInput, manualAdjustmentId: string): Promise<DataResult<JournalEntry>> {
   const parsed = manualAdjustmentInputSchema.safeParse(input);
   if (!parsed.success) {
     return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
@@ -2470,6 +2470,7 @@ async function recordManualAdjustment(input: ManualAdjustmentInput): Promise<Dat
       line_order: index,
     })),
     p_actor: actor,
+    p_manual_adjustment_id: manualAdjustmentId,
   });
   if (error) return handleFinanceRpcError<JournalEntry>(error);
 

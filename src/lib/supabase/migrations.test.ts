@@ -43,9 +43,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation + 20 Services Foundation schema migrations + 1 Event Service Workspace media owner_type widening migration + 1 Client Portal Checkpoint 14 schema migration + 1 Analytics permission seed migration + 1 Digital Asset Management media_assets workspace owner_type widening migration + 2 Finance F1.8 Payment Atomicity & Refund Reversal migrations + 1 Finance F2.1B Invoice Revenue Recognition migration + 1 Finance F2.1B-REVIEW refund guard migration + 1 Finance F2.1C-B refund Revenue correction migration + 1 Finance F2.1C-C Customer Deposit application migration + 1 Finance F2.1C-D-B refund-correction Invoice-field sync migration + 1 Finance F2.1C-D-C Invoice Financial Adjustment migration + 1 Finance F2.1C-D-D-B Partial-Payment Void migration + 1 Finance F2.1C-E-B Deposit Application Reversal migration (excluding independently-tracked, not-yet-released work still uncommitted alongside this one — see KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS), in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation + 20 Services Foundation schema migrations + 1 Event Service Workspace media owner_type widening migration + 1 Client Portal Checkpoint 14 schema migration + 1 Analytics permission seed migration + 1 Digital Asset Management media_assets workspace owner_type widening migration + 2 Finance F1.8 Payment Atomicity & Refund Reversal migrations + 1 Finance F2.1B Invoice Revenue Recognition migration + 1 Finance F2.1B-REVIEW refund guard migration + 1 Finance F2.1C-B refund Revenue correction migration + 1 Finance F2.1C-C Customer Deposit application migration + 1 Finance F2.1C-D-B refund-correction Invoice-field sync migration + 1 Finance F2.1C-D-C Invoice Financial Adjustment migration + 1 Finance F2.1C-D-D-B Partial-Payment Void migration + 1 Finance F2.1C-E-B Deposit Application Reversal migration + 1 Finance F2.1C-F-D-C Manual Adjustment Request Idempotency migration (excluding independently-tracked, not-yet-released work still uncommitted alongside this one — see KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS), in chronological (execution) order", () => {
     const files = migrationFilesForThisRelease();
-    expect(files).toHaveLength(167);
+    expect(files).toHaveLength(168);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -1212,6 +1212,7 @@ describe("Finance Posting Engine migrations", () => {
       "20260826100000_finance_invoice_adjustment.sql",
       "20260827100000_finance_partial_payment_void.sql",
       "20260828100000_finance_deposit_application_reversal.sql",
+      "20260829100000_finance_manual_adjustment_idempotency.sql",
     ];
     for (const otherFile of migrationFiles().filter((f) => !POSTING_ENGINE_FILES.includes(f) && !LATER_SANCTIONED_FINANCE_FILES.includes(f))) {
       const sql = readMigration(otherFile);
@@ -3365,5 +3366,88 @@ describe("Finance F2.1C-E-B migration — Deposit Application Reversal", () => {
         expect(code).toMatch(new RegExp(`errcode = '${errcode}'`));
       }
     });
+  });
+});
+
+describe("Finance F2.1C-F-D-C migration — Manual Adjustment Request Idempotency", () => {
+  const FILE = "20260829100000_finance_manual_adjustment_idempotency.sql";
+  const sql = () => readMigration(FILE);
+
+  it("sorts after 20260828100000_finance_deposit_application_reversal.sql", () => {
+    expect(FILE > "20260828100000_finance_deposit_application_reversal.sql").toBe(true);
+    expect(migrationFiles()).toContain(FILE);
+  });
+
+  it("does not modify the original record_manual_adjustment migration file — this is a NEW file, never an edit of it", () => {
+    const original = readMigration("20260804100600_finance_record_manual_adjustment.sql");
+    expect(original).not.toMatch(/p_manual_adjustment_id/);
+  });
+
+  it("redefines exactly one function — record_manual_adjustment — with no new table, column, index, RLS policy, or source_type widening", () => {
+    const code = stripSqlComments(sql());
+    const definitions = [...code.matchAll(/create or replace function public\.(\w+)\(/g)].map((m) => m[1]);
+    expect(definitions).toEqual(["record_manual_adjustment"]);
+    expect(code).not.toMatch(/create table/i);
+    expect(code).not.toMatch(/alter table public\.journal_entries add column/);
+    expect(code).not.toMatch(/create (unique )?index/i);
+    expect(code).not.toMatch(/create policy|alter policy|drop policy|enable row level security/i);
+    expect(code).not.toMatch(/alter table public\.journal_entries drop constraint/);
+    expect(code).not.toMatch(/backfill/i);
+  });
+
+  it("requires p_manual_adjustment_id (P1130 if null), checked before the memo/line-count checks", () => {
+    const code = stripSqlComments(sql());
+    const idCheckIndex = code.indexOf("if p_manual_adjustment_id is null then");
+    const memoCheckIndex = code.indexOf("if p_memo is null or btrim(p_memo) = '' then");
+    expect(idCheckIndex).toBeGreaterThan(-1);
+    expect(memoCheckIndex).toBeGreaterThan(idCheckIndex);
+    expect(code).toMatch(/errcode = 'P1130'/);
+  });
+
+  it("derives posting_key as manual_adjustment:<id> and looks up an existing entry by (workspace_id, posting_key), never by source_id", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/v_posting_key := 'manual_adjustment:' \|\| p_manual_adjustment_id;/);
+    expect(code).toMatch(/where workspace_id = p_workspace_id and posting_key = v_posting_key;/);
+    expect(code).not.toMatch(/source_id = p_manual_adjustment_id/);
+  });
+
+  it("compares the incoming payload against the existing entry's own persisted entry_date/memo and journal_lines (ordered by line_order) — never against memo-embedded or mutable external state", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/from public\.journal_lines\s*\n\s*where journal_entry_id = v_existing_entry\.id;/);
+    expect(code).toMatch(/order by line_order/);
+    expect(code).toMatch(/v_existing_entry\.entry_date = p_entry_date/);
+    expect(code).toMatch(/v_existing_entry\.memo = p_memo/);
+    expect(code).toMatch(/v_existing_lines = v_incoming_lines/);
+    expect(code).not.toMatch(/substring\(v_existing_entry\.memo/);
+  });
+
+  it("a same-key/same-payload replay returns the existing entry; a same-key/different-payload replay is rejected (P1129) before any insert is attempted", () => {
+    const code = stripSqlComments(sql());
+    const foundIndex = code.indexOf("if found then");
+    const returnExistingIndex = code.indexOf("return v_existing_entry;");
+    const conflictIndex = code.indexOf("errcode = 'P1129'");
+    const insertIndex = code.indexOf("v_entry := public.finance_insert_journal_entry(");
+    expect(foundIndex).toBeGreaterThan(-1);
+    expect(returnExistingIndex).toBeGreaterThan(foundIndex);
+    expect(conflictIndex).toBeGreaterThan(returnExistingIndex);
+    expect(insertIndex).toBeGreaterThan(conflictIndex);
+  });
+
+  it("still posts with source_type = 'manual_adjustment' and a null source_id on a fresh (non-replay) request, unchanged from the original migration", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/p_workspace_id, p_entry_date, 'manual_adjustment', null, p_memo, p_actor, null, v_posting_key, p_lines/);
+  });
+
+  it("preserves every original accounting/validation guard unchanged: P1106 (unbalanced), P1107 (cross-workspace), P1108 (archived account), P1111 (missing account), P1113 (blank memo), P1114 (fewer than 2 lines), P1115 (invalid line)", () => {
+    const code = stripSqlComments(sql());
+    for (const errcode of ["P1106", "P1107", "P1108", "P1111", "P1113", "P1114", "P1115"]) {
+      expect(code).toMatch(new RegExp(`errcode = '${errcode}'`));
+    }
+  });
+
+  it("never auto-balances or adds a plug line — no arithmetic adjusts v_total_debit/v_total_credit to force equality", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/v_total_debit\s*:=\s*v_total_credit/);
+    expect(code).not.toMatch(/v_total_credit\s*:=\s*v_total_debit/);
   });
 });

@@ -1912,8 +1912,8 @@ export async function recordExpenseTransition(expenseId: string, input: ExpenseT
   return financeRepository().recordExpenseTransition(expenseId, input);
 }
 
-export async function recordManualAdjustment(input: ManualAdjustmentInput): Promise<DataResult<JournalEntry>> {
-  return financeRepository().recordManualAdjustment(input);
+export async function recordManualAdjustment(input: ManualAdjustmentInput, manualAdjustmentId: string): Promise<DataResult<JournalEntry>> {
+  return financeRepository().recordManualAdjustment(input, manualAdjustmentId);
 }
 
 export async function reverseJournalEntry(journalEntryId: string, input: JournalEntryReversalInput): Promise<DataResult<JournalEntry>> {

@@ -317,8 +317,8 @@ export interface FinanceRepository {
   recordPaymentSettlement(input: PaymentSettlementInput): Promise<DataResult<Payment>>;
   /** Calls record_expense_transition. */
   recordExpenseTransition(expenseId: string, input: ExpenseTransitionInput): Promise<DataResult<Expense>>;
-  /** Calls record_manual_adjustment. Balance equality is validated by the RPC, not re-checked here. */
-  recordManualAdjustment(input: ManualAdjustmentInput): Promise<DataResult<JournalEntry>>;
+  /** Calls record_manual_adjustment. Balance equality is validated by the RPC, not re-checked here. manualAdjustmentId is a required, caller-generated request-idempotency key (kept separate from the Founder-authored ManualAdjustmentInput payload) — a retry with the same id and the same payload replays the original Journal Entry instead of posting a second one; the same id with a different payload is rejected as a conflict. */
+  recordManualAdjustment(input: ManualAdjustmentInput, manualAdjustmentId: string): Promise<DataResult<JournalEntry>>;
   /** Calls reverse_journal_entry. Never updates the original entry directly — the RPC sets reversed_by_entry_id itself. */
   reverseJournalEntry(journalEntryId: string, input: JournalEntryReversalInput): Promise<DataResult<JournalEntry>>;
 

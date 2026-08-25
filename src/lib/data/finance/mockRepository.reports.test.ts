@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 async function postAdjustment(input: ManualAdjustmentInput) {
-  const result = await mockFinanceRepository.recordManualAdjustment(input);
+  const result = await mockFinanceRepository.recordManualAdjustment(input, crypto.randomUUID());
   if (!result.success) throw new Error(`Seed adjustment failed: ${result.error}`);
   return result.data;
 }

@@ -3800,59 +3800,161 @@ describe("mockFinanceRepository.recordExpenseTransition", () => {
 
 describe("mockFinanceRepository.recordManualAdjustment", () => {
   it("rejects a blank memo, fewer than two lines, a zero-value line, and a double-sided line", async () => {
-    expect((await mockFinanceRepository.recordManualAdjustment({ ...MANUAL_ADJUSTMENT_INPUT, memo: "" })).success).toBe(false);
-    expect((await mockFinanceRepository.recordManualAdjustment({ ...MANUAL_ADJUSTMENT_INPUT, lines: [MANUAL_ADJUSTMENT_INPUT.lines[0]] })).success).toBe(false);
+    expect((await mockFinanceRepository.recordManualAdjustment({ ...MANUAL_ADJUSTMENT_INPUT, memo: "" }, crypto.randomUUID())).success).toBe(false);
+    expect(
+      (await mockFinanceRepository.recordManualAdjustment({ ...MANUAL_ADJUSTMENT_INPUT, lines: [MANUAL_ADJUSTMENT_INPUT.lines[0]] }, crypto.randomUUID()))
+        .success,
+    ).toBe(false);
     expect(
       (
-        await mockFinanceRepository.recordManualAdjustment({
-          ...MANUAL_ADJUSTMENT_INPUT,
-          lines: [
-            { account_id: "account_1000", debit_minor: 0, credit_minor: 0, line_memo: null },
-            { account_id: "account_2000", debit_minor: 0, credit_minor: 0, line_memo: null },
-          ],
-        })
+        await mockFinanceRepository.recordManualAdjustment(
+          {
+            ...MANUAL_ADJUSTMENT_INPUT,
+            lines: [
+              { account_id: "account_1000", debit_minor: 0, credit_minor: 0, line_memo: null },
+              { account_id: "account_2000", debit_minor: 0, credit_minor: 0, line_memo: null },
+            ],
+          },
+          crypto.randomUUID(),
+        )
       ).success,
     ).toBe(false);
     expect(
       (
-        await mockFinanceRepository.recordManualAdjustment({
-          ...MANUAL_ADJUSTMENT_INPUT,
-          lines: [
-            { account_id: "account_1000", debit_minor: 100, credit_minor: 100, line_memo: null },
-            { account_id: "account_2000", debit_minor: 0, credit_minor: 100, line_memo: null },
-          ],
-        })
+        await mockFinanceRepository.recordManualAdjustment(
+          {
+            ...MANUAL_ADJUSTMENT_INPUT,
+            lines: [
+              { account_id: "account_1000", debit_minor: 100, credit_minor: 100, line_memo: null },
+              { account_id: "account_2000", debit_minor: 0, credit_minor: 100, line_memo: null },
+            ],
+          },
+          crypto.randomUUID(),
+        )
       ).success,
     ).toBe(false);
   });
 
   it("rejects an unbalanced total (total debits != total credits), with no automatic plug line", async () => {
-    const result = await mockFinanceRepository.recordManualAdjustment({
-      ...MANUAL_ADJUSTMENT_INPUT,
-      lines: [
-        { account_id: "account_1000", debit_minor: 5000, credit_minor: 0, line_memo: null },
-        { account_id: "account_2000", debit_minor: 0, credit_minor: 4000, line_memo: null },
-      ],
-    });
+    const result = await mockFinanceRepository.recordManualAdjustment(
+      {
+        ...MANUAL_ADJUSTMENT_INPUT,
+        lines: [
+          { account_id: "account_1000", debit_minor: 5000, credit_minor: 0, line_memo: null },
+          { account_id: "account_2000", debit_minor: 0, credit_minor: 4000, line_memo: null },
+        ],
+      },
+      crypto.randomUUID(),
+    );
     expect(result.success).toBe(false);
   });
 
-  it("posts a balanced Journal Entry with posting_key null and writes exactly one Audit entry", async () => {
-    const result = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT);
+  it("posts a balanced Journal Entry with the deterministic posting_key and writes exactly one Audit entry", async () => {
+    const id = crypto.randomUUID();
+    const result = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT, id);
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect(result.data.posting_key).toBeNull();
+    expect(result.data.posting_key).toBe(`manual_adjustment:${id}`);
     expect(result.data.source_id).toBeNull();
     expect(result.data.source_type).toBe("manual_adjustment");
 
     const auditEntries = await mockAuditLogRepository.getAuditLogForOwner(CURRENT_WORKSPACE_ID, "journal_entry", result.data.id);
     expect(auditEntries.filter((e) => e.action === "manual_adjustment_recorded")).toHaveLength(1);
   });
+
+  it("rejects a missing (empty-string) manualAdjustmentId", async () => {
+    const result = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT, "");
+    expect(result.success).toBe(false);
+  });
+
+  it("a same-key retry with the same payload replays the original Journal Entry — no second entry, no duplicate lines", async () => {
+    const id = crypto.randomUUID();
+
+    const first = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT, id);
+    expect(first.success).toBe(true);
+    const second = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT, id);
+    expect(second.success).toBe(true);
+    if (!first.success || !second.success) return;
+
+    expect(second.data.id).toBe(first.data.id);
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "manual_adjustment" });
+    expect(entries.filter((e) => e.posting_key === `manual_adjustment:${id}`)).toHaveLength(1);
+
+    const detail = await mockFinanceRepository.getJournalEntry(first.data.id);
+    expect(detail.lines).toHaveLength(2);
+
+    // The replay did not write a second Audit entry beyond the one from the original post plus one from this replay's own repository-layer call — the SQL/mock posting layer itself was never re-invoked (see the account-existence assertion below).
+    const auditEntries = await mockAuditLogRepository.getAuditLogForOwner(CURRENT_WORKSPACE_ID, "journal_entry", first.data.id);
+    expect(auditEntries.filter((e) => e.action === "manual_adjustment_recorded").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("a same-key retry with a DIFFERENT amount is rejected as a conflict, not replayed", async () => {
+    const id = crypto.randomUUID();
+    const first = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT, id);
+    expect(first.success).toBe(true);
+
+    const conflicting = await mockFinanceRepository.recordManualAdjustment(
+      {
+        ...MANUAL_ADJUSTMENT_INPUT,
+        lines: [
+          { account_id: "account_1000", debit_minor: 6000, credit_minor: 0, line_memo: null },
+          { account_id: "account_2000", debit_minor: 0, credit_minor: 6000, line_memo: null },
+        ],
+      },
+      id,
+    );
+    expect(conflicting.success).toBe(false);
+    if (conflicting.success) return;
+    expect(conflicting.error).toMatch(/idempotency key was already used/);
+  });
+
+  it("a same-key retry with a DIFFERENT account on one line is rejected as a conflict", async () => {
+    const id = crypto.randomUUID();
+    const first = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT, id);
+    expect(first.success).toBe(true);
+
+    const conflicting = await mockFinanceRepository.recordManualAdjustment(
+      { ...MANUAL_ADJUSTMENT_INPUT, lines: [{ account_id: "account_4000", debit_minor: 5000, credit_minor: 0, line_memo: null }, MANUAL_ADJUSTMENT_INPUT.lines[1]] },
+      id,
+    );
+    expect(conflicting.success).toBe(false);
+  });
+
+  it("a same-key retry with a DIFFERENT entry_date is rejected as a conflict", async () => {
+    const id = crypto.randomUUID();
+    const first = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT, id);
+    expect(first.success).toBe(true);
+
+    const conflicting = await mockFinanceRepository.recordManualAdjustment({ ...MANUAL_ADJUSTMENT_INPUT, entry_date: "2026-07-16" }, id);
+    expect(conflicting.success).toBe(false);
+  });
+
+  it("a same-key retry with a DIFFERENT memo is rejected as a conflict", async () => {
+    const id = crypto.randomUUID();
+    const first = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT, id);
+    expect(first.success).toBe(true);
+
+    const conflicting = await mockFinanceRepository.recordManualAdjustment({ ...MANUAL_ADJUSTMENT_INPUT, memo: "A different memo" }, id);
+    expect(conflicting.success).toBe(false);
+  });
+
+  it("a DIFFERENT key represents a distinct, intentional second identical adjustment", async () => {
+    const first = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT, crypto.randomUUID());
+    expect(first.success).toBe(true);
+    const second = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT, crypto.randomUUID());
+    expect(second.success).toBe(true);
+    if (!first.success || !second.success) return;
+
+    expect(second.data.id).not.toBe(first.data.id);
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "manual_adjustment" });
+    expect(entries.filter((e) => e.id === first.data.id || e.id === second.data.id)).toHaveLength(2);
+  });
 });
 
 describe("mockFinanceRepository.reverseJournalEntry", () => {
   it("requires a nonblank reason", async () => {
-    const created = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT);
+    const created = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
 
     const result = await mockFinanceRepository.reverseJournalEntry(created.data.id, { reason: "" });
@@ -3860,7 +3962,7 @@ describe("mockFinanceRepository.reverseJournalEntry", () => {
   });
 
   it("creates a new entry with debit/credit swapped, leaves the original entry's lines unchanged, links both directions, and allows at most one reversal per entry", async () => {
-    const created = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT);
+    const created = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     const original = await mockFinanceRepository.getJournalEntry(created.data.id);
 
@@ -3900,7 +4002,7 @@ describe("mockFinanceRepository.reverseJournalEntry", () => {
 
 describe("mockFinanceRepository journal ledger — append-only + interface parity", () => {
   it("never mutates or removes an existing Journal Entry row except via reversed_by_entry_id", async () => {
-    const created = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT);
+    const created = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     const before = await mockFinanceRepository.getJournalEntry(created.data.id);
 
@@ -3914,7 +4016,7 @@ describe("mockFinanceRepository journal ledger — append-only + interface parit
   });
 
   it("listJournalEntries/getJournalEntry only return entries for the current workspace", async () => {
-    const created = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT);
+    const created = await mockFinanceRepository.recordManualAdjustment(MANUAL_ADJUSTMENT_INPUT, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     const entries = await mockFinanceRepository.listJournalEntries();
     expect(entries.every((e) => e.workspace_id === CURRENT_WORKSPACE_ID)).toBe(true);

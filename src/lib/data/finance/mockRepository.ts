@@ -2715,11 +2715,65 @@ async function recordExpenseTransition(expenseId: string, input: ExpenseTransiti
   return ok(expense);
 }
 
-/** Balance equality is validated here (unlike the Supabase repository, which defers entirely to record_manual_adjustment's own P1106 check) since the mock has no Postgres backstop of its own — this is the one place this phase's "no automatic balancing" rule is enforced client-side, not a duplicated accounting RULE (which side is debited/credited), just the arithmetic invariant a Journal Entry can never skip. */
-async function recordManualAdjustment(input: ManualAdjustmentInput): Promise<DataResult<JournalEntry>> {
+/** Compares the durable, already-persisted shape of an existing Manual Adjustment Journal Entry (entry_date/memo plus its own journal_lines, ordered by line_order) against a fresh request's parsed payload — never against mutable external state (e.g. current account metadata). Every line field is normalized (line_memo's "" vs null) the same way the insert path already normalizes it, so a byte-identical resubmission always compares equal. */
+function manualAdjustmentPayloadMatches(
+  existing: JournalEntry,
+  parsed: { entry_date: string; memo: string; lines: { account_id: string; debit_minor: number; credit_minor: number; line_memo?: string | null }[] },
+): boolean {
+  if (existing.entry_date !== parsed.entry_date || existing.memo !== parsed.memo) {
+    return false;
+  }
+  const existingLines = readJournalLines()
+    .filter((line) => line.journal_entry_id === existing.id)
+    .sort((a, b) => a.line_order - b.line_order)
+    .map((line) => ({ account_id: line.account_id, debit_minor: line.debit_minor, credit_minor: line.credit_minor, line_memo: line.line_memo }));
+  const incomingLines = parsed.lines.map((line) => ({
+    account_id: line.account_id,
+    debit_minor: line.debit_minor,
+    credit_minor: line.credit_minor,
+    line_memo: line.line_memo ?? null,
+  }));
+  if (existingLines.length !== incomingLines.length) {
+    return false;
+  }
+  return existingLines.every(
+    (line, index) =>
+      line.account_id === incomingLines[index].account_id &&
+      line.debit_minor === incomingLines[index].debit_minor &&
+      line.credit_minor === incomingLines[index].credit_minor &&
+      line.line_memo === incomingLines[index].line_memo,
+  );
+}
+
+/**
+ * Balance equality is validated here (unlike the Supabase repository, which defers entirely to record_manual_adjustment's own P1106 check) since the mock has no Postgres backstop of its own — this is the one place this phase's "no automatic balancing" rule is enforced client-side, not a duplicated accounting RULE (which side is debited/credited), just the arithmetic invariant a Journal Entry can never skip.
+ *
+ * Finance F2.1C-F-D-C: manualAdjustmentId is a required, caller-generated
+ * request-idempotency key, checked before any other validation (mirroring
+ * every other Finance idempotency-key convention in this file). It carries
+ * NO business meaning of its own — it is never embedded in the validated
+ * ManualAdjustmentInput payload — and derives posting_key deterministically
+ * (manual_adjustment:<id>). source_id stays permanently null for
+ * manual_adjustment (see journal_entries_source_consistency_check), so the
+ * replay lookup is by posting_key alone, never by source_id.
+ */
+async function recordManualAdjustment(input: ManualAdjustmentInput, manualAdjustmentId: string): Promise<DataResult<JournalEntry>> {
+  if (!manualAdjustmentId) {
+    return fail("manualAdjustmentId is required and must be a stable identifier supplied by the caller (the same value on every retry of the same manual adjustment request).");
+  }
+
   const parsed = manualAdjustmentInputSchema.safeParse(input);
   if (!parsed.success) {
     return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  const postingKey = `manual_adjustment:${manualAdjustmentId}`;
+  const existing = readJournalEntries().find((e) => e.workspace_id === CURRENT_WORKSPACE_ID && e.posting_key === postingKey);
+  if (existing) {
+    if (!manualAdjustmentPayloadMatches(existing, parsed.data)) {
+      return fail("This idempotency key was already used for a different manual adjustment request.");
+    }
+    return ok(existing);
   }
 
   for (const line of parsed.data.lines) {
@@ -2746,7 +2800,7 @@ async function recordManualAdjustment(input: ManualAdjustmentInput): Promise<Dat
     entry_date: parsed.data.entry_date,
     source_type: "manual_adjustment",
     source_id: null,
-    posting_key: null,
+    posting_key: postingKey,
     memo: parsed.data.memo,
     posted_by: CURRENT_ACTOR,
     lines: parsed.data.lines.map((line) => ({
