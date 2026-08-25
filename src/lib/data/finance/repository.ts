@@ -230,8 +230,37 @@ export interface FinanceRepository {
    * application action, reuse on retry, never regenerate.
    */
   applyDepositToInvoice(depositPaymentId: string, invoiceId: string, amountMinor: number, applicationPaymentId: string): Promise<DataResult<Payment>>;
-  /** The deposit's own amount minus every prior completed refund and every prior completed application of it. 0 if the payment isn't an unapplied Customer Deposit in a consumable status. */
+  /** The deposit's own amount minus every prior completed refund and every prior completed application of it, plus every prior completed reversal of one of those applications (Finance F2.1C-E-B). 0 if the payment isn't an unapplied Customer Deposit in a consumable status. */
   getDepositApplicableAmount(depositPaymentId: string): Promise<number>;
+
+  /**
+   * Finance F2.1C-E-B. Reverses ONE exact, already-posted Deposit
+   * Application in full — FULL_ONLY, never partial; the reversal amount is
+   * always the target Application's own `amount_minor`, never
+   * caller-supplied. Restores the Customer Deposit liability and the
+   * Invoice's AR position: Dr 1100 Accounts Receivable / Cr 2200 Customer
+   * Deposits — the exact inverse of `applyDepositToInvoice`'s own posting.
+   * No Cash, Revenue, Tax, or Discount line — this is a pure balance-sheet
+   * reallocation, never a P&L or Cash event. The original Application
+   * Payment/Journal Entry is never mutated (append-only); the reversal is
+   * represented as a NEW Payment row (`payment_type: 'refund'` — reused
+   * ONLY so the existing `recompute_invoice_balance` correctly subtracts it
+   * from `paid_minor`, never as a claim that Cash moved — `reference:
+   * 'deposit_application_reversal_of:<applicationPaymentId>'` keeps it
+   * unambiguous in the audit trail). Rejects an Invoice in a
+   * reversal-ineligible status (draft/voided/archived) and an Application
+   * that has already been reversed once (FULL_ONLY has no partial-remaining
+   * concept).
+   *
+   * Finance F2.1C-E-B-IDEMPOTENCY. `reversalId` is a REQUIRED, caller-
+   * supplied request-level idempotency key — same contract as
+   * `refundPayment`'s `refundPaymentId` (see its doc comment): generate
+   * once per intended reversal action, reuse on retry, never regenerate. A
+   * repeat call with the same key and the same target Application replays
+   * the original result unchanged; a repeat with the same key but a
+   * different target Application fails as a conflict.
+   */
+  reverseDepositApplication(applicationPaymentId: string, reversalId: string, reason: string): Promise<DataResult<Payment>>;
 
   /** `context` optionally injects an already-authenticated server Supabase client + Workspace session — see EventsRepository's identical doc comment. Ignored by the mock implementation. */
   getExpenses(filters?: ExpenseFilters, context?: ServerRepositoryContext): Promise<Expense[]>;

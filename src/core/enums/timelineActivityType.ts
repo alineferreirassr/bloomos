@@ -64,6 +64,14 @@ export const TIMELINE_ACTIVITY_TYPES = [
   // the append-only correction Journal Entry (source_type
   // 'invoice_partial_void') remains the accounting source of truth.
   "invoice_partially_voided",
+  // Finance F2.1C-E-B — Deposit Application Reversal. Recorded against the
+  // "payment" EntityType (the reversal Payment row itself), mirroring
+  // "payment_refunded"'s own recording convention exactly — distinct from
+  // it specifically so Timeline can tell a genuine Cash refund apart from a
+  // Customer Deposit application being undone, even though the reversal is
+  // internally represented as a payment_type: 'refund' row for
+  // recompute_invoice_balance compatibility.
+  "deposit_application_reversed",
   "payment_created",
   "payment_processing",
   "payment_succeeded",
@@ -531,6 +539,7 @@ export const TIMELINE_ACTIVITY_LABELS: Record<TimelineActivityType, string> = {
   invoice_restored: "Invoice restored",
   invoice_adjusted: "Invoice financial adjustment recorded",
   invoice_partially_voided: "Invoice partially voided",
+  deposit_application_reversed: "Customer Deposit application reversed",
   payment_created: "Payment created",
   payment_processing: "Payment processing",
   payment_succeeded: "Payment succeeded",

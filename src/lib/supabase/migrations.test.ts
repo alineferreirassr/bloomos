@@ -43,9 +43,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation + 20 Services Foundation schema migrations + 1 Event Service Workspace media owner_type widening migration + 1 Client Portal Checkpoint 14 schema migration + 1 Analytics permission seed migration + 1 Digital Asset Management media_assets workspace owner_type widening migration + 2 Finance F1.8 Payment Atomicity & Refund Reversal migrations + 1 Finance F2.1B Invoice Revenue Recognition migration + 1 Finance F2.1B-REVIEW refund guard migration + 1 Finance F2.1C-B refund Revenue correction migration + 1 Finance F2.1C-C Customer Deposit application migration + 1 Finance F2.1C-D-B refund-correction Invoice-field sync migration + 1 Finance F2.1C-D-C Invoice Financial Adjustment migration + 1 Finance F2.1C-D-D-B Partial-Payment Void migration (excluding independently-tracked, not-yet-released work still uncommitted alongside this one — see KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS), in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation + 20 Services Foundation schema migrations + 1 Event Service Workspace media owner_type widening migration + 1 Client Portal Checkpoint 14 schema migration + 1 Analytics permission seed migration + 1 Digital Asset Management media_assets workspace owner_type widening migration + 2 Finance F1.8 Payment Atomicity & Refund Reversal migrations + 1 Finance F2.1B Invoice Revenue Recognition migration + 1 Finance F2.1B-REVIEW refund guard migration + 1 Finance F2.1C-B refund Revenue correction migration + 1 Finance F2.1C-C Customer Deposit application migration + 1 Finance F2.1C-D-B refund-correction Invoice-field sync migration + 1 Finance F2.1C-D-C Invoice Financial Adjustment migration + 1 Finance F2.1C-D-D-B Partial-Payment Void migration + 1 Finance F2.1C-E-B Deposit Application Reversal migration (excluding independently-tracked, not-yet-released work still uncommitted alongside this one — see KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS), in chronological (execution) order", () => {
     const files = migrationFilesForThisRelease();
-    expect(files).toHaveLength(166);
+    expect(files).toHaveLength(167);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -1211,6 +1211,7 @@ describe("Finance Posting Engine migrations", () => {
       "20260825100000_finance_refund_invoice_field_sync.sql",
       "20260826100000_finance_invoice_adjustment.sql",
       "20260827100000_finance_partial_payment_void.sql",
+      "20260828100000_finance_deposit_application_reversal.sql",
     ];
     for (const otherFile of migrationFiles().filter((f) => !POSTING_ENGINE_FILES.includes(f) && !LATER_SANCTIONED_FINANCE_FILES.includes(f))) {
       const sql = readMigration(otherFile);
@@ -3117,5 +3118,252 @@ describe("Services Foundation schema migrations", () => {
     const sql = stripSqlComments(readMigration("20260806101500_service_immutability_triggers.sql"));
     const triggerCount = (sql.match(/create trigger trg_service_\w+_reject_published_write/g) ?? []).length;
     expect(triggerCount).toBe(16);
+  });
+});
+
+describe("Finance F2.1C-E-B migration — Deposit Application Reversal", () => {
+  const FILE = "20260828100000_finance_deposit_application_reversal.sql";
+  const sql = () => readMigration(FILE);
+
+  it("sorts after 20260827100000_finance_partial_payment_void.sql", () => {
+    expect(FILE > "20260827100000_finance_partial_payment_void.sql").toBe(true);
+    expect(migrationFiles()).toContain(FILE);
+  });
+
+  it("does not modify any already-committed historical migration file", () => {
+    for (const historical of [
+      "20260824100000_finance_deposit_application.sql",
+      "20260825100000_finance_refund_invoice_field_sync.sql",
+      "20260826100000_finance_invoice_adjustment.sql",
+      "20260827100000_finance_partial_payment_void.sql",
+    ]) {
+      // Each historical file's own content is untouched by this migration's
+      // existence — this migration is a NEW file, never an edit of theirs.
+      expect(readMigration(historical)).not.toMatch(/deposit_application_reversal/);
+    }
+  });
+
+  it("widens journal_entries_source_type_check to add exactly 'deposit_application_reversal', preserving all 23 prior values", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/alter table public\.journal_entries drop constraint journal_entries_source_type_check;/);
+    const PRIOR_VALUES = [
+      "purchase_receipt", "invoice_issued", "invoice_voided", "payment_settlement", "payment_refund",
+      "expense_due", "expense_paid", "expense_reimbursed", "expense_due_reversal",
+      "inventory_adjustment", "inventory_writeoff", "inventory_event_checkout", "inventory_event_return",
+      "inventory_initial_stock", "vendor_payment", "vendor_refund", "stripe_payout", "manual_adjustment",
+      "reversal", "deposit_application", "invoice_adjustment", "invoice_partial_void",
+    ];
+    for (const value of PRIOR_VALUES) {
+      expect(code).toMatch(new RegExp(`'${value}'`));
+    }
+    expect(code).toMatch(/'deposit_application_reversal'/);
+  });
+
+  it("redefines exactly five functions: post_deposit_application_reversal, record_deposit_application_reversal, record_deposit_application, process_payment_refund, void_invoice_and_reverse_revenue_recognition — no new table, no Chart of Accounts mutation", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create or replace function public\.post_deposit_application_reversal\(/);
+    expect(code).toMatch(/create or replace function public\.record_deposit_application_reversal\(/);
+    expect(code).toMatch(/create or replace function public\.record_deposit_application\(/);
+    expect(code).toMatch(/create or replace function public\.process_payment_refund\(/);
+    expect(code).toMatch(/create or replace function public\.void_invoice_and_reverse_revenue_recognition\(/);
+    expect(code).not.toMatch(/create table/i);
+    expect(code).not.toMatch(/insert into public\.chart_of_accounts/);
+    expect(code).not.toMatch(/alter table public\.chart_of_accounts/);
+  });
+
+  it("does not implement historical backfill, reconciliation activation, RLS/policy redesign, or a new status widening, and does not modify record_invoice_adjustment", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/backfill/i);
+    expect(code).not.toMatch(/create or replace function public\.\w*reconcil/i);
+    expect(code).not.toMatch(/create policy|alter policy|drop policy/i);
+    expect(code).not.toMatch(/payments_status_check/);
+    expect(code).not.toMatch(/create or replace function public\.record_invoice_adjustment\(/);
+  });
+
+  describe("void_invoice_and_reverse_revenue_recognition — reversal-aware P1137 blocker", () => {
+    const fn = () => {
+      const matches = [...stripSqlComments(sql()).matchAll(/create or replace function public\.void_invoice_and_reverse_revenue_recognition[\s\S]*?^\$\$;/gm)];
+      return matches[0]?.[0] ?? "";
+    };
+
+    it("keeps the SAME (uuid, uuid, text, text) signature — no cascading parameter change", () => {
+      const code = fn();
+      expect(code).toMatch(/create or replace function public\.void_invoice_and_reverse_revenue_recognition\(\s*\n\s*p_invoice_id uuid,\s*\n\s*p_cancellation_id uuid,\s*\n\s*p_reason text,\s*\n\s*p_actor text\s*\n\)/);
+    });
+
+    it("only treats a Deposit Application as unresolved when no completed reversal targets its own id", () => {
+      const code = fn();
+      expect(code).toMatch(/and not exists \(\s*\n\s*select 1 from public\.payments r\s*\n\s*where r\.reference = 'deposit_application_reversal_of:' \|\| a\.id::text/);
+      expect(code).toMatch(/errcode = 'P1137'/);
+      expect(code).not.toMatch(/reversal is not yet available/);
+    });
+
+    it("preserves the durable-memo replay/conflict mechanism, the critical field+status ordering, and the P1136/P1138 guards unchanged", () => {
+      const code = fn();
+      expect(code).toMatch(/v_replay_invoice_id := substring\(v_existing_entry\.memo from 'invoice_id=\(\[\^\\s\.\]\+\)'\);/);
+      expect(code).toMatch(/errcode = 'P1105'/);
+      expect(code).toMatch(/errcode = 'P1136'/);
+      expect(code).toMatch(/errcode = 'P1138'/);
+      const fieldsUpdateIndex = code.indexOf("status = 'voided',");
+      const recomputeIndex = code.indexOf("v_recomputed := public.recompute_invoice_balance(p_invoice_id, p_actor);");
+      expect(fieldsUpdateIndex).toBeGreaterThan(-1);
+      expect(recomputeIndex).toBeGreaterThan(fieldsUpdateIndex);
+    });
+
+    it("Finance F2.1C-E-B-REVIEW: P1105's status-eligibility guard additionally accepts status='paid' with paid_minor=0, as a LOCAL exception only", () => {
+      const code = fn();
+      expect(code).toMatch(/and not \(v_invoice\.status = 'paid' and v_invoice\.paid_minor = 0\)/);
+      // The exception is scoped to THIS function only — the shared
+      // invoice-transition table itself must remain untouched (still
+      // "paid" -> ["archived"] only, never allowing a genuinely paid
+      // invoice to become void-eligible via the generic UI-consumed path).
+      const workflowSource = readFileSync(
+        path.resolve(__dirname, "../../core/workflows/invoiceWorkflow.ts"),
+        "utf-8",
+      );
+      expect(workflowSource).toMatch(/paid: \["archived"\]/);
+    });
+  });
+
+  describe("record_deposit_application_reversal — owning RPC", () => {
+    const fn = () => {
+      const matches = [...stripSqlComments(sql()).matchAll(/create or replace function public\.record_deposit_application_reversal[\s\S]*?^\$\$;/gm)];
+      return matches[0]?.[0] ?? "";
+    };
+
+    it("has the (uuid, uuid, text, text) signature", () => {
+      const code = fn();
+      expect(code).toMatch(/create or replace function public\.record_deposit_application_reversal\(\s*\n\s*p_application_payment_id uuid,\s*\n\s*p_reversal_id uuid,\s*\n\s*p_reason text,\s*\n\s*p_actor text\s*\n\)/);
+    });
+
+    it("locks in order: Application row, then Deposit row, then Invoice row", () => {
+      const code = fn();
+      const applicationLockIndex = code.indexOf("select * into v_application from public.payments where id = p_application_payment_id for update;");
+      const depositLockIndex = code.indexOf("select * into v_deposit from public.payments where id = v_deposit_id for update;");
+      const invoiceLockIndex = code.indexOf("select * into v_invoice from public.invoices where id = v_application.invoice_id for update;");
+      expect(applicationLockIndex).toBeGreaterThan(-1);
+      expect(depositLockIndex).toBeGreaterThan(applicationLockIndex);
+      expect(invoiceLockIndex).toBeGreaterThan(depositLockIndex);
+    });
+
+    it("checks idempotency replay/conflict before the already-reversed check, which runs before the Deposit row lock", () => {
+      const code = fn();
+      const replayIndex = code.indexOf("select * into v_existing_reversal from public.payments where id = p_reversal_id;");
+      const alreadyReversedIndex = code.indexOf("into v_already_reversed;");
+      const depositLockIndex = code.indexOf("select * into v_deposit from public.payments where id = v_deposit_id for update;");
+      expect(replayIndex).toBeGreaterThan(-1);
+      expect(alreadyReversedIndex).toBeGreaterThan(replayIndex);
+      expect(depositLockIndex).toBeGreaterThan(alreadyReversedIndex);
+    });
+
+    it("raises P1130 for a missing reversal id, P1112 for a blank reason, P1142 for a non-Application source, P1140 for an already-reversed Application, P1141 for an ineligible invoice status", () => {
+      const code = fn();
+      expect(code).toMatch(/errcode = 'P1130'/);
+      expect(code).toMatch(/errcode = 'P1112'/);
+      expect(code).toMatch(/errcode = 'P1142'/);
+      expect(code).toMatch(/errcode = 'P1140'/);
+      expect(code).toMatch(/errcode = 'P1141'/);
+    });
+
+    it("restricts invoice eligibility to issued/sent/viewed/partially_paid/paid/overdue — the same set as record_invoice_adjustment", () => {
+      const code = fn();
+      expect(code).toMatch(/if v_invoice\.status not in \('issued', 'sent', 'viewed', 'partially_paid', 'paid', 'overdue'\) then/);
+    });
+
+    it("inserts the reversal Payment with payment_type='refund', payment_method='other', and reference='deposit_application_reversal_of:<id>'", () => {
+      const code = fn();
+      expect(code).toMatch(/'refund', 'succeeded', v_application\.amount_minor, v_application\.currency, 'other',/);
+      expect(code).toMatch(/v_reversal_reference := 'deposit_application_reversal_of:' \|\| p_application_payment_id;/);
+    });
+
+    it("never references Cash (1000), Revenue (4000), Refunds & Returns (4950), Sales Tax Payable (2100), or Sales Discounts (4900) accounts", () => {
+      const code = fn();
+      for (const accountNumber of [1000, 4000, 4950, 2100, 4900]) {
+        expect(code).not.toMatch(new RegExp(`finance_resolve_account\\(v_\\w+\\.workspace_id, ${accountNumber}\\)`));
+      }
+    });
+
+    it("composes post_deposit_application_reversal and recompute_invoice_balance, in that order, after the Payment insert", () => {
+      const code = fn();
+      const insertIndex = code.indexOf("insert into public.payments (");
+      const postIndex = code.indexOf("perform public.post_deposit_application_reversal(p_reversal_id, p_application_payment_id, p_actor);");
+      const recomputeIndex = code.indexOf("perform public.recompute_invoice_balance(v_application.invoice_id, p_actor);");
+      expect(insertIndex).toBeGreaterThan(-1);
+      expect(postIndex).toBeGreaterThan(insertIndex);
+      expect(recomputeIndex).toBeGreaterThan(postIndex);
+    });
+
+    it("writes a deposit_application_reversed timeline_activities row server-side", () => {
+      const code = fn();
+      expect(code).toMatch(/'deposit_application_reversed'/);
+    });
+  });
+
+  describe("post_deposit_application_reversal — posting primitive", () => {
+    const fn = () => {
+      const matches = [...stripSqlComments(sql()).matchAll(/create or replace function public\.post_deposit_application_reversal[\s\S]*?^\$\$;/gm)];
+      return matches[0]?.[0] ?? "";
+    };
+
+    it("posts Dr 1100 Accounts Receivable / Cr 2200 Customer Deposits — the exact inverse of post_deposit_application", () => {
+      const code = fn();
+      expect(code).toMatch(/finance_resolve_account\(v_reversal\.workspace_id, 1100\)\)\.id,\s*\n\s*'debit_minor', v_reversal\.amount_minor, 'credit_minor', 0/);
+      expect(code).toMatch(/finance_resolve_account\(v_reversal\.workspace_id, 2200\)\)\.id,\s*\n\s*'debit_minor', 0, 'credit_minor', v_reversal\.amount_minor/);
+    });
+
+    it("guards against duplicate posting via posting_key, errcode P1104", () => {
+      const code = fn();
+      expect(code).toMatch(/errcode = 'P1104'/);
+      expect(code).toMatch(/'deposit_application_reversal:' \|\| p_reversal_id;/);
+    });
+  });
+
+  describe("record_deposit_application — reversal-aware availability", () => {
+    const fn = () => {
+      const matches = [...stripSqlComments(sql()).matchAll(/create or replace function public\.record_deposit_application\([\s\S]*?^\$\$;/gm)];
+      return matches[0]?.[0] ?? "";
+    };
+
+    it("keeps the SAME (uuid, uuid, integer, uuid, text) signature — no cascading parameter change", () => {
+      const code = fn();
+      expect(code).toMatch(/create or replace function public\.record_deposit_application\(\s*\n\s*p_deposit_payment_id uuid,\s*\n\s*p_invoice_id uuid,\s*\n\s*p_amount_minor integer,\s*\n\s*p_application_payment_id uuid,\s*\n\s*p_actor text\s*\n\)/);
+    });
+
+    it("computes v_available netting prior applications against prior application reversals, scoped per-Application via a join, never a global sum against the deposit", () => {
+      const code = fn();
+      expect(code).toMatch(/join public\.payments r\s*\n\s*on r\.reference = 'deposit_application_reversal_of:' \|\| a\.id::text/);
+      expect(code).toMatch(/v_available := greatest\(0, v_deposit\.amount_minor - v_prior_refunds - v_prior_applications \+ v_prior_application_reversals\);/);
+    });
+
+    it("preserves the existing P1122-P1128 validation guards unchanged", () => {
+      const code = fn();
+      for (const errcode of ["P1122", "P1123", "P1124", "P1125", "P1126", "P1127", "P1128", "P1129", "P1130"]) {
+        expect(code).toMatch(new RegExp(`errcode = '${errcode}'`));
+      }
+    });
+  });
+
+  describe("process_payment_refund — reversal-aware refundable ceiling", () => {
+    const fn = () => {
+      const matches = [...stripSqlComments(sql()).matchAll(/create or replace function public\.process_payment_refund\([\s\S]*?^\$\$;/gm)];
+      return matches[0]?.[0] ?? "";
+    };
+
+    it("keeps the SAME (uuid, integer, uuid, text) signature — no cascading parameter change", () => {
+      const code = fn();
+      expect(code).toMatch(/create or replace function public\.process_payment_refund\(\s*\n\s*p_original_payment_id uuid,\s*\n\s*p_amount_minor integer,\s*\n\s*p_refund_payment_id uuid,\s*\n\s*p_actor text\s*\n\)/);
+    });
+
+    it("computes v_refundable netting prior applications against prior application reversals, the same formula as record_deposit_application's own v_available", () => {
+      const code = fn();
+      expect(code).toMatch(/v_refundable := greatest\(0, v_original\.amount_minor - v_prior_refunds - v_prior_applications \+ v_prior_application_reversals\);/);
+    });
+
+    it("preserves the P0001-P0004/P1104/P1118/P1129/P1130 guards unchanged", () => {
+      const code = fn();
+      for (const errcode of ["P0001", "P0002", "P0003", "P0004", "P1129", "P1130"]) {
+        expect(code).toMatch(new RegExp(`errcode = '${errcode}'`));
+      }
+    });
   });
 });

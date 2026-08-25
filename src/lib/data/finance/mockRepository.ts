@@ -523,7 +523,22 @@ async function voidInvoice(id: string, cancellationId: string, reason: string): 
     return fail("This idempotency key was already used for a different void/cancellation request.");
   }
 
-  if (!canTransitionInvoiceStatus(existing.status, "voided")) {
+  // Finance F2.1C-E-B-REVIEW: a local, function-only exception — NOT a
+  // change to canTransitionInvoiceStatus/INVOICE_TRANSITIONS itself (that
+  // table is shared with InvoiceActions.tsx's own canVoid UI gating; a
+  // genuinely paid invoice must never become void-eligible there). Found
+  // during this review: reversing a Deposit Application that was an
+  // invoice's SOLE settlement correctly drives paid_minor to 0, but
+  // applyPaymentToInvoice's status ladder never reverts status away from
+  // "paid" once reached (paid_minor=0 matches neither of its own
+  // paid/partially_paid branches) — leaving a paid_minor=0 invoice
+  // permanently stuck at a status the shared transition table treats as
+  // terminal-for-voiding, even though this function's OWN Case A branch
+  // immediately below is driven by paid_minor, not status, and would
+  // handle it correctly. Without this exception, "unblock Void" — this
+  // whole checkpoint's stated purpose — would not actually be achieved for
+  // an invoice whose ONLY settlement was the reversed Application.
+  if (!canTransitionInvoiceStatus(existing.status, "voided") && !(existing.status === "paid" && existing.paid_minor === 0)) {
     return fail(`Cannot void an invoice that is already ${INVOICE_STATUS_LABELS[existing.status].toLowerCase()}.`);
   }
 
@@ -544,17 +559,23 @@ async function voidInvoice(id: string, cancellationId: string, reason: string): 
 
   // Case B: Partial-Payment Cancellation.
   // Finance F2.1C-D-D-A decision D2: an unresolved Customer Deposit
-  // Application permanently blocks void — no reversal capability exists
-  // yet to un-strand the deposit's 2200 Customer Deposits position.
+  // Application blocks void. Finance F2.1C-E-B: "unresolved" now excludes
+  // an Application that has already been reversed — reversing it restores
+  // the 2200 Customer Deposits position instead of leaving it stranded, so
+  // it no longer blocks. An Application only counts as unresolved when no
+  // completed reversal targets its own id.
   const hasUnresolvedDepositApplication = readPayments().some(
     (p) =>
       p.invoice_id === id &&
       p.payment_type === "adjustment" &&
       p.reference?.startsWith("deposit_application_of:") &&
-      PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status),
+      PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status) &&
+      !readPayments().some(
+        (r) => r.reference === depositApplicationReversalReferenceFor(p.id) && PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(r.status),
+      ),
   );
   if (hasUnresolvedDepositApplication) {
-    return fail("Cannot void this invoice — it has an unresolved Customer Deposit Application. Deposit Application reversal is not yet available.");
+    return fail("Cannot void this invoice — it has an unresolved Customer Deposit Application. Reverse the Deposit Application first.");
   }
 
   // Finance F2.1C-D-D-A decision: allocation basis is the Invoice's CURRENT
@@ -1364,12 +1385,10 @@ async function refundPayment(originalPaymentId: string, amountMinor: number, ref
   // invoice_id === null) since an invoice-linked original payment can never
   // have a deposit_application_of:<id> row referencing it — this sum is
   // naturally zero for that case, so no branching is needed.
-  const priorApplications = sumMinor(
-    readPayments()
-      .filter((p) => p.reference === depositApplicationReferenceFor(originalPaymentId) && PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status))
-      .map((p) => p.amount_minor),
-  );
-  const refundable = Math.max(0, subtractMinor(subtractMinor(original.amount_minor, priorRefunds), priorApplications));
+  // Finance F2.1C-E-B: net of any completed reversal of an individual
+  // Application of this payment (see netApplicationsAgainstDeposit).
+  const netApplications = netApplicationsAgainstDeposit(originalPaymentId);
+  const refundable = Math.max(0, subtractMinor(subtractMinor(original.amount_minor, priorRefunds), netApplications));
   if (amountMinor > refundable) {
     return fail(`Cannot refund more than the refundable amount (${refundable} minor units remaining).`);
   }
@@ -1599,12 +1618,11 @@ async function getPaymentRefundableAmount(paymentId: string): Promise<number> {
       )
       .map((p) => p.amount_minor),
   );
-  const priorApplications = sumMinor(
-    readPayments()
-      .filter((p) => p.reference === depositApplicationReferenceFor(paymentId) && PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status))
-      .map((p) => p.amount_minor),
-  );
-  return Math.max(0, subtractMinor(subtractMinor(payment.amount_minor, priorRefunds), priorApplications));
+  // Finance F2.1C-E-B: net of any completed reversal of an individual
+  // Application of this payment — a reversed Application no longer
+  // consumes this payment's own refundable ceiling either.
+  const netApplications = netApplicationsAgainstDeposit(paymentId);
+  return Math.max(0, subtractMinor(subtractMinor(payment.amount_minor, priorRefunds), netApplications));
 }
 
 // ---------------------------------------------------------------------------
@@ -1615,7 +1633,44 @@ function depositApplicationReferenceFor(depositPaymentId: string): string {
   return `deposit_application_of:${depositPaymentId}`;
 }
 
+/** Finance F2.1C-E-B — the reference a Deposit Application Reversal Payment row carries, pointing at the specific Application it reverses (never at the original deposit directly). */
+function depositApplicationReversalReferenceFor(applicationPaymentId: string): string {
+  return `deposit_application_reversal_of:${applicationPaymentId}`;
+}
+
 const DEPOSIT_APPLICATION_ELIGIBLE_INVOICE_STATUSES = new Set(["issued", "sent", "viewed", "partially_paid", "overdue"]);
+
+/**
+ * Finance F2.1C-E-B — the portion of `depositPaymentId` still actually
+ * consumed by completed Applications, net of any completed reversal of
+ * each individual Application. A reversal is looked up by the SPECIFIC
+ * Application's own id it targets (never summed globally against the
+ * deposit), so a reversal can only ever net against the Application it
+ * actually reverses — required by the mandatory availability fix: a
+ * correctly-posted reversal Journal Entry alone does not restore
+ * product-level deposit availability, since `priorApplications`'
+ * reference-string filter has no way to know an Application was reversed
+ * unless this net computation is used everywhere `priorApplications` used
+ * to be.
+ */
+function netApplicationsAgainstDeposit(depositPaymentId: string): number {
+  const applications = readPayments().filter(
+    (p) => p.reference === depositApplicationReferenceFor(depositPaymentId) && PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status),
+  );
+  const grossApplications = sumMinor(applications.map((p) => p.amount_minor));
+  const reversals = sumMinor(
+    applications
+      .flatMap((application) =>
+        readPayments().filter(
+          (p) =>
+            p.reference === depositApplicationReversalReferenceFor(application.id) &&
+            PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status),
+        ),
+      )
+      .map((p) => p.amount_minor),
+  );
+  return subtractMinor(grossApplications, reversals);
+}
 
 /**
  * Finance F2.1C-C — mirrors record_deposit_application's available-deposit
@@ -1624,6 +1679,10 @@ const DEPOSIT_APPLICATION_ELIGIBLE_INVOICE_STATUSES = new Set(["issued", "sent",
  * payment that either doesn't exist or isn't an unapplied Customer
  * Deposit in a consumable status, exactly like getPaymentRefundableAmount
  * does for a non-refundable payment.
+ *
+ * Finance F2.1C-E-B: the application term is now NET of any completed
+ * reversal of an individual Application (see netApplicationsAgainstDeposit)
+ * — a reversed Application no longer consumes the deposit's availability.
  */
 async function getDepositApplicableAmount(depositPaymentId: string): Promise<number> {
   const deposit = readPayments().find((p) => p.id === depositPaymentId);
@@ -1634,12 +1693,154 @@ async function getDepositApplicableAmount(depositPaymentId: string): Promise<num
       .filter((p) => p.reference === refundReferenceFor(depositPaymentId) && PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status))
       .map((p) => p.amount_minor),
   );
-  const priorApplications = sumMinor(
-    readPayments()
-      .filter((p) => p.reference === depositApplicationReferenceFor(depositPaymentId) && PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status))
-      .map((p) => p.amount_minor),
+  const netApplications = netApplicationsAgainstDeposit(depositPaymentId);
+  return Math.max(0, subtractMinor(subtractMinor(deposit.amount_minor, priorRefunds), netApplications));
+}
+
+// ---------------------------------------------------------------------------
+// Deposit Application Reversal (Finance F2.1C-E-B)
+// ---------------------------------------------------------------------------
+
+const DEPOSIT_REVERSAL_ELIGIBLE_INVOICE_STATUSES = new Set(["issued", "sent", "viewed", "partially_paid", "paid", "overdue"]);
+
+/**
+ * Finance F2.1C-E-B — reverses ONE exact, already-posted Deposit
+ * Application in full (FULL_ONLY, never partial — the reversal amount is
+ * always the target Application's own amount_minor, never caller-supplied).
+ * Posts the exact inverse of post_deposit_application: Dr 1100 Accounts
+ * Receivable / Cr 2200 Customer Deposits, no Cash/Revenue/Tax/Discount
+ * line. The original Application Payment/Journal Entry is never mutated —
+ * represented as a NEW Payment row (payment_type='refund', reused ONLY so
+ * the existing applyPaymentToInvoice subtracts it from paid_minor, never a
+ * claim Cash moved; reference='deposit_application_reversal_of:
+ * <applicationPaymentId>' keeps the audit trail unambiguous). Rejects an
+ * Invoice in a reversal-ineligible status (draft/voided/archived) and an
+ * Application that has already been reversed (FULL_ONLY has no
+ * partial-remaining concept, so this is a binary check).
+ *
+ * Finance F2.1C-E-B-IDEMPOTENCY: `reversalId` is a REQUIRED, caller-supplied
+ * request-level idempotency key — same contract as refundPayment's
+ * `refundPaymentId`. Checked immediately after locating the target
+ * Application, before any other validation (which could spuriously fail
+ * against CURRENT state on a replay). The durable replay target is the
+ * Application's own id alone (encoded in the reversal's own `reference`
+ * field) — no numeric payload is needed, since FULL_ONLY makes the amount
+ * fully deterministic from the target.
+ */
+async function reverseDepositApplication(applicationPaymentId: string, reversalId: string, reason: string): Promise<DataResult<Payment>> {
+  if (!reversalId) {
+    return fail("reversalId is required and must be a stable identifier supplied by the caller (the same value on every retry of the same reversal request).");
+  }
+  if (!reason || !reason.trim()) {
+    return fail("A reversal reason is required.");
+  }
+
+  const application = readPayments().find((p) => p.id === applicationPaymentId);
+  if (!application) {
+    return fail("Deposit application payment not found.");
+  }
+
+  const reversalReference = depositApplicationReversalReferenceFor(applicationPaymentId);
+  const existingReversal = readPayments().find((p) => p.id === reversalId);
+  if (existingReversal) {
+    if (existingReversal.reference !== reversalReference) {
+      return fail("This idempotency key was already used for a different deposit application reversal request.");
+    }
+    return ok(existingReversal);
+  }
+
+  // Finance F2.1C-E-B: defensive/structural guard — the source must
+  // actually BE a posted Deposit Application (an 'adjustment'-typed,
+  // invoice-linked payment whose reference points back at an original
+  // deposit). Should be unreachable given callers only ever pass a real
+  // Application's own id, but never invents a reversal for something that
+  // was never really applied.
+  if (application.payment_type !== "adjustment" || application.invoice_id === null || !application.reference?.startsWith("deposit_application_of:")) {
+    return fail("This payment is not a Deposit Application and cannot be reversed.");
+  }
+
+  // FULL_ONLY double-reversal protection: a binary check, since the
+  // reversal amount is always the Application's full amount — there is no
+  // "partial remaining" ceiling to compute.
+  const alreadyReversed = readPayments().some(
+    (p) => p.reference === reversalReference && PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status),
   );
-  return Math.max(0, subtractMinor(subtractMinor(deposit.amount_minor, priorRefunds), priorApplications));
+  if (alreadyReversed) {
+    return fail("This Deposit Application has already been reversed.");
+  }
+
+  const invoice = readInvoices().find((i) => i.id === application.invoice_id);
+  if (!invoice) {
+    return fail("Invoice not found.");
+  }
+  if (!DEPOSIT_REVERSAL_ELIGIBLE_INVOICE_STATUSES.has(invoice.status)) {
+    return fail(`Cannot reverse a Deposit Application on an invoice that is ${INVOICE_STATUS_LABELS[invoice.status].toLowerCase()}.`);
+  }
+
+  // Mirrors post_deposit_application's own P1118-equivalent guard: proves
+  // the Application was actually posted, not merely shaped like one.
+  const applicationEntry = readJournalEntries().find(
+    (e) => e.workspace_id === application.workspace_id && e.source_type === "deposit_application" && e.source_id === application.id,
+  );
+  if (!applicationEntry) {
+    return fail("No Deposit Application posting exists for this payment — cannot reverse.");
+  }
+
+  const timestamp = nowIso();
+  const amountMinor = application.amount_minor;
+
+  try {
+    insertMockJournalEntry({
+      workspace_id: application.workspace_id,
+      entry_date: timestamp.slice(0, 10),
+      source_type: "deposit_application_reversal",
+      source_id: reversalId,
+      posting_key: `deposit_application_reversal:${reversalId}`,
+      memo: `Deposit Application reversal: application_id=${application.id}. Reason: ${reason}`,
+      posted_by: CURRENT_ACTOR,
+      lines: [
+        { account_id: findAccountByNumber(application.workspace_id, 1100).id, debit_minor: amountMinor, credit_minor: 0 },
+        { account_id: findAccountByNumber(application.workspace_id, 2200).id, debit_minor: 0, credit_minor: amountMinor },
+      ],
+    });
+  } catch (postingError) {
+    return fail(postingError instanceof Error ? postingError.message : String(postingError));
+  }
+
+  const reversal: Payment = {
+    id: reversalId,
+    workspace_id: application.workspace_id,
+    invoice_id: application.invoice_id,
+    client_id: application.client_id,
+    event_id: application.event_id,
+    contract_id: application.contract_id,
+    payment_type: "refund",
+    status: "succeeded",
+    amount_minor: amountMinor,
+    currency: application.currency,
+    payment_method: "other",
+    reference: reversalReference,
+    transaction_date: timestamp.slice(0, 10),
+    received_at: timestamp,
+    failed_at: null,
+    refunded_at: timestamp,
+    notes: `Deposit Application ${application.id} reversed. ${reason}`,
+    document_id: null,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+  writePayments([...readPayments(), reversal]);
+  recordTimelineActivity(
+    reversal.workspace_id,
+    "payment",
+    reversal.id,
+    "deposit_application_reversed",
+    `Customer Deposit application reversed (${reason})`,
+  );
+
+  applyPaymentToInvoice(application.invoice_id);
+
+  return ok(reversal);
 }
 
 /**
@@ -2995,6 +3196,7 @@ export const mockFinanceRepository: FinanceRepository = {
   getPaymentNextAction,
   applyDepositToInvoice,
   getDepositApplicableAmount,
+  reverseDepositApplication,
   getExpenses,
   getExpenseById,
   createExpense,

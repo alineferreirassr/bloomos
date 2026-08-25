@@ -2512,6 +2512,14 @@ export interface Database {
         Args: { p_application_payment_id: string; p_deposit_payment_id: string; p_actor: string };
         Returns: Database["public"]["Tables"]["journal_entries"]["Row"];
       };
+      record_deposit_application_reversal: {
+        Args: { p_application_payment_id: string; p_reversal_id: string; p_reason: string; p_actor: string };
+        Returns: Database["public"]["Tables"]["payments"]["Row"];
+      };
+      post_deposit_application_reversal: {
+        Args: { p_reversal_id: string; p_application_payment_id: string; p_actor: string };
+        Returns: Database["public"]["Tables"]["journal_entries"]["Row"];
+      };
       record_invoice_adjustment: {
         Args: {
           p_invoice_id: string;

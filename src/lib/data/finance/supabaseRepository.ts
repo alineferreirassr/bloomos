@@ -150,6 +150,19 @@ const DEPOSIT_APPLICATION_VALIDATION_ERROR_CODES = new Set([
  */
 const INVOICE_ADJUSTMENT_VALIDATION_ERROR_CODES = new Set(["P1111", "P1129", "P1130", "P1132", "P1133", "P1134", "P1135"]);
 
+/**
+ * errcodes raised by record_deposit_application_reversal for expected,
+ * user-facing validation failures — Finance F2.1C-E-B. P1111/P1129/P1130
+ * are reused with their established meanings (Application/Invoice not
+ * found; idempotency key reused for a different target; missing required
+ * idempotency key). P1140-P1142 are this checkpoint's new codes: the
+ * source Application has already been reversed (FULL_ONLY has no partial-
+ * remaining concept), the invoice is not in a reversal-eligible status,
+ * and a defensive guard for the source payment not actually having a
+ * posted deposit_application entry (should be unreachable).
+ */
+const DEPOSIT_APPLICATION_REVERSAL_VALIDATION_ERROR_CODES = new Set(["P1111", "P1129", "P1130", "P1140", "P1141", "P1142"]);
+
 function fieldErrorsFromZod(error: {
   issues: { path: PropertyKey[]; message: string }[];
 }): Partial<Record<string, string>> {
@@ -1208,6 +1221,11 @@ function depositApplicationReferenceFor(depositPaymentId: string): string {
   return `deposit_application_of:${depositPaymentId}`;
 }
 
+/** Finance F2.1C-E-B — the reference a Deposit Application Reversal Payment row carries, pointing at the specific Application it reverses (never at the original deposit directly). */
+function depositApplicationReversalReferenceFor(applicationPaymentId: string): string {
+  return `deposit_application_reversal_of:${applicationPaymentId}`;
+}
+
 /**
  * Delegates the atomic core (refundable-ceiling check, refund Payment
  * insert, original Payment status update, Timeline entry) to
@@ -1283,6 +1301,31 @@ async function sumPaymentsByReference(supabase: ReturnType<typeof createSupabase
     .reduce((sum: number, p: { amount_minor: number }) => sum + p.amount_minor, 0);
 }
 
+/**
+ * Finance F2.1C-E-B — the portion of `depositPaymentId` still actually
+ * consumed by completed Applications, net of any completed reversal of
+ * each individual Application. Mirrors the mock's
+ * netApplicationsAgainstDeposit exactly: a reversal is looked up by the
+ * SPECIFIC Application's own id it targets, never summed globally against
+ * the deposit — required by the mandatory availability fix.
+ */
+async function netApplicationsAgainstDeposit(supabase: ReturnType<typeof createSupabaseClient>, depositPaymentId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from("payments")
+    .select("id, amount_minor, status")
+    .eq("reference", depositApplicationReferenceFor(depositPaymentId));
+  if (error) throw normalizeSupabaseError(error);
+
+  const applications = (data ?? []).filter((p: { status: string }) => PAID_EQUIVALENT_STATUSES.has(p.status)) as { id: string; amount_minor: number }[];
+  const grossApplications = applications.reduce((sum, p) => sum + p.amount_minor, 0);
+
+  let reversals = 0;
+  for (const application of applications) {
+    reversals += await sumPaymentsByReference(supabase, depositApplicationReversalReferenceFor(application.id));
+  }
+  return grossApplications - reversals;
+}
+
 async function getPaymentRefundableAmount(paymentId: string): Promise<number> {
   const payment = await fetchPaymentRow(paymentId);
   if (!payment || !isPaymentRefundable(payment.status)) return 0;
@@ -1292,9 +1335,11 @@ async function getPaymentRefundableAmount(paymentId: string): Promise<number> {
   // Finance F2.1C-C: a Customer Deposit already applied to an invoice is no
   // longer available to refund — always computed, naturally zero for an
   // invoice-linked payment since nothing can reference it as an application.
-  const priorApplications = await sumPaymentsByReference(supabase, depositApplicationReferenceFor(paymentId));
+  // Finance F2.1C-E-B: net of any completed reversal of an individual
+  // Application of this payment.
+  const netApplications = await netApplicationsAgainstDeposit(supabase, paymentId);
 
-  return Math.max(0, payment.amount_minor - priorRefunds - priorApplications);
+  return Math.max(0, payment.amount_minor - priorRefunds - netApplications);
 }
 
 async function cancelPayment(id: string): Promise<DataResult<Payment>> {
@@ -1375,9 +1420,50 @@ async function getDepositApplicableAmount(depositPaymentId: string): Promise<num
 
   const supabase = createSupabaseClient();
   const priorRefunds = await sumPaymentsByReference(supabase, refundReferenceFor(depositPaymentId));
-  const priorApplications = await sumPaymentsByReference(supabase, depositApplicationReferenceFor(depositPaymentId));
+  // Finance F2.1C-E-B: net of any completed reversal of an individual Application (see netApplicationsAgainstDeposit).
+  const netApplications = await netApplicationsAgainstDeposit(supabase, depositPaymentId);
 
-  return Math.max(0, deposit.amount_minor - priorRefunds - priorApplications);
+  return Math.max(0, deposit.amount_minor - priorRefunds - netApplications);
+}
+
+/**
+ * Finance F2.1C-E-B. Same shape as applyDepositToInvoice/refundPayment:
+ * client-side only checks the conditions cheap/obvious enough to
+ * short-circuit before a round trip (required identity/reason fields),
+ * everything else (Application validity, already-reversed check, invoice
+ * status eligibility) is enforced server-side by
+ * record_deposit_application_reversal and translated back through
+ * DEPOSIT_APPLICATION_REVERSAL_VALIDATION_ERROR_CODES. No client-side
+ * accounting, no client-generated reversal amount (FULL_ONLY, derived
+ * server-side from the Application's own amount_minor).
+ */
+async function reverseDepositApplication(applicationPaymentId: string, reversalId: string, reason: string): Promise<DataResult<Payment>> {
+  if (!reversalId) {
+    return fail("reversalId is required and must be a stable identifier supplied by the caller (the same value on every retry of the same reversal request).");
+  }
+  if (!reason || !reason.trim()) {
+    return fail("A reversal reason is required.");
+  }
+
+  const session = await requireWorkspaceSession();
+  const actor = resolveActorName(session);
+  const supabase = createSupabaseClient();
+
+  const { data, error } = await supabase.rpc("record_deposit_application_reversal", {
+    p_application_payment_id: applicationPaymentId,
+    p_reversal_id: reversalId,
+    p_reason: reason,
+    p_actor: actor,
+  });
+  if (error) {
+    const code = (error as { code?: string }).code;
+    if (code && DEPOSIT_APPLICATION_REVERSAL_VALIDATION_ERROR_CODES.has(code)) {
+      return fail(error.message);
+    }
+    throw normalizeSupabaseError(error);
+  }
+
+  return ok(mapPaymentRow(data));
 }
 
 // ---------------------------------------------------------------------------
@@ -2552,6 +2638,7 @@ export const supabaseFinanceRepository: FinanceRepository = {
   getPaymentNextAction,
   applyDepositToInvoice,
   getDepositApplicableAmount,
+  reverseDepositApplication,
   getExpenses,
   getExpenseById,
   createExpense,

@@ -1123,7 +1123,8 @@ describe("supabaseFinanceRepository.getPaymentRefundableAmount", () => {
     const { client, calls } = createMockSupabase([
       { data: paymentRow({ status: "succeeded", amount_minor: 100000 }), error: null }, // fetch payment
       { data: [{ amount_minor: 30000, status: "succeeded" }], error: null }, // refunds lookup
-      { data: [{ amount_minor: 15000, status: "succeeded" }], error: null }, // deposit applications lookup
+      { data: [{ id: "app_1", amount_minor: 15000, status: "succeeded" }], error: null }, // deposit applications lookup
+      { data: [], error: null }, // Finance F2.1C-E-B: reversal lookup for app_1 — none, so the application is fully net
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
@@ -1131,7 +1132,20 @@ describe("supabaseFinanceRepository.getPaymentRefundableAmount", () => {
     expect(refundable).toBe(55000);
 
     const referenceLookups = calls.filter((c) => c.table === "payments" && c.method === "eq" && c.args[0] === "reference").map((c) => c.args[1]);
-    expect(referenceLookups).toEqual(["refund_of:payment_1", "deposit_application_of:payment_1"]);
+    expect(referenceLookups).toEqual(["refund_of:payment_1", "deposit_application_of:payment_1", "deposit_application_reversal_of:app_1"]);
+  });
+
+  it("Finance F2.1C-E-B: nets a reversed Application out of the refundable ceiling", async () => {
+    const { client } = createMockSupabase([
+      { data: paymentRow({ status: "succeeded", amount_minor: 100000 }), error: null }, // fetch payment
+      { data: [], error: null }, // refunds lookup — none
+      { data: [{ id: "app_1", amount_minor: 40000, status: "succeeded" }], error: null }, // deposit applications lookup
+      { data: [{ amount_minor: 40000, status: "succeeded" }], error: null }, // app_1's own reversal — fully reversed
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const refundable = await supabaseFinanceRepository.getPaymentRefundableAmount("payment_1");
+    expect(refundable).toBe(100000);
   });
 
   it("returns 0 for a payment that isn't refundable", async () => {
@@ -1255,7 +1269,8 @@ describe("supabaseFinanceRepository.getDepositApplicableAmount", () => {
     const { client, calls } = createMockSupabase([
       { data: paymentRow({ invoice_id: null, status: "succeeded", amount_minor: 100000 }), error: null },
       { data: [{ amount_minor: 10000, status: "succeeded" }], error: null }, // refunds lookup
-      { data: [{ amount_minor: 20000, status: "succeeded" }], error: null }, // applications lookup
+      { data: [{ id: "app_1", amount_minor: 20000, status: "succeeded" }], error: null }, // applications lookup
+      { data: [], error: null }, // Finance F2.1C-E-B: reversal lookup for app_1 — none
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
@@ -1263,7 +1278,20 @@ describe("supabaseFinanceRepository.getDepositApplicableAmount", () => {
     expect(available).toBe(70000);
 
     const referenceLookups = calls.filter((c) => c.table === "payments" && c.method === "eq" && c.args[0] === "reference").map((c) => c.args[1]);
-    expect(referenceLookups).toEqual(["refund_of:payment_1", "deposit_application_of:payment_1"]);
+    expect(referenceLookups).toEqual(["refund_of:payment_1", "deposit_application_of:payment_1", "deposit_application_reversal_of:app_1"]);
+  });
+
+  it("Finance F2.1C-E-B: nets a reversed Application back into the deposit's available balance", async () => {
+    const { client } = createMockSupabase([
+      { data: paymentRow({ invoice_id: null, status: "succeeded", amount_minor: 100000 }), error: null },
+      { data: [], error: null }, // refunds lookup — none
+      { data: [{ id: "app_1", amount_minor: 40000, status: "succeeded" }], error: null }, // applications lookup
+      { data: [{ amount_minor: 40000, status: "succeeded" }], error: null }, // app_1's own reversal — fully reversed
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const available = await supabaseFinanceRepository.getDepositApplicableAmount("payment_1");
+    expect(available).toBe(100000);
   });
 });
 

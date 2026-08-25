@@ -2809,6 +2809,535 @@ describe("mockFinanceRepository.getDepositApplicableAmount", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Finance F2.1C-E-B — Deposit Application Reversal
+// ---------------------------------------------------------------------------
+
+describe("mockFinanceRepository — Finance F2.1C-E-B: Deposit Application Reversal", () => {
+  async function createDeposit(amountMinor = 103000) {
+    const deposit = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: null,
+      client_id: BASE_INVOICE_INPUT.client_id,
+      event_id: null,
+      contract_id: null,
+      amount_minor: amountMinor,
+      payment_method: "cash",
+    });
+    if (!deposit.success) throw new Error("deposit creation failed");
+    return deposit.data.id;
+  }
+
+  async function createIssuedInvoice(invoiceInput = BASE_INVOICE_INPUT) {
+    const created = await mockFinanceRepository.createInvoice(invoiceInput);
+    if (!created.success) throw new Error("invoice creation failed");
+    await mockFinanceRepository.issueInvoice(created.data.id);
+    await mockFinanceRepository.sendInvoice(created.data.id);
+    return created.data.id;
+  }
+
+  async function findReversalEntry(reversalId: string) {
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "deposit_application_reversal" });
+    const entry = entries.find((e) => e.source_id === reversalId)!;
+    expect(entry).toBeDefined();
+    return mockFinanceRepository.getJournalEntry(entry.id);
+  }
+
+  // A. Basic reversal
+
+  it("full reversal restores AR / Customer Deposits — Dr 1100 AR / Cr 2200 Customer Deposits, no Cash/Revenue/Tax/Discount line", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 103000, crypto.randomUUID());
+    expect(applied.success).toBe(true);
+    if (!applied.success) return;
+
+    const reversalId = crypto.randomUUID();
+    const reversed = await mockFinanceRepository.reverseDepositApplication(applied.data.id, reversalId, "Client requested cancellation");
+    expect(reversed.success).toBe(true);
+    if (!reversed.success) return;
+    expect(reversed.data.id).toBe(reversalId);
+    expect(reversed.data.payment_type).toBe("refund");
+    expect(reversed.data.payment_method).toBe("other");
+    expect(reversed.data.invoice_id).toBe(invoiceId);
+    expect(reversed.data.amount_minor).toBe(103000);
+    expect(reversed.data.reference).toBe(`deposit_application_reversal_of:${applied.data.id}`);
+
+    const detail = await findReversalEntry(reversalId);
+    const lines = detail.lines!;
+    expect(lines).toHaveLength(2);
+    expect(lines.find((l) => l.account?.account_number === 1100)?.debit_minor).toBe(103000);
+    expect(lines.find((l) => l.account?.account_number === 2200)?.credit_minor).toBe(103000);
+    for (const accountNumber of [1000, 4000, 4950, 2100, 4900]) {
+      expect(lines.some((l) => l.account?.account_number === accountNumber)).toBe(false);
+    }
+
+    const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+    expect(invoice.paid_minor).toBe(0);
+    expect(invoice.balance_minor).toBe(103000);
+    expect(invoice.total_minor).toBe(103000);
+    expect(invoice.subtotal_minor).toBe(100000);
+    expect(invoice.tax_minor).toBe(5000);
+    expect(invoice.discount_minor).toBe(2000);
+  });
+
+  it("original Application Payment/Journal Entry is never mutated", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 103000, crypto.randomUUID());
+    if (!applied.success) throw new Error("setup failed");
+
+    await mockFinanceRepository.reverseDepositApplication(applied.data.id, crypto.randomUUID(), "Reversed");
+
+    const original = await mockFinanceRepository.getPaymentById(applied.data.id);
+    expect(original.payment_type).toBe("adjustment");
+    expect(original.status).toBe("succeeded");
+    expect(original.amount_minor).toBe(103000);
+    expect(original.reference).toBe(`deposit_application_of:${depositId}`);
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "deposit_application" });
+    expect(entries.some((e) => e.source_id === applied.data.id)).toBe(true);
+  });
+
+  // B. Multiple applications
+
+  it("reversing one of two Applications restores availability and paid_minor only by that Application's own amount", async () => {
+    const depositId = await createDeposit(50000);
+    const invoiceId = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 100000, tax_minor: 0, discount_minor: 0 });
+
+    const appA = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 20000, crypto.randomUUID());
+    const appB = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 30000, crypto.randomUUID());
+    expect(appA.success).toBe(true);
+    expect(appB.success).toBe(true);
+    if (!appA.success || !appB.success) return;
+
+    expect(await mockFinanceRepository.getDepositApplicableAmount(depositId)).toBe(0);
+
+    const reversed = await mockFinanceRepository.reverseDepositApplication(appA.data.id, crypto.randomUUID(), "Partial cleanup");
+    expect(reversed.success).toBe(true);
+
+    expect(await mockFinanceRepository.getDepositApplicableAmount(depositId)).toBe(20000);
+
+    const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+    expect(invoice.paid_minor).toBe(30000);
+    expect(invoice.balance_minor).toBe(70000);
+
+    // B's own Application is untouched.
+    const bPayment = await mockFinanceRepository.getPaymentById(appB.data.id);
+    expect(bPayment.status).toBe("succeeded");
+
+    // Reversing B too fully restores availability.
+    await mockFinanceRepository.reverseDepositApplication(appB.data.id, crypto.randomUUID(), "Full cleanup");
+    expect(await mockFinanceRepository.getDepositApplicableAmount(depositId)).toBe(50000);
+    const invoiceAfterBoth = await mockFinanceRepository.getInvoiceById(invoiceId);
+    expect(invoiceAfterBoth.paid_minor).toBe(0);
+  });
+
+  // C. Cross-Invoice isolation
+
+  it("reversing an Application on Invoice A never touches Invoice B's own Application", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceA = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 40000, tax_minor: 0, discount_minor: 0 });
+    const invoiceB = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 30000, tax_minor: 0, discount_minor: 0 });
+
+    const appA = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceA, 40000, crypto.randomUUID());
+    const appB = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceB, 30000, crypto.randomUUID());
+    if (!appA.success || !appB.success) throw new Error("setup failed");
+
+    await mockFinanceRepository.reverseDepositApplication(appA.data.id, crypto.randomUUID(), "Cancel A's allocation");
+
+    const invA = await mockFinanceRepository.getInvoiceById(invoiceA);
+    const invB = await mockFinanceRepository.getInvoiceById(invoiceB);
+    expect(invA.paid_minor).toBe(0);
+    expect(invB.paid_minor).toBe(30000);
+    expect(invB.status).toBe("paid");
+
+    const bPayment = await mockFinanceRepository.getPaymentById(appB.data.id);
+    expect(bPayment.status).toBe("succeeded");
+    // deposit 103000, minus B's still-active 30000, plus A's reversed 40000 restored.
+    expect(await mockFinanceRepository.getDepositApplicableAmount(depositId)).toBe(73000);
+  });
+
+  // D. Paid-Invoice reversal
+
+  it("reversing a Deposit Application on a fully paid invoice transitions it to partially_paid", async () => {
+    const depositId = await createDeposit(40000);
+    const invoiceId = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 100000, tax_minor: 0, discount_minor: 0 });
+
+    await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: invoiceId,
+      client_id: BASE_INVOICE_INPUT.client_id,
+      event_id: null,
+      contract_id: null,
+      amount_minor: 60000,
+      payment_method: "cash",
+    });
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 40000, crypto.randomUUID());
+    if (!applied.success) throw new Error("setup failed");
+
+    const before = await mockFinanceRepository.getInvoiceById(invoiceId);
+    expect(before.status).toBe("paid");
+    expect(before.paid_minor).toBe(100000);
+
+    const reversed = await mockFinanceRepository.reverseDepositApplication(applied.data.id, crypto.randomUUID(), "Deposit misapplied");
+    expect(reversed.success).toBe(true);
+
+    const after = await mockFinanceRepository.getInvoiceById(invoiceId);
+    expect(after.paid_minor).toBe(60000);
+    expect(after.balance_minor).toBe(40000);
+    expect(after.status).toBe("partially_paid");
+    expect(after.total_minor).toBe(100000);
+  });
+
+  // E. Void interaction
+
+  it("reversal removes the P1137-equivalent blocker, and Void then succeeds as Clean Void when the Application was the only settlement", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+    // A PARTIAL application (not covering the full invoice) deliberately
+    // keeps status at "partially_paid" rather than "paid" — a fully-
+    // covering application would leave the invoice's status label stuck at
+    // "paid" even after paid_minor reverts to 0 (recompute_invoice_balance
+    // never reverts a PAYMENT_AWARE status once reached, a pre-existing,
+    // shared characteristic identical to what a 100% Cash refund of a
+    // fully-paid invoice would also hit — out of this checkpoint's scope
+    // to change, since "paid" itself is not Void-eligible regardless of
+    // paid_minor). "partially_paid" IS Void-eligible, so this scenario
+    // correctly demonstrates the blocker fix without tripping over that
+    // unrelated, pre-existing status-ladder gap.
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 50000, crypto.randomUUID());
+    if (!applied.success) throw new Error("setup failed");
+
+    const blocked = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Should be blocked");
+    expect(blocked.success).toBe(false);
+
+    await mockFinanceRepository.reverseDepositApplication(applied.data.id, crypto.randomUUID(), "Unblock void");
+
+    const voided = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Now allowed");
+    expect(voided.success).toBe(true);
+    if (!voided.success) return;
+    expect(voided.data.status).toBe("voided");
+    const timeline = await mockFinanceRepository.getTimelineByInvoiceId(invoiceId);
+    expect(timeline.some((t) => t.type === "invoice_voided")).toBe(true);
+    expect(timeline.some((t) => t.type === "invoice_partially_voided")).toBe(false);
+  });
+
+  it("Finance F2.1C-E-B-REVIEW regression: reversing a Deposit Application that was an invoice's SOLE, FULL settlement (status='paid') still permits Clean Void", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 103000, crypto.randomUUID());
+    if (!applied.success) throw new Error("setup failed");
+
+    const before = await mockFinanceRepository.getInvoiceById(invoiceId);
+    expect(before.status).toBe("paid");
+    expect(before.paid_minor).toBe(103000);
+
+    const blocked = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Should be blocked");
+    expect(blocked.success).toBe(false);
+
+    const reversed = await mockFinanceRepository.reverseDepositApplication(applied.data.id, crypto.randomUUID(), "Deposit misapplied");
+    expect(reversed.success).toBe(true);
+
+    // Status stays the stale "paid" label immediately after reversal — a
+    // pre-existing, shared characteristic of recompute_invoice_balance's
+    // status ladder (identical to what a 100% Cash refund of a fully-paid
+    // invoice would also produce), not something this checkpoint changes.
+    const afterReversal = await mockFinanceRepository.getInvoiceById(invoiceId);
+    expect(afterReversal.status).toBe("paid");
+    expect(afterReversal.paid_minor).toBe(0);
+    expect(afterReversal.balance_minor).toBe(103000);
+
+    // The genuine fix under review: Void must still succeed for this
+    // specific paid_minor=0 case, even though status reads "paid".
+    const voided = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Now allowed");
+    expect(voided.success).toBe(true);
+    if (!voided.success) return;
+    expect(voided.data.status).toBe("voided");
+    const timeline = await mockFinanceRepository.getTimelineByInvoiceId(invoiceId);
+    expect(timeline.some((t) => t.type === "invoice_voided")).toBe(true);
+  });
+
+  it("a genuinely paid invoice (no reversal) remains correctly non-void-eligible — the fix is scoped to paid_minor=0 only", async () => {
+    const invoiceId = await createIssuedInvoice();
+    await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: invoiceId,
+      client_id: BASE_INVOICE_INPUT.client_id,
+      event_id: null,
+      contract_id: null,
+      payment_type: "full_payment",
+      amount_minor: 103000,
+      payment_method: "cash",
+    });
+    const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+    expect(invoice.status).toBe("paid");
+    expect(invoice.paid_minor).toBe(103000);
+
+    const result = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Should still be rejected");
+    expect(result.success).toBe(false);
+  });
+
+  it("reversal then Partial Void: retains remaining Cash settlement, cancels the rest", async () => {
+    const depositId = await createDeposit(40000);
+    const invoiceId = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 100000, tax_minor: 0, discount_minor: 0 });
+    await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: invoiceId,
+      client_id: BASE_INVOICE_INPUT.client_id,
+      event_id: null,
+      contract_id: null,
+      amount_minor: 20000,
+      payment_method: "cash",
+    });
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 40000, crypto.randomUUID());
+    if (!applied.success) throw new Error("setup failed");
+
+    const blocked = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Should be blocked");
+    expect(blocked.success).toBe(false);
+
+    await mockFinanceRepository.reverseDepositApplication(applied.data.id, crypto.randomUUID(), "Unblock void");
+
+    const voided = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Now allowed");
+    expect(voided.success).toBe(true);
+    if (!voided.success) return;
+    expect(voided.data.status).toBe("voided");
+    expect(voided.data.paid_minor).toBe(20000);
+    expect(voided.data.balance_minor).toBe(0);
+    const timeline = await mockFinanceRepository.getTimelineByInvoiceId(invoiceId);
+    expect(timeline.some((t) => t.type === "invoice_partially_voided")).toBe(true);
+  });
+
+  it("a remaining, unreversed second Application still blocks Void", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 100000, tax_minor: 0, discount_minor: 0 });
+    const appA = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 40000, crypto.randomUUID());
+    const appB = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 30000, crypto.randomUUID());
+    if (!appA.success || !appB.success) throw new Error("setup failed");
+
+    await mockFinanceRepository.reverseDepositApplication(appA.data.id, crypto.randomUUID(), "Cancel only A");
+
+    const result = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Should still be blocked");
+    expect(result.success).toBe(false);
+  });
+
+  // F. Invoice Adjustment interaction
+
+  it("Adjustment then reversal: paid_minor and balance stay coherent, no negative fields", async () => {
+    const depositId = await createDeposit(40000);
+    const invoiceId = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 100000, tax_minor: 0, discount_minor: 0 });
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 40000, crypto.randomUUID());
+    if (!applied.success) throw new Error("setup failed");
+
+    const adjusted = await mockFinanceRepository.recordInvoiceAdjustment(
+      invoiceId,
+      { subtotal_minor: 50000, tax_minor: 0, discount_minor: 0, reason: "Reduced scope" },
+      crypto.randomUUID(),
+    );
+    expect(adjusted.success).toBe(true);
+
+    const reversed = await mockFinanceRepository.reverseDepositApplication(applied.data.id, crypto.randomUUID(), "Undo deposit");
+    expect(reversed.success).toBe(true);
+    if (!reversed.success) return;
+
+    const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+    expect(invoice.total_minor).toBe(50000);
+    expect(invoice.paid_minor).toBe(0);
+    expect(invoice.balance_minor).toBe(50000);
+  });
+
+  it("Reversal then Adjustment: anti-overpayment remains correct regardless of ordering", async () => {
+    const depositId = await createDeposit(40000);
+    const invoiceId = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 100000, tax_minor: 0, discount_minor: 0 });
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 40000, crypto.randomUUID());
+    if (!applied.success) throw new Error("setup failed");
+
+    await mockFinanceRepository.reverseDepositApplication(applied.data.id, crypto.randomUUID(), "Undo deposit");
+
+    const adjusted = await mockFinanceRepository.recordInvoiceAdjustment(
+      invoiceId,
+      { subtotal_minor: 50000, tax_minor: 0, discount_minor: 0, reason: "Reduced scope" },
+      crypto.randomUUID(),
+    );
+    expect(adjusted.success).toBe(true);
+    if (!adjusted.success) return;
+    expect(adjusted.data.total_minor).toBe(50000);
+    expect(adjusted.data.paid_minor).toBe(0);
+    expect(adjusted.data.balance_minor).toBe(50000);
+  });
+
+  // G. Refund interaction
+
+  it("neither the source Application nor the reversal Payment can themselves be Cash-refunded", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 103000, crypto.randomUUID());
+    if (!applied.success) throw new Error("setup failed");
+
+    const refundApplication = await mockFinanceRepository.refundPayment(applied.data.id, 103000, crypto.randomUUID());
+    expect(refundApplication.success).toBe(false);
+
+    const reversed = await mockFinanceRepository.reverseDepositApplication(applied.data.id, crypto.randomUUID(), "Undo");
+    if (!reversed.success) throw new Error("reversal failed");
+
+    const refundReversal = await mockFinanceRepository.refundPayment(reversed.data.id, 103000, crypto.randomUUID());
+    expect(refundReversal.success).toBe(false);
+  });
+
+  it("the original Customer Deposit's own refundable ceiling increases after its Application is reversed", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 103000, crypto.randomUUID());
+    if (!applied.success) throw new Error("setup failed");
+
+    expect(await mockFinanceRepository.getPaymentRefundableAmount(depositId)).toBe(0);
+
+    await mockFinanceRepository.reverseDepositApplication(applied.data.id, crypto.randomUUID(), "Undo");
+
+    expect(await mockFinanceRepository.getPaymentRefundableAmount(depositId)).toBe(103000);
+
+    const refunded = await mockFinanceRepository.refundPayment(depositId, 103000, crypto.randomUUID());
+    expect(refunded.success).toBe(true);
+  });
+
+  // H. Idempotency / double-reversal
+
+  it("same reversalId + same Application replays without a second Journal Entry or Payment", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 103000, crypto.randomUUID());
+    if (!applied.success) throw new Error("setup failed");
+
+    const reversalId = crypto.randomUUID();
+    const first = await mockFinanceRepository.reverseDepositApplication(applied.data.id, reversalId, "Undo");
+    const second = await mockFinanceRepository.reverseDepositApplication(applied.data.id, reversalId, "Undo");
+    expect(first.success).toBe(true);
+    expect(second.success).toBe(true);
+    if (!first.success || !second.success) return;
+    expect(second.data.id).toBe(first.data.id);
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "deposit_application_reversal" });
+    expect(entries.filter((e) => e.source_id === reversalId)).toHaveLength(1);
+
+    const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
+    expect(invoice.paid_minor).toBe(0);
+  });
+
+  it("same reversalId reused for a different Application is a conflict", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceA = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 40000, tax_minor: 0, discount_minor: 0 });
+    const invoiceB = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 30000, tax_minor: 0, discount_minor: 0 });
+    const appA = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceA, 40000, crypto.randomUUID());
+    const appB = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceB, 30000, crypto.randomUUID());
+    if (!appA.success || !appB.success) throw new Error("setup failed");
+
+    const reversalId = crypto.randomUUID();
+    const first = await mockFinanceRepository.reverseDepositApplication(appA.data.id, reversalId, "Undo A");
+    expect(first.success).toBe(true);
+
+    const conflict = await mockFinanceRepository.reverseDepositApplication(appB.data.id, reversalId, "Undo B");
+    expect(conflict.success).toBe(false);
+  });
+
+  it("a different reversalId for an already-reversed Application is rejected", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 103000, crypto.randomUUID());
+    if (!applied.success) throw new Error("setup failed");
+
+    const first = await mockFinanceRepository.reverseDepositApplication(applied.data.id, crypto.randomUUID(), "First reversal");
+    expect(first.success).toBe(true);
+
+    const second = await mockFinanceRepository.reverseDepositApplication(applied.data.id, crypto.randomUUID(), "Second attempt, different key");
+    expect(second.success).toBe(false);
+  });
+
+  it("historical replay succeeds even after a later, unrelated Invoice mutation", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 100000, tax_minor: 0, discount_minor: 0 });
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 40000, crypto.randomUUID());
+    if (!applied.success) throw new Error("setup failed");
+
+    const reversalId = crypto.randomUUID();
+    const first = await mockFinanceRepository.reverseDepositApplication(applied.data.id, reversalId, "Undo");
+    expect(first.success).toBe(true);
+
+    // A later, unrelated financial event moves the Invoice's state further.
+    await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: invoiceId,
+      client_id: BASE_INVOICE_INPUT.client_id,
+      event_id: null,
+      contract_id: null,
+      amount_minor: 30000,
+      payment_method: "cash",
+    });
+
+    const replay = await mockFinanceRepository.reverseDepositApplication(applied.data.id, reversalId, "Undo");
+    expect(replay.success).toBe(true);
+    if (!replay.success) return;
+    expect(replay.data.id).toBe(first.success ? first.data.id : "");
+  });
+
+  // I. Error contract
+
+  it("rejects a missing (empty-string) reversalId", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 103000, crypto.randomUUID());
+    if (!applied.success) throw new Error("setup failed");
+
+    const result = await mockFinanceRepository.reverseDepositApplication(applied.data.id, "", "Undo");
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a blank reason", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 103000, crypto.randomUUID());
+    if (!applied.success) throw new Error("setup failed");
+
+    const result = await mockFinanceRepository.reverseDepositApplication(applied.data.id, crypto.randomUUID(), "   ");
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects reversing a payment that is not a Deposit Application", async () => {
+    const invoiceId = await createIssuedInvoice();
+    const cashPayment = await mockFinanceRepository.createPayment({
+      ...BASE_PAYMENT_INPUT,
+      invoice_id: invoiceId,
+      client_id: BASE_INVOICE_INPUT.client_id,
+      event_id: null,
+      contract_id: null,
+      amount_minor: 20000,
+      payment_method: "cash",
+    });
+    if (!cashPayment.success) throw new Error("setup failed");
+
+    const result = await mockFinanceRepository.reverseDepositApplication(cashPayment.data.id, crypto.randomUUID(), "Not a deposit application");
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects reversing a nonexistent payment", async () => {
+    const result = await mockFinanceRepository.reverseDepositApplication("nonexistent_payment", crypto.randomUUID(), "Undo");
+    expect(result.success).toBe(false);
+  });
+
+  // J. Timeline
+
+  it("records exactly one deposit_application_reversed timeline entry, against the reversal payment", async () => {
+    const depositId = await createDeposit(103000);
+    const invoiceId = await createIssuedInvoice();
+    const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 103000, crypto.randomUUID());
+    if (!applied.success) throw new Error("setup failed");
+
+    const reversed = await mockFinanceRepository.reverseDepositApplication(applied.data.id, crypto.randomUUID(), "Client requested cancellation");
+    if (!reversed.success) throw new Error("reversal failed");
+
+    const timeline = await mockFinanceRepository.getTimelineByPaymentId(reversed.data.id);
+    expect(timeline.filter((t) => t.type === "deposit_application_reversed")).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Expenses
 // ---------------------------------------------------------------------------
 

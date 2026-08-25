@@ -84,8 +84,11 @@ import { type DataResult, fail } from "@/lib/data/result";
  *     — void_invoice_and_reverse_revenue_recognition's Partial-Payment
  *     Cancellation branch: P1136 the invoice has no outstanding balance to
  *     cancel (fully paid — use a refund or invoice adjustment instead),
- *     P1137 an unresolved Customer Deposit Application blocks void (no
- *     reversal capability exists yet to un-strand it), P1138 a defensive
+ *     P1137 an unresolved Customer Deposit Application blocks void — an
+ *     Application with a completed reversal no longer counts as unresolved
+ *     (Finance F2.1C-E-B; the blocker query itself is redefined in that
+ *     checkpoint's migration to check for one, still the same P1137 code),
+ *     P1138 a defensive
  *     guard against the computed cancellation producing a negative
  *     resulting Invoice field (should be unreachable — the cancellable
  *     amount is always strictly less than the invoice's current total),
@@ -94,6 +97,17 @@ import { type DataResult, fail } from "@/lib/data/result";
  *     before Partial Void existed, since only a zero-paid invoice could
  *     ever reach `voided`; now a paid invoice can too, and its economic
  *     fields must stay frozen once terminal)
+ *   - deposit application reversal validation: P1140-P1142 (Finance
+ *     F2.1C-E-B — record_deposit_application_reversal: P1140 the source
+ *     Deposit Application has already been reversed (FULL_ONLY — nothing
+ *     partial left to reverse), P1141 the invoice is not in a
+ *     reversal-eligible status (draft — no Application could ever exist yet
+ *     — or terminal voided/archived, whose economics must stay frozen, same
+ *     principle as P1132/P1139), P1142 a defensive guard for the source
+ *     payment not actually having a posted `deposit_application` Journal
+ *     Entry — should be unreachable given the existing Application-eligible
+ *     validation, never invents a reversal for something that was never
+ *     really applied)
  *
  * P1120 (Finance F2.1B-REVIEW's "refund rejected, Revenue recognized" —
  * process_payment_refund's blanket rejection of any invoice-linked refund
@@ -166,6 +180,9 @@ export const FINANCE_VALIDATION_ERROR_CODES = new Set([
   "P1137",
   "P1138",
   "P1139",
+  "P1140",
+  "P1141",
+  "P1142",
   "P1200",
 ]);
 

@@ -1462,6 +1462,10 @@ export async function getDepositApplicableAmount(depositPaymentId: string): Prom
   return financeRepository().getDepositApplicableAmount(depositPaymentId);
 }
 
+export async function reverseDepositApplication(applicationPaymentId: string, reversalId: string, reason: string): Promise<DataResult<Payment>> {
+  return financeRepository().reverseDepositApplication(applicationPaymentId, reversalId, reason);
+}
+
 export async function getExpenses(filters: ExpenseFilters = {}, context?: ServerRepositoryContext): Promise<Expense[]> {
   return financeRepository().getExpenses(filters, context);
 }
