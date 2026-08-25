@@ -139,14 +139,25 @@ export function InvoiceForm({
 
   const submit = handleSubmit(async (values) => {
     setFormError(null);
-    const result = await onSubmit(values);
-    if (!result.success) {
-      setFormError(result.error);
-      if (result.fieldErrors) {
-        for (const [field, message] of Object.entries(result.fieldErrors)) {
-          setError(field as keyof InvoiceFormInput, { message });
+    try {
+      const result = await onSubmit(values);
+      if (!result.success) {
+        setFormError(result.error);
+        if (result.fieldErrors) {
+          for (const [field, message] of Object.entries(result.fieldErrors)) {
+            setError(field as keyof InvoiceFormInput, { message });
+          }
         }
       }
+    } catch {
+      // A genuinely unexpected failure (network/auth/out-of-taxonomy error)
+      // throws rather than resolving a DataResult — same contract every
+      // Finance mutation shares. React Hook Form already resets
+      // formState.isSubmitting on a thrown submit callback, so no local
+      // submitting state is needed here. onSubmit itself decides whether to
+      // navigate on success, so a throw here safely never navigates; the
+      // form remains open with every entered value intact for a safe retry.
+      setFormError("Something went wrong. Please try again.");
     }
   });
 

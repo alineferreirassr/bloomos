@@ -57,6 +57,30 @@ describe("ExpenseForm", () => {
     );
   });
 
+  it("recovers from an unexpected thrown error — resets submitting, shows a generic fallback, hides the raw error, preserves form state, does not navigate, and remains retryable", async () => {
+    const user = userEvent.setup();
+    mockCommon();
+    const onSubmit = vi.fn().mockRejectedValue(new Error("relation expenses does not exist"));
+    render(<ExpenseForm submitLabel="Create Expense" cancelHref="/finance/expenses" onSubmit={onSubmit} />);
+    await screen.findByLabelText(/^client\b/i);
+
+    await user.type(screen.getByLabelText(/description/i), "Florist deposit");
+    await user.clear(screen.getByLabelText(/^amount\b/i));
+    await user.type(screen.getByLabelText(/^amount\b/i), "750");
+    const submitButton = screen.getByRole("button", { name: /create expense/i });
+    await user.click(submitButton);
+
+    expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument();
+    expect(screen.queryByText(/relation expenses does not exist/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/description/i)).toHaveValue("Florist deposit");
+    expect(screen.getByLabelText(/^amount\b/i)).toHaveValue(750);
+    expect(submitButton).not.toBeDisabled();
+
+    onSubmit.mockResolvedValueOnce({ success: true, data: {} });
+    await user.click(submitButton);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
+  });
+
   it("renders status read-only (not a submittable field) when editing with a currentStatus", async () => {
     mockCommon();
     render(

@@ -138,14 +138,28 @@ export function PaymentForm({
 
   const submit = handleSubmit(async (values) => {
     setFormError(null);
-    const result = await onSubmit(values);
-    if (!result.success) {
-      setFormError(result.error);
-      if (result.fieldErrors) {
-        for (const [field, message] of Object.entries(result.fieldErrors)) {
-          setError(field as keyof PaymentFormInput, { message });
+    try {
+      const result = await onSubmit(values);
+      if (!result.success) {
+        setFormError(result.error);
+        if (result.fieldErrors) {
+          for (const [field, message] of Object.entries(result.fieldErrors)) {
+            setError(field as keyof PaymentFormInput, { message });
+          }
         }
       }
+    } catch {
+      // A genuinely unexpected failure (network/auth/out-of-taxonomy error)
+      // throws rather than resolving a DataResult — same contract every
+      // Finance mutation shares. React Hook Form already resets
+      // formState.isSubmitting on a thrown submit callback, so no local
+      // submitting state is needed here. onSubmit itself decides whether to
+      // navigate on success, so a throw here safely never navigates; the
+      // form remains open with every entered value intact for a safe retry.
+      // Shared by both New Payment and Payment Settlement callers — neither
+      // has its own idempotency key yet (engine work deferred to
+      // F2.1C-F-E-C), so a retry here simply resubmits the same values.
+      setFormError("Something went wrong. Please try again.");
     }
   });
 

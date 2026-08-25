@@ -96,4 +96,28 @@ describe("InvoiceForm", () => {
 
     expect(await screen.findByText(/the selected event doesn't belong to this client/i)).toBeInTheDocument();
   });
+
+  it("recovers from an unexpected thrown error — resets submitting, shows a generic fallback, hides the raw error, preserves form state, does not navigate, and remains retryable", async () => {
+    const user = userEvent.setup();
+    mockClients();
+    const onSubmit = vi.fn().mockRejectedValue(new Error("relation invoices does not exist"));
+    render(<InvoiceForm submitLabel="Create Invoice" cancelHref="/finance/invoices" onSubmit={onSubmit} />);
+
+    const clientSelect = await waitForClientOptions();
+    await user.selectOptions(clientSelect, "client_1");
+    await user.type(screen.getByLabelText(/^title\b/i), "Deposit Invoice");
+    await user.type(screen.getByLabelText(/^subtotal\b/i), "1000");
+    const submitButton = screen.getByRole("button", { name: /create invoice/i });
+    await user.click(submitButton);
+
+    expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument();
+    expect(screen.queryByText(/relation invoices does not exist/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^title\b/i)).toHaveValue("Deposit Invoice");
+    expect(screen.getByLabelText(/^subtotal\b/i)).toHaveValue(1000);
+    expect(submitButton).not.toBeDisabled();
+
+    onSubmit.mockResolvedValueOnce({ success: true, data: {} });
+    await user.click(submitButton);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
+  });
 });

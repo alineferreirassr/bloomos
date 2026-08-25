@@ -100,6 +100,29 @@ describe("PaymentForm", () => {
     expect(await screen.findByText(/would exceed the invoice's remaining balance/i)).toBeInTheDocument();
   });
 
+  it("recovers from an unexpected thrown error — resets submitting, shows a generic fallback, hides the raw error, preserves form state, does not navigate, and remains retryable", async () => {
+    const user = userEvent.setup();
+    mockClients();
+    const onSubmit = vi.fn().mockRejectedValue(new Error("relation payments does not exist"));
+    render(<PaymentForm submitLabel="Record Payment" cancelHref="/finance/payments" onSubmit={onSubmit} />);
+
+    const clientSelect = await waitForClientOptions();
+    await user.selectOptions(clientSelect, "client_1");
+    await user.clear(screen.getByLabelText(/^amount\b/i));
+    await user.type(screen.getByLabelText(/^amount\b/i), "150");
+    const submitButton = screen.getByRole("button", { name: /record payment/i });
+    await user.click(submitButton);
+
+    expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument();
+    expect(screen.queryByText(/relation payments does not exist/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^amount\b/i)).toHaveValue(150);
+    expect(submitButton).not.toBeDisabled();
+
+    onSubmit.mockResolvedValueOnce({ success: true, data: {} });
+    await user.click(submitButton);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
+  });
+
   it("hides excluded payment methods from the picker", async () => {
     mockClients();
     render(
