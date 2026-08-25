@@ -86,14 +86,26 @@ export function InvoiceAdjustmentModal({ open, invoice, onClose, onChanged }: In
     }
     setSubmitting(true);
     setError(null);
-    const result = await recordInvoiceAdjustment(invoice.id, invoiceAdjustmentFormToInput(parsed.data), adjustmentId);
-    setSubmitting(false);
-    if (!result.success) {
-      setError(result.error);
-      return;
+    try {
+      const result = await recordInvoiceAdjustment(invoice.id, invoiceAdjustmentFormToInput(parsed.data), adjustmentId);
+      setSubmitting(false);
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      onChanged();
+      onClose();
+    } catch {
+      // A genuinely unexpected failure (network/auth/out-of-taxonomy RPC
+      // error) throws rather than resolving a DataResult — same contract
+      // every Finance mutation shares (see ReverseDepositApplicationModal's
+      // identical fix). Without this, the request would never resolve
+      // `submitting`, permanently disabling both buttons. Refetch is a
+      // safe, idempotent read even though this RPC is single-phase atomic.
+      setSubmitting(false);
+      setError("Something went wrong. Please try again.");
+      onChanged();
     }
-    onChanged();
-    onClose();
   };
 
   return (

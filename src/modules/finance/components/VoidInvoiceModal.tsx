@@ -53,14 +53,28 @@ export function VoidInvoiceModal({ open, invoice, onClose, onChanged }: VoidInvo
     if (!canSubmit || !cancellationId) return;
     setSubmitting(true);
     setError(null);
-    const result = await voidInvoice(invoice.id, cancellationId, reason.trim());
-    setSubmitting(false);
-    if (!result.success) {
-      setError(result.error);
-      return;
+    try {
+      const result = await voidInvoice(invoice.id, cancellationId, reason.trim());
+      setSubmitting(false);
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      onChanged();
+      onClose();
+    } catch {
+      // A genuinely unexpected failure (network/auth/out-of-taxonomy RPC
+      // error) throws rather than resolving a DataResult — same contract
+      // every Finance mutation shares (see ReverseDepositApplicationModal's
+      // identical fix). Without this, the request would never resolve
+      // `submitting`, permanently disabling both buttons. Refetch: Clean
+      // Void's own follow-up Timeline write can throw after the invoice is
+      // already voided server-side — refetching reconciles the Founder's
+      // view with whatever actually committed.
+      setSubmitting(false);
+      setError("Something went wrong. Please try again.");
+      onChanged();
     }
-    onChanged();
-    onClose();
   };
 
   return (

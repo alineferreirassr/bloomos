@@ -171,6 +171,57 @@ describe("VoidInvoiceModal", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it("recovers from an unexpected thrown error — resets submitting, shows a generic fallback, does not hang, and refetches", async () => {
+    const user = userEvent.setup();
+    vi.mocked(dataLayer.voidInvoice).mockRejectedValue(new Error("relation invoices does not exist"));
+    const onClose = vi.fn();
+    const onChanged = vi.fn();
+    render(
+      <VoidInvoiceModal
+        open
+        invoice={makeInvoice({ id: "invoice_9", paid_minor: 0, balance_minor: 10000, total_minor: 10000 })}
+        onClose={onClose}
+        onChanged={onChanged}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/reason/i), "Testing an unexpected failure");
+    await user.click(screen.getByRole("button", { name: /^void$/i }));
+
+    expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument();
+    expect(screen.queryByText(/relation invoices does not exist/i)).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onChanged).toHaveBeenCalled();
+    expect(screen.getByLabelText(/reason/i)).toHaveValue("Testing an unexpected failure");
+    expect(screen.getByRole("button", { name: /^void$/i })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: /^cancel$/i })).not.toBeDisabled();
+  });
+
+  it("reuses the SAME cancellationId across a thrown-then-retried submit within one open", async () => {
+    const user = userEvent.setup();
+    vi.mocked(dataLayer.voidInvoice)
+      .mockRejectedValueOnce(new Error("network error"))
+      .mockResolvedValueOnce({ success: true, data: makeInvoice({ status: "voided" }) });
+    render(
+      <VoidInvoiceModal
+        open
+        invoice={makeInvoice({ paid_minor: 0, balance_minor: 10000, total_minor: 10000 })}
+        onClose={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/reason/i), "Retry after throw");
+    await user.click(screen.getByRole("button", { name: /^void$/i }));
+    await waitFor(() => expect(dataLayer.voidInvoice).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole("button", { name: /^void$/i }));
+    await waitFor(() => expect(dataLayer.voidInvoice).toHaveBeenCalledTimes(2));
+
+    const firstKey = vi.mocked(dataLayer.voidInvoice).mock.calls[0][1];
+    const secondKey = vi.mocked(dataLayer.voidInvoice).mock.calls[1][1];
+    expect(firstKey).toBe(secondKey);
+  });
+
   it("on success calls onChanged and closes the modal", async () => {
     const user = userEvent.setup();
     vi.mocked(dataLayer.voidInvoice).mockResolvedValue({ success: true, data: makeInvoice({ status: "voided" }) });

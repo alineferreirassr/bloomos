@@ -173,6 +173,66 @@ describe("InvoiceAdjustmentModal", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it("recovers from an unexpected thrown error — resets submitting, shows a generic fallback, does not hang, and refetches", async () => {
+    const user = userEvent.setup();
+    vi.mocked(dataLayer.recordInvoiceAdjustment).mockRejectedValue(new Error("relation invoices does not exist"));
+    const onClose = vi.fn();
+    const onChanged = vi.fn();
+    render(
+      <InvoiceAdjustmentModal
+        open
+        invoice={makeInvoice({ subtotal_minor: 10000, tax_minor: 0, discount_minor: 0, total_minor: 10000, paid_minor: 0 })}
+        onClose={onClose}
+        onChanged={onChanged}
+      />,
+    );
+
+    const subtotalInput = screen.getByLabelText(/new subtotal/i);
+    await user.clear(subtotalInput);
+    await user.type(subtotalInput, "120");
+    await user.type(screen.getByLabelText(/reason/i), "Testing an unexpected failure");
+    await user.click(screen.getByRole("button", { name: /adjust invoice/i }));
+
+    expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument();
+    expect(screen.queryByText(/relation invoices does not exist/i)).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onChanged).toHaveBeenCalled();
+    expect(screen.getByLabelText(/new subtotal/i)).toHaveValue(120);
+    expect(screen.getByLabelText(/new tax/i)).toHaveValue(0);
+    expect(screen.getByLabelText(/new discount/i)).toHaveValue(0);
+    expect(screen.getByLabelText(/reason/i)).toHaveValue("Testing an unexpected failure");
+    expect(screen.getByRole("button", { name: /adjust invoice/i })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: /^cancel$/i })).not.toBeDisabled();
+  });
+
+  it("reuses the SAME adjustmentId across a thrown-then-retried submit within one open", async () => {
+    const user = userEvent.setup();
+    vi.mocked(dataLayer.recordInvoiceAdjustment)
+      .mockRejectedValueOnce(new Error("network error"))
+      .mockResolvedValueOnce({ success: true, data: makeInvoice({ subtotal_minor: 12000, total_minor: 12000 }) });
+    render(
+      <InvoiceAdjustmentModal
+        open
+        invoice={makeInvoice({ subtotal_minor: 10000, tax_minor: 0, discount_minor: 0, total_minor: 10000, paid_minor: 0 })}
+        onClose={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+    );
+
+    const subtotalInput = screen.getByLabelText(/new subtotal/i);
+    await user.clear(subtotalInput);
+    await user.type(subtotalInput, "120");
+    await user.type(screen.getByLabelText(/reason/i), "Retry after throw");
+    await user.click(screen.getByRole("button", { name: /adjust invoice/i }));
+    await waitFor(() => expect(dataLayer.recordInvoiceAdjustment).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole("button", { name: /adjust invoice/i }));
+    await waitFor(() => expect(dataLayer.recordInvoiceAdjustment).toHaveBeenCalledTimes(2));
+
+    const firstKey = vi.mocked(dataLayer.recordInvoiceAdjustment).mock.calls[0][2];
+    const secondKey = vi.mocked(dataLayer.recordInvoiceAdjustment).mock.calls[1][2];
+    expect(firstKey).toBe(secondKey);
+  });
+
   it("on success calls onChanged and closes the modal", async () => {
     const user = userEvent.setup();
     vi.mocked(dataLayer.recordInvoiceAdjustment).mockResolvedValue({

@@ -112,6 +112,83 @@ describe("RefundPaymentModal", () => {
     expect(firstKey).toBe(secondKey);
   });
 
+  it("displays a DataResult failure verbatim and keeps the modal open", async () => {
+    const user = userEvent.setup();
+    vi.mocked(dataLayer.getPaymentRefundableAmount).mockResolvedValue(10000);
+    vi.mocked(dataLayer.refundPayment).mockResolvedValue({
+      success: false,
+      error: "Cannot refund more than the refundable amount (10000 minor units remaining).",
+    });
+    const onClose = vi.fn();
+    render(
+      <RefundPaymentModal
+        open
+        onClose={onClose}
+        payment={makePayment({ id: "payment_1", amount_minor: 10000, currency: "USD" })}
+        onRefunded={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByLabelText(/refund amount/i)).toHaveValue(100));
+    await user.click(screen.getByRole("button", { name: /^refund$/i }));
+
+    expect(await screen.findByText(/refundable amount \(10000 minor units remaining\)/i)).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("recovers from an unexpected thrown error — resets submitting, shows a generic fallback, does not hang, and refetches", async () => {
+    const user = userEvent.setup();
+    vi.mocked(dataLayer.getPaymentRefundableAmount).mockResolvedValue(10000);
+    vi.mocked(dataLayer.refundPayment).mockRejectedValue(new Error("relation payments does not exist"));
+    const onClose = vi.fn();
+    const onRefunded = vi.fn();
+    render(
+      <RefundPaymentModal
+        open
+        onClose={onClose}
+        payment={makePayment({ id: "payment_1", amount_minor: 10000, currency: "USD" })}
+        onRefunded={onRefunded}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByLabelText(/refund amount/i)).toHaveValue(100));
+    await user.click(screen.getByRole("button", { name: /^refund$/i }));
+
+    expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument();
+    expect(screen.queryByText(/relation payments does not exist/i)).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onRefunded).toHaveBeenCalled();
+    expect(screen.getByLabelText(/refund amount/i)).toHaveValue(100);
+    expect(screen.getByRole("button", { name: /^refund$/i })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: /^cancel$/i })).not.toBeDisabled();
+  });
+
+  it("reuses the SAME refundPaymentId across a thrown-then-retried submit within one open", async () => {
+    const user = userEvent.setup();
+    vi.mocked(dataLayer.getPaymentRefundableAmount).mockResolvedValue(10000);
+    vi.mocked(dataLayer.refundPayment)
+      .mockRejectedValueOnce(new Error("network error"))
+      .mockResolvedValueOnce({ success: true, data: makePayment({ id: "payment_1", status: "refunded" }) });
+    render(
+      <RefundPaymentModal
+        open
+        onClose={vi.fn()}
+        payment={makePayment({ id: "payment_1", amount_minor: 10000, currency: "USD" })}
+        onRefunded={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByLabelText(/refund amount/i)).toHaveValue(100));
+    await user.click(screen.getByRole("button", { name: /^refund$/i }));
+    await waitFor(() => expect(dataLayer.refundPayment).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole("button", { name: /^refund$/i }));
+    await waitFor(() => expect(dataLayer.refundPayment).toHaveBeenCalledTimes(2));
+
+    const firstKey = vi.mocked(dataLayer.refundPayment).mock.calls[0][2];
+    const secondKey = vi.mocked(dataLayer.refundPayment).mock.calls[1][2];
+    expect(firstKey).toBe(secondKey);
+  });
+
   it("disables submit and shows an error when the entered amount exceeds the refundable amount", async () => {
     const user = userEvent.setup();
     vi.mocked(dataLayer.getPaymentRefundableAmount).mockResolvedValue(5000);

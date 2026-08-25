@@ -58,14 +58,29 @@ export function RefundPaymentModal({ open, onClose, payment, onRefunded }: Refun
     if (amountMinor === null || amountMinor <= 0 || exceedsRefundable || !refundPaymentId) return;
     setSubmitting(true);
     setError(null);
-    const result = await refundPayment(payment.id, amountMinor, refundPaymentId);
-    setSubmitting(false);
-    if (!result.success) {
-      setError(result.error);
-      return;
+    try {
+      const result = await refundPayment(payment.id, amountMinor, refundPaymentId);
+      setSubmitting(false);
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      onRefunded();
+      onClose();
+    } catch {
+      // A genuinely unexpected failure (network/auth/out-of-taxonomy RPC
+      // error) throws rather than resolving a DataResult — same contract
+      // every Finance mutation shares (see ReverseDepositApplicationModal's
+      // identical fix). Without this, the request would never resolve
+      // `submitting`, permanently disabling both buttons. Refetch: the
+      // refund itself may have already committed before a follow-up
+      // invoice-balance recompute call threw — refetching reconciles the
+      // Founder's view with whatever actually committed, and a same-ID
+      // retry safely completes the recompute step either way.
+      setSubmitting(false);
+      setError("Something went wrong. Please try again.");
+      onRefunded();
     }
-    onRefunded();
-    onClose();
   };
 
   return (
