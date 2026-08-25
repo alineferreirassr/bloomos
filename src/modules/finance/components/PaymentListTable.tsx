@@ -43,7 +43,7 @@ export function PaymentListTable({ rows }: { rows: PaymentListRow[] }) {
                 {event ? event.title : "—"}
               </td>
               <td className="border-b border-border px-2.5 py-2">
-                <PaymentTypeBadge type={payment.payment_type} />
+                <PaymentTypeBadge type={payment.payment_type} reference={payment.reference} />
               </td>
               <td className="border-b border-border px-2.5 py-2">
                 <PaymentMethodBadge method={payment.payment_method} />

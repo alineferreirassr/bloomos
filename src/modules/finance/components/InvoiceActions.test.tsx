@@ -168,7 +168,8 @@ describe("InvoiceActions", () => {
       </MemberSessionProvider>,
     );
     expect(screen.getByRole("button", { name: /^void$/i })).toBeDisabled();
-    expect(screen.getByText(/can't be voided because a customer deposit/i)).toBeInTheDocument();
+    expect(screen.getByText(/can't be voided while a customer deposit remains applied/i)).toBeInTheDocument();
+    expect(screen.getByText(/reverse the deposit application from its payment record/i)).toBeInTheDocument();
     unmount();
 
     render(

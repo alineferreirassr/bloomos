@@ -301,7 +301,7 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-1.5">
-                        <PaymentTypeBadge type={payment.payment_type} />
+                        <PaymentTypeBadge type={payment.payment_type} reference={payment.reference} />
                         <PaymentStatusBadge status={payment.status} />
                       </div>
                     </Link>

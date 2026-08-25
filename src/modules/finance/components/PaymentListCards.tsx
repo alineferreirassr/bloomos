@@ -26,7 +26,7 @@ export function PaymentListCards({ rows }: { rows: PaymentListRow[] }) {
                 </p>
               </div>
               <div className="flex flex-col items-end gap-1">
-                <PaymentTypeBadge type={payment.payment_type} />
+                <PaymentTypeBadge type={payment.payment_type} reference={payment.reference} />
                 <PaymentStatusBadge status={payment.status} />
               </div>
             </div>

@@ -30,6 +30,7 @@ vi.mock("@/lib/data", () => ({
   markPaymentProcessing: vi.fn(),
   markPaymentSucceeded: vi.fn(),
   refundPayment: vi.fn(),
+  reverseDepositApplication: vi.fn(),
   getPaymentRefundableAmount: vi.fn(),
   getClients: vi.fn(),
   getEvents: vi.fn(),
@@ -162,5 +163,100 @@ describe("PaymentActions — permission gating", () => {
 
     expect(screen.getByRole("button", { name: /^refund$/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("PaymentActions — Deposit Application Reversal", () => {
+  const applicationPayment = (overrides = {}) =>
+    makePayment({
+      id: "payment_app_1",
+      payment_type: "adjustment",
+      status: "succeeded",
+      reference: "deposit_application_of:payment_deposit_1",
+      invoice_id: "invoice_1",
+      ...overrides,
+    });
+
+  const reversalPayment = (overrides = {}) =>
+    makePayment({
+      id: "payment_reversal_1",
+      payment_type: "refund",
+      status: "succeeded",
+      reference: "deposit_application_reversal_of:payment_app_1",
+      invoice_id: "invoice_1",
+      ...overrides,
+    });
+
+  it("shows Reverse Application for an active, unreversed Deposit Application", () => {
+    renderPaymentActions({
+      payment: applicationPayment(),
+      onChanged: vi.fn(),
+      depositApplicationAlreadyReversed: false,
+    });
+
+    expect(screen.getByRole("button", { name: /reverse application/i })).toBeInTheDocument();
+  });
+
+  it("does not show Reverse Application for an ordinary, non-Application payment", () => {
+    renderPaymentActions({ payment: makePayment({ status: "succeeded" }), onChanged: vi.fn() });
+
+    expect(screen.queryByRole("button", { name: /reverse application/i })).not.toBeInTheDocument();
+  });
+
+  it("does not show Reverse Application once the Application has already been reversed", () => {
+    renderPaymentActions({
+      payment: applicationPayment(),
+      onChanged: vi.fn(),
+      depositApplicationAlreadyReversed: true,
+    });
+
+    expect(screen.queryByRole("button", { name: /reverse application/i })).not.toBeInTheDocument();
+  });
+
+  it("does not show Reverse Application on a reversal row itself (no self-reversal)", () => {
+    renderPaymentActions({ payment: reversalPayment(), onChanged: vi.fn() });
+
+    expect(screen.queryByRole("button", { name: /reverse application/i })).not.toBeInTheDocument();
+  });
+
+  it("excludes a Deposit Application row from Refund even though its status is refundable", () => {
+    renderPaymentActions({ payment: applicationPayment(), onChanged: vi.fn() });
+
+    expect(screen.queryByRole("button", { name: /^refund$/i })).not.toBeInTheDocument();
+  });
+
+  it("excludes a Deposit Application Reversal row from Refund even though its status is refundable", () => {
+    renderPaymentActions({ payment: reversalPayment(), onChanged: vi.fn() });
+
+    expect(screen.queryByRole("button", { name: /^refund$/i })).not.toBeInTheDocument();
+  });
+
+  it("still shows Refund for an ordinary, genuinely refundable Cash payment (regression guard)", () => {
+    renderPaymentActions({ payment: makePayment({ status: "succeeded", payment_type: "deposit" }), onChanged: vi.fn() });
+
+    expect(screen.getByRole("button", { name: /^refund$/i })).toBeInTheDocument();
+  });
+
+  it("hides Reverse Application when the member lacks finance.refund", () => {
+    renderPaymentActions(
+      { payment: applicationPayment(), onChanged: vi.fn(), depositApplicationAlreadyReversed: false },
+      ["finance.view", "finance.update"],
+    );
+
+    expect(screen.queryByRole("button", { name: /reverse application/i })).not.toBeInTheDocument();
+  });
+
+  it("opens the Reverse Application modal showing the applied amount", async () => {
+    const user = userEvent.setup();
+    renderPaymentActions({
+      payment: applicationPayment({ amount_minor: 15000 }),
+      onChanged: vi.fn(),
+      depositApplicationAlreadyReversed: false,
+    });
+
+    await user.click(screen.getByRole("button", { name: /reverse application/i }));
+
+    const dialog = await screen.findByRole("dialog", { name: /reverse deposit application/i });
+    expect(within(dialog).getAllByText("$150.00").length).toBeGreaterThan(0);
   });
 });

@@ -12,9 +12,11 @@ import {
   getPaymentById,
   getPaymentNextAction,
   getPaymentRefundableAmount,
+  getPayments,
   getTimelineByPaymentId,
   togglePinNote,
 } from "@/lib/data";
+import { PAYMENT_STATUSES_COUNTING_TOWARD_PAID } from "@/core/enums/paymentStatus";
 import type { Payment } from "@/types/payment";
 import type { Client } from "@/types/client";
 import type { Event } from "@/types/event";
@@ -52,12 +54,23 @@ type LoadState =
       notes: Note[];
       timeline: TimelineActivity[];
       nextAction: string | null;
+      depositApplicationAlreadyReversed: boolean;
     };
 
+/**
+ * Finance F2.1C-E-C-B: no new repository method — reuses the existing
+ * getPayments({ invoiceId }) facade (only when `payment` is itself a
+ * Deposit Application row) to derive whether it has already been reversed,
+ * the same way InvoiceDetailView derives hasUnresolvedDepositApplication
+ * from its own already-fetched sibling payments. This is UX only: the
+ * engine's own P1140 check remains the sole authority.
+ */
 async function loadPaymentDetail(paymentId: string): Promise<LoadState> {
   try {
     const payment = await getPaymentById(paymentId);
-    const [client, invoice, event, contract, refundableMinor, notes, timeline, nextAction] = await Promise.all([
+    const isDepositApplication =
+      payment.payment_type === "adjustment" && !!payment.reference?.startsWith("deposit_application_of:");
+    const [client, invoice, event, contract, refundableMinor, notes, timeline, nextAction, siblingPayments] = await Promise.all([
       getClientById(payment.client_id).catch(() => null),
       payment.invoice_id ? getInvoiceById(payment.invoice_id).catch(() => null) : Promise.resolve(null),
       payment.event_id ? getEventById(payment.event_id).catch(() => null) : Promise.resolve(null),
@@ -66,7 +79,13 @@ async function loadPaymentDetail(paymentId: string): Promise<LoadState> {
       getNotesByPaymentId(paymentId),
       getTimelineByPaymentId(paymentId),
       getPaymentNextAction(paymentId),
+      isDepositApplication && payment.invoice_id ? getPayments({ invoiceId: payment.invoice_id }) : Promise.resolve([]),
     ]);
+
+    const reversalReference = `deposit_application_reversal_of:${payment.id}`;
+    const depositApplicationAlreadyReversed = siblingPayments.some(
+      (p) => p.reference === reversalReference && PAYMENT_STATUSES_COUNTING_TOWARD_PAID.includes(p.status),
+    );
 
     return {
       status: "ready",
@@ -79,6 +98,7 @@ async function loadPaymentDetail(paymentId: string): Promise<LoadState> {
       notes,
       timeline,
       nextAction,
+      depositApplicationAlreadyReversed,
     };
   } catch (err) {
     return { status: err instanceof NotFoundError ? "not-found" : "error" };
@@ -120,7 +140,8 @@ export function PaymentDetailView({ paymentId }: { paymentId: string }) {
     return <ErrorState message="Could not load this payment." onRetry={refetch} />;
   }
 
-  const { payment, client, invoice, event, contract, refundableMinor, notes, timeline, nextAction } = state;
+  const { payment, client, invoice, event, contract, refundableMinor, notes, timeline, nextAction, depositApplicationAlreadyReversed } =
+    state;
   const notesReadOnly = isPaymentFinal(payment.status);
   const refundedSoFarMinor = subtractMinor(payment.amount_minor, refundableMinor);
 
@@ -134,7 +155,7 @@ export function PaymentDetailView({ paymentId }: { paymentId: string }) {
           <h2 className="font-serif text-3xl font-semibold text-text">
             {formatMoney(payment.amount_minor, payment.currency)}
           </h2>
-          <PaymentTypeBadge type={payment.payment_type} />
+          <PaymentTypeBadge type={payment.payment_type} reference={payment.reference} />
           <PaymentStatusBadge status={payment.status} />
         </div>
         <p className="mt-1 text-sm text-text-muted">
@@ -172,7 +193,11 @@ export function PaymentDetailView({ paymentId }: { paymentId: string }) {
         </p>
 
         <div className="mt-4">
-          <PaymentActions payment={payment} onChanged={refetch} />
+          <PaymentActions
+            payment={payment}
+            onChanged={refetch}
+            depositApplicationAlreadyReversed={depositApplicationAlreadyReversed}
+          />
         </div>
       </div>
 
@@ -189,7 +214,7 @@ export function PaymentDetailView({ paymentId }: { paymentId: string }) {
             <h3 className="font-serif text-[17px] font-semibold text-text">Payment Details</h3>
             <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Amount" value={formatMoney(payment.amount_minor, payment.currency)} />
-              <Field label="Type" value={<PaymentTypeBadge type={payment.payment_type} />} />
+              <Field label="Type" value={<PaymentTypeBadge type={payment.payment_type} reference={payment.reference} />} />
               <Field label="Method" value={<PaymentMethodBadge method={payment.payment_method} />} />
               <Field label="Status" value={<PaymentStatusBadge status={payment.status} />} />
               <Field label="Transaction date" value={formatEventDate(payment.transaction_date)} />

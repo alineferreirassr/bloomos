@@ -222,8 +222,8 @@ export function InvoiceActions({ invoice, onChanged, hasUnresolvedDepositApplica
 
       {canVoid && canUpdate && hasUnresolvedDepositApplication ? (
         <p className="text-xs text-text-muted">
-          This invoice can&apos;t be voided because a Customer Deposit has been applied to it. Deposit Application
-          reversal is not available yet.
+          This invoice can&apos;t be voided while a Customer Deposit remains applied to it. Reverse the Deposit
+          Application from its payment record, then retry.
         </p>
       ) : null}
 
