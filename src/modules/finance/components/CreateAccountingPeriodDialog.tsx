@@ -14,7 +14,8 @@ import type { AccountingPeriod } from "@/types/accountingPeriod";
 interface CreateAccountingPeriodDialogProps {
   open: boolean;
   onClose: () => void;
-  onCreated: (period: AccountingPeriod) => void;
+  /** Called with the new AccountingPeriod on success, or with no argument on an unexpected thrown failure (see submit's catch) — the real caller today only uses this to trigger a refetch, so the argument is safely optional. */
+  onCreated: (period?: AccountingPeriod) => void;
 }
 
 /**
@@ -45,14 +46,29 @@ export function CreateAccountingPeriodDialog({ open, onClose, onCreated }: Creat
 
   const submit = handleSubmit(async (values) => {
     setFormError(null);
-    const result = await createAccountingPeriod(values);
-    if (!result.success) {
-      setFormError(result.error);
-      return;
+    try {
+      const result = await createAccountingPeriod(values);
+      if (!result.success) {
+        setFormError(result.error);
+        return;
+      }
+      reset();
+      onCreated(result.data);
+      onClose();
+    } catch {
+      // A genuinely unexpected failure (network/auth/out-of-taxonomy RPC
+      // error) throws rather than resolving a DataResult — same contract
+      // every Finance mutation shares (see ReverseDepositApplicationModal's
+      // identical fix). React Hook Form already resets formState.isSubmitting
+      // on a thrown submit callback, so no local submitting state is needed
+      // here. Deliberately does NOT call onClose() or reset(): the period
+      // may or may not have actually been created, so the safest response
+      // keeps the dialog open with the entered values intact while
+      // reconciling the parent list via onCreated() — a retry safely
+      // rejects as an overlapping range if the create already landed.
+      setFormError("Something went wrong. Please try again.");
+      onCreated();
     }
-    reset();
-    onCreated(result.data);
-    onClose();
   });
 
   return (

@@ -11,7 +11,8 @@ interface ReverseJournalEntryDialogProps {
   open: boolean;
   onClose: () => void;
   journalEntryId: string;
-  onReversed: (reversal: JournalEntry) => void;
+  /** Called with the new reversal JournalEntry on success, or with no argument on an unexpected thrown failure (see handleConfirm's catch) — the real caller today only uses this to trigger a refetch, so the argument is safely optional. */
+  onReversed: (reversal?: JournalEntry) => void;
 }
 
 /** Calls reverseJournalEntry directly — never updates the original entry itself; the confirmation copy explains that a new, separate reversing entry is created instead. */
@@ -34,15 +35,32 @@ export function ReverseJournalEntryDialog({ open, onClose, journalEntryId, onRev
     }
     setSubmitting(true);
     setError(null);
-    const result = await reverseJournalEntry(journalEntryId, { reason: reason.trim() });
-    setSubmitting(false);
-    if (!result.success) {
-      setError(result.error);
-      return;
+    try {
+      const result = await reverseJournalEntry(journalEntryId, { reason: reason.trim() });
+      setSubmitting(false);
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      setReason("");
+      onReversed(result.data);
+      onClose();
+    } catch {
+      // A genuinely unexpected failure (network/auth/out-of-taxonomy RPC
+      // error) throws rather than resolving a DataResult — same contract
+      // every Finance mutation shares (see ReverseDepositApplicationModal's
+      // identical fix). Without this, the request would never resolve
+      // `submitting`, permanently disabling both buttons. Refetch: the
+      // reversal may have already posted before a separate follow-up write
+      // threw — refetching reconciles the Founder's view with whatever
+      // actually committed. The reversal's own posting_key
+      // (reversal:<journalEntryId>) plus its reversed_by_entry_id guard
+      // means a retry safely rejects as already-reversed rather than
+      // posting a second reversing entry.
+      setSubmitting(false);
+      setError("Something went wrong. Please try again.");
+      onReversed();
     }
-    setReason("");
-    onReversed(result.data);
-    onClose();
   };
 
   return (
