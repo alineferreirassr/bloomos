@@ -49,7 +49,7 @@ import { getCoreAuditLogService } from "@/core/audit";
 import { readClients } from "@/lib/data/mock/clientsStore";
 import { readEvents } from "@/lib/data/mock/eventsStore";
 import { readContracts } from "@/lib/data/mock/contractsStore";
-import { readInvoices, writeInvoices } from "@/lib/data/mock/invoicesStore";
+import { readInvoices, writeInvoices, readInvoiceCreationSnapshot, writeInvoiceCreationSnapshot } from "@/lib/data/mock/invoicesStore";
 import { readPayments, writePayments } from "@/lib/data/mock/paymentsStore";
 import { readExpenses, writeExpenses } from "@/lib/data/mock/expensesStore";
 import { readNotes, writeNotes } from "@/lib/data/mock/notesStore";
@@ -202,7 +202,41 @@ function computeInvoiceTotal(subtotalMinor: number, taxMinor: number, discountMi
   return subtractMinor(addMinor(subtotalMinor, taxMinor), discountMinor);
 }
 
-async function createInvoice(input: InvoiceInput): Promise<DataResult<Invoice>> {
+/** Compares a frozen creation-request snapshot against a fresh request's parsed payload — never against the Invoice's current, independently-editable columns (see invoiceCreationSnapshots' own doc comment for why). */
+function invoiceCreationPayloadMatches(snapshot: InvoiceInput, parsed: InvoiceInput): boolean {
+  return (
+    snapshot.client_id === parsed.client_id &&
+    snapshot.event_id === parsed.event_id &&
+    snapshot.contract_id === parsed.contract_id &&
+    snapshot.title === parsed.title &&
+    snapshot.description === parsed.description &&
+    snapshot.issue_date === parsed.issue_date &&
+    snapshot.due_date === parsed.due_date &&
+    snapshot.subtotal_minor === parsed.subtotal_minor &&
+    snapshot.tax_minor === parsed.tax_minor &&
+    snapshot.discount_minor === parsed.discount_minor &&
+    snapshot.currency === parsed.currency &&
+    snapshot.notes === parsed.notes
+  );
+}
+
+/**
+ * Finance F2.1C-F-E-D-B1: invoiceId is a required, caller-generated
+ * request-idempotency key — it becomes the Invoice's own primary key
+ * directly (mirroring refundPayment/recordDepositApplication/
+ * createPayment, never a posting_key-only scheme, since an Invoice has no
+ * natural parent row to key off of). The replay lookup is by
+ * (workspace_id, id) — the Invoice's own primary key. Unlike Payment, the
+ * comparison is against an immutable creation snapshot frozen once at
+ * insert time, never against the Invoice's own current columns, because
+ * updateInvoice can legitimately mutate the exact same fields after
+ * creation — see invoiceCreationSnapshots' doc comment.
+ */
+async function createInvoice(input: InvoiceInput, invoiceId: string): Promise<DataResult<Invoice>> {
+  if (!invoiceId) {
+    return fail("invoiceId is required and must be a stable identifier supplied by the caller (the same value on every retry of the same invoice creation request).");
+  }
+
   const parsed = invoiceSchema.safeParse(input);
   if (!parsed.success) {
     return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
@@ -212,6 +246,19 @@ async function createInvoice(input: InvoiceInput): Promise<DataResult<Invoice>> 
   if (!client) {
     return fail("Please select a valid client.", { client_id: "Client not found." });
   }
+
+  const existing = readInvoices().find((i) => i.id === invoiceId && i.workspace_id === client.workspace_id);
+  if (existing) {
+    // A historical Invoice (predating this mechanism) or one created via
+    // duplicateInvoice() has no recorded snapshot — never treat that as a
+    // confirmed replay; fail safely as a conflict instead.
+    const snapshot = readInvoiceCreationSnapshot(client.workspace_id, invoiceId);
+    if (!snapshot || !invoiceCreationPayloadMatches(snapshot, parsed.data)) {
+      return fail("This idempotency key was already used for a different invoice creation request.");
+    }
+    return ok(existing);
+  }
+
   if (parsed.data.event_id !== null) {
     const error = validateEventBelongsToClient(parsed.data.event_id, parsed.data.client_id);
     if (error) return fail(error, { event_id: error });
@@ -224,7 +271,7 @@ async function createInvoice(input: InvoiceInput): Promise<DataResult<Invoice>> 
   const timestamp = nowIso();
   const total_minor = computeInvoiceTotal(parsed.data.subtotal_minor, parsed.data.tax_minor, parsed.data.discount_minor);
   const invoice: Invoice = {
-    id: generateId("invoice"),
+    id: invoiceId,
     workspace_id: client.workspace_id,
     invoice_number: generateInvoiceNumber(client.workspace_id),
     ...parsed.data,
@@ -243,6 +290,7 @@ async function createInvoice(input: InvoiceInput): Promise<DataResult<Invoice>> 
   };
 
   writeInvoices([...readInvoices(), invoice]);
+  writeInvoiceCreationSnapshot(client.workspace_id, invoiceId, parsed.data);
   recordTimelineActivity(invoice.workspace_id, "invoice", invoice.id, "invoice_created", `Invoice created: "${invoice.title}"`);
 
   return ok(invoice);

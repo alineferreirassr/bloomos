@@ -1,4 +1,5 @@
 import type { Invoice } from "@/types/invoice";
+import type { InvoiceInput } from "@/modules/finance/schema";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 
 /**
@@ -225,7 +226,32 @@ export function writeInvoices(next: Invoice[]): void {
   invoices = next;
 }
 
+/**
+ * Finance F2.1C-F-E-D-B1: internal-only idempotency metadata, deliberately
+ * kept OUT of the `Invoice` domain type — never exposed, never returned to
+ * a caller, never touched by updateInvoice/issueInvoice/voidInvoice (which
+ * only ever read/write plain `Invoice` records), and never populated by
+ * duplicateInvoice (a distinct, always-new-resource action, never a
+ * retry). Keyed by `${workspaceId}:${invoiceId}` so a replay lookup can
+ * never see another workspace's snapshot. Mirrors the Supabase
+ * `invoices.creation_request_snapshot` column's exact semantics.
+ */
+const invoiceCreationSnapshots = new Map<string, InvoiceInput>();
+
+function snapshotKey(workspaceId: string, invoiceId: string): string {
+  return `${workspaceId}:${invoiceId}`;
+}
+
+export function readInvoiceCreationSnapshot(workspaceId: string, invoiceId: string): InvoiceInput | undefined {
+  return invoiceCreationSnapshots.get(snapshotKey(workspaceId, invoiceId));
+}
+
+export function writeInvoiceCreationSnapshot(workspaceId: string, invoiceId: string, snapshot: InvoiceInput): void {
+  invoiceCreationSnapshots.set(snapshotKey(workspaceId, invoiceId), snapshot);
+}
+
 /** Test-only: restore the store to its seeded state between test cases. */
 export function resetInvoicesStore(): void {
   invoices = SEED_INVOICES.map((invoice) => ({ ...invoice }));
+  invoiceCreationSnapshots.clear();
 }

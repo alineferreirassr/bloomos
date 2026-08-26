@@ -141,7 +141,7 @@ describe("mock data", () => {
 
 describe("createInvoice", () => {
   it("creates an invoice with a generated invoice_number and computed total", async () => {
-    const result = await createInvoice(validInvoiceInput);
+    const result = await createInvoice(validInvoiceInput, crypto.randomUUID());
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.invoice_number).toMatch(/^INV-\d{4}-\d{4}$/);
@@ -153,7 +153,7 @@ describe("createInvoice", () => {
   });
 
   it("computes total_minor as subtotal + tax - discount", async () => {
-    const result = await createInvoice({ ...validInvoiceInput, subtotal_minor: 100000, tax_minor: 5000, discount_minor: 10000 });
+    const result = await createInvoice({ ...validInvoiceInput, subtotal_minor: 100000, tax_minor: 5000, discount_minor: 10000 }, crypto.randomUUID());
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.total_minor).toBe(95000);
@@ -161,39 +161,50 @@ describe("createInvoice", () => {
   });
 
   it("rejects an invalid client_id", async () => {
-    const result = await createInvoice({ ...validInvoiceInput, client_id: "does_not_exist" });
+    const result = await createInvoice({ ...validInvoiceInput, client_id: "does_not_exist" }, crypto.randomUUID());
     expect(result.success).toBe(false);
   });
 
   it("rejects an event that doesn't belong to the given client", async () => {
     // event_1 belongs to client_2; client_1 is a different client
-    const result = await createInvoice({ ...validInvoiceInput, client_id: "client_1", event_id: "event_1" });
+    const result = await createInvoice({ ...validInvoiceInput, client_id: "client_1", event_id: "event_1" }, crypto.randomUUID());
     expect(result.success).toBe(false);
   });
 
   it("accepts an event that belongs to the given client", async () => {
-    const result = await createInvoice({ ...validInvoiceInput, client_id: "client_2", event_id: "event_1" });
+    const result = await createInvoice({ ...validInvoiceInput, client_id: "client_2", event_id: "event_1" }, crypto.randomUUID());
     expect(result.success).toBe(true);
   });
 
   it("rejects a contract that doesn't belong to the given client", async () => {
-    const result = await createInvoice({ ...validInvoiceInput, client_id: "client_1", contract_id: "contract_1" });
+    const result = await createInvoice({ ...validInvoiceInput, client_id: "client_1", contract_id: "contract_1" }, crypto.randomUUID());
     expect(result.success).toBe(false);
   });
 
   it("records an invoice_created timeline entry", async () => {
-    const result = await createInvoice(validInvoiceInput);
+    const result = await createInvoice(validInvoiceInput, crypto.randomUUID());
     expect(result.success).toBe(true);
     if (result.success) {
       const timeline = await getTimelineByInvoiceId(result.data.id);
       expect(timeline.some((t) => t.type === "invoice_created")).toBe(true);
     }
   });
+
+  it("Finance F2.1C-F-E-D-B1: forwards the caller-supplied invoiceId unchanged to the repository — a same-id retry replays the same Invoice", async () => {
+    const id = crypto.randomUUID();
+    const first = await createInvoice(validInvoiceInput, id);
+    expect(first.success).toBe(true);
+    const second = await createInvoice(validInvoiceInput, id);
+    expect(second.success).toBe(true);
+    if (!first.success || !second.success) return;
+    expect(second.data.id).toBe(first.data.id);
+    expect(second.data.id).toBe(id);
+  });
 });
 
 describe("Invoice status transitions", () => {
   it("issues a draft invoice", async () => {
-    const created = await createInvoice(validInvoiceInput);
+    const created = await createInvoice(validInvoiceInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     const result = await issueInvoice(created.data.id);
     expect(result.success).toBe(true);
@@ -201,14 +212,14 @@ describe("Invoice status transitions", () => {
   });
 
   it("cannot send a draft invoice directly (must be issued first)", async () => {
-    const created = await createInvoice(validInvoiceInput);
+    const created = await createInvoice(validInvoiceInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     const result = await sendInvoice(created.data.id);
     expect(result.success).toBe(false);
   });
 
   it("sends an issued invoice", async () => {
-    const created = await createInvoice(validInvoiceInput);
+    const created = await createInvoice(validInvoiceInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await issueInvoice(created.data.id);
     const result = await sendInvoice(created.data.id);
@@ -220,7 +231,7 @@ describe("Invoice status transitions", () => {
   });
 
   it("marks a sent invoice as viewed, idempotently", async () => {
-    const created = await createInvoice(validInvoiceInput);
+    const created = await createInvoice(validInvoiceInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await issueInvoice(created.data.id);
     await sendInvoice(created.data.id);
@@ -232,7 +243,7 @@ describe("Invoice status transitions", () => {
   });
 
   it("marks an invoice overdue only when it has a due_date", async () => {
-    const created = await createInvoice({ ...validInvoiceInput, due_date: null });
+    const created = await createInvoice({ ...validInvoiceInput, due_date: null }, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await issueInvoice(created.data.id);
     await sendInvoice(created.data.id);
@@ -241,7 +252,7 @@ describe("Invoice status transitions", () => {
   });
 
   it("marks a sent invoice overdue when it has a due_date", async () => {
-    const created = await createInvoice(validInvoiceInput);
+    const created = await createInvoice(validInvoiceInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await issueInvoice(created.data.id);
     await sendInvoice(created.data.id);
@@ -254,7 +265,7 @@ describe("Invoice status transitions", () => {
   });
 
   it("voids an invoice", async () => {
-    const created = await createInvoice(validInvoiceInput);
+    const created = await createInvoice(validInvoiceInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     const result = await voidInvoice(created.data.id, crypto.randomUUID(), "Cancelled");
     expect(result.success).toBe(true);
@@ -269,7 +280,7 @@ describe("Invoice status transitions", () => {
   });
 
   it("archives and restores an invoice back to draft", async () => {
-    const created = await createInvoice(validInvoiceInput);
+    const created = await createInvoice(validInvoiceInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     const archived = await archiveInvoice(created.data.id);
     expect(archived.success).toBe(true);
@@ -282,7 +293,7 @@ describe("Invoice status transitions", () => {
   });
 
   it("blocks content edits once an invoice is voided or archived", async () => {
-    const created = await createInvoice(validInvoiceInput);
+    const created = await createInvoice(validInvoiceInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await voidInvoice(created.data.id, crypto.randomUUID(), "Cancelled");
     const result = await updateInvoice(created.data.id, validInvoiceInput);
@@ -345,7 +356,7 @@ describe("createPayment and Invoice application", () => {
   });
 
   it("applies a full succeeded payment to its Invoice, marking it paid", async () => {
-    const invoice = await createInvoice({ ...validInvoiceInput, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 });
+    const invoice = await createInvoice({ ...validInvoiceInput, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 }, crypto.randomUUID());
     if (!invoice.success) throw new Error("setup failed");
     await issueInvoice(invoice.data.id);
     await sendInvoice(invoice.data.id);
@@ -364,7 +375,7 @@ describe("createPayment and Invoice application", () => {
   });
 
   it("applies a partial succeeded payment to its Invoice, marking it partially_paid", async () => {
-    const invoice = await createInvoice({ ...validInvoiceInput, subtotal_minor: 100000, tax_minor: 0, discount_minor: 0 });
+    const invoice = await createInvoice({ ...validInvoiceInput, subtotal_minor: 100000, tax_minor: 0, discount_minor: 0 }, crypto.randomUUID());
     if (!invoice.success) throw new Error("setup failed");
     await issueInvoice(invoice.data.id);
     await sendInvoice(invoice.data.id);
@@ -383,7 +394,7 @@ describe("createPayment and Invoice application", () => {
   });
 
   it("does not let a pending payment count toward an Invoice's paid total", async () => {
-    const invoice = await createInvoice({ ...validInvoiceInput, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 });
+    const invoice = await createInvoice({ ...validInvoiceInput, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 }, crypto.randomUUID());
     if (!invoice.success) throw new Error("setup failed");
     await issueInvoice(invoice.data.id);
     await sendInvoice(invoice.data.id);
@@ -401,7 +412,7 @@ describe("createPayment and Invoice application", () => {
   });
 
   it("does not let a failed payment count toward an Invoice's paid total", async () => {
-    const invoice = await createInvoice({ ...validInvoiceInput, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 });
+    const invoice = await createInvoice({ ...validInvoiceInput, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 }, crypto.randomUUID());
     if (!invoice.success) throw new Error("setup failed");
     await issueInvoice(invoice.data.id);
     await sendInvoice(invoice.data.id);
@@ -421,7 +432,7 @@ describe("createPayment and Invoice application", () => {
   });
 
   it("rejects a payment that would exceed the invoice's remaining balance (no overpayment)", async () => {
-    const invoice = await createInvoice({ ...validInvoiceInput, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 });
+    const invoice = await createInvoice({ ...validInvoiceInput, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 }, crypto.randomUUID());
     if (!invoice.success) throw new Error("setup failed");
     await issueInvoice(invoice.data.id);
     await sendInvoice(invoice.data.id);
@@ -440,7 +451,7 @@ describe("createPayment and Invoice application", () => {
   });
 
   it("accepts a payment that exactly matches the remaining balance", async () => {
-    const invoice = await createInvoice({ ...validInvoiceInput, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 });
+    const invoice = await createInvoice({ ...validInvoiceInput, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 }, crypto.randomUUID());
     if (!invoice.success) throw new Error("setup failed");
     await issueInvoice(invoice.data.id);
     await sendInvoice(invoice.data.id);
@@ -459,7 +470,7 @@ describe("createPayment and Invoice application", () => {
   });
 
   it("rejects marking a pending payment succeeded if the invoice's balance shrank in the meantime", async () => {
-    const invoice = await createInvoice({ ...validInvoiceInput, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 });
+    const invoice = await createInvoice({ ...validInvoiceInput, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 }, crypto.randomUUID());
     if (!invoice.success) throw new Error("setup failed");
     await issueInvoice(invoice.data.id);
     await sendInvoice(invoice.data.id);
@@ -584,7 +595,7 @@ describe("refundPayment", () => {
   });
 
   it("recomputes the linked Invoice's paid/balance/status after a refund", async () => {
-    const invoice = await createInvoice({ ...validInvoiceInput, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 });
+    const invoice = await createInvoice({ ...validInvoiceInput, subtotal_minor: 50000, tax_minor: 0, discount_minor: 0 }, crypto.randomUUID());
     if (!invoice.success) throw new Error("setup failed");
     await issueInvoice(invoice.data.id);
     await sendInvoice(invoice.data.id);
@@ -758,14 +769,14 @@ describe("duplicateExpense", () => {
 
 describe("getInvoiceNextAction / getPaymentNextAction / getExpenseNextAction", () => {
   it("returns a recommended action for a draft invoice", async () => {
-    const created = await createInvoice(validInvoiceInput);
+    const created = await createInvoice(validInvoiceInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     const action = await getInvoiceNextAction(created.data.id);
     expect(action).toMatch(/issue/i);
   });
 
   it("returns null for a voided invoice", async () => {
-    const created = await createInvoice(validInvoiceInput);
+    const created = await createInvoice(validInvoiceInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await voidInvoice(created.data.id, crypto.randomUUID(), "Cancelled");
     const action = await getInvoiceNextAction(created.data.id);
@@ -825,7 +836,7 @@ describe("Financial summaries", () => {
 
 describe("Invoice/Payment/Expense Notes and Timeline", () => {
   it("adds and retrieves a note on an Invoice", async () => {
-    const created = await createInvoice(validInvoiceInput);
+    const created = await createInvoice(validInvoiceInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     const noteResult = await createInvoiceNote(created.data.id, {
       title: "Test note",
@@ -867,7 +878,7 @@ describe("Invoice/Payment/Expense Notes and Timeline", () => {
   });
 
   it("scopes Invoice/Payment/Expense notes and timeline to the correct workspace via owner_type/owner_id", async () => {
-    const invoice = await createInvoice(validInvoiceInput);
+    const invoice = await createInvoice(validInvoiceInput, crypto.randomUUID());
     const payment = await createPayment({ ...validPaymentInput, payment_method: "cash" }, crypto.randomUUID());
     const expense = await createExpense(validExpenseInput);
     if (!invoice.success || !payment.success || !expense.success) throw new Error("setup failed");
@@ -881,7 +892,7 @@ describe("Invoice/Payment/Expense Notes and Timeline", () => {
   });
 
   it("records Invoice lifecycle activities on its own timeline", async () => {
-    const created = await createInvoice(validInvoiceInput);
+    const created = await createInvoice(validInvoiceInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await issueInvoice(created.data.id);
     await sendInvoice(created.data.id);

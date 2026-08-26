@@ -1333,8 +1333,8 @@ export async function getInvoiceById(id: string): Promise<Invoice> {
   return financeRepository().getInvoiceById(id);
 }
 
-export async function createInvoice(input: InvoiceInput): Promise<DataResult<Invoice>> {
-  return financeRepository().createInvoice(input);
+export async function createInvoice(input: InvoiceInput, invoiceId: string): Promise<DataResult<Invoice>> {
+  return financeRepository().createInvoice(input, invoiceId);
 }
 
 export async function updateInvoice(id: string, input: InvoiceInput): Promise<DataResult<Invoice>> {

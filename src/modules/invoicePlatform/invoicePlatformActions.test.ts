@@ -74,7 +74,7 @@ function invoiceInput(overrides: Partial<InvoiceInput> = {}): InvoiceInput {
 }
 
 async function makeInvoice() {
-  const created = await createInvoice(invoiceInput());
+  const created = await createInvoice(invoiceInput(), crypto.randomUUID());
   if (!created.success) throw new Error(`setup failed: createInvoice — ${JSON.stringify(created.error)}`);
   return created.data;
 }

@@ -122,24 +122,24 @@ describe("mockFinanceRepository.getInvoices / getInvoiceById", () => {
 
 describe("mockFinanceRepository.createInvoice — Client/Event/Contract consistency and numbering", () => {
   it("rejects an unknown client", async () => {
-    const result = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, client_id: "nope" });
+    const result = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, client_id: "nope" }, crypto.randomUUID());
     expect(result.success).toBe(false);
   });
 
   it("rejects an event that doesn't belong to the selected client", async () => {
     // event_2 belongs to client_3, not client_2.
-    const result = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, event_id: "event_2" });
+    const result = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, event_id: "event_2" }, crypto.randomUUID());
     expect(result.success).toBe(false);
   });
 
   it("rejects a contract that doesn't belong to the selected client", async () => {
     // contract_2 belongs to client_4, not client_2.
-    const result = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, contract_id: "contract_2" });
+    const result = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, contract_id: "contract_2" }, crypto.randomUUID());
     expect(result.success).toBe(false);
   });
 
   it("generates a unique invoice_number, computes total_minor, and starts paid_minor at 0", async () => {
-    const result = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const result = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     expect(result.success).toBe(true);
     if (!result.success) return;
 
@@ -154,7 +154,7 @@ describe("mockFinanceRepository.createInvoice — Client/Event/Contract consiste
   });
 
   it("duplicateInvoice receives a new, different invoice number and reset lifecycle fields", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
 
@@ -172,9 +172,126 @@ describe("mockFinanceRepository.createInvoice — Client/Event/Contract consiste
   });
 });
 
+describe("mockFinanceRepository.createInvoice — request idempotency (Finance F2.1C-F-E-D-B1)", () => {
+  it("rejects a missing (empty-string) invoiceId", async () => {
+    const result = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, "");
+    expect(result.success).toBe(false);
+  });
+
+  it("a same-key retry with the same payload replays the original Invoice — no second Invoice, no new invoice_number", async () => {
+    const id = crypto.randomUUID();
+    const first = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, id);
+    expect(first.success).toBe(true);
+    const second = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, id);
+    expect(second.success).toBe(true);
+    if (!first.success || !second.success) return;
+
+    expect(second.data.id).toBe(first.data.id);
+    expect(second.data.invoice_number).toBe(first.data.invoice_number);
+
+    const allInvoices = await mockFinanceRepository.getInvoices();
+    expect(allInvoices.filter((i) => i.id === first.data.id)).toHaveLength(1);
+  });
+
+  it("a same-key retry with a DIFFERENT title is rejected as a conflict, not replayed", async () => {
+    const id = crypto.randomUUID();
+    const first = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, id);
+    expect(first.success).toBe(true);
+
+    const conflicting = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, title: "A different invoice" }, id);
+    expect(conflicting.success).toBe(false);
+    if (conflicting.success) return;
+    expect(conflicting.error).toMatch(/idempotency key was already used/);
+  });
+
+  it("a same-key retry with a DIFFERENT subtotal_minor is rejected as a conflict", async () => {
+    const id = crypto.randomUUID();
+    const first = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, id);
+    expect(first.success).toBe(true);
+
+    const conflicting = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 999900 }, id);
+    expect(conflicting.success).toBe(false);
+  });
+
+  it("a same-key retry with a DIFFERENT client_id is rejected as a conflict", async () => {
+    const id = crypto.randomUUID();
+    const first = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, id);
+    expect(first.success).toBe(true);
+
+    const conflicting = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, client_id: "client_1", event_id: null, contract_id: null }, id);
+    expect(conflicting.success).toBe(false);
+  });
+
+  it("a DIFFERENT key represents a distinct, intentional second identical Invoice", async () => {
+    const first = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
+    expect(first.success).toBe(true);
+    const second = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
+    expect(second.success).toBe(true);
+    if (!first.success || !second.success) return;
+
+    expect(second.data.id).not.toBe(first.data.id);
+    expect(second.data.invoice_number).not.toBe(first.data.invoice_number);
+  });
+
+  it("a same-key collision against a historical Invoice with no recorded snapshot fails safely as a conflict, never as a silent replay", async () => {
+    // invoice_1 is a seeded historical row (predates this mechanism) — its
+    // id was never generated by createInvoice, so it has no snapshot.
+    const result = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, "invoice_1");
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toMatch(/idempotency key was already used/);
+
+    // Confirm no mutation occurred — the historical row is untouched.
+    const historical = await mockFinanceRepository.getInvoiceById("invoice_1");
+    expect(historical.title).not.toBe(BASE_INVOICE_INPUT.title);
+  });
+
+  it("historical replay after a later edit: a stale retry of the original create payload still replays safely, and the edit is preserved (never overwritten)", async () => {
+    const id = crypto.randomUUID();
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, id);
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+
+    const edited = await mockFinanceRepository.updateInvoice(created.data.id, {
+      ...BASE_INVOICE_INPUT,
+      title: "Retitled after creation",
+    });
+    expect(edited.success).toBe(true);
+    if (!edited.success) return;
+    expect(edited.data.title).toBe("Retitled after creation");
+
+    // The ORIGINAL stale request (same id, same ORIGINAL payload) finally
+    // arrives after the edit above. It must still be recognized as a safe
+    // replay of the original creation — never re-validated against the
+    // now-different current title — and must return the CURRENT (edited)
+    // Invoice untouched, never reverting the Founder's edit.
+    const staleRetry = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, id);
+    expect(staleRetry.success).toBe(true);
+    if (!staleRetry.success) return;
+    expect(staleRetry.data.id).toBe(created.data.id);
+    expect(staleRetry.data.title).toBe("Retitled after creation");
+
+    const allInvoices = await mockFinanceRepository.getInvoices();
+    expect(allInvoices.filter((i) => i.id === created.data.id)).toHaveLength(1);
+  });
+
+  it("duplicateInvoice's resulting row has no recorded snapshot and therefore can never be silently 'replayed' by an unrelated createInvoice request reusing its id", async () => {
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
+    expect(created.success).toBe(true);
+    if (!created.success) return;
+
+    const duplicate = await mockFinanceRepository.duplicateInvoice(created.data.id);
+    expect(duplicate.success).toBe(true);
+    if (!duplicate.success) return;
+
+    const collision = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, duplicate.data.id);
+    expect(collision.success).toBe(false);
+  });
+});
+
 describe("mockFinanceRepository.updateInvoice", () => {
   it("blocked once the invoice is terminal (voided/archived)", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
 
@@ -186,7 +303,7 @@ describe("mockFinanceRepository.updateInvoice", () => {
   });
 
   it("rejects changing the client_id", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
 
@@ -198,7 +315,7 @@ describe("mockFinanceRepository.updateInvoice", () => {
   });
 
   it("recomputes total_minor and balance_minor", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
 
@@ -217,7 +334,7 @@ describe("mockFinanceRepository.updateInvoice", () => {
 
 describe("mockFinanceRepository Invoice status lifecycle", () => {
   it("runs issue -> send -> viewed -> overdue -> voided, and rejects out-of-order transitions", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
     const id = created.data.id;
@@ -256,7 +373,7 @@ describe("mockFinanceRepository Invoice status lifecycle", () => {
   });
 
   it("markInvoiceOverdue fails when the invoice has no due_date", async () => {
-    const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, due_date: null });
+    const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, due_date: null }, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
 
@@ -267,7 +384,7 @@ describe("mockFinanceRepository Invoice status lifecycle", () => {
   });
 
   it("archives and restores, resetting status to draft", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
 
@@ -295,7 +412,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
   // Debits: AR 103000 + Sales Discounts 2000 = 105000. Credits: Revenue 100000 + Tax Payable 5000 = 105000.
 
   it("issueInvoice posts Dr AR (total_minor) + Dr Sales Discounts, Cr Revenue (subtotal_minor) + Cr Sales Tax Payable, balanced", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
 
@@ -326,7 +443,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
   });
 
   it("does not post Sales Discounts or Sales Tax Payable lines when discount/tax are zero", async () => {
-    const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, tax_minor: 0, discount_minor: 0 });
+    const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, tax_minor: 0, discount_minor: 0 }, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
 
@@ -340,7 +457,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
   });
 
   it("Example B (subtotal 100000, tax 10000, discount 0): Dr AR 110000, Cr Revenue 100000 + Cr Tax Payable 10000, no Sales Discounts line", async () => {
-    const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 100000, tax_minor: 10000, discount_minor: 0 });
+    const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 100000, tax_minor: 10000, discount_minor: 0 }, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
 
@@ -357,7 +474,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
   });
 
   it("Example D (subtotal 100000, tax 0, discount 5000): Dr AR 95000 + Dr Sales Discounts 5000, Cr Revenue 100000, no Sales Tax Payable line", async () => {
-    const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 100000, tax_minor: 0, discount_minor: 5000 });
+    const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, subtotal_minor: 100000, tax_minor: 0, discount_minor: 5000 }, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
 
@@ -374,7 +491,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
   });
 
   it("retrying issueInvoice on an already-issued invoice does not duplicate the posting (fails at the status-transition check, before any second post)", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
 
@@ -387,7 +504,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
   });
 
   it("voidInvoice before any payment reverses the recognition entry — append-only, swapped debit/credit", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
 
@@ -415,7 +532,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
   });
 
   it("voidInvoice on a never-issued (draft) invoice succeeds with no recognition entry to reverse", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
 
@@ -427,7 +544,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
   });
 
   it("Finance F2.1C-D-D-B: voidInvoice on an invoice with a payment applied now SUCCEEDS via Partial-Payment Cancellation — the original invoice_issued entry is left untouched (never reversed), only a new invoice_partial_void correction posts", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
 
@@ -459,7 +576,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
   });
 
   it("F2.1B-REVIEW: updateInvoice rejects a subtotal/tax/discount change once issued — Revenue is already recognized against the current amounts", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
 
@@ -476,7 +593,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
   });
 
   it("F2.1B-REVIEW: updateInvoice still allows non-financial edits (title) once issued", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
 
@@ -488,7 +605,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
   });
 
   it("F2.1B-REVIEW: updateInvoice still allows financial edits while still draft (Revenue not yet recognized)", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
 
@@ -502,7 +619,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
   // revenue_portion=103000+2000-5000=100000. Combined entry: Dr AR 103000, Dr 4950 100000, Dr 2100 5000 (=208000)
   // / Cr Cash 103000, Cr 4900 2000, Cr AR 103000 (=208000). Balances.
   async function issueInvoiceAndPayInFull(invoiceInput = BASE_INVOICE_INPUT, amountMinor = 103000) {
-    const created = await mockFinanceRepository.createInvoice(invoiceInput);
+    const created = await mockFinanceRepository.createInvoice(invoiceInput, crypto.randomUUID());
     if (!created.success) throw new Error("invoice creation failed");
     await mockFinanceRepository.issueInvoice(created.data.id);
     await mockFinanceRepository.sendInvoice(created.data.id);
@@ -698,7 +815,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
 describe("mockFinanceRepository.voidInvoice — Finance F2.1C-D-D-B: Partial-Payment Void / Cancellation", () => {
   // BASE_INVOICE_INPUT: subtotal 100000, tax 5000, discount 2000, total 103000.
   async function createEligibleInvoice(overrides: Partial<InvoiceInput> = {}) {
-    const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, ...overrides });
+    const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, ...overrides }, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await mockFinanceRepository.issueInvoice(created.data.id);
     await mockFinanceRepository.sendInvoice(created.data.id);
@@ -1045,7 +1162,7 @@ describe("mockFinanceRepository.voidInvoice — Finance F2.1C-D-D-B: Partial-Pay
 
 describe("mockFinanceRepository.refundPayment — terminal-status guard (Finance F2.1C-D-D-B)", () => {
   it("rejects a refund linked to an invoice that was partially voided", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await mockFinanceRepository.issueInvoice(created.data.id);
     await mockFinanceRepository.sendInvoice(created.data.id);
@@ -1071,7 +1188,7 @@ describe("mockFinanceRepository.refundPayment — terminal-status guard (Finance
   it("rejects a refund linked to a cleanly-voided invoice", async () => {
     // Clean void requires paid_minor = 0, so this exercises the archived path instead —
     // a payment still refundable in principle, against an invoice archived afterward.
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await mockFinanceRepository.issueInvoice(created.data.id);
     await mockFinanceRepository.sendInvoice(created.data.id);
@@ -1093,7 +1210,7 @@ describe("mockFinanceRepository.refundPayment — terminal-status guard (Finance
   });
 
   it("an active (non-terminal) invoice's refund remains unaffected", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await mockFinanceRepository.issueInvoice(created.data.id);
     await mockFinanceRepository.sendInvoice(created.data.id);
@@ -1624,7 +1741,7 @@ describe("mockFinanceRepository.refundPayment", () => {
     // deliberately reused as-is (not a special-cased shape) so these tests exercise
     // the same tax/discount split every other Invoice test in this file already uses.
     async function createIssuedInvoice(overrides: Partial<InvoiceInput> = {}) {
-      const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, ...overrides });
+      const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, ...overrides }, crypto.randomUUID());
       if (!created.success) throw new Error("setup failed");
       await mockFinanceRepository.issueInvoice(created.data.id);
       await mockFinanceRepository.sendInvoice(created.data.id);
@@ -1765,7 +1882,7 @@ describe("mockFinanceRepository.refundPayment", () => {
 
 describe("Finance F2.1C-D-B: currency is financially immutable after issuance", () => {
   it("allows changing currency on a draft invoice", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
 
     const updated = await mockFinanceRepository.updateInvoice(created.data.id, { ...BASE_INVOICE_INPUT, currency: "EUR" });
@@ -1774,7 +1891,7 @@ describe("Finance F2.1C-D-B: currency is financially immutable after issuance", 
   });
 
   it("rejects changing currency after an invoice has been issued", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await mockFinanceRepository.issueInvoice(created.data.id);
 
@@ -1789,7 +1906,7 @@ describe("Finance F2.1C-D-B: currency is financially immutable after issuance", 
 describe("mockFinanceRepository.recordInvoiceAdjustment — Finance F2.1C-D-C", () => {
   // BASE_INVOICE_INPUT: subtotal 100000, tax 5000, discount 2000, total 103000.
   async function createEligibleInvoice(overrides: Partial<InvoiceInput> = {}) {
-    const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, ...overrides });
+    const created = await mockFinanceRepository.createInvoice({ ...BASE_INVOICE_INPUT, ...overrides }, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await mockFinanceRepository.issueInvoice(created.data.id);
     await mockFinanceRepository.sendInvoice(created.data.id);
@@ -1975,7 +2092,7 @@ describe("mockFinanceRepository.recordInvoiceAdjustment — Finance F2.1C-D-C", 
 
   describe("invoice state eligibility", () => {
     it("allows an adjustment on an issued (not yet sent) invoice", async () => {
-      const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+      const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
       if (!created.success) throw new Error("setup failed");
       await mockFinanceRepository.issueInvoice(created.data.id);
 
@@ -2020,7 +2137,7 @@ describe("mockFinanceRepository.recordInvoiceAdjustment — Finance F2.1C-D-C", 
     });
 
     it("rejects an adjustment on a draft invoice — use updateInvoice instead", async () => {
-      const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+      const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
       if (!created.success) throw new Error("setup failed");
 
       const result = await mockFinanceRepository.recordInvoiceAdjustment(
@@ -2032,7 +2149,7 @@ describe("mockFinanceRepository.recordInvoiceAdjustment — Finance F2.1C-D-C", 
     });
 
     it("rejects an adjustment on a voided invoice", async () => {
-      const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+      const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
       if (!created.success) throw new Error("setup failed");
       await mockFinanceRepository.issueInvoice(created.data.id);
       await mockFinanceRepository.voidInvoice(created.data.id, crypto.randomUUID(), "Cancelled");
@@ -2433,7 +2550,7 @@ describe("mockFinanceRepository — Finance F2.1C-C: Customer Deposit applicatio
   }
 
   async function createIssuedInvoice(invoiceInput = BASE_INVOICE_INPUT) {
-    const created = await mockFinanceRepository.createInvoice(invoiceInput);
+    const created = await mockFinanceRepository.createInvoice(invoiceInput, crypto.randomUUID());
     if (!created.success) throw new Error("invoice creation failed");
     await mockFinanceRepository.issueInvoice(created.data.id);
     await mockFinanceRepository.sendInvoice(created.data.id);
@@ -2667,7 +2784,7 @@ describe("mockFinanceRepository — Finance F2.1C-C: Customer Deposit applicatio
 
   it("rejects applying to a draft invoice (Revenue not yet recognized)", async () => {
     const depositId = await createDeposit();
-    const draft = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const draft = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     expect(draft.success).toBe(true);
     if (!draft.success) return;
 
@@ -2677,7 +2794,7 @@ describe("mockFinanceRepository — Finance F2.1C-C: Customer Deposit applicatio
 
   it("rejects applying to a voided invoice", async () => {
     const depositId = await createDeposit();
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
     await mockFinanceRepository.issueInvoice(created.data.id);
@@ -2911,7 +3028,7 @@ describe("mockFinanceRepository — Finance F2.1C-E-B: Deposit Application Rever
   }
 
   async function createIssuedInvoice(invoiceInput = BASE_INVOICE_INPUT) {
-    const created = await mockFinanceRepository.createInvoice(invoiceInput);
+    const created = await mockFinanceRepository.createInvoice(invoiceInput, crypto.randomUUID());
     if (!created.success) throw new Error("invoice creation failed");
     await mockFinanceRepository.issueInvoice(created.data.id);
     await mockFinanceRepository.sendInvoice(created.data.id);
@@ -3593,7 +3710,7 @@ describe("mockFinanceRepository Expense status lifecycle", () => {
 
 describe("mockFinanceRepository Invoice Notes and Timeline", () => {
   it("creates a note, pins/unpins it, and lists Timeline entries", async () => {
-    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT);
+    const created = await mockFinanceRepository.createInvoice(BASE_INVOICE_INPUT, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
     const invoiceId = created.data.id;

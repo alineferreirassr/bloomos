@@ -147,7 +147,7 @@ describe("Critical commercial flow — Lead → Client → Event → Contract �
       discount_minor: 0,
       currency: "USD",
       notes: null,
-    });
+    }, crypto.randomUUID());
     expect(invoice.success).toBe(true);
     if (!invoice.success) return;
     expect(invoice.data.event_id).toBe(event.id);
@@ -250,7 +250,7 @@ describe("Critical commercial flow — Lead → Client → Event → Contract �
       discount_minor: 0,
       currency: "USD",
       notes: null,
-    });
+    }, crypto.randomUUID());
 
     expect(invoice.success).toBe(false);
     if (invoice.success) return;
@@ -294,7 +294,7 @@ describe("Critical commercial flow — Lead → Client → Event → Contract �
       discount_minor: 0,
       currency: "USD",
       notes: null,
-    });
+    }, crypto.randomUUID());
 
     const secondSummary = await getEventFinancialSummary(second.event.id);
     expect(secondSummary.invoiced_total_minor).toBe(0);

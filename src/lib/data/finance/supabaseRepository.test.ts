@@ -423,33 +423,31 @@ describe("supabaseFinanceRepository.getInvoiceById", () => {
   });
 });
 
-describe("supabaseFinanceRepository.createInvoice — numbering and retries", () => {
+describe("supabaseFinanceRepository.createInvoice — atomic RPC boundary", () => {
   it("rejects an unknown client", async () => {
     const { client } = createMockSupabase([{ data: null, error: null }]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const result = await supabaseFinanceRepository.createInvoice(INVOICE_INPUT);
+    const result = await supabaseFinanceRepository.createInvoice(INVOICE_INPUT, crypto.randomUUID());
     expect(result.success).toBe(false);
   });
 
-  it("generates an invoice_number via RPC, inserts, and logs a timeline entry", async () => {
+  it("calls the atomic record_invoice_creation RPC exactly once (invoice-number generation/retry now lives entirely inside it, not orchestrated client-side), inserts nothing directly, and logs a timeline entry", async () => {
     mockSession();
-    const { client, calls, rpcCalls } = createMockSupabase([
+    const { calls, rpcCalls, client } = createMockSupabase([
       { data: clientRow(), error: null }, // client lookup
-      { data: "INV-2026-0001", error: null }, // generate_invoice_number rpc
-      { data: invoiceRow(), error: null }, // insert
+      { data: invoiceRow({ invoice_number: "INV-2026-0001" }), error: null }, // record_invoice_creation rpc
       { data: null, error: null }, // timeline insert
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const result = await supabaseFinanceRepository.createInvoice(INVOICE_INPUT);
+    const result = await supabaseFinanceRepository.createInvoice(INVOICE_INPUT, "invoice-key-1");
     expect(result.success).toBe(true);
-    expect(rpcCalls[0].name).toBe("generate_invoice_number");
+    if (result.success) expect(result.data.invoice_number).toBe("INV-2026-0001");
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0].name).toBe("record_invoice_creation");
 
-    const insertCall = calls.find((c) => c.table === "invoices" && c.method === "insert");
-    const insertPayload = insertCall?.args[0] as { invoice_number: string; status: string };
-    expect(insertPayload.invoice_number).toBe("INV-2026-0001");
-    expect(insertPayload.status).toBe("draft");
+    expect(calls.some((c) => c.table === "invoices" && c.method === "insert")).toBe(false);
 
     const timelineInsert = calls.find((c) => c.table === "timeline_activities" && c.method === "insert");
     const timelinePayload = timelineInsert?.args[0] as { owner_type: string; type: string };
@@ -457,22 +455,60 @@ describe("supabaseFinanceRepository.createInvoice — numbering and retries", ()
     expect(timelinePayload.type).toBe("invoice_created");
   });
 
-  it("retries with a fresh number on a unique-violation and succeeds on the second attempt", async () => {
+  it("Finance F2.1C-F-E-D-B1: sends p_invoice_id and the full canonical payload to record_invoice_creation", async () => {
     mockSession();
-    const { client, rpcCalls } = createMockSupabase([
-      { data: clientRow(), error: null }, // client lookup
-      { data: "INV-2026-0001", error: null }, // first generated number
-      { data: null, error: { code: "23505", message: "duplicate key" } }, // insert collides
-      { data: "INV-2026-0002", error: null }, // second generated number
-      { data: invoiceRow({ invoice_number: "INV-2026-0002" }), error: null }, // insert succeeds
-      { data: null, error: null }, // timeline insert
+    const { rpcCalls, client } = createMockSupabase([
+      { data: clientRow(), error: null },
+      { data: invoiceRow(), error: null },
+      { data: null, error: null },
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const result = await supabaseFinanceRepository.createInvoice(INVOICE_INPUT);
-    expect(result.success).toBe(true);
-    if (result.success) expect(result.data.invoice_number).toBe("INV-2026-0002");
-    expect(rpcCalls).toHaveLength(2);
+    await supabaseFinanceRepository.createInvoice(INVOICE_INPUT, "invoice-key-1");
+    const args = rpcCalls[0].args as Record<string, unknown>;
+    expect(args.p_invoice_id).toBe("invoice-key-1");
+    expect(args.p_client_id).toBe(INVOICE_INPUT.client_id);
+    expect(args.p_title).toBe(INVOICE_INPUT.title);
+    expect(args.p_subtotal_minor).toBe(INVOICE_INPUT.subtotal_minor);
+  });
+
+  it("does not retry client-side on an RPC error — a raw unique-violation from the RPC propagates rather than being silently retried", async () => {
+    mockSession();
+    const { rpcCalls, client } = createMockSupabase([
+      { data: clientRow(), error: null },
+      { data: null, error: { code: "23505", message: "duplicate key" } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await expect(supabaseFinanceRepository.createInvoice(INVOICE_INPUT, crypto.randomUUID())).rejects.toThrow();
+    expect(rpcCalls).toHaveLength(1);
+  });
+
+  it("Finance F2.1C-F-E-D-B1-IDEMPOTENCY: translates a P1129 (idempotency key reused for a different invoice payload) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { rpcCalls, client } = createMockSupabase([
+      { data: clientRow(), error: null },
+      { data: null, error: { code: "P1129", message: "This idempotency key was already used for a different invoice creation request." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.createInvoice(INVOICE_INPUT, "invoice-key-1");
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("This idempotency key was already used for a different invoice creation request.");
+    expect(rpcCalls.map((c) => c.name)).toEqual(["record_invoice_creation"]);
+  });
+
+  it("Finance F2.1C-F-E-D-B1-IDEMPOTENCY: translates a P1130 (missing required invoiceId) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: clientRow(), error: null },
+      { data: null, error: { code: "P1130", message: "p_invoice_id is required and must be a stable identifier supplied by the caller (the same value on every retry of the same invoice creation request)." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.createInvoice(INVOICE_INPUT, "invoice-key-1");
+    expect(result.success).toBe(false);
   });
 });
 

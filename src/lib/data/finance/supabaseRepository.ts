@@ -391,7 +391,18 @@ function computeInvoiceTotal(subtotalMinor: number, taxMinor: number, discountMi
   return subtotalMinor + taxMinor - discountMinor;
 }
 
-async function createInvoice(input: InvoiceInput): Promise<DataResult<Invoice>> {
+/**
+ * Finance F2.1C-F-E-D-B1: invoiceId is a required, caller-generated
+ * request-idempotency key, passed through as p_invoice_id — never embedded
+ * in the validated InvoiceInput payload. A same-key replay (P1129
+ * conflict) or null key (P1130) both already fall inside the shared
+ * FINANCE_VALIDATION_ERROR_CODES set handleFinanceRpcError checks, so no
+ * new error-handling path is needed here. The RPC itself owns the
+ * previously client-orchestrated replay lookup + invoice-number
+ * generation/retry + insert as one atomic transaction — see
+ * record_invoice_creation's own migration comment.
+ */
+async function createInvoice(input: InvoiceInput, invoiceId: string): Promise<DataResult<Invoice>> {
   const parsed = invoiceSchema.safeParse(input);
   if (!parsed.success) {
     return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
@@ -420,17 +431,24 @@ async function createInvoice(input: InvoiceInput): Promise<DataResult<Invoice>> 
 
   const session = await requireWorkspaceSession();
   const actor = resolveActorName(session);
-  const total_minor = computeInvoiceTotal(parsed.data.subtotal_minor, parsed.data.tax_minor, parsed.data.discount_minor);
 
-  const { data, error } = await insertInvoiceWithGeneratedNumber(supabase, client.workspace_id, {
-    workspace_id: client.workspace_id,
-    ...parsed.data,
-    status: "draft",
-    total_minor,
-    paid_minor: 0,
-    balance_minor: total_minor,
+  const { data, error } = await supabase.rpc("record_invoice_creation", {
+    p_workspace_id: client.workspace_id,
+    p_client_id: parsed.data.client_id,
+    p_event_id: parsed.data.event_id,
+    p_contract_id: parsed.data.contract_id,
+    p_title: parsed.data.title,
+    p_description: parsed.data.description,
+    p_issue_date: parsed.data.issue_date,
+    p_due_date: parsed.data.due_date,
+    p_subtotal_minor: parsed.data.subtotal_minor,
+    p_tax_minor: parsed.data.tax_minor,
+    p_discount_minor: parsed.data.discount_minor,
+    p_currency: parsed.data.currency,
+    p_notes: parsed.data.notes,
+    p_invoice_id: invoiceId,
   });
-  if (error) throw normalizeSupabaseError(error);
+  if (error) return handleFinanceRpcError<Invoice>(error);
 
   const invoice = mapInvoiceRow(data as InvoiceRow);
   await insertTimelineActivity(supabase, actor, invoice.workspace_id, "invoice", invoice.id, "invoice_created", `Invoice created: "${invoice.title}"`);

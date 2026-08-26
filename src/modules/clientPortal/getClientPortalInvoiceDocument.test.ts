@@ -78,7 +78,7 @@ function pointCurrentClientAccountAt(clientId: string): void {
 
 async function makePublishedInvoice(): Promise<{ invoiceId: string; clientId: string }> {
   vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(memberSession);
-  const created = await createInvoice(invoiceInput());
+  const created = await createInvoice(invoiceInput(), crypto.randomUUID());
   if (!created.success) throw new Error(`setup failed: createInvoice — ${JSON.stringify(created.error)}`);
   await createInvoiceVersionAction(created.data.id, versionInput());
   await publishInvoiceVersionAction(created.data.id);
@@ -110,7 +110,7 @@ describe("getClientPortalInvoiceDocumentAction", () => {
 
   it("rejects a document that has not been published yet", async () => {
     vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(memberSession);
-    const created = await createInvoice(invoiceInput());
+    const created = await createInvoice(invoiceInput(), crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await createInvoiceVersionAction(created.data.id, versionInput());
     pointCurrentClientAccountAt(created.data.client_id);

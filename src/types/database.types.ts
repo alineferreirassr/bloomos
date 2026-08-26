@@ -1215,6 +1215,7 @@ export interface Database {
           archived_at: string | null;
           created_at: string;
           updated_at: string;
+          creation_request_snapshot: Json | null;
         };
         Insert: {
           id?: string;
@@ -1244,6 +1245,7 @@ export interface Database {
           archived_at?: string | null;
           created_at?: string;
           updated_at?: string;
+          creation_request_snapshot?: Json | null;
         };
         Update: {
           id?: string;
@@ -1273,6 +1275,7 @@ export interface Database {
           archived_at?: string | null;
           created_at?: string;
           updated_at?: string;
+          creation_request_snapshot?: Json | null;
         };
         Relationships: [];
       };
@@ -2491,6 +2494,25 @@ export interface Database {
       generate_invoice_number: {
         Args: { p_workspace_id: string };
         Returns: string;
+      };
+      record_invoice_creation: {
+        Args: {
+          p_workspace_id: string;
+          p_client_id: string;
+          p_event_id: string | null;
+          p_contract_id: string | null;
+          p_title: string;
+          p_description: string | null;
+          p_issue_date: string | null;
+          p_due_date: string | null;
+          p_subtotal_minor: number;
+          p_tax_minor: number;
+          p_discount_minor: number;
+          p_currency: string;
+          p_notes: string | null;
+          p_invoice_id: string;
+        };
+        Returns: Database["public"]["Tables"]["invoices"]["Row"];
       };
       recompute_invoice_balance: {
         Args: { p_invoice_id: string; p_actor: string };
