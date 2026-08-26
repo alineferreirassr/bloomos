@@ -1,4 +1,5 @@
 import type { Expense } from "@/types/expense";
+import type { ExpenseInput } from "@/modules/finance/schema";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 
 /**
@@ -272,7 +273,32 @@ export function writeExpenses(next: Expense[]): void {
   expenses = next;
 }
 
+/**
+ * Finance F2.1C-F-E-D-B2: internal-only idempotency metadata, deliberately
+ * kept OUT of the `Expense` domain type — never exposed, never returned to
+ * a caller, never touched by updateExpense/recordExpenseTransition (which
+ * only ever read/write plain `Expense` records), and never populated by
+ * duplicateExpense (a distinct, always-new-resource action, never a
+ * retry). Keyed by `${workspaceId}:${expenseId}` so a replay lookup can
+ * never see another workspace's snapshot. Mirrors the Supabase
+ * `expenses.creation_request_snapshot` column's exact semantics.
+ */
+const expenseCreationSnapshots = new Map<string, ExpenseInput>();
+
+function snapshotKey(workspaceId: string, expenseId: string): string {
+  return `${workspaceId}:${expenseId}`;
+}
+
+export function readExpenseCreationSnapshot(workspaceId: string, expenseId: string): ExpenseInput | undefined {
+  return expenseCreationSnapshots.get(snapshotKey(workspaceId, expenseId));
+}
+
+export function writeExpenseCreationSnapshot(workspaceId: string, expenseId: string, snapshot: ExpenseInput): void {
+  expenseCreationSnapshots.set(snapshotKey(workspaceId, expenseId), snapshot);
+}
+
 /** Test-only: restore the store to its seeded state between test cases. */
 export function resetExpensesStore(): void {
   expenses = SEED_EXPENSES.map((expense) => ({ ...expense }));
+  expenseCreationSnapshots.clear();
 }

@@ -1474,8 +1474,8 @@ export async function getExpenseById(id: string): Promise<Expense> {
   return financeRepository().getExpenseById(id);
 }
 
-export async function createExpense(input: ExpenseInput): Promise<DataResult<Expense>> {
-  return financeRepository().createExpense(input);
+export async function createExpense(input: ExpenseInput, expenseId: string): Promise<DataResult<Expense>> {
+  return financeRepository().createExpense(input, expenseId);
 }
 
 export async function updateExpense(id: string, input: ExpenseInput): Promise<DataResult<Expense>> {

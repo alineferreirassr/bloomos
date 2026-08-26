@@ -14,6 +14,12 @@ import { LIVE_EVENT_LOG_KIND_LABELS, type LiveEventLogEntry } from "@/types/live
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_LABELS, type ExpenseCategory } from "@/core/enums/expenseCategory";
 import type { Event } from "@/types/event";
 import type { ChecklistItem } from "@/types/checklistItem";
+import type { ExpenseInput } from "@/modules/finance/schema";
+
+/** Plain JSON-shaped payload (strings/numbers/null/booleans, fixed key order) — string comparison is a safe, simple deep-equality check. */
+function expensePayloadsEqual(a: ExpenseInput, b: ExpenseInput): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
 interface LiveEventModePanelProps {
   event: Event;
@@ -45,6 +51,25 @@ export function LiveEventModePanel({ event, loggedByName, onClose, onChanged }: 
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  /**
+   * Finance F2.1C-F-E-D-B2: unlike NewExpenseView (a one-shot form that
+   * navigates away on success), this panel stays mounted for an entire
+   * event and is used to register MULTIPLE, independent, legitimate
+   * Expenses in sequence — so a persistent request ref (rotate only on
+   * payload change, otherwise reuse forever) would be unsafe: if the
+   * Founder registers "Parking, $20", it succeeds, and later registers a
+   * genuinely separate second "Parking, $20" (two real receipts of the
+   * same amount are entirely plausible on-site), a persistent ref would
+   * see the payload as unchanged since last time and silently replay the
+   * first Expense instead of creating the second one — silently dropping
+   * a real Expense the Founder believed they registered. Explicitly
+   * resetting this ref to null after every successful create closes that
+   * gap: the next submission always starts a fresh create-intent with a
+   * new id, regardless of whether its payload coincidentally matches the
+   * previous one, while a thrown-then-retried single attempt still
+   * correctly reuses the same id (the reset only fires on success).
+   */
+  const expenseRequestRef = useRef<{ id: string; lastPayload: ExpenseInput | null } | null>(null);
 
   const refresh = () => {
     Promise.all([getChecklistByEventId(event.id), getLiveEventLog(event.id)]).then(([checklistResult, logResult]) => {
@@ -117,7 +142,7 @@ export function LiveEventModePanel({ event, loggedByName, onClose, onChanged }: 
       return;
     }
     runAction("expense", async () => {
-      const result = await createExpense({
+      const payload: ExpenseInput = {
         event_id: event.id,
         client_id: event.client_id,
         contract_id: null,
@@ -132,10 +157,24 @@ export function LiveEventModePanel({ event, loggedByName, onClose, onChanged }: 
         reimbursable: false,
         reference: null,
         notes: null,
-      });
+      };
+
+      if (expenseRequestRef.current === null) {
+        expenseRequestRef.current = { id: crypto.randomUUID(), lastPayload: null };
+      }
+      const request = expenseRequestRef.current;
+      const payloadChanged = request.lastPayload !== null && !expensePayloadsEqual(request.lastPayload, payload);
+      const expenseId = payloadChanged ? crypto.randomUUID() : request.id;
+      expenseRequestRef.current = { id: expenseId, lastPayload: payload };
+
+      const result = await createExpense(payload, expenseId);
       if (result.success) {
         setExpenseDescription("");
         setExpenseAmount("");
+        // Ends this create-intent's lifecycle now — the next submission
+        // (even a coincidentally identical one) is treated as a genuinely
+        // new Expense, never mistaken for a replay of this one.
+        expenseRequestRef.current = null;
       }
       return result;
     });

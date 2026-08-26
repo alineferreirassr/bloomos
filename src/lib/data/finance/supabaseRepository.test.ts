@@ -1554,7 +1554,7 @@ describe("supabaseFinanceRepository.createExpense / updateExpense — Event/Cont
       ...EXPENSE_INPUT,
       client_id: "client_1",
       event_id: "event_1",
-    });
+    }, crypto.randomUUID());
     expect(result.success).toBe(false);
   });
 
@@ -1566,19 +1566,19 @@ describe("supabaseFinanceRepository.createExpense / updateExpense — Event/Cont
       ...EXPENSE_INPUT,
       client_id: "client_1",
       contract_id: "contract_1",
-    });
+    }, crypto.randomUUID());
     expect(result.success).toBe(false);
   });
 
   it("creates an expense with a null client_id and no consistency checks required", async () => {
     mockSession();
     const { client } = createMockSupabase([
-      { data: expenseRow({ client_id: null }), error: null }, // insert
+      { data: expenseRow({ client_id: null }), error: null }, // record_expense_creation rpc
       { data: null, error: null }, // timeline insert
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const result = await supabaseFinanceRepository.createExpense({ ...EXPENSE_INPUT, client_id: null });
+    const result = await supabaseFinanceRepository.createExpense({ ...EXPENSE_INPUT, client_id: null }, crypto.randomUUID());
     expect(result.success).toBe(true);
   });
 
@@ -1594,6 +1594,79 @@ describe("supabaseFinanceRepository.createExpense / updateExpense — Event/Cont
       client_id: "client_1",
       event_id: "event_1",
     });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("supabaseFinanceRepository.createExpense — atomic RPC boundary (Finance F2.1C-F-E-D-B2)", () => {
+  it("calls the atomic record_expense_creation RPC exactly once, inserts nothing directly, and logs a timeline entry", async () => {
+    mockSession();
+    const { calls, rpcCalls, client } = createMockSupabase([
+      { data: expenseRow(), error: null }, // record_expense_creation rpc
+      { data: null, error: null }, // timeline insert
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.createExpense(EXPENSE_INPUT, "expense-key-1");
+    expect(result.success).toBe(true);
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0].name).toBe("record_expense_creation");
+    expect(calls.some((c) => c.table === "expenses" && c.method === "insert")).toBe(false);
+
+    const timelineInsert = calls.find((c) => c.table === "timeline_activities" && c.method === "insert");
+    const timelinePayload = timelineInsert?.args[0] as { owner_type: string; type: string };
+    expect(timelinePayload.owner_type).toBe("expense");
+    expect(timelinePayload.type).toBe("expense_created");
+  });
+
+  it("Finance F2.1C-F-E-D-B2: sends p_expense_id and the full canonical payload to record_expense_creation", async () => {
+    mockSession();
+    const { rpcCalls, client } = createMockSupabase([
+      { data: expenseRow(), error: null },
+      { data: null, error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await supabaseFinanceRepository.createExpense(EXPENSE_INPUT, "expense-key-1");
+    const args = rpcCalls[0].args as Record<string, unknown>;
+    expect(args.p_expense_id).toBe("expense-key-1");
+    expect(args.p_category).toBe(EXPENSE_INPUT.category);
+    expect(args.p_description).toBe(EXPENSE_INPUT.description);
+    expect(args.p_amount_minor).toBe(EXPENSE_INPUT.amount_minor);
+    expect(args.p_client_id).toBe(EXPENSE_INPUT.client_id);
+  });
+
+  it("does not retry client-side on an RPC error — a raw unique-violation from the RPC propagates rather than being silently retried", async () => {
+    mockSession();
+    const { rpcCalls, client } = createMockSupabase([{ data: null, error: { code: "23505", message: "duplicate key" } }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await expect(supabaseFinanceRepository.createExpense(EXPENSE_INPUT, crypto.randomUUID())).rejects.toThrow();
+    expect(rpcCalls).toHaveLength(1);
+  });
+
+  it("Finance F2.1C-F-E-D-B2-IDEMPOTENCY: translates a P1129 (idempotency key reused for a different expense payload) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { rpcCalls, client } = createMockSupabase([
+      { data: null, error: { code: "P1129", message: "This idempotency key was already used for a different expense creation request." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.createExpense(EXPENSE_INPUT, "expense-key-1");
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("This idempotency key was already used for a different expense creation request.");
+    expect(rpcCalls.map((c) => c.name)).toEqual(["record_expense_creation"]);
+  });
+
+  it("Finance F2.1C-F-E-D-B2-IDEMPOTENCY: translates a P1130 (missing required expenseId) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: null, error: { code: "P1130", message: "p_expense_id is required and must be a stable identifier supplied by the caller (the same value on every retry of the same expense creation request)." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.createExpense(EXPENSE_INPUT, "expense-key-1");
     expect(result.success).toBe(false);
   });
 });

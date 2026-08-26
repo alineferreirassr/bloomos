@@ -51,7 +51,7 @@ import { readEvents } from "@/lib/data/mock/eventsStore";
 import { readContracts } from "@/lib/data/mock/contractsStore";
 import { readInvoices, writeInvoices, readInvoiceCreationSnapshot, writeInvoiceCreationSnapshot } from "@/lib/data/mock/invoicesStore";
 import { readPayments, writePayments } from "@/lib/data/mock/paymentsStore";
-import { readExpenses, writeExpenses } from "@/lib/data/mock/expensesStore";
+import { readExpenses, writeExpenses, readExpenseCreationSnapshot, writeExpenseCreationSnapshot } from "@/lib/data/mock/expensesStore";
 import { readNotes, writeNotes } from "@/lib/data/mock/notesStore";
 import { readChartOfAccounts } from "@/lib/data/mock/chartOfAccountsStore";
 import { readJournalEntries, writeJournalEntries } from "@/lib/data/mock/journalEntriesStore";
@@ -2149,10 +2149,58 @@ async function getExpenseById(id: string): Promise<Expense> {
 }
 
 /** Expense's client_id is legitimately optional, unlike every other entity whose workspace_id is derived from a required Client — so workspace_id is assigned directly from CURRENT_WORKSPACE_ID here. */
-async function createExpense(input: ExpenseInput): Promise<DataResult<Expense>> {
+/** Compares a frozen creation-request snapshot against a fresh request's parsed payload — never against the Expense's current, independently-editable columns (see expenseCreationSnapshots' own doc comment for why). */
+function expenseCreationPayloadMatches(snapshot: ExpenseInput, parsed: ExpenseInput): boolean {
+  return (
+    snapshot.event_id === parsed.event_id &&
+    snapshot.client_id === parsed.client_id &&
+    snapshot.contract_id === parsed.contract_id &&
+    snapshot.supplier_id === parsed.supplier_id &&
+    snapshot.team_member_id === parsed.team_member_id &&
+    snapshot.category === parsed.category &&
+    snapshot.description === parsed.description &&
+    snapshot.amount_minor === parsed.amount_minor &&
+    snapshot.currency === parsed.currency &&
+    snapshot.transaction_date === parsed.transaction_date &&
+    snapshot.due_date === parsed.due_date &&
+    snapshot.reimbursable === parsed.reimbursable &&
+    snapshot.reference === parsed.reference &&
+    snapshot.notes === parsed.notes
+  );
+}
+
+/**
+ * Finance F2.1C-F-E-D-B2: expenseId is a required, caller-generated
+ * request-idempotency key — it becomes the Expense's own primary key
+ * directly (mirroring refundPayment/recordDepositApplication/
+ * createPayment/createInvoice, never a posting_key-only scheme, since an
+ * Expense has no natural parent row to key off of). The replay lookup is
+ * by (workspace_id, id) — the Expense's own primary key. The comparison is
+ * against an immutable creation snapshot frozen once at insert time, never
+ * against the Expense's own current columns, because updateExpense can
+ * legitimately mutate the exact same fields after creation — see
+ * expenseCreationSnapshots' doc comment.
+ */
+async function createExpense(input: ExpenseInput, expenseId: string): Promise<DataResult<Expense>> {
+  if (!expenseId) {
+    return fail("expenseId is required and must be a stable identifier supplied by the caller (the same value on every retry of the same expense creation request).");
+  }
+
   const parsed = expenseSchema.safeParse(input);
   if (!parsed.success) {
     return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
+  }
+
+  const existing = readExpenses().find((e) => e.id === expenseId && e.workspace_id === CURRENT_WORKSPACE_ID);
+  if (existing) {
+    // A historical Expense (predating this mechanism) or one created via
+    // duplicateExpense() has no recorded snapshot — never treat that as a
+    // confirmed replay; fail safely as a conflict instead.
+    const snapshot = readExpenseCreationSnapshot(CURRENT_WORKSPACE_ID, expenseId);
+    if (!snapshot || !expenseCreationPayloadMatches(snapshot, parsed.data)) {
+      return fail("This idempotency key was already used for a different expense creation request.");
+    }
+    return ok(existing);
   }
 
   if (parsed.data.event_id !== null) {
@@ -2180,7 +2228,7 @@ async function createExpense(input: ExpenseInput): Promise<DataResult<Expense>> 
 
   const timestamp = nowIso();
   const expense: Expense = {
-    id: generateId("expense"),
+    id: expenseId,
     workspace_id: CURRENT_WORKSPACE_ID,
     ...parsed.data,
     status: "planned",
@@ -2193,6 +2241,7 @@ async function createExpense(input: ExpenseInput): Promise<DataResult<Expense>> 
   };
 
   writeExpenses([...readExpenses(), expense]);
+  writeExpenseCreationSnapshot(CURRENT_WORKSPACE_ID, expenseId, parsed.data);
   recordTimelineActivity(expense.workspace_id, "expense", expense.id, "expense_created", `Expense created: "${expense.description}"`);
 
   return ok(expense);

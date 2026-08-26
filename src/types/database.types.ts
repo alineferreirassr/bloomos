@@ -1373,6 +1373,7 @@ export interface Database {
           created_at: string;
           updated_at: string;
           archived_at: string | null;
+          creation_request_snapshot: Json | null;
         };
         Insert: {
           id?: string;
@@ -1398,6 +1399,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
           archived_at?: string | null;
+          creation_request_snapshot?: Json | null;
         };
         Update: {
           id?: string;
@@ -1423,6 +1425,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
           archived_at?: string | null;
+          creation_request_snapshot?: Json | null;
         };
         Relationships: [];
       };
@@ -2685,6 +2688,27 @@ export interface Database {
       };
       record_expense_transition: {
         Args: { p_expense_id: string; p_transition: string; p_actor: string };
+        Returns: Database["public"]["Tables"]["expenses"]["Row"];
+      };
+      record_expense_creation: {
+        Args: {
+          p_workspace_id: string;
+          p_event_id: string | null;
+          p_client_id: string | null;
+          p_contract_id: string | null;
+          p_supplier_id: string | null;
+          p_team_member_id: string | null;
+          p_category: string;
+          p_description: string;
+          p_amount_minor: number;
+          p_currency: string;
+          p_transaction_date: string;
+          p_due_date: string | null;
+          p_reimbursable: boolean;
+          p_reference: string | null;
+          p_notes: string | null;
+          p_expense_id: string;
+        };
         Returns: Database["public"]["Tables"]["expenses"]["Row"];
       };
       post_inventory_movement_entry: {

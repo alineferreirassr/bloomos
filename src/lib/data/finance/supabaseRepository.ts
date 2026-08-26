@@ -91,6 +91,7 @@ const DEFAULT_JOURNAL_ENTRY_PAGE_SIZE = 50;
 type SupabaseClient = ReturnType<typeof createSupabaseClient>;
 type InvoiceRow = Database["public"]["Tables"]["invoices"]["Row"];
 type InvoiceInsert = Omit<Database["public"]["Tables"]["invoices"]["Insert"], "invoice_number">;
+type ExpenseRow = Database["public"]["Tables"]["expenses"]["Row"];
 
 const MAX_INVOICE_NUMBER_ATTEMPTS = 5;
 const UNIQUE_VIOLATION = "23505";
@@ -1537,7 +1538,17 @@ async function getExpenseById(id: string): Promise<Expense> {
 }
 
 /** Expense's client_id is legitimately optional — workspace_id comes from the caller's own session, not derived from a required Client (mirrors the mock's use of CURRENT_WORKSPACE_ID). */
-async function createExpense(input: ExpenseInput): Promise<DataResult<Expense>> {
+/**
+ * Finance F2.1C-F-E-D-B2: expenseId is a required, caller-generated
+ * request-idempotency key, passed through as p_expense_id — never
+ * embedded in the validated ExpenseInput payload. A same-key replay
+ * (P1129 conflict) or null key (P1130) both already fall inside the
+ * shared FINANCE_VALIDATION_ERROR_CODES set handleFinanceRpcError checks,
+ * so no new error-handling path is needed here. The RPC itself owns the
+ * previously client-side direct insert as one atomic transaction — see
+ * record_expense_creation's own migration comment.
+ */
+async function createExpense(input: ExpenseInput, expenseId: string): Promise<DataResult<Expense>> {
   const parsed = expenseSchema.safeParse(input);
   if (!parsed.success) {
     return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
@@ -1579,14 +1590,27 @@ async function createExpense(input: ExpenseInput): Promise<DataResult<Expense>> 
 
   const session = await requireWorkspaceSession();
   const actor = resolveActorName(session);
-  const { data, error } = await supabase
-    .from("expenses")
-    .insert({ workspace_id: session.workspace.id, ...parsed.data, status: "planned" })
-    .select("*")
-    .single();
-  if (error) throw normalizeSupabaseError(error);
+  const { data, error } = await supabase.rpc("record_expense_creation", {
+    p_workspace_id: session.workspace.id,
+    p_event_id: parsed.data.event_id,
+    p_client_id: parsed.data.client_id,
+    p_contract_id: parsed.data.contract_id,
+    p_supplier_id: parsed.data.supplier_id,
+    p_team_member_id: parsed.data.team_member_id,
+    p_category: parsed.data.category,
+    p_description: parsed.data.description,
+    p_amount_minor: parsed.data.amount_minor,
+    p_currency: parsed.data.currency,
+    p_transaction_date: parsed.data.transaction_date,
+    p_due_date: parsed.data.due_date,
+    p_reimbursable: parsed.data.reimbursable,
+    p_reference: parsed.data.reference,
+    p_notes: parsed.data.notes,
+    p_expense_id: expenseId,
+  });
+  if (error) return handleFinanceRpcError<Expense>(error);
 
-  const expense = mapExpenseRow(data);
+  const expense = mapExpenseRow(data as ExpenseRow);
   await insertTimelineActivity(supabase, actor, expense.workspace_id, "expense", expense.id, "expense_created", `Expense created: "${expense.description}"`);
 
   return ok(expense);

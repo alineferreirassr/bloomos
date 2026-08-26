@@ -638,7 +638,7 @@ describe("refundPayment", () => {
 
 describe("createExpense", () => {
   it("creates a general business expense with no Client/Event/Contract", async () => {
-    const result = await createExpense(validExpenseInput);
+    const result = await createExpense(validExpenseInput, crypto.randomUUID());
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.status).toBe("planned");
@@ -648,24 +648,35 @@ describe("createExpense", () => {
   });
 
   it("rejects an event that doesn't belong to the given client", async () => {
-    const result = await createExpense({ ...validExpenseInput, client_id: "client_1", event_id: "event_1" });
+    const result = await createExpense({ ...validExpenseInput, client_id: "client_1", event_id: "event_1" }, crypto.randomUUID());
     expect(result.success).toBe(false);
   });
 
   it("accepts an event that belongs to the given client", async () => {
-    const result = await createExpense({ ...validExpenseInput, client_id: "client_2", event_id: "event_1" });
+    const result = await createExpense({ ...validExpenseInput, client_id: "client_2", event_id: "event_1" }, crypto.randomUUID());
     expect(result.success).toBe(true);
   });
 
   it("rejects a zero amount", async () => {
-    const result = await createExpense({ ...validExpenseInput, amount_minor: 0 });
+    const result = await createExpense({ ...validExpenseInput, amount_minor: 0 }, crypto.randomUUID());
     expect(result.success).toBe(false);
+  });
+
+  it("Finance F2.1C-F-E-D-B2: forwards the caller-supplied expenseId unchanged to the repository — a same-id retry replays the same Expense", async () => {
+    const id = crypto.randomUUID();
+    const first = await createExpense(validExpenseInput, id);
+    expect(first.success).toBe(true);
+    const second = await createExpense(validExpenseInput, id);
+    expect(second.success).toBe(true);
+    if (!first.success || !second.success) return;
+    expect(second.data.id).toBe(first.data.id);
+    expect(second.data.id).toBe(id);
   });
 });
 
 describe("getExpenseById", () => {
   it("returns the matching Expense", async () => {
-    const created = await createExpense(validExpenseInput);
+    const created = await createExpense(validExpenseInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     const found = await getExpenseById(created.data.id);
     expect(found.id).toBe(created.data.id);
@@ -678,7 +689,7 @@ describe("getExpenseById", () => {
 
 describe("Expense status transitions", () => {
   it("moves planned -> approved -> due -> paid", async () => {
-    const created = await createExpense(validExpenseInput);
+    const created = await createExpense(validExpenseInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     expect((await approveExpense(created.data.id)).success).toBe(true);
     expect((await markExpenseDue(created.data.id)).success).toBe(true);
@@ -688,14 +699,14 @@ describe("Expense status transitions", () => {
   });
 
   it("cannot mark planned expense due directly (must be approved first)", async () => {
-    const created = await createExpense(validExpenseInput);
+    const created = await createExpense(validExpenseInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     const result = await markExpenseDue(created.data.id);
     expect(result.success).toBe(false);
   });
 
   it("reimburses a paid, reimbursable expense", async () => {
-    const created = await createExpense({ ...validExpenseInput, reimbursable: true });
+    const created = await createExpense({ ...validExpenseInput, reimbursable: true }, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await approveExpense(created.data.id);
     await markExpensePaid(created.data.id);
@@ -705,7 +716,7 @@ describe("Expense status transitions", () => {
   });
 
   it("cannot reimburse a non-reimbursable expense", async () => {
-    const created = await createExpense({ ...validExpenseInput, reimbursable: false });
+    const created = await createExpense({ ...validExpenseInput, reimbursable: false }, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await approveExpense(created.data.id);
     await markExpensePaid(created.data.id);
@@ -714,7 +725,7 @@ describe("Expense status transitions", () => {
   });
 
   it("cancels a planned expense", async () => {
-    const created = await createExpense(validExpenseInput);
+    const created = await createExpense(validExpenseInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     const result = await cancelExpense(created.data.id);
     expect(result.success).toBe(true);
@@ -722,7 +733,7 @@ describe("Expense status transitions", () => {
   });
 
   it("cannot cancel a paid expense", async () => {
-    const created = await createExpense(validExpenseInput);
+    const created = await createExpense(validExpenseInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await approveExpense(created.data.id);
     await markExpensePaid(created.data.id);
@@ -731,7 +742,7 @@ describe("Expense status transitions", () => {
   });
 
   it("archives and restores an expense back to planned", async () => {
-    const created = await createExpense(validExpenseInput);
+    const created = await createExpense(validExpenseInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await archiveExpense(created.data.id);
     const restored = await restoreExpense(created.data.id);
@@ -740,7 +751,7 @@ describe("Expense status transitions", () => {
   });
 
   it("blocks content edits once an expense is terminal (reimbursed/cancelled/archived)", async () => {
-    const created = await createExpense(validExpenseInput);
+    const created = await createExpense(validExpenseInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await cancelExpense(created.data.id);
     const result = await updateExpense(created.data.id, validExpenseInput);
@@ -750,7 +761,7 @@ describe("Expense status transitions", () => {
 
 describe("duplicateExpense", () => {
   it("creates a new planned expense with a new id and no inherited paid/reimbursed state", async () => {
-    const created = await createExpense({ ...validExpenseInput, reimbursable: true });
+    const created = await createExpense({ ...validExpenseInput, reimbursable: true }, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await approveExpense(created.data.id);
     await markExpensePaid(created.data.id);
@@ -791,7 +802,7 @@ describe("getInvoiceNextAction / getPaymentNextAction / getExpenseNextAction", (
   });
 
   it("returns a recommended action for a planned expense", async () => {
-    const created = await createExpense(validExpenseInput);
+    const created = await createExpense(validExpenseInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     const action = await getExpenseNextAction(created.data.id);
     expect(action).toMatch(/approve/i);
@@ -864,7 +875,7 @@ describe("Invoice/Payment/Expense Notes and Timeline", () => {
   });
 
   it("adds and retrieves a note on an Expense", async () => {
-    const created = await createExpense(validExpenseInput);
+    const created = await createExpense(validExpenseInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     const noteResult = await createExpenseNote(created.data.id, {
       title: "Test note",
@@ -880,7 +891,7 @@ describe("Invoice/Payment/Expense Notes and Timeline", () => {
   it("scopes Invoice/Payment/Expense notes and timeline to the correct workspace via owner_type/owner_id", async () => {
     const invoice = await createInvoice(validInvoiceInput, crypto.randomUUID());
     const payment = await createPayment({ ...validPaymentInput, payment_method: "cash" }, crypto.randomUUID());
-    const expense = await createExpense(validExpenseInput);
+    const expense = await createExpense(validExpenseInput, crypto.randomUUID());
     if (!invoice.success || !payment.success || !expense.success) throw new Error("setup failed");
 
     const invoiceNotes = await getNotesByInvoiceId(invoice.data.id);
@@ -904,7 +915,7 @@ describe("Invoice/Payment/Expense Notes and Timeline", () => {
   });
 
   it("records Expense lifecycle activities on its own timeline", async () => {
-    const created = await createExpense(validExpenseInput);
+    const created = await createExpense(validExpenseInput, crypto.randomUUID());
     if (!created.success) throw new Error("setup failed");
     await approveExpense(created.data.id);
     const timeline = await getTimelineByExpenseId(created.data.id);

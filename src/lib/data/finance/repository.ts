@@ -267,7 +267,8 @@ export interface FinanceRepository {
   /** `context` optionally injects an already-authenticated server Supabase client + Workspace session — see EventsRepository's identical doc comment. Ignored by the mock implementation. */
   getExpenses(filters?: ExpenseFilters, context?: ServerRepositoryContext): Promise<Expense[]>;
   getExpenseById(id: string): Promise<Expense>;
-  createExpense(input: ExpenseInput): Promise<DataResult<Expense>>;
+  /** Finance F2.1C-F-E-D-B2: expenseId is a required, caller-generated request-idempotency key (kept separate from the Founder-authored ExpenseInput payload) — a retry with the same id and the same payload replays the original Expense instead of creating a second one; the same id with a different payload is rejected as a conflict. The comparison is against an immutable snapshot of the original creation payload, never against the Expense's current, independently-editable columns, since updateExpense can legitimately change the same fields after creation. */
+  createExpense(input: ExpenseInput, expenseId: string): Promise<DataResult<Expense>>;
   updateExpense(id: string, input: ExpenseInput): Promise<DataResult<Expense>>;
   approveExpense(id: string): Promise<DataResult<Expense>>;
   markExpenseDue(id: string): Promise<DataResult<Expense>>;
