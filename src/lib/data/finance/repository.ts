@@ -200,7 +200,8 @@ export interface FinanceRepository {
   /** `context` optionally injects an already-authenticated server Supabase client + Workspace session — see EventsRepository's identical doc comment. Ignored by the mock implementation. */
   getPayments(filters?: PaymentFilters, context?: ServerRepositoryContext): Promise<Payment[]>;
   getPaymentById(id: string): Promise<Payment>;
-  createPayment(input: PaymentInput): Promise<DataResult<Payment>>;
+  /** paymentId is a required, caller-generated request-idempotency key for the immediately-succeeded path (kept separate from PaymentInput) — see recordPaymentSettlement's own doc comment for the shared semantics. A pending-status Payment (this path's other branch) does not yet participate in this idempotency mechanism. */
+  createPayment(input: PaymentInput, paymentId: string): Promise<DataResult<Payment>>;
   updatePayment(id: string, input: PaymentInput): Promise<DataResult<Payment>>;
   markPaymentProcessing(id: string): Promise<DataResult<Payment>>;
   markPaymentSucceeded(id: string): Promise<DataResult<Payment>>;
@@ -313,8 +314,8 @@ export interface FinanceRepository {
   listAccountingPeriods(filters?: AccountingPeriodFilters): Promise<AccountingPeriod[]>;
   getAccountingPeriod(id: string): Promise<AccountingPeriod>;
 
-  /** Calls record_payment_settlement. Rejects payment_method='stripe' at this boundary too (Stripe remains deferred), independent of the RPC's own P1117 rejection. */
-  recordPaymentSettlement(input: PaymentSettlementInput): Promise<DataResult<Payment>>;
+  /** Calls record_payment_settlement. Rejects payment_method='stripe' at this boundary too (Stripe remains deferred), independent of the RPC's own P1117 rejection. Finance F2.1C-F-E-C: paymentId is a required, caller-generated request-idempotency key (kept separate from the Founder-authored PaymentSettlementInput payload) — a retry with the same id and the same payload replays the original Payment instead of posting a second settlement; the same id with a different payload is rejected as a conflict. createPayment's own immediately-succeeded path shares this exact mechanism (both compose into the same underlying settled-payment engine path). */
+  recordPaymentSettlement(input: PaymentSettlementInput, paymentId: string): Promise<DataResult<Payment>>;
   /** Calls record_expense_transition. */
   recordExpenseTransition(expenseId: string, input: ExpenseTransitionInput): Promise<DataResult<Expense>>;
   /** Calls record_manual_adjustment. Balance equality is validated by the RPC, not re-checked here. manualAdjustmentId is a required, caller-generated request-idempotency key (kept separate from the Founder-authored ManualAdjustmentInput payload) — a retry with the same id and the same payload replays the original Journal Entry instead of posting a second one; the same id with a different payload is rejected as a conflict. */

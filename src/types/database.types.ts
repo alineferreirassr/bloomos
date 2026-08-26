@@ -2649,6 +2649,7 @@ export interface Database {
           p_transaction_date: string;
           p_notes: string | null;
           p_actor: string;
+          p_payment_id: string;
         };
         Returns: Database["public"]["Tables"]["payments"]["Row"];
       };

@@ -49,7 +49,7 @@ describe("NewPaymentSettlementView", () => {
     expect(within(methodSelect).queryByRole("option", { name: /stripe/i })).not.toBeInTheDocument();
   });
 
-  it("calls recordPaymentSettlement (not createPayment) and navigates to the new payment", async () => {
+  it("calls recordPaymentSettlement (not createPayment) with a generated paymentId and navigates to the new payment", async () => {
     const user = userEvent.setup();
     mockClients();
     vi.mocked(dataLayer.recordPaymentSettlement).mockResolvedValue({
@@ -64,8 +64,62 @@ describe("NewPaymentSettlementView", () => {
     await user.type(screen.getByLabelText(/^amount\b/i), "150");
     await user.click(screen.getByRole("button", { name: /record settlement/i }));
 
-    await waitFor(() => expect(dataLayer.recordPaymentSettlement).toHaveBeenCalled());
+    await waitFor(() => expect(dataLayer.recordPaymentSettlement).toHaveBeenCalledWith(expect.objectContaining({ amount_minor: 15000 }), expect.any(String)));
+    const paymentId = vi.mocked(dataLayer.recordPaymentSettlement).mock.calls[0][1];
+    expect(paymentId.length).toBeGreaterThan(0);
     await waitFor(() => expect(push).toHaveBeenCalledWith("/finance/payments/payment_new"));
+  });
+
+  it("reuses the SAME paymentId across a thrown-then-retried submit with an unchanged payload", async () => {
+    const user = userEvent.setup();
+    mockClients();
+    vi.mocked(dataLayer.recordPaymentSettlement)
+      .mockRejectedValueOnce(new Error("network error"))
+      .mockResolvedValueOnce({ success: true, data: makePayment({ id: "payment_new" }) });
+
+    render(<NewPaymentSettlementView />);
+    const clientSelect = await waitForClientOptions();
+    await user.selectOptions(clientSelect, "client_1");
+    await user.clear(screen.getByLabelText(/^amount\b/i));
+    await user.type(screen.getByLabelText(/^amount\b/i), "150");
+    const submitButton = screen.getByRole("button", { name: /record settlement/i });
+    await user.click(submitButton);
+    expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument();
+    await user.click(submitButton);
+
+    await waitFor(() => expect(dataLayer.recordPaymentSettlement).toHaveBeenCalledTimes(2));
+    const firstId = vi.mocked(dataLayer.recordPaymentSettlement).mock.calls[0][1];
+    const secondId = vi.mocked(dataLayer.recordPaymentSettlement).mock.calls[1][1];
+    expect(secondId).toBe(firstId);
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/finance/payments/payment_new"));
+  });
+
+  it("generates a NEW paymentId when the Founder edits the payload after a failed attempt", async () => {
+    const user = userEvent.setup();
+    mockClients();
+    vi.mocked(dataLayer.recordPaymentSettlement)
+      .mockRejectedValueOnce(new Error("network error"))
+      .mockResolvedValueOnce({ success: true, data: makePayment({ id: "payment_new" }) });
+
+    render(<NewPaymentSettlementView />);
+    const clientSelect = await waitForClientOptions();
+    await user.selectOptions(clientSelect, "client_1");
+    const amountInput = screen.getByLabelText(/^amount\b/i);
+    await user.clear(amountInput);
+    await user.type(amountInput, "150");
+    const submitButton = screen.getByRole("button", { name: /record settlement/i });
+    await user.click(submitButton);
+    expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument();
+
+    await user.clear(amountInput);
+    await user.type(amountInput, "200");
+    await user.click(submitButton);
+
+    await waitFor(() => expect(dataLayer.recordPaymentSettlement).toHaveBeenCalledTimes(2));
+    const firstId = vi.mocked(dataLayer.recordPaymentSettlement).mock.calls[0][1];
+    const secondCall = vi.mocked(dataLayer.recordPaymentSettlement).mock.calls[1];
+    expect(secondCall[1]).not.toBe(firstId);
+    expect(secondCall[0]).toEqual(expect.objectContaining({ amount_minor: 20000 }));
   });
 
   it("surfaces a translated error from the Repository without navigating", async () => {

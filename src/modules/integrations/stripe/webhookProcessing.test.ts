@@ -124,7 +124,7 @@ describe("checkout.session.completed", () => {
     const result = await processStripeWebhookEvent("ws_1", "conn_1", event);
 
     expect(result.handled).toBe(true);
-    expect(createPayment).toHaveBeenCalledWith(expect.objectContaining({ amount_minor: 50000, payment_method: "stripe", reference: "pi_real_1" }));
+    expect(createPayment).toHaveBeenCalledWith(expect.objectContaining({ amount_minor: 50000, payment_method: "stripe", reference: "pi_real_1" }), expect.any(String));
     expect(markPaymentSucceeded).toHaveBeenCalled();
     expect(publishIntegrationEvent).toHaveBeenCalledWith(expect.objectContaining({ type: "payment.succeeded" }));
     expect(dispatchAutomationTrigger).toHaveBeenCalledWith(expect.objectContaining({ type: "payment.received" }), expect.anything());

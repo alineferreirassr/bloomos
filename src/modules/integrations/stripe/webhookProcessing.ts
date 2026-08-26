@@ -112,19 +112,29 @@ async function handleMoneyReceived(paymentIntentId: string, amountMinor: number,
     return succeeded.data;
   }
 
-  const created = await createPayment({
-    invoice_id: meta.invoiceId,
-    client_id: meta.clientId,
-    event_id: meta.eventId,
-    contract_id: null,
-    payment_type: meta.paymentType,
-    amount_minor: amountMinor,
-    currency,
-    payment_method: "stripe",
-    reference: paymentIntentId,
-    transaction_date: clockNow().toISOString().slice(0, 10),
-    notes: `Received via Stripe (${paymentIntentId}).`,
-  });
+  // payment_method is always "stripe" here — never in IMMEDIATELY_SUCCEEDED_METHODS
+  // — so this always takes createPayment's plain pending-status insert path,
+  // never the settled-payment engine path Finance F2.1C-F-E-C added
+  // idempotency to. This call's own genuine idempotency already comes from
+  // the findExistingPaymentByReference check above (keyed on the Stripe
+  // paymentIntentId), so the required paymentId argument here is inert —
+  // supplied only to satisfy createPayment's signature.
+  const created = await createPayment(
+    {
+      invoice_id: meta.invoiceId,
+      client_id: meta.clientId,
+      event_id: meta.eventId,
+      contract_id: null,
+      payment_type: meta.paymentType,
+      amount_minor: amountMinor,
+      currency,
+      payment_method: "stripe",
+      reference: paymentIntentId,
+      transaction_date: clockNow().toISOString().slice(0, 10),
+      notes: `Received via Stripe (${paymentIntentId}).`,
+    },
+    crypto.randomUUID(),
+  );
   if (!created.success) throw new Error(created.error);
 
   const succeeded = await markPaymentSucceeded(created.data.id);
@@ -140,19 +150,27 @@ async function handleMoneyFailed(paymentIntentId: string, amountMinor: number, c
     return failedExisting.success ? failedExisting.data : existing;
   }
 
-  const created = await createPayment({
-    invoice_id: meta.invoiceId,
-    client_id: meta.clientId,
-    event_id: meta.eventId,
-    contract_id: null,
-    payment_type: meta.paymentType,
-    amount_minor: amountMinor,
-    currency,
-    payment_method: "stripe",
-    reference: paymentIntentId,
-    transaction_date: clockNow().toISOString().slice(0, 10),
-    notes: `Failed via Stripe (${paymentIntentId}).`,
-  });
+  // See handleMoneyReceived's identical comment: always the plain
+  // pending-status insert path (payment_method is always "stripe"), never
+  // the settled-payment engine path — paymentId here is inert, required
+  // only by createPayment's signature; the real idempotency for this
+  // handler is findExistingPaymentByReference above.
+  const created = await createPayment(
+    {
+      invoice_id: meta.invoiceId,
+      client_id: meta.clientId,
+      event_id: meta.eventId,
+      contract_id: null,
+      payment_type: meta.paymentType,
+      amount_minor: amountMinor,
+      currency,
+      payment_method: "stripe",
+      reference: paymentIntentId,
+      transaction_date: clockNow().toISOString().slice(0, 10),
+      notes: `Failed via Stripe (${paymentIntentId}).`,
+    },
+    crypto.randomUUID(),
+  );
   if (!created.success) throw new Error(created.error);
   const failed = await markPaymentFailed(created.data.id);
   if (!failed.success) throw new Error(failed.error);

@@ -1,15 +1,21 @@
 "use client";
 
+import { useRef } from "react";
 import { useRouter } from "next/navigation";
 import { recordPaymentSettlement } from "@/lib/data";
 import { PaymentForm } from "@/modules/finance/components/PaymentForm";
-import { paymentFormToInput } from "@/modules/finance/schema";
+import { paymentFormToInput, type PaymentInput } from "@/modules/finance/schema";
 
 interface NewPaymentSettlementViewProps {
   defaultClientId?: string;
   defaultInvoiceId?: string;
   defaultEventId?: string;
   defaultContractId?: string;
+}
+
+/** Plain JSON-shaped payload (strings/numbers/null, fixed key order from paymentFormToInput) — string comparison is a safe, simple deep-equality check. */
+function paymentPayloadsEqual(a: PaymentInput, b: PaymentInput): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 /**
@@ -25,6 +31,19 @@ export function NewPaymentSettlementView({
   defaultContractId,
 }: NewPaymentSettlementViewProps) {
   const router = useRouter();
+
+  /**
+   * Finance F2.1C-F-E-C: paymentId is generated lazily, exactly once per
+   * page mount — same lifecycle NewPaymentView uses, but its own
+   * independent ref: Payment and Settlement must never share an identity,
+   * since a shared ref here would let an edited Settlement retry
+   * accidentally collide with (or replay) an unrelated New Payment
+   * attempt if a Founder somehow had both flows' state alive at once.
+   */
+  const requestRef = useRef<{ id: string; lastPayload: PaymentInput | null } | null>(null);
+  if (requestRef.current === null) {
+    requestRef.current = { id: crypto.randomUUID(), lastPayload: null };
+  }
 
   return (
     <div>
@@ -44,7 +63,13 @@ export function NewPaymentSettlementView({
             contract_id: defaultContractId ?? "",
           }}
           onSubmit={async (input) => {
-            const result = await recordPaymentSettlement(paymentFormToInput(input));
+            const payload = paymentFormToInput(input);
+            const request = requestRef.current!;
+            const payloadChanged = request.lastPayload !== null && !paymentPayloadsEqual(request.lastPayload, payload);
+            const paymentId = payloadChanged ? crypto.randomUUID() : request.id;
+            requestRef.current = { id: paymentId, lastPayload: payload };
+
+            const result = await recordPaymentSettlement(payload, paymentId);
             if (result.success) {
               router.push(`/finance/payments/${result.data.id}`);
             }

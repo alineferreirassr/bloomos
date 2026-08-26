@@ -188,6 +188,7 @@ describe("Finance Reports UI structural guardrails", () => {
       "20260827100000_finance_partial_payment_void.sql",
       "20260828100000_finance_deposit_application_reversal.sql",
       "20260829100000_finance_manual_adjustment_idempotency.sql",
+      "20260830100000_finance_payment_settlement_idempotency.sql",
     ];
     const financeFilesAfter = files.filter(
       (f) => f > "20260805100000_finance_report_rpcs.sql" && f.includes("finance") && !LATER_SANCTIONED_FINANCE_FILES.includes(f),

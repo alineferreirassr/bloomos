@@ -1030,10 +1030,53 @@ const IMMEDIATELY_SUCCEEDED_METHODS = new Set(["cash", "check", "bank_transfer",
  * ledger, one didn't, for what a user would reasonably consider the same
  * action).
  */
-async function insertSettledPayment(client: Client, parsed: PaymentInput, invoice: Invoice | undefined): Promise<Payment> {
+/** Compares the durable, already-persisted shape of an existing settled Payment against a fresh request's parsed payload — never against mutable external state (e.g. current invoice balance). */
+function settledPaymentPayloadMatches(existing: Payment, parsed: PaymentInput): boolean {
+  return (
+    existing.invoice_id === parsed.invoice_id &&
+    existing.client_id === parsed.client_id &&
+    existing.event_id === parsed.event_id &&
+    existing.contract_id === parsed.contract_id &&
+    existing.payment_type === parsed.payment_type &&
+    existing.amount_minor === parsed.amount_minor &&
+    existing.currency === parsed.currency &&
+    existing.payment_method === parsed.payment_method &&
+    existing.reference === parsed.reference &&
+    existing.transaction_date === parsed.transaction_date &&
+    existing.notes === parsed.notes
+  );
+}
+
+/**
+ * Finance F2.1C-F-E-C: paymentId is a required, caller-generated
+ * request-idempotency key — it becomes the Payment's own primary key
+ * directly (mirroring refundPayment/recordDepositApplication, never a
+ * separate posting_key-only scheme, since a Payment has no natural parent
+ * row to key off of and the resulting posting_key already derives from
+ * this same id). The replay lookup is by (workspace_id, id) — the
+ * Payment's own primary key — not by any journal_entries mechanism.
+ */
+async function insertSettledPayment(
+  client: Client,
+  parsed: PaymentInput,
+  invoice: Invoice | undefined,
+  paymentId: string,
+): Promise<DataResult<Payment>> {
+  if (!paymentId) {
+    return fail("paymentId is required and must be a stable identifier supplied by the caller (the same value on every retry of the same payment request).");
+  }
+
+  const existing = readPayments().find((p) => p.id === paymentId && p.workspace_id === client.workspace_id);
+  if (existing) {
+    if (!settledPaymentPayloadMatches(existing, parsed)) {
+      return fail("This idempotency key was already used for a different payment request.");
+    }
+    return ok(existing);
+  }
+
   const timestamp = nowIso();
   const payment: Payment = {
-    id: generateId("payment"),
+    id: paymentId,
     workspace_id: client.workspace_id,
     ...parsed,
     status: "succeeded",
@@ -1076,10 +1119,10 @@ async function insertSettledPayment(client: Client, parsed: PaymentInput, invoic
     after: { amount_minor: payment.amount_minor, payment_method: payment.payment_method, invoice_id: payment.invoice_id },
   });
 
-  return payment;
+  return ok(payment);
 }
 
-async function createPayment(input: PaymentInput): Promise<DataResult<Payment>> {
+async function createPayment(input: PaymentInput, paymentId: string): Promise<DataResult<Payment>> {
   const parsed = paymentSchema.safeParse(input);
   if (!parsed.success) {
     return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
@@ -1132,8 +1175,7 @@ async function createPayment(input: PaymentInput): Promise<DataResult<Payment>> 
   // payment as already succeeded. See insertSettledPayment's own doc
   // comment and its Supabase-mode counterpart for the full reasoning.
   if (initialStatus === "succeeded") {
-    const payment = await insertSettledPayment(client, parsed.data, invoice);
-    return ok(payment);
+    return insertSettledPayment(client, parsed.data, invoice, paymentId);
   }
 
   const payment: Payment = {
@@ -2624,7 +2666,7 @@ async function getAccountingPeriod(id: string): Promise<AccountingPeriod> {
  * and overpayment checks `createPayment` runs) — mirroring the real RPC's
  * own narrower validation exactly, not a mock-only shortcut.
  */
-async function recordPaymentSettlement(input: PaymentSettlementInput): Promise<DataResult<Payment>> {
+async function recordPaymentSettlement(input: PaymentSettlementInput, paymentId: string): Promise<DataResult<Payment>> {
   if (input.payment_method === "stripe") {
     return fail("Stripe payments are not supported in this phase — record only manual/internal payment methods.");
   }
@@ -2647,8 +2689,7 @@ async function recordPaymentSettlement(input: PaymentSettlementInput): Promise<D
     }
   }
 
-  const payment = await insertSettledPayment(client, parsed.data, invoice);
-  return ok(payment);
+  return insertSettledPayment(client, parsed.data, invoice, paymentId);
 }
 
 /**

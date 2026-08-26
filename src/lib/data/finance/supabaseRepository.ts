@@ -931,11 +931,13 @@ const IMMEDIATELY_SUCCEEDED_METHODS = new Set(["cash", "check", "bank_transfer",
  * the two audit trails (Timeline + Audit Log) both prior paths already had
  * one or the other of, never both — this helper gives every caller both.
  */
+/** Finance F2.1C-F-E-C: paymentId is a required, caller-generated request-idempotency key, passed through as p_payment_id — never embedded in the validated PaymentInput payload. A same-key replay (P1129 conflict) or null key (P1130) both already fall inside the shared FINANCE_VALIDATION_ERROR_CODES set handleFinanceRpcError checks, so no new error-handling path is needed here. */
 async function insertSettledPayment(
   supabase: SupabaseClient,
   session: WorkspaceSession,
   actor: string,
   parsed: PaymentInput,
+  paymentId: string,
 ): Promise<DataResult<Payment>> {
   const { data, error } = await supabase.rpc("record_payment_settlement", {
     p_workspace_id: session.workspace.id,
@@ -951,6 +953,7 @@ async function insertSettledPayment(
     p_transaction_date: parsed.transaction_date,
     p_notes: parsed.notes,
     p_actor: actor,
+    p_payment_id: paymentId,
   });
   if (error) return handleFinanceRpcError<Payment>(error);
 
@@ -969,7 +972,7 @@ async function insertSettledPayment(
   return ok(payment);
 }
 
-async function createPayment(input: PaymentInput): Promise<DataResult<Payment>> {
+async function createPayment(input: PaymentInput, paymentId: string): Promise<DataResult<Payment>> {
   const parsed = paymentSchema.safeParse(input);
   if (!parsed.success) {
     return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
@@ -1037,7 +1040,7 @@ async function createPayment(input: PaymentInput): Promise<DataResult<Payment>> 
   // posting to the ledger before the money has actually moved would be a
   // real accounting error, not merely a missed opportunity.
   if (initialStatus === "succeeded") {
-    return insertSettledPayment(supabase, session, actor, parsed.data);
+    return insertSettledPayment(supabase, session, actor, parsed.data, paymentId);
   }
 
   const { data, error } = await supabase
@@ -2394,7 +2397,7 @@ async function getBalanceSheetReport(filters: BalanceSheetReportFilters): Promis
  * distinction between the two screens: "I already know this money moved,
  * post it now" vs. "record what I was told, infer whether it's settled."
  */
-async function recordPaymentSettlement(input: PaymentSettlementInput): Promise<DataResult<Payment>> {
+async function recordPaymentSettlement(input: PaymentSettlementInput, paymentId: string): Promise<DataResult<Payment>> {
   if (input.payment_method === "stripe") {
     return fail("Stripe payments are not supported in this phase — record only manual/internal payment methods.");
   }
@@ -2408,7 +2411,7 @@ async function recordPaymentSettlement(input: PaymentSettlementInput): Promise<D
   const actor = resolveActorName(session);
   const supabase = createSupabaseClient();
 
-  return insertSettledPayment(supabase, session, actor, parsed.data);
+  return insertSettledPayment(supabase, session, actor, parsed.data, paymentId);
 }
 
 async function recordExpenseTransition(expenseId: string, input: ExpenseTransitionInput): Promise<DataResult<Expense>> {

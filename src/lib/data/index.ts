@@ -1412,8 +1412,8 @@ async function maybeDispatchInvoicePaid(invoiceId: string | null): Promise<void>
   }
 }
 
-export async function createPayment(input: PaymentInput): Promise<DataResult<Payment>> {
-  const result = await financeRepository().createPayment(input);
+export async function createPayment(input: PaymentInput, paymentId: string): Promise<DataResult<Payment>> {
+  const result = await financeRepository().createPayment(input, paymentId);
   if (result.success) await maybeDispatchInvoicePaid(result.data.invoice_id);
   return result;
 }
@@ -1904,8 +1904,8 @@ export async function getAccountingPeriod(id: string): Promise<AccountingPeriod>
   return financeRepository().getAccountingPeriod(id);
 }
 
-export async function recordPaymentSettlement(input: PaymentSettlementInput): Promise<DataResult<Payment>> {
-  return financeRepository().recordPaymentSettlement(input);
+export async function recordPaymentSettlement(input: PaymentSettlementInput, paymentId: string): Promise<DataResult<Payment>> {
+  return financeRepository().recordPaymentSettlement(input, paymentId);
 }
 
 export async function recordExpenseTransition(expenseId: string, input: ExpenseTransitionInput): Promise<DataResult<Expense>> {

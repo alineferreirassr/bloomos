@@ -43,9 +43,9 @@ function stripSqlComments(sql: string): string {
 }
 
 describe("supabase/migrations file structure", () => {
-  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation + 20 Services Foundation schema migrations + 1 Event Service Workspace media owner_type widening migration + 1 Client Portal Checkpoint 14 schema migration + 1 Analytics permission seed migration + 1 Digital Asset Management media_assets workspace owner_type widening migration + 2 Finance F1.8 Payment Atomicity & Refund Reversal migrations + 1 Finance F2.1B Invoice Revenue Recognition migration + 1 Finance F2.1B-REVIEW refund guard migration + 1 Finance F2.1C-B refund Revenue correction migration + 1 Finance F2.1C-C Customer Deposit application migration + 1 Finance F2.1C-D-B refund-correction Invoice-field sync migration + 1 Finance F2.1C-D-C Invoice Financial Adjustment migration + 1 Finance F2.1C-D-D-B Partial-Payment Void migration + 1 Finance F2.1C-E-B Deposit Application Reversal migration + 1 Finance F2.1C-F-D-C Manual Adjustment Request Idempotency migration (excluding independently-tracked, not-yet-released work still uncommitted alongside this one — see KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS), in chronological (execution) order", () => {
+  it("contains exactly the 8 Supabase Foundation + 5 Leads + 6 Clients + 8 Events + 6 Media Library + 8 Contracts + 8 Finance + 8 Documents + 1 Phase 1 cleanup + 11 Team foundation + 1 Team foundation fix + 8 Client Accounts + Invitations foundation + 5 Client Portal MVP + 3 SECURITY DEFINER privilege-hardening + 3 Booking Workflow + 1 Clients Core-integration + 7 Inventory + 5 Vendors + 1 Inventory movement-recording function + 7 Purchases + 1 Purchases receiving function + 11 Finance Ledger Database + 1 Finance posting_key correction + 9 Finance Posting Engine + 1 Finance Reports Foundation + 20 Services Foundation schema migrations + 1 Event Service Workspace media owner_type widening migration + 1 Client Portal Checkpoint 14 schema migration + 1 Analytics permission seed migration + 1 Digital Asset Management media_assets workspace owner_type widening migration + 2 Finance F1.8 Payment Atomicity & Refund Reversal migrations + 1 Finance F2.1B Invoice Revenue Recognition migration + 1 Finance F2.1B-REVIEW refund guard migration + 1 Finance F2.1C-B refund Revenue correction migration + 1 Finance F2.1C-C Customer Deposit application migration + 1 Finance F2.1C-D-B refund-correction Invoice-field sync migration + 1 Finance F2.1C-D-C Invoice Financial Adjustment migration + 1 Finance F2.1C-D-D-B Partial-Payment Void migration + 1 Finance F2.1C-E-B Deposit Application Reversal migration + 1 Finance F2.1C-F-D-C Manual Adjustment Request Idempotency migration + 1 Finance F2.1C-F-E-C Payment + Settlement Request Idempotency migration (excluding independently-tracked, not-yet-released work still uncommitted alongside this one — see KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS), in chronological (execution) order", () => {
     const files = migrationFilesForThisRelease();
-    expect(files).toHaveLength(168);
+    expect(files).toHaveLength(169);
     // readdirSync + sort() on Supabase's YYYYMMDDHHMMSS_description.sql
     // naming convention gives execution order directly — this assertion is
     // really "the naming convention is followed," not a separate sort.
@@ -1213,6 +1213,7 @@ describe("Finance Posting Engine migrations", () => {
       "20260827100000_finance_partial_payment_void.sql",
       "20260828100000_finance_deposit_application_reversal.sql",
       "20260829100000_finance_manual_adjustment_idempotency.sql",
+      "20260830100000_finance_payment_settlement_idempotency.sql",
     ];
     for (const otherFile of migrationFiles().filter((f) => !POSTING_ENGINE_FILES.includes(f) && !LATER_SANCTIONED_FINANCE_FILES.includes(f))) {
       const sql = readMigration(otherFile);
@@ -3449,5 +3450,103 @@ describe("Finance F2.1C-F-D-C migration — Manual Adjustment Request Idempotenc
     const code = stripSqlComments(sql());
     expect(code).not.toMatch(/v_total_debit\s*:=\s*v_total_credit/);
     expect(code).not.toMatch(/v_total_credit\s*:=\s*v_total_debit/);
+  });
+});
+
+describe("Finance F2.1C-F-E-C migration — Payment + Settlement Request Idempotency", () => {
+  const FILE = "20260830100000_finance_payment_settlement_idempotency.sql";
+  const sql = () => readMigration(FILE);
+
+  it("sorts after 20260829100000_finance_manual_adjustment_idempotency.sql", () => {
+    expect(FILE > "20260829100000_finance_manual_adjustment_idempotency.sql").toBe(true);
+    expect(migrationFiles()).toContain(FILE);
+  });
+
+  it("does not modify the original record_payment_settlement migration file — this is a NEW file, never an edit of it", () => {
+    const original = stripSqlComments(readMigration("20260804100200_finance_post_payment_settlement.sql"));
+    const match = original.match(/create or replace function public\.record_payment_settlement\([\s\S]*?^\$\$;/m);
+    expect(match).not.toBeNull();
+    expect(match![0]).not.toMatch(/p_payment_id\b/);
+    expect(match![0]).toMatch(/p_actor text\s*\n\)/);
+  });
+
+  it("redefines exactly one function — record_payment_settlement — with no new table, column, index, RLS policy, or constraint change", () => {
+    const code = stripSqlComments(sql());
+    const definitions = [...code.matchAll(/create or replace function public\.(\w+)\(/g)].map((m) => m[1]);
+    expect(definitions).toEqual(["record_payment_settlement"]);
+    expect(code).not.toMatch(/create table/i);
+    expect(code).not.toMatch(/alter table public\.payments add column/);
+    expect(code).not.toMatch(/create (unique )?index/i);
+    expect(code).not.toMatch(/create policy|alter policy|drop policy|enable row level security/i);
+    expect(code).not.toMatch(/alter table public\.payments (add|drop) constraint/);
+    expect(code).not.toMatch(/backfill/i);
+  });
+
+  it("does not redefine post_payment_settlement or recompute_invoice_balance", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/create or replace function public\.post_payment_settlement\(/);
+    expect(code).not.toMatch(/create or replace function public\.recompute_invoice_balance\(/);
+  });
+
+  it("requires p_payment_id (P1130 if null), checked before the replay lookup and before every other validation", () => {
+    const code = stripSqlComments(sql());
+    const idCheckIndex = code.indexOf("if p_payment_id is null then");
+    const replayIndex = code.indexOf("select * into v_existing from public.payments");
+    const stripeCheckIndex = code.indexOf("if p_payment_method = 'stripe' then");
+    expect(idCheckIndex).toBeGreaterThan(-1);
+    expect(replayIndex).toBeGreaterThan(idCheckIndex);
+    expect(stripeCheckIndex).toBeGreaterThan(replayIndex);
+    expect(code).toMatch(/errcode = 'P1130'/);
+  });
+
+  it("looks up an existing payment by (id, workspace_id) — never by posting_key or source_id", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/where id = p_payment_id and workspace_id = p_workspace_id;/);
+    const functionBody = code.match(/as \$\$([\s\S]*?)^\$\$;/m);
+    expect(functionBody).not.toBeNull();
+    expect(functionBody![1]).not.toMatch(/posting_key = /);
+  });
+
+  it("compares the incoming payload against the existing row's own persisted columns using IS DISTINCT FROM — never mutable external state or a memo-embedded fingerprint", () => {
+    const code = stripSqlComments(sql());
+    for (const field of [
+      "invoice_id", "client_id", "event_id", "contract_id", "payment_type",
+      "amount_minor", "currency", "payment_method", "reference", "transaction_date", "notes",
+    ]) {
+      expect(code).toMatch(new RegExp(`v_existing\\.${field} is distinct from p_${field}`));
+    }
+    expect(code).not.toMatch(/substring\(v_existing/);
+  });
+
+  it("a same-key/same-payload replay returns the existing payment; a same-key/different-payload replay is rejected (P1129) — both decided before any insert is attempted", () => {
+    const code = stripSqlComments(sql());
+    const foundIndex = code.indexOf("if found then");
+    const returnExistingIndex = code.indexOf("return v_existing;");
+    const conflictIndex = code.indexOf("errcode = 'P1129'");
+    const insertIndex = code.indexOf("insert into public.payments (");
+    expect(foundIndex).toBeGreaterThan(-1);
+    // Both the replay-return and the conflict-raise are decided inside the
+    // "if found" branch — their relative order to each other doesn't matter
+    // (the raise is written above the return in source, though only one of
+    // the two paths ever executes for a given call) — what matters is both
+    // sit strictly between "if found" and the fresh-insert path.
+    expect(returnExistingIndex).toBeGreaterThan(foundIndex);
+    expect(conflictIndex).toBeGreaterThan(foundIndex);
+    expect(returnExistingIndex).toBeLessThan(insertIndex);
+    expect(conflictIndex).toBeLessThan(insertIndex);
+  });
+
+  it("inserts the payment with id = p_payment_id explicitly, and preserves the P1117 (stripe) / P1111 (invalid amount) guards unchanged", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/insert into public\.payments \(\s*\n\s*id, workspace_id, invoice_id, client_id, event_id, contract_id,/);
+    expect(code).toMatch(/\)\s*values\s*\(\s*\n\s*p_payment_id, p_workspace_id, p_invoice_id, p_client_id, p_event_id, p_contract_id,/);
+    expect(code).toMatch(/errcode = 'P1117'/);
+    expect(code).toMatch(/errcode = 'P1111'/);
+  });
+
+  it("still calls recompute_invoice_balance and post_payment_settlement unchanged on a fresh (non-replay) request", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/perform public\.recompute_invoice_balance\(p_invoice_id, p_actor\);/);
+    expect(code).toMatch(/perform public\.post_payment_settlement\(v_payment\.id, p_actor\);/);
   });
 });

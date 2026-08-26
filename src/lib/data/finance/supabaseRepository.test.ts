@@ -802,7 +802,7 @@ describe("supabaseFinanceRepository.createPayment", () => {
       ...PAYMENT_INPUT,
       amount_minor: 50000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     expect(result.success).toBe(false);
   });
 
@@ -820,7 +820,7 @@ describe("supabaseFinanceRepository.createPayment", () => {
       ...PAYMENT_INPUT,
       amount_minor: 50000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     expect(result.success).toBe(true);
     expect(rpcCalls.map((c) => c.name)).toEqual(["record_payment_settlement"]);
     expect(recordAuditEventMock).toHaveBeenCalledTimes(1);
@@ -842,9 +842,53 @@ describe("supabaseFinanceRepository.createPayment", () => {
       ...PAYMENT_INPUT,
       amount_minor: 50000,
       payment_method: "credit_card",
-    });
+    }, crypto.randomUUID());
     expect(result.success).toBe(true);
     expect(rpcCalls).toHaveLength(0);
+  });
+
+  it("Finance F2.1C-F-E-C: the succeeded path sends p_payment_id to record_payment_settlement", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: clientRow(), error: null },
+      { data: invoiceRow({ balance_minor: 100000 }), error: null },
+      { data: paymentRow(), error: null },
+      { data: null, error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await supabaseFinanceRepository.createPayment({ ...PAYMENT_INPUT, amount_minor: 50000, payment_method: "cash" }, "payment-key-1");
+    const args = rpcCalls[0].args as Record<string, unknown>;
+    expect(args.p_payment_id).toBe("payment-key-1");
+  });
+
+  it("Finance F2.1C-F-E-C-IDEMPOTENCY: translates a P1129 (idempotency key reused for a different payment payload) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: clientRow(), error: null },
+      { data: invoiceRow({ balance_minor: 100000 }), error: null },
+      { data: null, error: { code: "P1129", message: "This idempotency key was already used for a different payment request." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.createPayment({ ...PAYMENT_INPUT, amount_minor: 50000, payment_method: "cash" }, "payment-key-1");
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("This idempotency key was already used for a different payment request.");
+    expect(rpcCalls.map((c) => c.name)).toEqual(["record_payment_settlement"]);
+  });
+
+  it("Finance F2.1C-F-E-C-IDEMPOTENCY: translates a P1130 (missing required paymentId) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: clientRow(), error: null },
+      { data: invoiceRow({ balance_minor: 100000 }), error: null },
+      { data: null, error: { code: "P1130", message: "p_payment_id is required and must be a stable identifier supplied by the caller (the same value on every retry of the same payment request)." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.createPayment({ ...PAYMENT_INPUT, amount_minor: 50000, payment_method: "cash" }, "payment-key-1");
+    expect(result.success).toBe(false);
   });
 });
 
@@ -920,14 +964,14 @@ describe("supabaseFinanceRepository — payment path unification (Finance F1.7)"
       { data: null, error: null }, // timeline insert
     ]);
     vi.mocked(createClient).mockReturnValue(createHarness.client as never);
-    await supabaseFinanceRepository.createPayment({ ...PAYMENT_INPUT, amount_minor: 50000, payment_method: "cash" });
+    await supabaseFinanceRepository.createPayment({ ...PAYMENT_INPUT, amount_minor: 50000, payment_method: "cash" }, crypto.randomUUID());
 
     const settlementHarness = createMockSupabase([
       { data: paymentRow(), error: null }, // record_payment_settlement rpc
       { data: null, error: null }, // timeline insert
     ]);
     vi.mocked(createClient).mockReturnValue(settlementHarness.client as never);
-    await supabaseFinanceRepository.recordPaymentSettlement({ ...PAYMENT_SETTLEMENT_INPUT, amount_minor: 50000, invoice_id: "invoice_1" });
+    await supabaseFinanceRepository.recordPaymentSettlement({ ...PAYMENT_SETTLEMENT_INPUT, amount_minor: 50000, invoice_id: "invoice_1" }, crypto.randomUUID());
 
     expect(createHarness.rpcCalls[0].name).toBe("record_payment_settlement");
     expect(settlementHarness.rpcCalls[0].name).toBe("record_payment_settlement");
@@ -1747,7 +1791,7 @@ describe("supabaseFinanceRepository.recordPaymentSettlement", () => {
     const { client, rpcCalls } = createMockSupabase([]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const result = await supabaseFinanceRepository.recordPaymentSettlement({ ...PAYMENT_SETTLEMENT_INPUT, payment_method: "stripe" });
+    const result = await supabaseFinanceRepository.recordPaymentSettlement({ ...PAYMENT_SETTLEMENT_INPUT, payment_method: "stripe" }, crypto.randomUUID());
     expect(result.success).toBe(false);
     expect(rpcCalls).toHaveLength(0);
   });
@@ -1760,7 +1804,7 @@ describe("supabaseFinanceRepository.recordPaymentSettlement", () => {
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const result = await supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT);
+    const result = await supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT, crypto.randomUUID());
     expect(result.success).toBe(true);
     expect(rpcCalls).toHaveLength(1);
     expect(rpcCalls[0].name).toBe("record_payment_settlement");
@@ -1776,12 +1820,50 @@ describe("supabaseFinanceRepository.recordPaymentSettlement", () => {
     expect(auditInput.ownerId).toBe("payment_1");
   });
 
+  it("Finance F2.1C-F-E-C: sends p_payment_id to record_payment_settlement", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: paymentRow(), error: null },
+      { data: null, error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT, "settlement-key-1");
+    const args = rpcCalls[0].args as Record<string, unknown>;
+    expect(args.p_payment_id).toBe("settlement-key-1");
+  });
+
+  it("Finance F2.1C-F-E-C-IDEMPOTENCY: translates a P1129 (idempotency key reused for a different settlement payload) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { client, rpcCalls } = createMockSupabase([
+      { data: null, error: { code: "P1129", message: "This idempotency key was already used for a different payment request." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT, "settlement-key-1");
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("This idempotency key was already used for a different payment request.");
+    expect(rpcCalls.map((c) => c.name)).toEqual(["record_payment_settlement"]);
+  });
+
+  it("Finance F2.1C-F-E-C-IDEMPOTENCY: translates a P1130 (missing required paymentId) RPC error into a DataResult failure rather than throwing", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: null, error: { code: "P1130", message: "p_payment_id is required and must be a stable identifier supplied by the caller (the same value on every retry of the same payment request)." } },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT, "settlement-key-1");
+    expect(result.success).toBe(false);
+  });
+
   it("translates a known Finance errcode into a DataResult fail() and does not call Audit", async () => {
     mockSession();
     const { client } = createMockSupabase([{ data: null, error: { code: "P1100", message: "System account 1000 not found for this workspace." } }]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    const result = await supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT);
+    const result = await supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT, crypto.randomUUID());
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error).toBe("System account 1000 not found for this workspace.");
     expect(recordAuditEventMock).not.toHaveBeenCalled();
@@ -1792,7 +1874,7 @@ describe("supabaseFinanceRepository.recordPaymentSettlement", () => {
     const { client } = createMockSupabase([{ data: null, error: { code: "42501", message: "permission denied" } }]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    await expect(supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT)).rejects.toThrow();
+    await expect(supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT, crypto.randomUUID())).rejects.toThrow();
     expect(recordAuditEventMock).not.toHaveBeenCalled();
   });
 
@@ -1804,7 +1886,7 @@ describe("supabaseFinanceRepository.recordPaymentSettlement", () => {
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    await supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT);
+    await supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT, crypto.randomUUID());
     expect(rpcCalls).toHaveLength(1);
   });
 });
@@ -2063,7 +2145,7 @@ describe("supabaseFinanceRepository Stripe deferral (Finance Ledger)", () => {
     ]);
     vi.mocked(createClient).mockReturnValue(client as never);
 
-    await supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT);
+    await supabaseFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT, crypto.randomUUID());
     expect(calls.some((c) => c.table === "stripe_webhook_events")).toBe(false);
   });
 });

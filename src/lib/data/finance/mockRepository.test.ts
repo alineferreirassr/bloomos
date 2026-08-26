@@ -441,7 +441,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
       contract_id: null,
       amount_minor: 50000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     expect(payment.success).toBe(true);
 
     const voided = await mockFinanceRepository.voidInvoice(created.data.id, crypto.randomUUID(), "Cancelling the unpaid remainder");
@@ -514,7 +514,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
       contract_id: null,
       amount_minor: amountMinor,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     if (!payment.success) throw new Error("payment creation failed");
     return { invoiceId: created.data.id, paymentId: payment.data.id };
   }
@@ -686,7 +686,7 @@ describe("mockFinanceRepository Finance F2.1B — Invoice Revenue Recognition (c
       contract_id: null,
       amount_minor: 20000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     expect(payment.success).toBe(true);
     if (!payment.success) return;
 
@@ -715,7 +715,7 @@ describe("mockFinanceRepository.voidInvoice — Finance F2.1C-D-D-B: Partial-Pay
       payment_type: "full_payment",
       amount_minor: amountMinor,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     if (!payment.success) throw new Error("setup failed");
     return payment.data;
   }
@@ -858,7 +858,7 @@ describe("mockFinanceRepository.voidInvoice — Finance F2.1C-D-D-B: Partial-Pay
         payment_type: "deposit",
         amount_minor: 40000,
         payment_method: "cash",
-      });
+      }, crypto.randomUUID());
       if (!deposit.success) throw new Error("setup failed");
       await mockFinanceRepository.applyDepositToInvoice(deposit.data.id, invoiceId, 40000, crypto.randomUUID());
 
@@ -877,7 +877,7 @@ describe("mockFinanceRepository.voidInvoice — Finance F2.1C-D-D-B: Partial-Pay
         payment_type: "deposit",
         amount_minor: 20000,
         payment_method: "cash",
-      });
+      }, crypto.randomUUID());
       if (!deposit.success) throw new Error("setup failed");
       await mockFinanceRepository.applyDepositToInvoice(deposit.data.id, invoiceId, 20000, crypto.randomUUID());
       await paySettled(invoiceId, 20000);
@@ -899,7 +899,7 @@ describe("mockFinanceRepository.voidInvoice — Finance F2.1C-D-D-B: Partial-Pay
         payment_type: "deposit",
         amount_minor: 15000,
         payment_method: "cash",
-      });
+      }, crypto.randomUUID());
 
       const result = await mockFinanceRepository.voidInvoice(invoiceId, crypto.randomUUID(), "Cancelled");
       expect(result.success).toBe(true);
@@ -1058,7 +1058,7 @@ describe("mockFinanceRepository.refundPayment — terminal-status guard (Finance
       payment_type: "full_payment",
       amount_minor: 40000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     if (!payment.success) throw new Error("setup failed");
 
     const voided = await mockFinanceRepository.voidInvoice(created.data.id, crypto.randomUUID(), "Cancelling remainder");
@@ -1084,7 +1084,7 @@ describe("mockFinanceRepository.refundPayment — terminal-status guard (Finance
       payment_type: "full_payment",
       amount_minor: 103000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     if (!payment.success) throw new Error("setup failed");
     await mockFinanceRepository.archiveInvoice(created.data.id);
 
@@ -1106,7 +1106,7 @@ describe("mockFinanceRepository.refundPayment — terminal-status guard (Finance
       payment_type: "full_payment",
       amount_minor: 40000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     if (!payment.success) throw new Error("setup failed");
 
     const refund = await mockFinanceRepository.refundPayment(payment.data.id, 10000, crypto.randomUUID());
@@ -1125,7 +1125,7 @@ describe("mockFinanceRepository.createPayment", () => {
         ...BASE_PAYMENT_INPUT,
         invoice_id: null,
         payment_method: method,
-      });
+      }, crypto.randomUUID());
       expect(result.success).toBe(true);
       if (result.success) expect(result.data.status).toBe("succeeded");
     }
@@ -1135,7 +1135,7 @@ describe("mockFinanceRepository.createPayment", () => {
         ...BASE_PAYMENT_INPUT,
         invoice_id: null,
         payment_method: method,
-      });
+      }, crypto.randomUUID());
       expect(result.success).toBe(true);
       if (result.success) expect(result.data.status).toBe("pending");
     }
@@ -1147,7 +1147,7 @@ describe("mockFinanceRepository.createPayment", () => {
       ...BASE_PAYMENT_INPUT,
       amount_minor: 60000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     expect(result.success).toBe(false);
   });
 
@@ -1156,7 +1156,7 @@ describe("mockFinanceRepository.createPayment", () => {
       ...BASE_PAYMENT_INPUT,
       amount_minor: 50000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     expect(result.success).toBe(true);
 
     const invoice = await mockFinanceRepository.getInvoiceById("invoice_4");
@@ -1170,7 +1170,7 @@ describe("mockFinanceRepository.createPayment", () => {
       ...BASE_PAYMENT_INPUT,
       amount_minor: 20000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     expect(result.success).toBe(true);
 
     const invoice = await mockFinanceRepository.getInvoiceById("invoice_4");
@@ -1184,7 +1184,7 @@ describe("mockFinanceRepository.createPayment", () => {
       ...BASE_PAYMENT_INPUT,
       amount_minor: 20000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data.status).toBe("succeeded");
@@ -1210,13 +1210,96 @@ describe("mockFinanceRepository.createPayment", () => {
       invoice_id: null,
       amount_minor: 20000,
       payment_method: "credit_card",
-    });
+    }, crypto.randomUUID());
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data.status).toBe("pending");
 
     const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_settlement" });
     expect(entries.some((e) => e.source_id === result.data.id)).toBe(false);
+  });
+
+  it("rejects a missing (empty-string) paymentId on the immediately-succeeded path", async () => {
+    const result = await mockFinanceRepository.createPayment({ ...BASE_PAYMENT_INPUT, invoice_id: null }, "");
+    expect(result.success).toBe(false);
+  });
+
+  it("a same-key retry with the same payload replays the original settled Payment — no second Payment, no second Journal Entry, no second lines", async () => {
+    const id = crypto.randomUUID();
+    const input = { ...BASE_PAYMENT_INPUT, invoice_id: null };
+
+    const first = await mockFinanceRepository.createPayment(input, id);
+    expect(first.success).toBe(true);
+    const second = await mockFinanceRepository.createPayment(input, id);
+    expect(second.success).toBe(true);
+    if (!first.success || !second.success) return;
+
+    expect(second.data.id).toBe(first.data.id);
+
+    const allPayments = await mockFinanceRepository.getPayments();
+    expect(allPayments.filter((p) => p.id === first.data.id)).toHaveLength(1);
+
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_settlement" });
+    const posted = entries.filter((e) => e.source_id === first.data.id);
+    expect(posted).toHaveLength(1);
+
+    const detail = await mockFinanceRepository.getJournalEntry(posted[0].id);
+    expect(detail.lines).toHaveLength(2);
+  });
+
+  it("a same-key retry with a DIFFERENT amount is rejected as a conflict, not replayed", async () => {
+    const id = crypto.randomUUID();
+    const input = { ...BASE_PAYMENT_INPUT, invoice_id: null };
+    const first = await mockFinanceRepository.createPayment(input, id);
+    expect(first.success).toBe(true);
+
+    const conflicting = await mockFinanceRepository.createPayment({ ...input, amount_minor: 5000 }, id);
+    expect(conflicting.success).toBe(false);
+    if (conflicting.success) return;
+    expect(conflicting.error).toMatch(/idempotency key was already used/);
+  });
+
+  it("a same-key retry with a DIFFERENT invoice_id is rejected as a conflict", async () => {
+    const id = crypto.randomUUID();
+    const input = { ...BASE_PAYMENT_INPUT, invoice_id: null, amount_minor: 1000 };
+    const first = await mockFinanceRepository.createPayment(input, id);
+    expect(first.success).toBe(true);
+
+    const conflicting = await mockFinanceRepository.createPayment({ ...input, invoice_id: "invoice_4" }, id);
+    expect(conflicting.success).toBe(false);
+  });
+
+  it("a same-key retry with a DIFFERENT payment_method is rejected as a conflict", async () => {
+    const id = crypto.randomUUID();
+    const input = { ...BASE_PAYMENT_INPUT, invoice_id: null, payment_method: "cash" as const };
+    const first = await mockFinanceRepository.createPayment(input, id);
+    expect(first.success).toBe(true);
+
+    const conflicting = await mockFinanceRepository.createPayment({ ...input, payment_method: "check" as const }, id);
+    expect(conflicting.success).toBe(false);
+  });
+
+  it("a same-key retry with a DIFFERENT transaction_date is rejected as a conflict", async () => {
+    const id = crypto.randomUUID();
+    const input = { ...BASE_PAYMENT_INPUT, invoice_id: null };
+    const first = await mockFinanceRepository.createPayment(input, id);
+    expect(first.success).toBe(true);
+
+    const conflicting = await mockFinanceRepository.createPayment({ ...input, transaction_date: "2026-07-17" }, id);
+    expect(conflicting.success).toBe(false);
+  });
+
+  it("a DIFFERENT key represents a distinct, intentional second identical Payment", async () => {
+    const input = { ...BASE_PAYMENT_INPUT, invoice_id: null };
+    const first = await mockFinanceRepository.createPayment(input, crypto.randomUUID());
+    expect(first.success).toBe(true);
+    const second = await mockFinanceRepository.createPayment(input, crypto.randomUUID());
+    expect(second.success).toBe(true);
+    if (!first.success || !second.success) return;
+
+    expect(second.data.id).not.toBe(first.data.id);
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_settlement" });
+    expect(entries.filter((e) => e.source_id === first.data.id || e.source_id === second.data.id)).toHaveLength(2);
   });
 });
 
@@ -1226,12 +1309,12 @@ describe("mockFinanceRepository.markPaymentSucceeded", () => {
       ...BASE_PAYMENT_INPUT,
       amount_minor: 20000,
       payment_method: "credit_card",
-    });
+    }, crypto.randomUUID());
     const second = await mockFinanceRepository.createPayment({
       ...BASE_PAYMENT_INPUT,
       amount_minor: 20000,
       payment_method: "credit_card",
-    });
+    }, crypto.randomUUID());
     expect(first.success).toBe(true);
     expect(second.success).toBe(true);
     if (!first.success || !second.success) return;
@@ -1259,14 +1342,14 @@ describe("mockFinanceRepository.markPaymentSucceeded", () => {
       ...BASE_PAYMENT_INPUT,
       amount_minor: 50000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     expect(covering.success).toBe(true);
 
     const pending = await mockFinanceRepository.createPayment({
       ...BASE_PAYMENT_INPUT,
       amount_minor: 10000,
       payment_method: "credit_card",
-    });
+    }, crypto.randomUUID());
     expect(pending.success).toBe(true);
     if (!pending.success) return;
 
@@ -1281,7 +1364,7 @@ describe("mockFinanceRepository.markPaymentSucceeded", () => {
       invoice_id: null,
       amount_minor: 15000,
       payment_method: "credit_card",
-    });
+    }, crypto.randomUUID());
     expect(pending.success).toBe(true);
     if (!pending.success) return;
 
@@ -1310,7 +1393,7 @@ describe("mockFinanceRepository.markPaymentSucceeded", () => {
       amount_minor: 5000,
       payment_method: "credit_card",
       transaction_date: "2027-01-01", // Outside every seeded accounting period.
-    });
+    }, crypto.randomUUID());
     expect(pending.success).toBe(true);
     if (!pending.success) return;
 
@@ -1333,7 +1416,7 @@ describe("mockFinanceRepository.markPaymentSucceeded", () => {
       invoice_id: null,
       amount_minor: 5000,
       payment_method: "credit_card",
-    });
+    }, crypto.randomUUID());
     expect(covering.success).toBe(true);
     if (!covering.success) return;
 
@@ -1354,7 +1437,7 @@ describe("mockFinanceRepository.markPaymentFailed / cancelPayment", () => {
       ...BASE_PAYMENT_INPUT,
       amount_minor: 20000,
       payment_method: "credit_card",
-    });
+    }, crypto.randomUUID());
     expect(failing.success).toBe(true);
     if (!failing.success) return;
     const failed = await mockFinanceRepository.markPaymentFailed(failing.data.id);
@@ -1365,7 +1448,7 @@ describe("mockFinanceRepository.markPaymentFailed / cancelPayment", () => {
       ...BASE_PAYMENT_INPUT,
       amount_minor: 20000,
       payment_method: "credit_card",
-    });
+    }, crypto.randomUUID());
     expect(cancelling.success).toBe(true);
     if (!cancelling.success) return;
     const cancelled = await mockFinanceRepository.cancelPayment(cancelling.data.id);
@@ -1409,7 +1492,7 @@ describe("mockFinanceRepository.refundPayment", () => {
         payment_method: "cash",
         amount_minor: 40000,
         ...overrides,
-      });
+      }, crypto.randomUUID());
       if (!created.success) throw new Error("setup failed");
       return created.data;
     }
@@ -1558,7 +1641,7 @@ describe("mockFinanceRepository.refundPayment", () => {
         payment_type: "full_payment",
         amount_minor: amountMinor,
         payment_method: "cash",
-      });
+      }, crypto.randomUUID());
       if (!payment.success) throw new Error("setup failed");
       return payment.data;
     }
@@ -1668,7 +1751,7 @@ describe("mockFinanceRepository.refundPayment", () => {
         payment_type: "deposit",
         amount_minor: 20000,
         payment_method: "cash",
-      });
+      }, crypto.randomUUID());
       if (!depositPayment.success) throw new Error("setup failed");
 
       const refund = await mockFinanceRepository.refundPayment(depositPayment.data.id, 20000, crypto.randomUUID());
@@ -1723,7 +1806,7 @@ describe("mockFinanceRepository.recordInvoiceAdjustment — Finance F2.1C-D-C", 
       payment_type: "full_payment",
       amount_minor: amountMinor,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     if (!payment.success) throw new Error("setup failed");
     return payment.data;
   }
@@ -2020,7 +2103,7 @@ describe("mockFinanceRepository.recordInvoiceAdjustment — Finance F2.1C-D-C", 
         payment_type: "deposit",
         amount_minor: 70000,
         payment_method: "cash",
-      });
+      }, crypto.randomUUID());
       if (!deposit.success) throw new Error("setup failed");
       const applied = await mockFinanceRepository.applyDepositToInvoice(deposit.data.id, invoiceId, 70000, crypto.randomUUID());
       expect(applied.success).toBe(true);
@@ -2054,7 +2137,7 @@ describe("mockFinanceRepository.recordInvoiceAdjustment — Finance F2.1C-D-C", 
         payment_type: "deposit",
         amount_minor: 30000,
         payment_method: "cash",
-      });
+      }, crypto.randomUUID());
       if (!deposit.success) throw new Error("setup failed");
       await mockFinanceRepository.applyDepositToInvoice(deposit.data.id, invoiceId, 30000, crypto.randomUUID());
       await paySettled(invoiceId, 40000);
@@ -2236,7 +2319,7 @@ describe("mockFinanceRepository.refundPayment — Finance F2.1C-C-IDEMPOTENCY", 
       contract_id: null,
       amount_minor: amountMinor,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     if (!payment.success) throw new Error("payment creation failed");
     return payment.data.id;
   }
@@ -2344,7 +2427,7 @@ describe("mockFinanceRepository — Finance F2.1C-C: Customer Deposit applicatio
       contract_id: null,
       amount_minor: amountMinor,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     if (!deposit.success) throw new Error("deposit creation failed");
     return deposit.data.id;
   }
@@ -2441,7 +2524,7 @@ describe("mockFinanceRepository — Finance F2.1C-C: Customer Deposit applicatio
       contract_id: null,
       amount_minor: 20000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     expect(ordinaryPayment.success).toBe(true);
 
     const secondApplication = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 53000, crypto.randomUUID());
@@ -2522,7 +2605,7 @@ describe("mockFinanceRepository — Finance F2.1C-C: Customer Deposit applicatio
       contract_id: null,
       amount_minor: 20000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     expect(linkedPayment.success).toBe(true);
     if (!linkedPayment.success) return;
 
@@ -2540,7 +2623,7 @@ describe("mockFinanceRepository — Finance F2.1C-C: Customer Deposit applicatio
       contract_id: null,
       amount_minor: 20000,
       payment_method: "credit_card",
-    });
+    }, crypto.randomUUID());
     expect(pending.success).toBe(true);
     if (!pending.success) return;
     expect(pending.data.status).toBe("pending");
@@ -2560,7 +2643,7 @@ describe("mockFinanceRepository — Finance F2.1C-C: Customer Deposit applicatio
       amount_minor: 20000,
       currency: "EUR",
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     expect(deposit.success).toBe(true);
     if (!deposit.success) return;
 
@@ -2624,7 +2707,7 @@ describe("mockFinanceRepository — Finance F2.1C-C: Customer Deposit applicatio
       contract_id: null,
       amount_minor: 20000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     expect(deposit.success).toBe(true);
     if (!deposit.success) return;
 
@@ -2679,7 +2762,7 @@ describe("mockFinanceRepository — Finance F2.1C-C: Customer Deposit applicatio
       contract_id: null,
       amount_minor: 103000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     expect(payment.success).toBe(true);
     if (!payment.success) return;
 
@@ -2822,7 +2905,7 @@ describe("mockFinanceRepository — Finance F2.1C-E-B: Deposit Application Rever
       contract_id: null,
       amount_minor: amountMinor,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     if (!deposit.success) throw new Error("deposit creation failed");
     return deposit.data.id;
   }
@@ -2970,7 +3053,7 @@ describe("mockFinanceRepository — Finance F2.1C-E-B: Deposit Application Rever
       contract_id: null,
       amount_minor: 60000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 40000, crypto.randomUUID());
     if (!applied.success) throw new Error("setup failed");
 
@@ -3067,7 +3150,7 @@ describe("mockFinanceRepository — Finance F2.1C-E-B: Deposit Application Rever
       payment_type: "full_payment",
       amount_minor: 103000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     const invoice = await mockFinanceRepository.getInvoiceById(invoiceId);
     expect(invoice.status).toBe("paid");
     expect(invoice.paid_minor).toBe(103000);
@@ -3087,7 +3170,7 @@ describe("mockFinanceRepository — Finance F2.1C-E-B: Deposit Application Rever
       contract_id: null,
       amount_minor: 20000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     const applied = await mockFinanceRepository.applyDepositToInvoice(depositId, invoiceId, 40000, crypto.randomUUID());
     if (!applied.success) throw new Error("setup failed");
 
@@ -3269,7 +3352,7 @@ describe("mockFinanceRepository — Finance F2.1C-E-B: Deposit Application Rever
       contract_id: null,
       amount_minor: 30000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
 
     const replay = await mockFinanceRepository.reverseDepositApplication(applied.data.id, reversalId, "Undo");
     expect(replay.success).toBe(true);
@@ -3309,7 +3392,7 @@ describe("mockFinanceRepository — Finance F2.1C-E-B: Deposit Application Rever
       contract_id: null,
       amount_minor: 20000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     if (!cashPayment.success) throw new Error("setup failed");
 
     const result = await mockFinanceRepository.reverseDepositApplication(cashPayment.data.id, crypto.randomUUID(), "Not a deposit application");
@@ -3552,7 +3635,7 @@ describe("mockFinanceRepository Payment Notes and Timeline", () => {
       ...BASE_PAYMENT_INPUT,
       invoice_id: null,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     expect(created.success).toBe(true);
     if (!created.success) return;
     const paymentId = created.data.id;
@@ -3708,12 +3791,12 @@ describe("mockFinanceRepository accounting periods", () => {
 
 describe("mockFinanceRepository.recordPaymentSettlement", () => {
   it("rejects payment_method='stripe'", async () => {
-    const result = await mockFinanceRepository.recordPaymentSettlement({ ...PAYMENT_SETTLEMENT_INPUT, payment_method: "stripe" });
+    const result = await mockFinanceRepository.recordPaymentSettlement({ ...PAYMENT_SETTLEMENT_INPUT, payment_method: "stripe" }, crypto.randomUUID());
     expect(result.success).toBe(false);
   });
 
   it("creates a succeeded Payment, posts a balanced Journal Entry, and writes exactly one Audit entry", async () => {
-    const result = await mockFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT);
+    const result = await mockFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT, crypto.randomUUID());
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data.status).toBe("succeeded");
@@ -3732,6 +3815,42 @@ describe("mockFinanceRepository.recordPaymentSettlement", () => {
     const auditEntries = await mockAuditLogRepository.getAuditLogForOwner(CURRENT_WORKSPACE_ID, "payment", result.data.id);
     expect(auditEntries.filter((e) => e.action === "payment_settlement_recorded")).toHaveLength(1);
   });
+
+  it("rejects a missing (empty-string) paymentId", async () => {
+    const result = await mockFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT, "");
+    expect(result.success).toBe(false);
+  });
+
+  it("a same-key retry with the same payload replays the original settled Payment — no second Payment, no second Journal Entry", async () => {
+    const id = crypto.randomUUID();
+    const first = await mockFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT, id);
+    expect(first.success).toBe(true);
+    const second = await mockFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT, id);
+    expect(second.success).toBe(true);
+    if (!first.success || !second.success) return;
+
+    expect(second.data.id).toBe(first.data.id);
+    const entries = await mockFinanceRepository.listJournalEntries({ sourceType: "payment_settlement" });
+    expect(entries.filter((e) => e.source_id === first.data.id)).toHaveLength(1);
+  });
+
+  it("a same-key retry with a DIFFERENT amount is rejected as a conflict, not replayed", async () => {
+    const id = crypto.randomUUID();
+    const first = await mockFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT, id);
+    expect(first.success).toBe(true);
+
+    const conflicting = await mockFinanceRepository.recordPaymentSettlement({ ...PAYMENT_SETTLEMENT_INPUT, amount_minor: 1000 }, id);
+    expect(conflicting.success).toBe(false);
+  });
+
+  it("a DIFFERENT key represents a distinct, intentional second identical Settlement", async () => {
+    const first = await mockFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT, crypto.randomUUID());
+    expect(first.success).toBe(true);
+    const second = await mockFinanceRepository.recordPaymentSettlement(PAYMENT_SETTLEMENT_INPUT, crypto.randomUUID());
+    expect(second.success).toBe(true);
+    if (!first.success || !second.success) return;
+    expect(second.data.id).not.toBe(first.data.id);
+  });
 });
 
 describe("mockFinanceRepository — payment path unification (Finance F1.7)", () => {
@@ -3740,14 +3859,14 @@ describe("mockFinanceRepository — payment path unification (Finance F1.7)", ()
       ...BASE_PAYMENT_INPUT,
       amount_minor: 20000,
       payment_method: "cash",
-    });
+    }, crypto.randomUUID());
     expect(viaCreate.success).toBe(true);
     if (!viaCreate.success) return;
 
     const viaSettlement = await mockFinanceRepository.recordPaymentSettlement({
       ...PAYMENT_SETTLEMENT_INPUT,
       amount_minor: 20000,
-    });
+    }, crypto.randomUUID());
     expect(viaSettlement.success).toBe(true);
     if (!viaSettlement.success) return;
 
