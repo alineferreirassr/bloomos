@@ -246,6 +246,12 @@ import { mockDocumentsRepository } from "@/lib/data/documents/mockRepository";
 import { supabaseDocumentsRepository } from "@/lib/data/documents/supabaseRepository";
 import { mockTeamRepository, resetTeamMembersStore, resetWorkspaceInvitationsStore } from "@/lib/data/team/mockRepository";
 import { supabaseTeamRepository } from "@/lib/data/team/supabaseRepository";
+import { mockWellnessRepository, resetWellnessMockData } from "@/lib/data/wellness/mockRepository";
+import { supabaseWellnessRepository } from "@/lib/data/wellness/supabaseRepository";
+import { mockFounderNoteRepository, resetFounderNotesMockData } from "@/lib/data/founderNotes/mockRepository";
+import { supabaseFounderNoteRepository } from "@/lib/data/founderNotes/supabaseRepository";
+import type { MoodValue, WellnessCheckIn, WaterLog } from "@/types/wellness";
+import type { NoteToFounder } from "@/types/founderNote";
 import { mockClientAccessRepository, resetClientAccountsStore, resetClientInvitationsStore } from "@/lib/data/clientAccess/mockRepository";
 import { supabaseClientAccessRepository } from "@/lib/data/clientAccess/supabaseRepository";
 import { mockClientPortalRepository } from "@/lib/data/clientPortal/mockRepository";
@@ -2183,6 +2189,55 @@ function teamRepository() {
   return selectRepository({ mock: mockTeamRepository, supabase: supabaseTeamRepository });
 }
 
+function wellnessRepository() {
+  return selectRepository({ mock: mockWellnessRepository, supabase: supabaseWellnessRepository });
+}
+
+function founderNoteRepository() {
+  return selectRepository({ mock: mockFounderNoteRepository, supabase: supabaseFounderNoteRepository });
+}
+
+// ---------------------------------------------------------------------------
+// Personal Wellness (mood check-in, water tracker) — every method here is
+// implicitly "my own data only." There is deliberately no exported function
+// that reads another member's mood/water entries — see
+// `lib/data/wellness/repository.ts`'s own doc comment.
+// ---------------------------------------------------------------------------
+
+export async function getMyWellnessCheckIn(date: string, context?: ServerRepositoryContext): Promise<WellnessCheckIn | null> {
+  return wellnessRepository().getMyCheckIn(date, context);
+}
+
+export async function setMyMood(date: string, mood: MoodValue, context?: ServerRepositoryContext): Promise<DataResult<WellnessCheckIn>> {
+  return wellnessRepository().setMyMood(date, mood, context);
+}
+
+export async function getMyWaterLog(date: string, context?: ServerRepositoryContext): Promise<WaterLog | null> {
+  return wellnessRepository().getMyWaterLog(date, context);
+}
+
+export async function addMyWaterGlass(date: string, context?: ServerRepositoryContext): Promise<DataResult<WaterLog>> {
+  return wellnessRepository().addMyWaterGlass(date, context);
+}
+
+export async function removeMyWaterGlass(date: string, context?: ServerRepositoryContext): Promise<DataResult<WaterLog>> {
+  return wellnessRepository().removeMyWaterGlass(date, context);
+}
+
+// ---------------------------------------------------------------------------
+// Note for Aline — author + Founder/Admin access only, never other
+// employees, never auto-attached wellness data. See
+// `lib/data/founderNotes/repository.ts`.
+// ---------------------------------------------------------------------------
+
+export async function getMyFounderNotes(context?: ServerRepositoryContext): Promise<NoteToFounder[]> {
+  return founderNoteRepository().getMyNotes(context);
+}
+
+export async function createFounderNote(body: string, context?: ServerRepositoryContext): Promise<DataResult<NoteToFounder>> {
+  return founderNoteRepository().createNote(body, context);
+}
+
 export async function getWorkspaceMembers(context?: ServerRepositoryContext): Promise<TeamMember[]> {
   return teamRepository().getWorkspaceMembers(context);
 }
@@ -3476,6 +3531,8 @@ export function resetAllMockData(): void {
   resetServicesStore();
   resetServiceTemplatesStore();
   resetEventServicesStore();
+  resetWellnessMockData();
+  resetFounderNotesMockData();
 }
 
 /**
