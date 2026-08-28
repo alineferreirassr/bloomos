@@ -5,6 +5,15 @@ vi.mock("@/lib/auth/memberSessionSnapshot", () => ({
   resolveMemberSessionSnapshot: vi.fn(),
 }));
 
+// executiveDecisionsActions.ts also imports Client Journey wiring
+// (journeyRecommendationsForExecutiveDecisions), which imports `@/lib/auth/workspaceSession`
+// directly — a second, separate path to the server-only-guarded `@/lib/supabase/server` the
+// memberSessionSnapshot mock above doesn't intercept. Mocked here per the Test Infra T1-B fix;
+// never actually reached in mock-mode tests.
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: vi.fn(),
+}));
+
 import { evaluateExecutiveDecisionsAction, updateDecisionStatusAction } from "@/modules/executiveDecisions/executiveDecisionsActions";
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 import { resetKnowledgeGraphStore } from "@/lib/data/core/knowledge/knowledgeGraphStore";

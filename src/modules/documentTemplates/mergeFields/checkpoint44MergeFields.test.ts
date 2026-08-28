@@ -12,6 +12,14 @@ vi.mock("@/lib/auth/memberSessionSnapshot", () => ({
   resolveMemberSessionSnapshot: vi.fn(async () => ({ kind: "no-workspace" })),
 }));
 
+// journeyMergeFields.ts's buildClientJourney import reaches `@/lib/auth/workspaceSession`
+// directly (not via memberSessionSnapshot) — a second, separate path to the server-only-guarded
+// `@/lib/supabase/server` the mock above doesn't intercept. Mocked here per the Test Infra T1-B
+// fix; never actually reached in mock-mode tests.
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: vi.fn(),
+}));
+
 const baseContext: MergeContext = { workspaceId: "ws_44_test", memberId: "member_1" };
 
 function reset(): void {

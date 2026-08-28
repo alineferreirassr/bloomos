@@ -15,6 +15,15 @@ vi.mock("@/lib/auth/memberSessionSnapshot", () => ({
   resolveMemberSessionSnapshot: vi.fn().mockResolvedValue({ kind: "unauthenticated" }),
 }));
 
+// This DTO's dependency graph also reaches Client Journey (via the Client Portal journey
+// summary) which imports `@/lib/auth/workspaceSession` directly — a second, separate path to
+// the server-only-guarded `@/lib/supabase/server` that the memberSessionSnapshot mock above
+// doesn't intercept. Mocked here per the Test Infra T1-B fix (see workspaceSession.ts/
+// supabase/server.ts) — the underlying call is never actually reached in mock-mode tests.
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: vi.fn(),
+}));
+
 import { getClientDashboardData } from "@/modules/clientAccess/getClientDashboardData";
 
 /**

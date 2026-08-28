@@ -3,6 +3,14 @@ import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 
 vi.mock("@/lib/auth/memberSessionSnapshot", () => ({ resolveMemberSessionSnapshot: vi.fn() }));
 
+// getDocumentTemplatesListData.ts registers merge fields, including Client Journey merge
+// fields, which import `@/lib/auth/workspaceSession` directly — a second, separate path to the
+// server-only-guarded `@/lib/supabase/server` the memberSessionSnapshot mock above doesn't
+// intercept. Mocked here per the Test Infra T1-B fix; never actually reached in mock-mode tests.
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: vi.fn(),
+}));
+
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 import { getDocumentTemplatesListData } from "@/modules/documentTemplates/getDocumentTemplatesListData";
 import { getDocumentsManager } from "@/core/documents/manager";

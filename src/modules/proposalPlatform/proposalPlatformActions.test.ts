@@ -5,6 +5,14 @@ vi.mock("@/lib/auth/memberSessionSnapshot", () => ({
   resolveMemberSessionSnapshot: vi.fn(),
 }));
 
+// proposalPlatformActions.ts also imports Client Journey wiring (evaluateClientJourneyAction),
+// which imports `@/lib/auth/workspaceSession` directly — a second, separate path to the
+// server-only-guarded `@/lib/supabase/server` the memberSessionSnapshot mock above doesn't
+// intercept. Mocked here per the Test Infra T1-B fix; never actually reached in mock-mode tests.
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: vi.fn(),
+}));
+
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 import {
   listProposalTemplatesAction,

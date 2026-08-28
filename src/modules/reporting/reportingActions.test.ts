@@ -9,6 +9,15 @@ vi.mock("@/modules/executiveDecisions/executiveDecisionsActions", () => ({
   evaluateExecutiveDecisionsAction: vi.fn(),
 }));
 
+// reportingActions.ts also registers built-in report metrics, including a commercial metric
+// (getJourneyAnalyticsAction) that imports Client Journey wiring reaching
+// `@/lib/auth/workspaceSession` directly — a second, separate path to the server-only-guarded
+// `@/lib/supabase/server` the mocks above don't intercept. Mocked here per the Test Infra T1-B
+// fix; never actually reached in mock-mode tests.
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: vi.fn(),
+}));
+
 import {
   listReportMetricsAction,
   listReportDimensionsAction,
