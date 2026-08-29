@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Calendar,
   CalendarClock,
+  Clock,
   ClipboardCheck,
   ListChecks,
   TrendingUp,
@@ -61,6 +62,11 @@ export function LuxuryCalendarIcon(props: IconProps) {
 
 export function LuxuryScheduleIcon(props: IconProps) {
   return <CalendarClock strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** The World Clock card's small per-city decorative mark — a restrained round clock face rather than a full illustrated icon, matching the "subtle round time-of-day icon" option (WorldClockCard.tsx). */
+export function LuxuryClockIcon(props: IconProps) {
+  return <Clock strokeWidth={2} aria-hidden="true" {...props} />;
 }
 
 export function LuxuryChecklistIcon(props: IconProps) {

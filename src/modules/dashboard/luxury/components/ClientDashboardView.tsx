@@ -19,6 +19,8 @@ import { ClientPortalJourneyCard } from "@/modules/clientJourney/components/Clie
 import { ClientPortalProposalCard } from "@/modules/proposalPlatform/components/ClientPortalProposalCard";
 import { PortalSummaryStrip } from "@/modules/dashboard/luxury/components/PortalSummaryStrip";
 import { ClientRecentActivityCard } from "@/modules/dashboard/luxury/components/ClientRecentActivityCard";
+import { CompactClockWeatherPanel } from "@/modules/dashboard/luxury/components/CompactClockWeatherPanel";
+import { DEFAULT_OPERATIONAL_LOCATION } from "@/core/dashboard/operationalLocation";
 import Link from "next/link";
 
 interface ClientDashboardViewProps {
@@ -39,6 +41,12 @@ interface ClientDashboardViewProps {
  * Checkpoint 36, Step 13 — "Recent Activity" is the Dashboard Widgets step's
  * own reusable widget, `ClientRecentActivityCard`, sharing the exact same
  * `ActivityFeedList` primitive the Owner Dashboard's own widgets use.
+ *
+ * "Team + Client Compact Clock & Weather Variant" addendum — the same
+ * compact single-location `CompactClockWeatherPanel` Team's page renders,
+ * fixed to Amoré Bloom's shared operational location (Huntington Beach,
+ * CA), never the Founder Dashboard's multi-city World Clock and never any
+ * Founder-private or client-specific location.
  */
 export function ClientDashboardView({ data }: ClientDashboardViewProps) {
   const [checklist, setChecklist] = useState(data.checklist);
@@ -60,6 +68,10 @@ export function ClientDashboardView({ data }: ClientDashboardViewProps) {
 
         <div className="animate-fade-up stagger-1">
           <PortalSummaryStrip summary={data.portalSummary} />
+        </div>
+
+        <div className="animate-fade-up stagger-1">
+          <CompactClockWeatherPanel location={DEFAULT_OPERATIONAL_LOCATION} forecast={data.operationalForecast} />
         </div>
 
         <div className="animate-fade-up stagger-1 grid grid-cols-1 gap-4 lg:grid-cols-3">

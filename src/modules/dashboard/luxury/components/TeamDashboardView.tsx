@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { TeamDashboardData } from "@/modules/dashboard/luxury/getTeamDashboardData";
 import type { LuxuryBranding } from "@/modules/dashboard/luxury/components/LuxuryDashboardShell";
@@ -18,7 +19,8 @@ import { EventHeroCard } from "@/modules/dashboard/luxury/components/EventHeroCa
 import { ProgressCard } from "@/modules/dashboard/luxury/components/ProgressCard";
 import { TeamActivityCard } from "@/modules/dashboard/luxury/components/TeamActivityCard";
 import { ImportantNotesCard } from "@/modules/dashboard/luxury/components/ImportantNotesCard";
-import { TeamEventWeatherCard } from "@/modules/dashboard/luxury/components/TeamEventWeatherCard";
+import { NextEventWeatherCard } from "@/modules/dashboard/luxury/components/NextEventWeatherCard";
+import { WorldClockCard } from "@/modules/dashboard/luxury/components/WorldClockCard";
 import { CalendarWidget } from "@/modules/dashboard/luxury/components/CalendarWidget";
 import { MoodCheckInCard } from "@/modules/dashboard/luxury/components/MoodCheckInCard";
 import { WaterTrackerCard } from "@/modules/dashboard/luxury/components/WaterTrackerCard";
@@ -39,19 +41,21 @@ interface TeamDashboardViewProps {
 /**
  * Checkpoint 19, Step 7/8, then the App Shell + Home redesign, then the
  * Dashboard Experience Restoration pass, then the Founder-requested "promote
- * Calendar + Weather to the top" hierarchy correction — the same "organize
- * my workday, don't monitor me" philosophy as Founder's Home: greeting →
- * metrics → Calendar + Weather side by side (mirrors Owner Home's own
- * Calendar+Weather row, immediately after the metrics strip — previously
- * this sat below Today's Work, effectively invisible without scrolling) →
- * Today's Work (Schedule/Tasks/Current Event) → My Day (private Mood/Water/
- * Little Reminder + the intentionally-shared Note for Aline) →
- * de-emphasized Event Progress/Team Updates/Important Notes/Reminder last.
- * The Weather card merges the live event forecast (`TeamEventWeatherCard`)
- * with the event's manually-entered contingency note (`weather_plan`, when
- * present) into one card instead of two separately-titled "weather" cards —
- * they're genuinely different data (forecast vs. operator plan), so the
- * note is kept, just not as a competing duplicate widget.
+ * Calendar + Weather to the top" hierarchy correction, then the "Team must
+ * share the same dashboard system as Founder" pass — the same "organize my
+ * workday, don't monitor me" philosophy as Founder's Home, now genuinely
+ * sharing its composition rather than a parallel look-alike: greeting →
+ * metrics → "Today, at a glance" (World Clock — the exact same
+ * `WorldClockCard` Founder's Home renders, no Team-only fork — beside a
+ * narrow right column of Weather + compact Calendar, mirroring Owner
+ * Home's identical section) → Today's Work (Schedule/Tasks/Current Event)
+ * → My Day (private Mood/Water/Little Reminder + the intentionally-shared
+ * Note for Aline) → de-emphasized Event Progress/Team Updates/Important
+ * Notes/Reminder last. Weather reuses the exact same `NextEventWeatherCard`
+ * Founder's Home renders — Team's only addition is passing its
+ * `contingencyNote` prop for the event's manually-entered `weather_plan`
+ * text, which the shared component renders as an extra line rather than
+ * Team needing its own separate weather-card implementation.
  * `data.teamRoleLabel` stays badge-only — the underlying cards are already
  * filtered to this member's own assignments by the aggregator, so no
  * per-role branch is needed here. Date/Notifications/Messages moved out of
@@ -81,29 +85,25 @@ export function TeamDashboardView({ data, branding, profileName, profileRoleLabe
           ))}
         </div>
 
-        <div className="animate-fade-up stagger-2 grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <LuxuryCard className="lg:col-span-2">
-            <SectionHeader title="Calendar" />
-            <CalendarWidget initialEvents={data.calendarWidget.initialEvents} initialAnchorIso={data.calendarWidget.initialAnchorIso} currentMemberName={data.memberName} />
-          </LuxuryCard>
-          {data.weather || data.eventWeather ? (
-            <LuxuryCard tone="tint">
-              <SectionHeader title="Weather" />
-              {data.eventWeather ? (
-                <TeamEventWeatherCard forecast={data.eventWeather} />
-              ) : (
-                <p className="text-luxury-small text-luxury-text-muted">Weather unavailable</p>
-              )}
-              {data.weather ? (
-                <p className="mt-3 border-t border-luxury-border pt-3 text-luxury-small text-luxury-text-muted">
-                  <span className="font-medium text-luxury-text">Contingency plan:</span> {data.weather.description}
-                </p>
-              ) : null}
-            </LuxuryCard>
-          ) : null}
+        <div className="animate-fade-up stagger-2">
+          <p className="text-luxury-metadata font-semibold tracking-wide text-luxury-rose uppercase">Your Day</p>
+          <h2 className="mt-1 font-luxury-display text-luxury-page font-semibold text-luxury-text">Today, at a glance</h2>
         </div>
 
-        <div className="animate-fade-up stagger-3 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="animate-fade-up stagger-2 grid grid-cols-1 items-start gap-4 lg:grid-cols-4">
+          <div className="lg:col-span-3">
+            <WorldClockCard />
+          </div>
+          <div className="space-y-4 lg:col-span-1">
+            <NextEventWeatherCard data={data.nextEventWeather} contingencyNote={data.weather?.description} />
+            <LuxuryCard>
+              <SectionHeader title="Calendar" action={<Link href="/calendar" className="text-luxury-small font-medium text-luxury-rose">Open</Link>} />
+              <CalendarWidget initialEvents={data.calendarWidget.initialEvents} initialAnchorIso={data.calendarWidget.initialAnchorIso} currentMemberName={data.memberName} compact />
+            </LuxuryCard>
+          </div>
+        </div>
+
+        <div className="animate-fade-up stagger-3 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
           <LuxuryCard>
             <SectionHeader title="Today's Schedule" action={<span className="text-luxury-small text-luxury-text-muted">View full day</span>} />
             {data.schedule.length === 0 ? <EmptyState title="Nothing scheduled today" description="Today's event schedule appears here." /> : <ScheduleTimeline items={data.schedule} />}
@@ -115,7 +115,7 @@ export function TeamDashboardView({ data, branding, profileName, profileRoleLabe
           </LuxuryCard>
 
           <div>
-            <SectionHeader title="Current Event" action={<span className="text-luxury-small text-luxury-text-muted">View details</span>} />
+            <SectionHeader title={data.currentEventIsToday ? "Current Event" : "Next Up"} action={<span className="text-luxury-small text-luxury-text-muted">View details</span>} />
             {data.currentEvent ? <EventHeroCard data={data.currentEvent} /> : <LuxuryCard><EmptyState title="No event today" description="Your next assigned event appears here." /></LuxuryCard>}
           </div>
         </div>

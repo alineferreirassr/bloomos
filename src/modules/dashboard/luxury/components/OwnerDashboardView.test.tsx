@@ -18,6 +18,26 @@ vi.mock("@/modules/dashboard/luxury/components/ProfileMenu", () => ({
 vi.mock("@/modules/dashboard/luxury/components/OwnerAIBriefCard", () => ({
   OwnerAIBriefCard: () => null,
 }));
+// CalendarWidget/MoodCheckInCard/WaterTrackerCard each call a "use server"
+// action (getCalendarEventsAction / wellnessActions.ts) that transitively
+// imports @/lib/supabase/server, which itself imports the `server-only`
+// package — same reason OwnerAIBriefCard is stubbed above. None of their
+// internals are what this test verifies.
+vi.mock("@/modules/dashboard/luxury/components/CalendarWidget", () => ({
+  CalendarWidget: () => null,
+}));
+vi.mock("@/modules/dashboard/luxury/components/MoodCheckInCard", () => ({
+  MoodCheckInCard: () => null,
+}));
+vi.mock("@/modules/dashboard/luxury/components/WaterTrackerCard", () => ({
+  WaterTrackerCard: () => null,
+}));
+// WorldClockCard's own timer/Intl behavior is fully covered by its dedicated
+// test file — stubbed here so this file's `vi.useFakeTimers()` calls (for
+// the greeting tests) can't interact with WorldClockCard's own interval.
+vi.mock("@/modules/dashboard/luxury/components/WorldClockCard", () => ({
+  WorldClockCard: () => <div>World Clock</div>,
+}));
 
 import { OwnerDashboardView } from "@/modules/dashboard/luxury/components/OwnerDashboardView";
 import type { OwnerDashboardData } from "@/modules/dashboard/luxury/getOwnerDashboardData";
@@ -25,6 +45,7 @@ import type { LuxuryBranding } from "@/modules/dashboard/luxury/components/Luxur
 import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
 import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
+import { CopilotProvider } from "@/modules/ai/copilot/CopilotProvider";
 
 const branding: LuxuryBranding = { logoUrl: null, brandName: "Amoré Bloom", tagline: "", inspirationalMessage: "" };
 
@@ -47,11 +68,14 @@ function data(overrides: Partial<OwnerDashboardData> = {}): OwnerDashboardData {
     firstName: "there",
     metrics: [],
     upcomingEvents: [],
+    nextEventWeather: null,
     weekAgenda: [],
+    calendarWidget: { initialEvents: [], initialAnchorIso: "2026-01-01T00:00:00.000Z" },
     priorities: [],
     revenueSeries: [],
     recentMessages: [],
     teamActivity: [],
+    littleReminder: null,
     notificationCount: 0,
     messageCount: 0,
     ...overrides,
@@ -71,7 +95,9 @@ describe("OwnerDashboardView", () => {
 
     render(
       <MemberSessionProvider snapshot={ownerSnapshot}>
-        <OwnerDashboardView data={data({ welcome: { greeting: "Good evening, there", subtitle: "x" }, firstName: "Aline" })} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} />
+        <CopilotProvider>
+          <OwnerDashboardView data={data({ welcome: { greeting: "Good evening, there", subtitle: "x" }, firstName: "Aline" })} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} />
+        </CopilotProvider>
       </MemberSessionProvider>,
     );
 
@@ -85,10 +111,156 @@ describe("OwnerDashboardView", () => {
 
     render(
       <MemberSessionProvider snapshot={ownerSnapshot}>
-        <OwnerDashboardView data={data({ firstName: "there" })} branding={branding} profileName="there" profileRoleLabel="Owner" profileAvatarUrl={null} />
+        <CopilotProvider>
+          <OwnerDashboardView data={data({ firstName: "there" })} branding={branding} profileName="there" profileRoleLabel="Owner" profileAvatarUrl={null} />
+        </CopilotProvider>
       </MemberSessionProvider>,
     );
 
     expect(screen.getByText("Good afternoon, there")).toBeInTheDocument();
+  });
+});
+
+describe("OwnerDashboardView — Today, at a glance (World Clock + Weather, no Calendar card)", () => {
+  it("renders the eyebrow/heading, World Clock, and a Weather card with a graceful state, even when there is no eligible upcoming event", () => {
+    render(
+      <MemberSessionProvider snapshot={ownerSnapshot}>
+        <CopilotProvider>
+          <OwnerDashboardView data={data({ nextEventWeather: null })} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} />
+        </CopilotProvider>
+      </MemberSessionProvider>,
+    );
+
+    expect(screen.getByText("Your Day")).toBeInTheDocument();
+    expect(screen.getByText("Today, at a glance")).toBeInTheDocument();
+    expect(screen.getByText("World Clock")).toBeInTheDocument();
+
+    // Weather no longer vanishes when nextEventWeather is null — it still renders its own section, once.
+    expect(screen.getAllByText("Weather")).toHaveLength(1);
+    expect(screen.getByText("No upcoming event with a set location yet — weather appears here once one is scheduled.")).toBeInTheDocument();
+
+    // The Founder addendum explicitly requires the dashboard Calendar card gone from this composition — /calendar itself is untouched.
+    expect(screen.queryByText("Calendar")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open" })).not.toBeInTheDocument();
+  });
+
+  it("renders the real forecast beside World Clock when an eligible upcoming event has weather", () => {
+    render(
+      <MemberSessionProvider snapshot={ownerSnapshot}>
+        <CopilotProvider>
+          <OwnerDashboardView
+            data={data({
+              nextEventWeather: {
+                eventId: "event_1",
+                title: "Amelia & Noah Wedding",
+                dateLabel: "Sep 13",
+                timeLabel: "5:00 PM",
+                forecast: {
+                  point: { latitude: 34.05, longitude: -118.24, timezone: "America/Los_Angeles" },
+                  eventTime: { time: "2026-09-13T17:00:00", condition: "SUNNY", weatherCode: 0, temperatureF: 78, precipitationProbability: 5, windSpeedMph: 4, windDirectionDeg: 180, isDay: true },
+                  day: { date: "2026-09-13", condition: "SUNNY", weatherCode: 0, highF: 82, lowF: 61, precipitationProbabilityMax: 5, windSpeedMaxMph: 6, sunrise: "x", sunset: "x" },
+                  sunset: "x",
+                },
+              },
+            })}
+            branding={branding}
+            profileName="Aline Ferreira"
+            profileRoleLabel="Owner"
+            profileAvatarUrl={null}
+          />
+        </CopilotProvider>
+      </MemberSessionProvider>,
+    );
+
+    expect(screen.getAllByText("Weather")).toHaveLength(1);
+    expect(screen.getByText("78°")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Amelia & Noah Wedding" })).toHaveAttribute("href", "/events/event_1");
+  });
+});
+
+describe("OwnerDashboardView — Today's Focus + Little Reminder, directly below World Clock + Weather", () => {
+  it("renders Today's Focus (the real My Priorities data, relabeled) beside Little Reminder, with nothing else between them and Today at a glance", () => {
+    const { container } = render(
+      <MemberSessionProvider snapshot={ownerSnapshot}>
+        <CopilotProvider>
+          <OwnerDashboardView data={data({ priorities: [] })} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} />
+        </CopilotProvider>
+      </MemberSessionProvider>,
+    );
+
+    expect(screen.getByText("Today's Focus")).toBeInTheDocument();
+    expect(screen.getByText("Nothing needs your attention right now ♡")).toBeInTheDocument();
+    expect(screen.getByText("A little breathing room is a good thing.")).toBeInTheDocument();
+    expect(screen.getByText("Little Reminder ♡")).toBeInTheDocument();
+    // No real notification supplied — the shared LittleReminderCard's own graceful fallback, never fabricated priority/event/deadline data.
+    expect(screen.getByText("Small steps still move you forward.")).toBeInTheDocument();
+    expect(screen.getByText("Upcoming Events")).toBeInTheDocument();
+
+    // Section order: "Today, at a glance" heading, then Today's Focus, then Upcoming Events (now its own row), then "My Day" — never Revenue/Messages/etc. in between.
+    const headings = Array.from(container.querySelectorAll("h2")).map((h) => h.textContent);
+    const glanceIndex = headings.indexOf("Today, at a glance");
+    const focusIndex = headings.indexOf("Today's Focus");
+    const upcomingIndex = headings.indexOf("Upcoming Events");
+    const myDayIndex = headings.indexOf("My Day");
+    expect(glanceIndex).toBeGreaterThanOrEqual(0);
+    expect(focusIndex).toBeGreaterThan(glanceIndex);
+    expect(upcomingIndex).toBeGreaterThan(focusIndex);
+    expect(myDayIndex).toBeGreaterThan(upcomingIndex);
+  });
+
+  it("renders the Founder's own real latest unread notification instead of the fallback when one exists", () => {
+    render(
+      <MemberSessionProvider snapshot={ownerSnapshot}>
+        <CopilotProvider>
+          <OwnerDashboardView
+            data={data({ littleReminder: { title: "Client replied", body: "Naomi Whitfield sent a new message." } })}
+            branding={branding}
+            profileName="Aline Ferreira"
+            profileRoleLabel="Owner"
+            profileAvatarUrl={null}
+          />
+        </CopilotProvider>
+      </MemberSessionProvider>,
+    );
+
+    expect(screen.getByText("Client replied")).toBeInTheDocument();
+    expect(screen.getByText("Naomi Whitfield sent a new message.")).toBeInTheDocument();
+    expect(screen.queryByText("Small steps still move you forward.")).not.toBeInTheDocument();
+  });
+
+  it("renders real priority items instead of the empty state when priorities exist", () => {
+    render(
+      <MemberSessionProvider snapshot={ownerSnapshot}>
+        <CopilotProvider>
+          <OwnerDashboardView
+            data={data({ priorities: [{ id: "p1", title: "Confirm final headcount", dueLabel: "Due Sep 1", completed: false, urgent: true }] })}
+            branding={branding}
+            profileName="Aline Ferreira"
+            profileRoleLabel="Owner"
+            profileAvatarUrl={null}
+          />
+        </CopilotProvider>
+      </MemberSessionProvider>,
+    );
+
+    expect(screen.getByText("Confirm final headcount")).toBeInTheDocument();
+    expect(screen.queryByText("Nothing needs your attention right now ♡")).not.toBeInTheDocument();
+  });
+});
+
+describe("OwnerDashboardView — My Day composition (Mood + Water only)", () => {
+  it("no longer contains a Weather card in My Day now that Weather lives in Today at a glance", () => {
+    render(
+      <MemberSessionProvider snapshot={ownerSnapshot}>
+        <CopilotProvider>
+          <OwnerDashboardView data={data()} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} />
+        </CopilotProvider>
+      </MemberSessionProvider>,
+    );
+
+    expect(screen.getByText("My Day")).toBeInTheDocument();
+    expect(screen.getByText("A few things just for you.")).toBeInTheDocument();
+    // Exactly one Weather card exists on the whole page (in Today at a glance), never a second copy inside My Day.
+    expect(screen.getAllByText("Weather")).toHaveLength(1);
   });
 });

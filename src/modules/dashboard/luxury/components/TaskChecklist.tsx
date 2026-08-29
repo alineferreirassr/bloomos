@@ -12,7 +12,15 @@ export interface TaskChecklistItemData {
   onToggle?: () => void;
 }
 
-/** Checkpoint 19, Step 3/7/9 — the shared checkbox-list shape behind the Team Dashboard's "My Tasks" and the Client Dashboard's "Planning Checklist." A row is only ever rendered as an interactive checkbox when `onToggle` is real. */
+/**
+ * Checkpoint 19, Step 3/7/9 — the shared checkbox-list shape behind the Team
+ * Dashboard's "My Tasks" and the Client Dashboard's "Planning Checklist." A
+ * row is only ever rendered as an interactive checkbox when `onToggle` is
+ * real; without it, the marker is a small status dot (`role="img"` with its
+ * own accessible label — never `aria-hidden` decoration, since it's the
+ * only per-row status signal a screen reader gets), deliberately not shaped
+ * like a checkbox, so a passive list never implies a tap will do something.
+ */
 export function TaskChecklist({ items }: { items: TaskChecklistItemData[] }) {
   return (
     <ul className="space-y-3">
@@ -29,12 +37,12 @@ export function TaskChecklist({ items }: { items: TaskChecklistItemData[] }) {
               {item.completed ? <LuxuryCheckedCircleIcon className="h-5 w-5" /> : <LuxuryUncheckedCircleIcon className="h-5 w-5 text-luxury-border" />}
             </button>
           ) : (
-            <span className="shrink-0 text-luxury-rose" aria-hidden="true">
-              {item.completed ? <LuxuryCheckedCircleIcon className="h-5 w-5" /> : <LuxuryUncheckedCircleIcon className="h-5 w-5 text-luxury-border" />}
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center" role="img" aria-label={item.completed ? "Completed" : "Pending"}>
+              <span className={`h-1.5 w-1.5 rounded-full ${item.completed ? "bg-luxury-success" : "bg-luxury-border"}`} aria-hidden="true" />
             </span>
           )}
           <span className="min-w-0 flex-1">
-            <span className={`block truncate text-luxury-body font-medium ${item.completed ? "text-luxury-text-muted line-through" : "text-luxury-text"}`}>{item.title}</span>
+            <span className={`block break-words text-luxury-body font-medium ${item.completed ? "text-luxury-text-muted line-through" : "text-luxury-text"}`}>{item.title}</span>
             {item.timeLabel ? <span className="block text-luxury-small text-luxury-text-muted">{item.timeLabel}</span> : null}
           </span>
           <StatusBadge label={item.completed ? "Completed" : "Pending"} tone={item.completed ? "success" : "pending"} />

@@ -12,6 +12,9 @@ import { getWorkspaceBranding } from "@/core/branding/getWorkspaceBranding";
 import { majorToMinor } from "@/lib/money";
 import { buildWelcomeCopy } from "@/core/dashboard/buildWelcomeCopy";
 import { EVENT_TYPE_LABELS } from "@/core/enums/eventType";
+import { getOperationalLocationForecast } from "@/core/weather/operationalLocationWeather";
+import { DEFAULT_OPERATIONAL_LOCATION } from "@/core/dashboard/operationalLocation";
+import type { DailyForecast } from "@/types/weather";
 import type { EventHeroCardData } from "@/modules/dashboard/luxury/components/EventHeroCard";
 import type { TaskChecklistItemData } from "@/modules/dashboard/luxury/components/TaskChecklist";
 import type { ScheduleTimelineItemData } from "@/modules/dashboard/luxury/components/ScheduleTimeline";
@@ -64,6 +67,14 @@ export interface ClientDashboardData {
   planner: PlannerContactData;
   portalSummary: PortalHomeSummaryData;
   recentActivity: ActivityFeedItemData[];
+  /**
+   * "Team + Client Compact Clock & Weather Variant" addendum — today's
+   * forecast for Amoré Bloom's shared operational location
+   * (`DEFAULT_OPERATIONAL_LOCATION`), never this client's own event
+   * location or any Founder-private location. Null only when the lookup
+   * itself fails.
+   */
+  operationalForecast: DailyForecast | null;
 }
 
 export type GetClientDashboardDataResult = { success: true; data: ClientDashboardData } | { success: false; error: string };
@@ -105,7 +116,7 @@ export async function getClientDashboardData(): Promise<GetClientDashboardDataRe
   publishPortalLoginWebhookEvent(context.account.workspace_id, context.account.id, context.account.client_id);
 
   const manager = getSettingsManager();
-  const [overview, checklist, timeline, contracts, allEvents, teamMembers, branding, welcomeMessageValue, journeySummary, messageThread, proposalsResult, announcementsResult, communicationResult] = await Promise.all([
+  const [overview, checklist, timeline, contracts, allEvents, teamMembers, branding, welcomeMessageValue, journeySummary, messageThread, proposalsResult, announcementsResult, communicationResult, operationalForecast] = await Promise.all([
     getClientPortalOverview(),
     getClientPortalChecklist(),
     getClientPortalTimeline(),
@@ -119,6 +130,7 @@ export async function getClientDashboardData(): Promise<GetClientDashboardDataRe
     listClientPortalProposalsAction(),
     getClientPortalAnnouncementsAction(),
     getClientPortalCommunicationSummaryAction(),
+    getOperationalLocationForecast(DEFAULT_OPERATIONAL_LOCATION),
   ]);
   const logoUrl = branding.logoUrl;
   const emotionalMessage = typeof welcomeMessageValue === "string" && welcomeMessageValue.trim().length > 0 ? welcomeMessageValue : "Every detail is planned with love, so you can live the moment.";
@@ -213,6 +225,7 @@ export async function getClientDashboardData(): Promise<GetClientDashboardDataRe
       planner,
       portalSummary,
       recentActivity,
+      operationalForecast,
     },
   };
 }

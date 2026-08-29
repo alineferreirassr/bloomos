@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   getWorkspaceMembers,
@@ -21,14 +22,23 @@ import { TEAM_ROLE_LABELS, TEAM_ROLE_LABEL_NAMES, DEFAULT_TEAM_ROLE_LABEL, type 
 import { WORKSPACE_MEMBER_ROLES, WORKSPACE_MEMBER_ROLE_LABELS, type WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 import { INVITATION_STATUS_LABELS } from "@/core/enums/invitationStatus";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { KpiCard } from "@/components/ui/KpiCard";
-import { TeamIcon, SettingsIcon, LockIcon, PipelineIcon, ClientsIcon } from "@/components/ui/icons";
+import type { LuxuryBranding } from "@/modules/dashboard/luxury/components/LuxuryDashboardShell";
+import { LuxuryDashboardShell } from "@/modules/dashboard/luxury/components/LuxuryDashboardShell";
+import { PersonalizedWelcomeHeader } from "@/modules/dashboard/luxury/components/PersonalizedWelcomeHeader";
+import { DashboardDateSelector } from "@/modules/dashboard/luxury/components/DashboardDateSelector";
+import { ProfileMenu } from "@/modules/dashboard/luxury/components/ProfileMenu";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
+import { LuxuryMetricCard, type LuxuryMetricCardData } from "@/modules/dashboard/luxury/components/LuxuryMetricCard";
+import { CompactClockWeatherPanel } from "@/modules/dashboard/luxury/components/CompactClockWeatherPanel";
+import { CalendarWidget } from "@/modules/dashboard/luxury/components/CalendarWidget";
+import { DEFAULT_OPERATIONAL_LOCATION } from "@/core/dashboard/operationalLocation";
+import type { DailyForecast } from "@/types/weather";
+import type { CalendarEvent } from "@/types/calendarEvent";
 import { NewInvitationModal } from "@/modules/team/components/NewInvitationModal";
 import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
@@ -42,11 +52,39 @@ type LoadState =
       teamRoleLabels: Record<string, TeamRoleLabel>;
     };
 
+interface TeamViewProps {
+  branding: LuxuryBranding;
+  profileName: string;
+  profileRoleLabel: string;
+  profileAvatarUrl: string | null;
+  operationalForecast: DailyForecast | null;
+  calendarWidget: { initialEvents: CalendarEvent[]; initialAnchorIso: string };
+}
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-export function TeamView() {
+/**
+ * "Team page must use the same dashboard system" addendum, then the "Team +
+ * Client Compact Clock & Weather Variant" correction — `/team` shares the
+ * Luxury Dashboard shell and card system `/dashboard` uses, but its "Today"
+ * section is the COMPACT single-location `CompactClockWeatherPanel` (one
+ * Huntington Beach clock + that location's weather), not Founder's
+ * multi-city `WorldClockCard` — the Founder Dashboard is the only surface
+ * with the full editable World Clock. `operationalForecast`/`calendarWidget`
+ * come from `getTeamPageGlanceData` — a role-agnostic sibling of
+ * `getOwnerDashboardData` built entirely on `getCalendarEventsAction` (the
+ * same `events.view`-checked action `/calendar` itself uses) plus a fixed,
+ * non-event location forecast, so every role that can already reach this
+ * page sees the same data, never anything RLS/permissions wouldn't already
+ * let them see at `/calendar` — and never the Founder-private wellness/notes
+ * data that stays exclusive to the personal Dashboard. The roster/
+ * invitations management below (members table, role dropdowns, invite
+ * modal) is unchanged in behavior — only its presentation now sits inside
+ * `LuxuryCard`s instead of the old generic `Card`.
+ */
+export function TeamView({ branding, profileName, profileRoleLabel, profileAvatarUrl, operationalForecast, calendarWidget }: TeamViewProps) {
   const { can } = useMemberSession();
   const canManageRoles = can("team.manage_roles");
   const canInvite = can("team.invite");
@@ -83,29 +121,6 @@ export function TeamView() {
     fetchTeamData().then(setState);
   };
 
-  if (state.status === "loading") {
-    return (
-      <div className="space-y-3">
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
-  }
-
-  if (state.status === "error") {
-    return <ErrorState onRetry={load} />;
-  }
-
-  const { members, invitations, teamRoleLabels } = state;
-
-  const kpis = {
-    total: members.length,
-    owner: members.filter((member) => member.role === "owner").length,
-    admin: members.filter((member) => member.role === "admin").length,
-    manager: members.filter((member) => member.role === "manager").length,
-    staff: members.filter((member) => member.role === "staff").length,
-  };
-
   const runAction = async (id: string, action: () => Promise<{ success: boolean; error?: string }>) => {
     setBusyId(id);
     setActionError(null);
@@ -118,213 +133,238 @@ export function TeamView() {
     load();
   };
 
+  const kpis =
+    state.status === "ready"
+      ? {
+          total: state.members.length,
+          owner: state.members.filter((member) => member.role === "owner").length,
+          admin: state.members.filter((member) => member.role === "admin").length,
+          manager: state.members.filter((member) => member.role === "manager").length,
+          staff: state.members.filter((member) => member.role === "staff").length,
+        }
+      : null;
+
+  const metrics: LuxuryMetricCardData[] = kpis
+    ? [
+        { id: "total-members", label: "Total Members", value: kpis.total.toLocaleString(), icon: "Users" },
+        { id: "owner", label: "Owner", value: kpis.owner.toLocaleString(), icon: "Users" },
+        { id: "admin", label: "Admin", value: kpis.admin.toLocaleString(), icon: "Users" },
+        { id: "manager", label: "Manager", value: kpis.manager.toLocaleString(), icon: "Users" },
+        { id: "staff", label: "Staff", value: kpis.staff.toLocaleString(), icon: "Users" },
+      ]
+    : [];
+
   return (
-    <div>
-      <PageHeader
-        title="Team"
-        subtitle={`Amoré Bloom's internal team members and invitations. ${getDataPersistenceMessage()}`}
-      />
+    <LuxuryDashboardShell
+      branding={branding}
+      sidebarFooter={<ProfileMenu name={profileName} roleLabel={profileRoleLabel} avatarUrl={profileAvatarUrl} />}
+      topbarActions={<DashboardDateSelector />}
+    >
+      <div className="space-y-6">
+        <PersonalizedWelcomeHeader copy={{ greeting: "Team", subtitle: `Amoré Bloom's internal team members and invitations. ${getDataPersistenceMessage()}` }} />
 
-      <div className="animate-fade-up stagger-1 mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
-        <KpiCard icon={TeamIcon} label="Total Members" value={kpis.total.toLocaleString()} />
-        <KpiCard icon={SettingsIcon} label="Owner" value={kpis.owner.toLocaleString()} />
-        <KpiCard icon={LockIcon} label="Admin" value={kpis.admin.toLocaleString()} />
-        <KpiCard icon={PipelineIcon} label="Manager" value={kpis.manager.toLocaleString()} />
-        <KpiCard icon={ClientsIcon} label="Staff" value={kpis.staff.toLocaleString()} />
-      </div>
+        {metrics.length > 0 ? (
+          <div className="animate-fade-up stagger-1 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
+            {metrics.map((metric) => (
+              <LuxuryMetricCard key={metric.id} data={metric} />
+            ))}
+          </div>
+        ) : null}
 
-      <div className="space-y-8">
-      {actionError ? (
-        <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
-          {actionError}
-        </div>
-      ) : null}
-
-      {copiedLink ? (
-        <div role="status" className="rounded-lg border border-border bg-surface px-3 py-2 text-xs text-text">
-          Invitation link for {copiedLink.email}:{" "}
-          <code className="break-all text-accent">{copiedLink.url}</code>
-        </div>
-      ) : null}
-
-      <Card>
-        <h3 className="font-serif text-[17px] font-semibold text-text">Members</h3>
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-border text-xs text-text-muted">
-                <th className="pb-2 pr-3 font-normal">Name</th>
-                <th className="pb-2 pr-3 font-normal">Email</th>
-                <th className="pb-2 pr-3 font-normal">Role</th>
-                <th className="pb-2 pr-3 font-normal">Dashboard role</th>
-                <th className="pb-2 pr-3 font-normal">Status</th>
-                <th className="pb-2 pr-3 font-normal">Joined</th>
-                {canManageRoles ? <th className="pb-2 font-normal">Actions</th> : null}
-              </tr>
-            </thead>
-            <tbody>
-              {members.map((member) => (
-                <tr key={member.id} className="border-b border-border/60 last:border-0">
-                  <td className="py-2 pr-3 text-text">{member.full_name ?? "—"}</td>
-                  <td className="py-2 pr-3 text-text-muted">{member.email}</td>
-                  <td className="py-2 pr-3">
-                    {canManageRoles ? (
-                      <select
-                        aria-label={`Role for ${member.email}`}
-                        value={member.role}
-                        disabled={busyId === member.id}
-                        onChange={(event) =>
-                          runAction(member.id, () => updateWorkspaceMemberRole(member.id, event.target.value as WorkspaceMemberRole))
-                        }
-                        className="rounded-md border border-border bg-transparent px-1.5 py-1 text-xs text-text"
-                      >
-                        {WORKSPACE_MEMBER_ROLES.map((role) => (
-                          <option key={role} value={role}>
-                            {WORKSPACE_MEMBER_ROLE_LABELS[role]}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <Badge tone="outline">{WORKSPACE_MEMBER_ROLE_LABELS[member.role]}</Badge>
-                    )}
-                  </td>
-                  <td className="py-2 pr-3">
-                    {canManageRoles ? (
-                      <select
-                        aria-label={`Dashboard role for ${member.email}`}
-                        value={teamRoleLabels[member.id] ?? DEFAULT_TEAM_ROLE_LABEL}
-                        disabled={busyId === member.id}
-                        onChange={(event) =>
-                          runAction(member.id, () => setTeamRoleLabelAction(member.id, event.target.value as TeamRoleLabel))
-                        }
-                        className="rounded-md border border-border bg-transparent px-1.5 py-1 text-xs text-text"
-                      >
-                        {TEAM_ROLE_LABELS.map((label) => (
-                          <option key={label} value={label}>
-                            {TEAM_ROLE_LABEL_NAMES[label]}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <Badge tone="outline">{TEAM_ROLE_LABEL_NAMES[teamRoleLabels[member.id] ?? DEFAULT_TEAM_ROLE_LABEL]}</Badge>
-                    )}
-                  </td>
-                  <td className="py-2 pr-3">
-                    <Badge tone={member.status === "active" ? "accent" : "neutral"}>
-                      {member.status === "active" ? "Active" : "Suspended"}
-                    </Badge>
-                  </td>
-                  <td className="py-2 pr-3 text-text-muted">{formatDate(member.created_at)}</td>
-                  {canManageRoles ? (
-                    <td className="py-2">
-                      <div className="flex gap-2">
-                        {member.status === "active" ? (
-                          <Button
-                            variant="secondary"
-                            disabled={busyId === member.id}
-                            onClick={() => runAction(member.id, () => deactivateWorkspaceMember(member.id))}
-                          >
-                            Deactivate
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="secondary"
-                            disabled={busyId === member.id}
-                            onClick={() => runAction(member.id, () => reactivateWorkspaceMember(member.id))}
-                          >
-                            Reactivate
-                          </Button>
-                        )}
-                        <Button
-                          variant="secondary"
-                          disabled={busyId === member.id}
-                          onClick={() => runAction(member.id, () => removeWorkspaceMember(member.id))}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    </td>
-                  ) : null}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      <Card>
-        <div className="flex items-center justify-between">
-          <h3 className="font-serif text-[17px] font-semibold text-text">Invitations</h3>
-          {canInvite ? <Button onClick={() => setNewInvitationOpen(true)}>New Invitation</Button> : null}
+        <div className="animate-fade-up stagger-2">
+          <p className="text-luxury-metadata font-semibold tracking-wide text-luxury-rose uppercase">Today</p>
+          <h2 className="mt-1 font-luxury-display text-luxury-page font-semibold text-luxury-text">Today, at a glance</h2>
         </div>
 
-        {invitations.length === 0 ? (
-          <div className="mt-3">
-            <EmptyState title="No invitations yet" description={canInvite ? "Invite a team member to get started." : undefined} />
+        <div className="animate-fade-up stagger-2">
+          <CompactClockWeatherPanel location={DEFAULT_OPERATIONAL_LOCATION} forecast={operationalForecast} />
+        </div>
+
+        <div className="animate-fade-up stagger-2 lg:max-w-md">
+          <LuxuryCard>
+            <SectionHeader title="Calendar" action={<Link href="/calendar" className="text-luxury-small font-medium text-luxury-rose">Open</Link>} />
+            <CalendarWidget initialEvents={calendarWidget.initialEvents} initialAnchorIso={calendarWidget.initialAnchorIso} currentMemberName={profileName} compact />
+          </LuxuryCard>
+        </div>
+
+        {state.status === "loading" ? (
+          <div className="animate-fade-up stagger-3 space-y-3">
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-64 w-full" />
+          </div>
+        ) : state.status === "error" ? (
+          <div className="animate-fade-up stagger-3">
+            <ErrorState onRetry={load} />
           </div>
         ) : (
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-border text-xs text-text-muted">
-                  <th className="pb-2 pr-3 font-normal">Email</th>
-                  <th className="pb-2 pr-3 font-normal">Role</th>
-                  <th className="pb-2 pr-3 font-normal">Status</th>
-                  <th className="pb-2 pr-3 font-normal">Expires</th>
-                  {canInvite ? <th className="pb-2 font-normal">Actions</th> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {invitations.map((invitation) => (
-                  <tr key={invitation.id} className="border-b border-border/60 last:border-0">
-                    <td className="py-2 pr-3 text-text">{invitation.email}</td>
-                    <td className="py-2 pr-3 text-text-muted">{WORKSPACE_MEMBER_ROLE_LABELS[invitation.invited_role]}</td>
-                    <td className="py-2 pr-3">
-                      <Badge tone={invitation.status === "pending" ? "outline" : invitation.status === "accepted" ? "accent" : "neutral"}>
-                        {INVITATION_STATUS_LABELS[invitation.status]}
-                      </Badge>
-                    </td>
-                    <td className="py-2 pr-3 text-text-muted">{formatDate(invitation.expires_at)}</td>
-                    {canInvite ? (
-                      <td className="py-2">
-                        {invitation.status === "pending" ? (
-                          <div className="flex gap-2">
-                            <Button
-                              variant="secondary"
-                              disabled={busyId === invitation.id}
-                              onClick={async () => {
-                                setBusyId(invitation.id);
-                                setActionError(null);
-                                const result = await resendWorkspaceInvitation(invitation.id);
-                                setBusyId(null);
-                                if (!result.success) {
-                                  setActionError(result.error);
-                                  return;
-                                }
-                                setCopiedLink({ email: result.data.invitation.email, url: `${window.location.origin}/invitations/${result.data.token}` });
-                                load();
-                              }}
+          <div className="animate-fade-up stagger-3 space-y-6">
+            {actionError ? (
+              <div role="alert" className="rounded-luxury-md border border-luxury-border bg-luxury-surface px-3 py-2 text-luxury-small text-luxury-rose">
+                {actionError}
+              </div>
+            ) : null}
+
+            {copiedLink ? (
+              <div role="status" className="rounded-luxury-md border border-luxury-border bg-luxury-surface px-3 py-2 text-luxury-small text-luxury-text">
+                Invitation link for {copiedLink.email}: <code className="break-all text-luxury-rose">{copiedLink.url}</code>
+              </div>
+            ) : null}
+
+            <LuxuryCard>
+              <SectionHeader title="Members" />
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full text-left text-luxury-small">
+                  <thead>
+                    <tr className="border-b border-luxury-border text-luxury-metadata text-luxury-text-muted uppercase">
+                      <th className="pb-2 pr-3 font-normal">Name</th>
+                      <th className="pb-2 pr-3 font-normal">Email</th>
+                      <th className="pb-2 pr-3 font-normal">Role</th>
+                      <th className="pb-2 pr-3 font-normal">Dashboard role</th>
+                      <th className="pb-2 pr-3 font-normal">Status</th>
+                      <th className="pb-2 pr-3 font-normal">Joined</th>
+                      {canManageRoles ? <th className="pb-2 font-normal">Actions</th> : null}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {state.members.map((member) => (
+                      <tr key={member.id} className="border-b border-luxury-border/60 last:border-0">
+                        <td className="py-2 pr-3 text-luxury-text">{member.full_name ?? "—"}</td>
+                        <td className="py-2 pr-3 text-luxury-text-muted">{member.email}</td>
+                        <td className="py-2 pr-3">
+                          {canManageRoles ? (
+                            <select
+                              aria-label={`Role for ${member.email}`}
+                              value={member.role}
+                              disabled={busyId === member.id}
+                              onChange={(event) => runAction(member.id, () => updateWorkspaceMemberRole(member.id, event.target.value as WorkspaceMemberRole))}
+                              className="rounded-luxury-md border border-luxury-border bg-transparent px-1.5 py-1 text-luxury-small text-luxury-text"
                             >
-                              Resend
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              disabled={busyId === invitation.id}
-                              onClick={() => runAction(invitation.id, () => revokeWorkspaceInvitation(invitation.id))}
+                              {WORKSPACE_MEMBER_ROLES.map((role) => (
+                                <option key={role} value={role}>
+                                  {WORKSPACE_MEMBER_ROLE_LABELS[role]}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <Badge tone="outline">{WORKSPACE_MEMBER_ROLE_LABELS[member.role]}</Badge>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3">
+                          {canManageRoles ? (
+                            <select
+                              aria-label={`Dashboard role for ${member.email}`}
+                              value={state.teamRoleLabels[member.id] ?? DEFAULT_TEAM_ROLE_LABEL}
+                              disabled={busyId === member.id}
+                              onChange={(event) => runAction(member.id, () => setTeamRoleLabelAction(member.id, event.target.value as TeamRoleLabel))}
+                              className="rounded-luxury-md border border-luxury-border bg-transparent px-1.5 py-1 text-luxury-small text-luxury-text"
                             >
-                              Revoke
-                            </Button>
-                          </div>
+                              {TEAM_ROLE_LABELS.map((label) => (
+                                <option key={label} value={label}>
+                                  {TEAM_ROLE_LABEL_NAMES[label]}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <Badge tone="outline">{TEAM_ROLE_LABEL_NAMES[state.teamRoleLabels[member.id] ?? DEFAULT_TEAM_ROLE_LABEL]}</Badge>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3">
+                          <Badge tone={member.status === "active" ? "accent" : "neutral"}>{member.status === "active" ? "Active" : "Suspended"}</Badge>
+                        </td>
+                        <td className="py-2 pr-3 text-luxury-text-muted">{formatDate(member.created_at)}</td>
+                        {canManageRoles ? (
+                          <td className="py-2">
+                            <div className="flex gap-2">
+                              {member.status === "active" ? (
+                                <Button variant="secondary" disabled={busyId === member.id} onClick={() => runAction(member.id, () => deactivateWorkspaceMember(member.id))}>
+                                  Deactivate
+                                </Button>
+                              ) : (
+                                <Button variant="secondary" disabled={busyId === member.id} onClick={() => runAction(member.id, () => reactivateWorkspaceMember(member.id))}>
+                                  Reactivate
+                                </Button>
+                              )}
+                              <Button variant="secondary" disabled={busyId === member.id} onClick={() => runAction(member.id, () => removeWorkspaceMember(member.id))}>
+                                Remove
+                              </Button>
+                            </div>
+                          </td>
                         ) : null}
-                      </td>
-                    ) : null}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </LuxuryCard>
+
+            <LuxuryCard>
+              <SectionHeader title="Invitations" action={canInvite ? <Button onClick={() => setNewInvitationOpen(true)}>New Invitation</Button> : undefined} />
+
+              {state.invitations.length === 0 ? (
+                <div className="mt-3">
+                  <EmptyState title="No invitations yet" description={canInvite ? "Invite a team member to get started." : undefined} />
+                </div>
+              ) : (
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full text-left text-luxury-small">
+                    <thead>
+                      <tr className="border-b border-luxury-border text-luxury-metadata text-luxury-text-muted uppercase">
+                        <th className="pb-2 pr-3 font-normal">Email</th>
+                        <th className="pb-2 pr-3 font-normal">Role</th>
+                        <th className="pb-2 pr-3 font-normal">Status</th>
+                        <th className="pb-2 pr-3 font-normal">Expires</th>
+                        {canInvite ? <th className="pb-2 font-normal">Actions</th> : null}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {state.invitations.map((invitation) => (
+                        <tr key={invitation.id} className="border-b border-luxury-border/60 last:border-0">
+                          <td className="py-2 pr-3 text-luxury-text">{invitation.email}</td>
+                          <td className="py-2 pr-3 text-luxury-text-muted">{WORKSPACE_MEMBER_ROLE_LABELS[invitation.invited_role]}</td>
+                          <td className="py-2 pr-3">
+                            <Badge tone={invitation.status === "pending" ? "outline" : invitation.status === "accepted" ? "accent" : "neutral"}>
+                              {INVITATION_STATUS_LABELS[invitation.status]}
+                            </Badge>
+                          </td>
+                          <td className="py-2 pr-3 text-luxury-text-muted">{formatDate(invitation.expires_at)}</td>
+                          {canInvite ? (
+                            <td className="py-2">
+                              {invitation.status === "pending" ? (
+                                <div className="flex gap-2">
+                                  <Button
+                                    variant="secondary"
+                                    disabled={busyId === invitation.id}
+                                    onClick={async () => {
+                                      setBusyId(invitation.id);
+                                      setActionError(null);
+                                      const result = await resendWorkspaceInvitation(invitation.id);
+                                      setBusyId(null);
+                                      if (!result.success) {
+                                        setActionError(result.error);
+                                        return;
+                                      }
+                                      setCopiedLink({ email: result.data.invitation.email, url: `${window.location.origin}/invitations/${result.data.token}` });
+                                      load();
+                                    }}
+                                  >
+                                    Resend
+                                  </Button>
+                                  <Button variant="secondary" disabled={busyId === invitation.id} onClick={() => runAction(invitation.id, () => revokeWorkspaceInvitation(invitation.id))}>
+                                    Revoke
+                                  </Button>
+                                </div>
+                              ) : null}
+                            </td>
+                          ) : null}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </LuxuryCard>
           </div>
         )}
-      </Card>
       </div>
 
       <NewInvitationModal
@@ -336,6 +376,6 @@ export function TeamView() {
           load();
         }}
       />
-    </div>
+    </LuxuryDashboardShell>
   );
 }

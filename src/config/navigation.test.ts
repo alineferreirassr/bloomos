@@ -3,7 +3,9 @@ import {
   findActiveNavLabel,
   getNavigableLabelEntries,
   getVisibleNavigationModules,
+  groupVisibleNavigationModules,
   navigationModules,
+  NAV_GROUP_ORDER,
 } from "@/config/navigation";
 
 describe("getVisibleNavigationModules", () => {
@@ -23,21 +25,14 @@ describe("getVisibleNavigationModules", () => {
     expect(visible.map((m) => m.id)).not.toContain("team");
   });
 
-  it("drops the CRM module's Client Accounts/Invitations children for a member without clients.portal_view, but keeps CRM for its other children", () => {
+  it("hides only Client Accounts/Invitations for a member without clients.portal_view, keeping every other Relationships destination (Leads, Clients, ...) since flattening made each its own permission-gated entry", () => {
     const can = (permission: string) => permission !== "clients.portal_view";
     const visible = getVisibleNavigationModules(can);
-    const crm = visible.find((m) => m.id === "crm");
-    expect(crm).toBeDefined();
-    expect(crm?.children?.map((c) => c.id)).not.toContain("client-accounts");
-    expect(crm?.children?.map((c) => c.id)).not.toContain("client-invitations");
-    expect(crm?.children?.map((c) => c.id)).toContain("leads");
-  });
-
-  it("drops a module entirely once every one of its children is hidden by permission", () => {
-    const can = (permission: string) =>
-      !["leads.view", "clients.view", "contracts.view", "clients.portal_view"].includes(permission);
-    const visible = getVisibleNavigationModules(can);
-    expect(visible.find((m) => m.id === "crm")).toBeUndefined();
+    const ids = visible.map((m) => m.id);
+    expect(ids).not.toContain("client-accounts");
+    expect(ids).not.toContain("client-invitations");
+    expect(ids).toContain("leads");
+    expect(ids).toContain("clients");
   });
 
   it("shows Inventory/Vendors/Purchases/Services/Bloom AI regardless of permission — none of their routes has a ROUTE_ACCESS_MAP entry, so canAccessRoute treats them as active-membership-only", () => {
@@ -60,6 +55,11 @@ describe("getVisibleNavigationModules", () => {
   it("hides Developer for a member without workspace.manage", () => {
     const visible = getVisibleNavigationModules(() => false);
     expect(visible.map((m) => m.id)).not.toContain("developer");
+  });
+
+  it("hides Integrations for a member without workspace.manage", () => {
+    const visible = getVisibleNavigationModules(() => false);
+    expect(visible.map((m) => m.id)).not.toContain("integrations");
   });
 
   it("shows exactly the staff-permitted modules for the seeded staff permission matrix (Settings excluded — staff lacks workspace.manage; Analytics excluded — staff lacks analytics.view; Developer/Marketplace/Integrations excluded — staff lacks workspace.manage)", () => {
@@ -94,15 +94,40 @@ describe("getVisibleNavigationModules", () => {
       navigationModules.map((m) => m.id).filter((id) => id !== "settings" && id !== "analytics" && id !== "developer" && id !== "marketplace" && id !== "integrations"),
     );
   });
+});
 
-  it("hides Integrations for a member without workspace.manage", () => {
-    const visible = getVisibleNavigationModules(() => false);
-    expect(visible.map((m) => m.id)).not.toContain("integrations");
+describe("groupVisibleNavigationModules", () => {
+  it("buckets every visible module into exactly one group, in NAV_GROUP_ORDER, covering every module with no drops or duplicates", () => {
+    const groups = groupVisibleNavigationModules(() => true);
+    expect(groups.map((g) => g.id)).toEqual(NAV_GROUP_ORDER);
+    const flattened = groups.flatMap((g) => g.modules.map((m) => m.id));
+    expect(flattened.sort()).toEqual(navigationModules.map((m) => m.id).sort());
+  });
+
+  it("drops a group entirely once permission filtering leaves it with zero visible modules", () => {
+    // A member who can reach nothing outside the always-visible Workspace/Dashboard.
+    const groups = groupVisibleNavigationModules(() => false);
+    const groupIds = groups.map((g) => g.id);
+    expect(groupIds).toContain("workspace");
+    expect(groupIds).not.toContain("insights");
+    expect(groupIds).not.toContain("team");
+  });
+
+  it("shrinks Insights and System for a staff member without narrowing any other group's membership, and never removes a group a manager with full access would see", () => {
+    const staffCan = (permission: string) => permission !== "analytics.view" && permission !== "workspace.manage";
+    const staffGroups = groupVisibleNavigationModules(staffCan);
+    const insights = staffGroups.find((g) => g.id === "insights");
+    const system = staffGroups.find((g) => g.id === "system");
+    expect(insights?.modules.map((m) => m.id)).not.toContain("analytics");
+    expect(system?.modules.map((m) => m.id)).toEqual(["bloom-ai", "automation"]);
+
+    const managerGroups = groupVisibleNavigationModules(() => true);
+    expect(managerGroups.map((g) => g.id)).toEqual(expect.arrayContaining(staffGroups.map((g) => g.id)));
   });
 });
 
 describe("getNavigableLabelEntries", () => {
-  it("flattens both top-level direct links and every child leaf, excluding disabled and childless-group entries", () => {
+  it("includes every real destination, including the ones formerly hidden inside the CRM/Events expandable groups", () => {
     const entries = getNavigableLabelEntries();
     const hrefs = entries.map((e) => e.href);
 
@@ -114,12 +139,6 @@ describe("getNavigableLabelEntries", () => {
     expect(hrefs).toContain("/bloom-ai");
     expect(hrefs).toContain("/settings");
   });
-
-  it("never includes an entry for CRM or Events themselves, since those are childless-of-href expandable groups", () => {
-    const entries = getNavigableLabelEntries();
-    expect(entries.find((e) => e.label === "CRM")).toBeUndefined();
-    expect(entries.find((e) => e.label === "Events" && e.href === undefined)).toBeUndefined();
-  });
 });
 
 describe("findActiveNavLabel", () => {
@@ -127,7 +146,7 @@ describe("findActiveNavLabel", () => {
     expect(findActiveNavLabel("/dashboard")).toBe("Dashboard");
   });
 
-  it("resolves a nested child leaf", () => {
+  it("resolves a formerly-hidden CRM child, now a real top-level entry", () => {
     expect(findActiveNavLabel("/leads")).toBe("Leads");
   });
 

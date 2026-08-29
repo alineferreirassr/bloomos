@@ -12,15 +12,38 @@ import { formatMoney } from "@/lib/money";
 import { buildWelcomeCopy, resolveTimeOfDay } from "@/core/dashboard/buildWelcomeCopy";
 import { resolveDashboardExperience } from "@/core/dashboard/resolveDashboardExperience";
 import { EVENT_TYPE_LABELS } from "@/core/enums/eventType";
+import { getEventWeather } from "@/core/weather/eventWeatherEngine";
+import { formatDateOnlyLabel } from "@/modules/dashboard/luxury/localDate";
+import { getCalendarEventsAction } from "@/modules/calendar/calendarActions";
+import type { EventWeatherForecast } from "@/types/weather";
 import type { LuxuryMetricCardData } from "@/modules/dashboard/luxury/components/LuxuryMetricCard";
+import type { LittleReminderData } from "@/modules/dashboard/luxury/components/LittleReminderCard";
 import type { EventPreviewCardData } from "@/modules/dashboard/luxury/components/EventPreviewCard";
 import type { PriorityItemData } from "@/modules/dashboard/luxury/components/PriorityList";
 import type { ActivityFeedItemData } from "@/modules/dashboard/luxury/components/ActivityFeedList";
 import type { RevenueTrendPoint } from "@/modules/dashboard/luxury/components/RevenueTrendChart";
 import type { WelcomeCopy } from "@/core/dashboard/buildWelcomeCopy";
+import type { CalendarEvent } from "@/types/calendarEvent";
 
 const GENERIC_ACCESS_ERROR = "The Dashboard isn't available. You may not have access to it.";
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * The Founder Dashboard's weather card data — deliberately "next event
+ * with weather available" rather than "next OUTDOOR event": `Event` has
+ * no indoor/outdoor field anywhere in its schema (confirmed by direct
+ * audit before building this), and inferring one from the event's title
+ * or type would be exactly the kind of fabrication the founder's Weather
+ * instructions explicitly forbid. This is a known, reported limitation,
+ * not an oversight — see the Weather integration's certification report.
+ */
+export interface NextEventWeather {
+  eventId: string;
+  title: string;
+  dateLabel: string;
+  timeLabel: string | null;
+  forecast: EventWeatherForecast;
+}
 
 export interface OwnerDashboardData {
   welcome: WelcomeCopy;
@@ -28,11 +51,17 @@ export interface OwnerDashboardData {
   firstName: string;
   metrics: LuxuryMetricCardData[];
   upcomingEvents: EventPreviewCardData[];
+  /** Null when no upcoming event carries real coordinates/date, or when the forecast lookup itself fails — never a fabricated forecast. */
+  nextEventWeather: NextEventWeather | null;
   weekAgenda: { dayLabel: string; dateLabel: string; events: { id: string; title: string; timeLabel: string | null; href: string }[] }[];
+  /** The current month's Events/Tasks, fetched through the same `getCalendarEventsAction` the Advanced Calendar itself uses — the Home Calendar widget's first paint before any client-side month navigation. */
+  calendarWidget: { initialEvents: CalendarEvent[]; initialAnchorIso: string };
   priorities: PriorityItemData[];
   revenueSeries: RevenueTrendPoint[];
   recentMessages: ActivityFeedItemData[];
   teamActivity: ActivityFeedItemData[];
+  /** From the caller's own real, workspace-sent notifications — never fabricated. Same derivation as `getTeamDashboardData.ts`'s own `littleReminder`. */
+  littleReminder: LittleReminderData | null;
   notificationCount: number;
   messageCount: number;
 }
@@ -200,7 +229,33 @@ export async function getOwnerDashboardData(): Promise<GetOwnerDashboardDataResu
   const notificationCount = memberNotifications.filter((n) => n.read_at === null && n.archived_at === null).length;
   const messageCount = recentMessages.filter((item) => item.unread).length;
 
+  // "Little Reminder beside Today's Focus" addendum — the exact same derivation `getTeamDashboardData.ts` already uses (latest unread, real workspace-sent notification), reusing `memberNotifications` already fetched above rather than a second lookup. Never fabricated.
+  const latestUnreadNotification = memberNotifications
+    .filter((n) => n.read_at === null && n.archived_at === null)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  const littleReminder: LittleReminderData | null = latestUnreadNotification ? { title: latestUnreadNotification.title, body: latestUnreadNotification.body } : null;
+
   const firstName = session.profile.full_name?.split(" ")[0] ?? "there";
+
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const calendarResult = await getCalendarEventsAction(monthStart.toISOString(), monthEnd.toISOString());
+  const calendarWidget = { initialEvents: calendarResult.success ? calendarResult.data : [], initialAnchorIso: now.toISOString() };
+
+  const weatherEligibleEvent = upcoming.find((e) => e.latitude !== null && e.longitude !== null && e.event_date !== null);
+  let nextEventWeather: NextEventWeather | null = null;
+  if (weatherEligibleEvent) {
+    const weatherResult = await getEventWeather(weatherEligibleEvent);
+    if (weatherResult.success) {
+      nextEventWeather = {
+        eventId: weatherEligibleEvent.id,
+        title: weatherEligibleEvent.title,
+        dateLabel: formatDateOnlyLabel(weatherEligibleEvent.event_date as string, { month: "short", day: "numeric" }),
+        timeLabel: weatherEligibleEvent.start_time,
+        forecast: weatherResult.data,
+      };
+    }
+  }
 
   return {
     success: true,
@@ -209,11 +264,14 @@ export async function getOwnerDashboardData(): Promise<GetOwnerDashboardDataResu
       firstName,
       metrics,
       upcomingEvents,
+      nextEventWeather,
       weekAgenda,
+      calendarWidget,
       priorities,
       revenueSeries,
       recentMessages,
       teamActivity,
+      littleReminder,
       notificationCount,
       messageCount,
     },

@@ -6,6 +6,7 @@ import { getDataMode } from "@/lib/env";
 import { getEvents, getChecklistByEventId, getScheduleByEventId } from "@/lib/data";
 import { listClientPortalThreadsForWorkspace, listClientPortalMessages } from "@/lib/data/clientPortal/clientPortalMessageStore";
 import { getTeamRoleLabel } from "@/lib/data/core/dashboard/teamRoleLabelStore";
+import { getCoreNotificationsService } from "@/core/notifications";
 import { buildWelcomeCopy, resolveTimeOfDay } from "@/core/dashboard/buildWelcomeCopy";
 import { resolveDashboardExperience } from "@/core/dashboard/resolveDashboardExperience";
 import { EVENT_TYPE_LABELS } from "@/core/enums/eventType";
@@ -18,9 +19,15 @@ import type { ProgressStageData } from "@/modules/dashboard/luxury/components/Pr
 import type { ActivityFeedItemData } from "@/modules/dashboard/luxury/components/ActivityFeedList";
 import type { ImportantNoteData } from "@/modules/dashboard/luxury/components/ImportantNotesCard";
 import type { WeatherNoticeData } from "@/modules/dashboard/luxury/components/WeatherNoticeCard";
+import type { LittleReminderData } from "@/modules/dashboard/luxury/components/LittleReminderCard";
 import type { WelcomeCopy } from "@/core/dashboard/buildWelcomeCopy";
 import type { TeamRoleLabel } from "@/types/teamRoleLabel";
 import type { Event } from "@/types/event";
+import { getEventWeather } from "@/core/weather/eventWeatherEngine";
+import { getCalendarEventsAction } from "@/modules/calendar/calendarActions";
+import { formatDateOnlyLabel } from "@/modules/dashboard/luxury/localDate";
+import type { NextEventWeather } from "@/modules/dashboard/luxury/getOwnerDashboardData";
+import type { CalendarEvent } from "@/types/calendarEvent";
 
 const GENERIC_ACCESS_ERROR = "The Dashboard isn't available. You may not have access to it.";
 
@@ -35,17 +42,36 @@ const PROGRESS_STAGES: { id: string; label: string; icon: string; categories: Ch
 
 export interface TeamDashboardData {
   welcome: WelcomeCopy;
+  /** This member's own `profile.full_name` — passed to `CalendarWidget` so it can highlight items assigned to them, matching the same free-text match `isAssignedToMember` already uses elsewhere in this file. */
+  memberName: string;
   teamRoleLabel: TeamRoleLabel;
   metrics: LuxuryMetricCardData[];
   schedule: ScheduleTimelineItemData[];
   tasks: TaskChecklistItemData[];
   currentEvent: EventHeroCardData | null;
+  /** True when `currentEvent` is actually happening today; false when there's nothing scheduled today and this is the next upcoming event shown instead — the "Current Event" card's own title switches on this so it never presents a future event as today's. */
+  currentEventIsToday: boolean;
+  /** The current month's events this member is authorized to see (same `getCalendarEventsAction` `/calendar` itself calls, ceiling unchanged) — the Home Calendar widget's first paint. */
+  calendarWidget: { initialEvents: CalendarEvent[]; initialAnchorIso: string };
   progressPercent: number;
   progressStages: ProgressStageData[];
   teamUpdates: ActivityFeedItemData[];
   importantNote: ImportantNoteData | null;
   weather: WeatherNoticeData | null;
+  /**
+   * Shares the exact `NextEventWeather` shape `getOwnerDashboardData.ts`
+   * uses, so both dashboards render through the same `NextEventWeatherCard`
+   * component instead of a Team-only parallel implementation — built from
+   * the team member's own assigned event (`currentEventSource`, never a
+   * different event they aren't authorized to see), null when that event
+   * has no coordinates/date or the lookup fails. Independent of `weather`,
+   * which stays the founder's manual `weather_plan` text note passed to
+   * the same card as `contingencyNote`.
+   */
+  nextEventWeather: NextEventWeather | null;
   reminder: ImportantNoteData | null;
+  /** From the caller's own real, workspace-sent notifications — never fabricated. See `LittleReminderCard`'s own doc comment for why this is separate from the private wellness cards. */
+  littleReminder: LittleReminderData | null;
   notificationCount: number;
   messageCount: number;
 }
@@ -149,6 +175,7 @@ export async function getTeamDashboardData(): Promise<GetTeamDashboardDataResult
     .map((item) => ({ id: item.id, title: item.title, timeLabel: item.due_date ? `Today, ${new Date(item.due_date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : null, completed: item.status === "completed" }));
 
   const currentEventSource = todaysEvents[0] ?? upcomingEvents[0] ?? null;
+  const currentEventIsToday = todaysEvents.length > 0;
   const currentEvent: EventHeroCardData | null = currentEventSource
     ? {
         title: currentEventSource.title,
@@ -187,27 +214,56 @@ export async function getTeamDashboardData(): Promise<GetTeamDashboardDataResult
   const importantNote: ImportantNoteData | null = highPriorityOpen ? { id: highPriorityOpen.id, icon: "Checklist", title: highPriorityOpen.title, description: highPriorityOpen.due_date ? `Due ${new Date(highPriorityOpen.due_date).toLocaleDateString("en-US")}` : "No due date set." } : null;
 
   const weather: WeatherNoticeData | null = currentEventSource?.weather_plan ? { description: currentEventSource.weather_plan, highLabel: "—", lowLabel: "—" } : null;
+  let nextEventWeather: NextEventWeather | null = null;
+  if (currentEventSource && currentEventSource.latitude !== null && currentEventSource.longitude !== null && currentEventSource.event_date !== null) {
+    const eventWeatherResult = await getEventWeather(currentEventSource);
+    if (eventWeatherResult.success) {
+      nextEventWeather = {
+        eventId: currentEventSource.id,
+        title: currentEventSource.title,
+        dateLabel: formatDateOnlyLabel(currentEventSource.event_date, { month: "short", day: "numeric" }),
+        timeLabel: currentEventSource.start_time,
+        forecast: eventWeatherResult.data,
+      };
+    }
+  }
+
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const calendarResult = await getCalendarEventsAction(monthStart.toISOString(), monthEnd.toISOString());
+  const calendarWidget = { initialEvents: calendarResult.success ? calendarResult.data : [], initialAnchorIso: now.toISOString() };
 
   const supplyReminder = openTasks.find((item) => item.category === "inventory") ?? null;
   const reminder: ImportantNoteData | null = supplyReminder ? { id: supplyReminder.id, icon: "Checklist", title: "Don't forget", description: supplyReminder.title } : null;
 
   const notificationCount = openTasks.filter((item) => item.due_date !== null && new Date(item.due_date) < now).length;
 
+  const memberNotifications = await getCoreNotificationsService().getNotificationsForMember(session.workspace.id, session.membership.id);
+  const latestUnread = memberNotifications
+    .filter((n) => n.read_at === null && n.archived_at === null)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  const littleReminder: LittleReminderData | null = latestUnread ? { title: latestUnread.title, body: latestUnread.body } : null;
+
   return {
     success: true,
     data: {
       welcome: buildWelcomeCopy({ experience: "team", firstName: memberName.split(" ")[0] || session.user.email, timeOfDay: resolveTimeOfDay(now), taskCount: tasksToday.length, eventCount: todaysEvents.length }),
+      memberName,
       teamRoleLabel,
       metrics,
       schedule,
       tasks,
       currentEvent,
+      currentEventIsToday,
+      calendarWidget,
       progressPercent,
       progressStages,
       teamUpdates,
       importantNote,
       weather,
+      nextEventWeather,
       reminder,
+      littleReminder,
       notificationCount,
       messageCount: unreadThreadCount,
     },

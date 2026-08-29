@@ -40,6 +40,10 @@ import {
   Image,
   Search,
   Command,
+  ListChecks,
+  AlarmClock,
+  Pin,
+  CalendarClock,
 } from "lucide-react";
 
 type IconProps = SVGProps<SVGSVGElement>;
@@ -227,4 +231,24 @@ export function SearchIcon(props: IconProps) {
 
 export function CommandCenterIcon(props: IconProps) {
   return <Command strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Advanced Calendar phase — the "Task" category on calendar entries (a dated Event checklist item), distinct from CheckIcon's plain single confirmation mark. */
+export function TaskIcon(props: IconProps) {
+  return <ListChecks strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Advanced Calendar phase — the "Deadline" category on calendar entries (a high/critical-priority dated checklist item), distinct from CommunicationsIcon's plain Bell: this is time-pressure, not a message. */
+export function DeadlineIcon(props: IconProps) {
+  return <AlarmClock strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Advanced Calendar phase — Pinned Events (the operational shortcut, not a social favorite). */
+export function PinIcon(props: IconProps) {
+  return <Pin strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Enterprise Scheduling Platform (top-level nav module, relocated from `/calendar` to `/scheduling` during the Advanced Calendar phase) — availability windows/reservations/buffers/capacity, distinct from EventsIcon's plain Calendar (now the Advanced Calendar's own icon). */
+export function SchedulingIcon(props: IconProps) {
+  return <CalendarClock strokeWidth={2} aria-hidden="true" {...props} />;
 }

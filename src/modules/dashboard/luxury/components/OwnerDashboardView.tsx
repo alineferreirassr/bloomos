@@ -21,10 +21,11 @@ import { RevenueTrendChart } from "@/modules/dashboard/luxury/components/Revenue
 import { RecentMessagesCard } from "@/modules/dashboard/luxury/components/RecentMessagesCard";
 import { TeamActivityCard } from "@/modules/dashboard/luxury/components/TeamActivityCard";
 import { OwnerAIBriefCard } from "@/modules/dashboard/luxury/components/OwnerAIBriefCard";
-import { OwnerNextEventWeatherCard } from "@/modules/dashboard/luxury/components/OwnerNextEventWeatherCard";
-import { CalendarWidget } from "@/modules/dashboard/luxury/components/CalendarWidget";
+import { NextEventWeatherCard } from "@/modules/dashboard/luxury/components/NextEventWeatherCard";
+import { WorldClockCard } from "@/modules/dashboard/luxury/components/WorldClockCard";
 import { MoodCheckInCard } from "@/modules/dashboard/luxury/components/MoodCheckInCard";
 import { WaterTrackerCard } from "@/modules/dashboard/luxury/components/WaterTrackerCard";
+import { LittleReminderCard } from "@/modules/dashboard/luxury/components/LittleReminderCard";
 import { LuxuryHeartIcon } from "@/modules/dashboard/luxury/luxuryIcons";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatMoney } from "@/lib/money";
@@ -38,19 +39,39 @@ interface OwnerDashboardViewProps {
 }
 
 /**
- * Checkpoint 19, Step 6, then the App Shell + Home redesign — the Founder's
- * personal daily workspace, not a business-report landing page. Leads with
- * "what's my day," "what needs my attention," "what's next": greeting,
- * metrics strip, Calendar + Weather side by side (the Calendar's own
- * selected-day agenda already defaults to today, standing in for "Today's
- * Schedule" without a second widget), My Day (private Mood/Water), then
- * Upcoming Events/My Priorities. Revenue Overview, Recent Messages, Team
- * Activity, and the AI Executive Brief are unchanged in content but pushed
- * below that fold — de-emphasized, never deleted. Date/Notifications/
- * Messages moved out of this header into the shell's own persistent
- * `LuxuryTopbar` (see `LuxuryDashboardShell`'s `topbarActions` prop) —
- * `PersonalizedWelcomeHeader` now carries only the greeting, matching the
- * reference product's sparse "Good morning, {name} ♡" pattern.
+ * Checkpoint 19, Step 6, then the App Shell + Home redesign, then the
+ * Weather + AF-inspired polish pass, then the World Clock + AF-composition
+ * pass, then the "remove the dashboard Calendar card + Today's Focus"
+ * correction, then the "add Little Reminder beside Today's Focus"
+ * correction — the Founder's personal daily workspace, not a
+ * business-report landing page. Leads with "what's my day," "what needs my
+ * attention," "what's next": greeting, metrics strip, "Today, at a glance"
+ * (World Clock — Honolulu/Huntington Beach/Sorocaba, real IANA-timezone
+ * math, no third-party API — beside Weather, ~75/25, matching the
+ * Founder-approved AF Digital Studio reference density; Weather always
+ * renders, with a graceful empty state, instead of silently vanishing on
+ * days with no upcoming event carrying real coordinates), then, directly
+ * below with nothing in between, "Today's Focus" (the existing My
+ * Priorities card, relabeled and widened to ~2/3) beside `LittleReminderCard`
+ * (~1/3) — the exact same shared, already-generic component Team's own
+ * dashboard renders, fed here by `data.littleReminder` (the Founder's own
+ * latest unread real workspace notification, same derivation as
+ * `getTeamDashboardData.ts`'s own field, not a second data source). Upcoming
+ * Events moves to its own full-width row directly below (no natural
+ * existing 2-up partner for it once Little Reminder took its old seat — see
+ * the "Little Reminder" checkpoint report for why nothing was invented to
+ * fill that slot). My Day (private Mood/Water) follows. The dashboard
+ * Calendar card that used to sit beside Weather has been REMOVED from this
+ * composition entirely per the Founder's explicit correction — `/calendar`
+ * itself, its data, and its permissions are completely untouched; this is a
+ * layout-only removal.
+ * Revenue Overview, Recent Messages, Team Activity, and the AI Executive
+ * Brief are unchanged in content but pushed below that fold — de-emphasized,
+ * never deleted. Date/Notifications/Messages moved out of this header into
+ * the shell's own persistent `LuxuryTopbar` (see `LuxuryDashboardShell`'s
+ * `topbarActions` prop) — `PersonalizedWelcomeHeader` now carries only the
+ * greeting, matching the reference product's sparse "Good morning, {name}
+ * ♡" pattern.
  */
 export function OwnerDashboardView({ data, branding, profileName, profileRoleLabel, profileAvatarUrl }: OwnerDashboardViewProps) {
   const router = useRouter();
@@ -92,20 +113,45 @@ export function OwnerDashboardView({ data, branding, profileName, profileRoleLab
           ))}
         </div>
 
-        <div className="animate-fade-up stagger-2 grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <LuxuryCard className="lg:col-span-2">
-            <SectionHeader title="Calendar" />
-            <CalendarWidget initialEvents={data.calendarWidget.initialEvents} initialAnchorIso={data.calendarWidget.initialAnchorIso} />
-          </LuxuryCard>
-          {data.nextEventWeather ? (
-            <LuxuryCard tone="tint">
-              <SectionHeader title="Weather" />
-              <OwnerNextEventWeatherCard data={data.nextEventWeather} />
-            </LuxuryCard>
-          ) : null}
+        <div className="animate-fade-up stagger-2">
+          <p className="text-luxury-metadata font-semibold tracking-wide text-luxury-rose uppercase">Your Day</p>
+          <h2 className="mt-1 font-luxury-display text-luxury-page font-semibold text-luxury-text">Today, at a glance</h2>
         </div>
 
-        <section className="animate-fade-up stagger-3 rounded-luxury-lg border border-luxury-border bg-luxury-surface-tint p-5 shadow-luxury-sm sm:p-6">
+        <div className="animate-fade-up stagger-2 grid grid-cols-1 items-start gap-4 lg:grid-cols-4">
+          <div className="lg:col-span-3">
+            <WorldClockCard />
+          </div>
+          <div className="lg:col-span-1">
+            <NextEventWeatherCard data={data.nextEventWeather} />
+          </div>
+        </div>
+
+        <div className="animate-fade-up stagger-3 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+          <LuxuryCard className="lg:col-span-2">
+            <SectionHeader title="Today's Focus" action={<span className="text-luxury-small text-luxury-text-muted">{data.priorities.length} tasks</span>} />
+            {data.priorities.length === 0 ? <EmptyState title="Nothing needs your attention right now ♡" description="A little breathing room is a good thing." /> : <PriorityList items={data.priorities} />}
+          </LuxuryCard>
+
+          <LittleReminderCard reminder={data.littleReminder} />
+        </div>
+
+        <div className="animate-fade-up stagger-4">
+          <LuxuryCard>
+            <SectionHeader title="Upcoming Events" action={<Link href="/events" className="text-luxury-small font-medium text-luxury-rose">View all</Link>} />
+            {data.upcomingEvents.length === 0 ? (
+              <EmptyState title="No upcoming events" description="Booked events appear here." />
+            ) : (
+              <div className="space-y-1">
+                {data.upcomingEvents.map((event) => (
+                  <EventPreviewCard key={event.id} data={event} />
+                ))}
+              </div>
+            )}
+          </LuxuryCard>
+        </div>
+
+        <section className="animate-fade-up stagger-5 rounded-luxury-lg border border-luxury-border bg-luxury-surface-tint p-5 shadow-luxury-sm sm:p-6">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
             <div className="flex items-center gap-2">
               <LuxuryHeartIcon className="h-4.5 w-4.5 text-luxury-rose" />
@@ -119,27 +165,7 @@ export function OwnerDashboardView({ data, branding, profileName, profileRoleLab
           </div>
         </section>
 
-        <div className="animate-fade-up stagger-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <LuxuryCard>
-            <SectionHeader title="Upcoming Events" action={<Link href="/events" className="text-luxury-small font-medium text-luxury-rose">View all</Link>} />
-            {data.upcomingEvents.length === 0 ? (
-              <EmptyState title="No upcoming events" description="Booked events appear here." />
-            ) : (
-              <div className="space-y-1">
-                {data.upcomingEvents.map((event) => (
-                  <EventPreviewCard key={event.id} data={event} />
-                ))}
-              </div>
-            )}
-          </LuxuryCard>
-
-          <LuxuryCard>
-            <SectionHeader title="My Priorities" action={<span className="text-luxury-small text-luxury-text-muted">{data.priorities.length} tasks</span>} />
-            {data.priorities.length === 0 ? <EmptyState title="Nothing urgent" description="High-priority items appear here." /> : <PriorityList items={data.priorities} />}
-          </LuxuryCard>
-        </div>
-
-        <div className="animate-fade-up stagger-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="animate-fade-up stagger-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
           <LuxuryCard className="lg:col-span-2">
             <SectionHeader title="Revenue Overview" action={<span className="text-luxury-small text-luxury-text-muted">This month</span>} />
             <p className="font-luxury-display text-luxury-display font-semibold text-luxury-text">{formatMoney(data.revenueSeries[data.revenueSeries.length - 1]?.valueMinor ?? 0, "USD")}</p>

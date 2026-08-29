@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useDialogBehavior } from "@/components/ui/useDialogBehavior";
 import { BloomGlassPanel } from "@/components/ui/BloomGlassPanel";
 import { useKeyboardShortcut } from "@/core/commandPalette/useKeyboardShortcut";
+import { COMMAND_PALETTE_OPEN_EVENT } from "@/core/commandPalette/openCommandPaletteEvent";
 import { getCommands } from "@/core/commandPalette/registry";
 import { filterCommands } from "@/core/commandPalette/filter";
 import { recordCommandInvocation } from "@/core/commandPalette/commandUsageStore";
@@ -60,6 +61,18 @@ export function CommandPalette({ workspaceId }: CommandPaletteProps) {
 
   useKeyboardShortcut("mod+k", () => (open ? close() : setOpen(true)));
   useDialogBehavior({ open, onClose: close, containerRef: dialogRef, lockScroll: true });
+
+  // App Shell redesign — the Luxury Topbar's search pill opens this same
+  // singleton palette via a `window` custom event instead of duplicating
+  // search logic into a second component. Purely additive: "mod+k" keeps
+  // working exactly as before.
+  useEffect(() => {
+    function handleOpenRequest() {
+      setOpen(true);
+    }
+    window.addEventListener(COMMAND_PALETTE_OPEN_EVENT, handleOpenRequest);
+    return () => window.removeEventListener(COMMAND_PALETTE_OPEN_EVENT, handleOpenRequest);
+  }, []);
 
   useEffect(() => {
     if (!open || !workspaceId) return;

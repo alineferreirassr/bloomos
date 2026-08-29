@@ -3,11 +3,12 @@
 import { useRef, type ReactNode } from "react";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { getVisibleNavigationModules } from "@/config/navigation";
+import { groupVisibleNavigationModules } from "@/config/navigation";
 import { useMemberSession } from "@/components/providers/MemberSessionProvider";
+import { resolveDashboardExperience } from "@/core/dashboard/resolveDashboardExperience";
 import { useDialogBehavior } from "@/components/ui/useDialogBehavior";
 import { CloseIcon } from "@/components/ui/icons";
-import { LuxuryNavigationList } from "@/modules/dashboard/luxury/components/LuxuryNavigationList";
+import { LuxuryNavGroupList } from "@/modules/dashboard/luxury/components/LuxuryNavGroupList";
 
 interface LuxuryMobileNavigationProps {
   open: boolean;
@@ -21,8 +22,9 @@ interface LuxuryMobileNavigationProps {
 /** Checkpoint 19, Step 11/12 — the Luxury Dashboard's mobile drawer: same focus-trap/Escape-to-close/scroll-lock behavior `Modal`/`Drawer` already share via `useDialogBehavior`, same real navigation data as `LuxurySidebar`. */
 export function LuxuryMobileNavigation({ open, onClose, logoUrl, brandName, tagline, footer }: LuxuryMobileNavigationProps) {
   const pathname = usePathname();
-  const { can } = useMemberSession();
-  const navigationModules = getVisibleNavigationModules(can);
+  const { can, role } = useMemberSession();
+  const groups = groupVisibleNavigationModules(can);
+  const dashboardLabel = role && resolveDashboardExperience(role) === "team" ? "My Day" : undefined;
   const containerRef = useRef<HTMLDivElement>(null);
   useDialogBehavior({ open, onClose, containerRef });
 
@@ -60,7 +62,7 @@ export function LuxuryMobileNavigation({ open, onClose, logoUrl, brandName, tagl
             <CloseIcon className="h-5 w-5" />
           </button>
         </div>
-        <LuxuryNavigationList modules={navigationModules} pathname={pathname} onNavigate={onClose} />
+        <LuxuryNavGroupList groups={groups} pathname={pathname} onNavigate={onClose} dashboardLabel={dashboardLabel} />
         <div className="mt-4 px-4">{footer}</div>
       </div>
     </div>

@@ -18,7 +18,7 @@ function CardBody({ data }: { data: LuxuryMetricCardData }) {
     <LuxuryCard className="flex items-start gap-3">
       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-luxury-md bg-luxury-blush">{iconElement}</span>
       <div className="min-w-0">
-        <p className="truncate text-luxury-metadata font-medium tracking-wide text-luxury-text-muted uppercase">{data.label}</p>
+        <p className="line-clamp-3 text-[0.6875rem] leading-tight font-medium break-words text-luxury-text-muted uppercase sm:text-luxury-metadata sm:tracking-wide lg:line-clamp-1">{data.label}</p>
         <p className="mt-1 font-luxury-display text-luxury-numeric font-semibold text-luxury-text">{data.value}</p>
         {data.helper ? <p className="mt-0.5 text-luxury-small text-luxury-text-muted">{data.helper}</p> : null}
       </div>

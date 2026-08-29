@@ -19,8 +19,13 @@ interface AppShellProps {
  * breadcrumb bar layered above it). Every other route keeps this Classical
  * shell completely unchanged — a full application re-skin is this
  * checkpoint's own explicit Non-Goal. See docs/luxury-design-system.md.
+ *
+ * "Team page must use the same dashboard system" addendum — `/team`
+ * (`TeamView.tsx`) joins `/dashboard` here for the same reason: it now
+ * renders its own `LuxuryDashboardShell` too, so it must not also get this
+ * Classical shell layered underneath it.
  */
-const LUXURY_SHELL_ROUTES = ["/dashboard"];
+const LUXURY_SHELL_ROUTES = ["/dashboard", "/team"];
 
 export function AppShell({ children, workspaceDisplayName }: AppShellProps) {
   const pathname = usePathname();

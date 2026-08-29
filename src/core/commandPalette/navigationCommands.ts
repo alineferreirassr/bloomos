@@ -1,57 +1,49 @@
+import type { NavGroupId } from "@/config/navigation";
+
 /**
- * v2.0 Checkpoint 40 — Global Search & Universal Command Center. A plain
- * data list of every major platform's own real route — the "Open X" half
- * of the Universal Command Registry — mirroring `SearchableEntityConfig`'s
- * shape (`core/search/types.ts`) on purpose, the same "commands and search
- * results share one rendering shape" precedent `CommandAction`'s own doc
- * comment already states. Every `href` here is a route already confirmed
- * live in the route catalog audited for this checkpoint — never a
- * placeholder.
+ * App Shell architecture cleanup — this file previously held
+ * `NAVIGATION_COMMANDS`, a 30-entry hand-typed catalog that duplicated (and
+ * had already drifted from) `src/config/navigation.ts`'s own 45-entry
+ * `navigationModules` — e.g. it was missing Leads/Clients/Vendors/Finance/
+ * Team/Reports entirely, and separately carried two different commands
+ * ("Open Executive Dashboard" and "Open Analytics") pointing at the exact
+ * same `/analytics` href. That duplication is gone: every Command Palette
+ * "Open X" entry for a route that already has a sidebar module is now
+ * *derived* from `navigationModules` itself (see `registerGlobalCommands.ts`),
+ * reusing that module's own `label`/`group`/`keywords` — never re-typed here.
  *
- * Deliberately data, not `CommandAction[]` directly: turning a `href` into
- * a real `run()` needs a router, which only exists client-side — see
- * `registerDefaultNavigationCommands` below, which is the one place that
- * gap gets closed.
+ * What's left in this file is a small, deliberately additive list of real
+ * destinations that are NOT sidebar modules at all — either because they're
+ * one level deeper than the top-level nav (a sub-page of `/assets` or
+ * `/finance`) or because they're the Command Center/Search's own meta-pages.
+ * This is not a second route catalog: none of these hrefs exist in
+ * `navigationModules` (enforced by
+ * `registerGlobalCommands.test.ts`'s own drift-prevention test), so there is
+ * nothing here for the two lists to disagree about.
+ *
+ * Each entry's `group` reuses the same `NavGroupId` vocabulary the sidebar
+ * uses (via `NAV_GROUP_LABELS`) rather than inventing a parallel set of
+ * group names — Command Palette group headers now match sidebar group
+ * headers exactly, which they didn't before this cleanup (the old file used
+ * ad-hoc labels like "Executive"/"Assets"/"Client Portal" found nowhere in
+ * `NAV_GROUP_LABELS`).
  */
-export interface NavigationCommandConfig {
+export interface SupplementaryNavigationCommand {
   id: string;
   label: string;
-  group: string;
-  keywords?: string[];
+  group: NavGroupId;
   href: string;
+  keywords?: string[];
 }
 
-export const NAVIGATION_COMMANDS: NavigationCommandConfig[] = [
-  { id: "nav-workspace-home", label: "Open Workspace Home", group: "Navigation", href: "/workspace", keywords: ["home", "dashboard"] },
-  { id: "nav-dashboard", label: "Open Dashboard", group: "Navigation", href: "/dashboard" },
-  { id: "nav-executive-dashboard", label: "Open Executive Dashboard", group: "Executive", href: "/analytics", keywords: ["executive", "kpi", "revenue"] },
-  { id: "nav-business-health", label: "Open Business Health", group: "Executive", href: "/assets/business-health", keywords: ["health", "score"] },
-  { id: "nav-executive-decisions", label: "Open Executive Decisions", group: "Executive", href: "/assets/executive-decisions", keywords: ["decisions", "priorities"] },
-  { id: "nav-knowledge-graph", label: "Open Knowledge Graph", group: "Executive", href: "/assets/knowledge-graph", keywords: ["graph", "relationships"] },
-  { id: "nav-workflow-builder", label: "Open Workflow Builder", group: "Automation", href: "/workflows", keywords: ["workflows", "automation"] },
-  { id: "nav-workflow-monitoring", label: "Open Workflow Monitoring", group: "Automation", href: "/workflows/monitoring", keywords: ["monitoring center", "executions"] },
-  { id: "nav-automation-center", label: "Open Automation Center", group: "Automation", href: "/automation" },
-  { id: "nav-dam", label: "Open Digital Asset Library", group: "Assets", href: "/assets", keywords: ["dam", "assets", "media"] },
-  { id: "nav-operational-planning", label: "Open Operational Planning", group: "Operations", href: "/operational-planning", keywords: ["plans"] },
-  { id: "nav-execution-packages", label: "Open Execution Packages", group: "Operations", href: "/execution-packages", keywords: ["packages"] },
-  { id: "nav-dispatch", label: "Open Dispatch", group: "Operations", href: "/dispatch" },
-  { id: "nav-route-optimization", label: "Open Route Optimization", group: "Operations", href: "/route-optimization", keywords: ["routes"] },
-  { id: "nav-operations-center", label: "Open Operations Center", group: "Operations", href: "/operations-center", keywords: ["alerts", "incidents"] },
-  { id: "nav-allocations", label: "Open Resource Allocation", group: "Operations", href: "/allocations", keywords: ["bundles", "resources"] },
-  { id: "nav-calendar", label: "Open Calendar", group: "Scheduling", href: "/calendar" },
-  { id: "nav-finance-reports", label: "Open Finance Reports", group: "Finance", href: "/finance/reports", keywords: ["reports"] },
-  { id: "nav-notifications", label: "Open Notifications", group: "Communication", href: "/communications", keywords: ["notification center"] },
-  { id: "nav-inbox", label: "Open Inbox", group: "Communication", href: "/inbox" },
-  { id: "nav-client-portal", label: "Open Client Portal Accounts", group: "Client Portal", href: "/client-portal/accounts", keywords: ["client portal", "portal"] },
-  { id: "nav-proposals", label: "Open Proposals", group: "CRM", href: "/proposals" },
-  { id: "nav-contracts", label: "Open Contracts", group: "CRM", href: "/contracts" },
-  { id: "nav-client-journeys", label: "Open Client Journeys", group: "CRM", href: "/client-journeys" },
-  { id: "nav-analytics", label: "Open Analytics", group: "Executive", href: "/analytics" },
-  { id: "nav-settings", label: "Open Settings", group: "Workspace", href: "/settings" },
-  { id: "nav-marketplace", label: "Open Marketplace", group: "Workspace", href: "/marketplace" },
-  { id: "nav-developer-console", label: "Open Developer Console", group: "Workspace", href: "/developer" },
-  // v2.0 Checkpoint 40 — Global Search & Universal Command Center's own three routes, reachable from within itself like every other platform above.
-  { id: "nav-global-search", label: "Open Global Search", group: "Workspace", href: "/search", keywords: ["search", "find"] },
-  { id: "nav-command-center", label: "Open Command Center", group: "Workspace", href: "/command-center", keywords: ["commands", "shortcuts"] },
-  { id: "nav-search-analytics", label: "Open Search Analytics", group: "Workspace", href: "/search/analytics", keywords: ["search health", "coverage"] },
+export const SUPPLEMENTARY_NAVIGATION_COMMANDS: SupplementaryNavigationCommand[] = [
+  { id: "nav-business-health", label: "Open Business Health", group: "insights", href: "/assets/business-health", keywords: ["health", "score"] },
+  { id: "nav-executive-decisions", label: "Open Executive Decisions", group: "insights", href: "/assets/executive-decisions", keywords: ["decisions", "priorities"] },
+  { id: "nav-knowledge-graph", label: "Open Knowledge Graph", group: "insights", href: "/assets/knowledge-graph", keywords: ["graph", "relationships"] },
+  { id: "nav-workflow-builder", label: "Open Workflow Builder", group: "system", href: "/workflows", keywords: ["workflows", "automation"] },
+  { id: "nav-workflow-monitoring", label: "Open Workflow Monitoring", group: "system", href: "/workflows/monitoring", keywords: ["monitoring center", "executions"] },
+  { id: "nav-finance-reports", label: "Open Finance Reports", group: "business", href: "/finance/reports", keywords: ["reports"] },
+  { id: "nav-global-search", label: "Open Global Search", group: "system", href: "/search", keywords: ["search", "find"] },
+  { id: "nav-command-center", label: "Open Command Center", group: "system", href: "/command-center", keywords: ["commands", "shortcuts"] },
+  { id: "nav-search-analytics", label: "Open Search Analytics", group: "system", href: "/search/analytics", keywords: ["search health", "coverage"] },
 ];
