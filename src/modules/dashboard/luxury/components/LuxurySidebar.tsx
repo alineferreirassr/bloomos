@@ -24,7 +24,7 @@ export function LuxurySidebar({ logoUrl, brandName, tagline, inspirationalMessag
   const dashboardLabel = role && resolveDashboardExperience(role) === "team" ? "My Day" : undefined;
 
   return (
-    <aside className="hidden md:flex md:w-64 md:shrink-0 md:flex-col md:bg-luxury-sidebar md:py-6">
+    <aside className="hidden md:flex md:w-64 md:shrink-0 md:flex-col md:border-r md:border-luxury-border md:bg-luxury-sidebar md:py-6">
       <div className="mb-4 px-6 pb-5">
         {logoUrl ? (
           <Image src={logoUrl} alt={brandName} width={640} height={640} priority className="h-auto w-36" />

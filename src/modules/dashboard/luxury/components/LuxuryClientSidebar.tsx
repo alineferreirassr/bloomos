@@ -17,7 +17,7 @@ export function LuxuryClientSidebar({ logoUrl, brandName, footer }: LuxuryClient
   const pathname = usePathname();
 
   return (
-    <aside className="hidden md:flex md:w-64 md:shrink-0 md:flex-col md:bg-luxury-sidebar md:py-6">
+    <aside className="hidden md:flex md:w-64 md:shrink-0 md:flex-col md:border-r md:border-luxury-border md:bg-luxury-sidebar md:py-6">
       <div className="mb-4 px-6 pb-5">
         {logoUrl ? (
           <Image src={logoUrl} alt={brandName} width={640} height={640} priority className="h-auto w-36" />
