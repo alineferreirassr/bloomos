@@ -51,7 +51,8 @@ describe("NextEventWeatherCard — real forecast data only, never fabricated", (
 
     expect(screen.getByText("78°")).toBeInTheDocument();
     expect(screen.getAllByText("Sunny").length).toBeGreaterThan(0);
-    expect(screen.getByText("H 82° · L 61°")).toBeInTheDocument();
+    // The "·" separator is its own <span>, so the H/L line is split across text nodes — match by normalized textContent instead of an exact string.
+    expect(screen.getByText((_, element) => element?.tagName === "P" && (element.textContent?.replace(/\s+/g, " ").trim() ?? "") === "H 82° · L 61°")).toBeInTheDocument();
     expect(screen.getByText(/Sep 13/)).toBeInTheDocument();
     expect(screen.getByText(/5:00 PM/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Amelia & Noah Wedding" })).toHaveAttribute("href", "/events/event_1");
@@ -72,7 +73,7 @@ describe("NextEventWeatherCard — real forecast data only, never fabricated", (
 
     expect(screen.getByText("70°")).toBeInTheDocument();
     expect(screen.getAllByText("Partly Cloudy").length).toBeGreaterThan(0);
-    expect(screen.getByText("H 70° · L 55°")).toBeInTheDocument();
+    expect(screen.getByText((_, element) => element?.tagName === "P" && (element.textContent?.replace(/\s+/g, " ").trim() ?? "") === "H 70° · L 55°")).toBeInTheDocument();
     expect(screen.getByText("Sep 13")).toBeInTheDocument();
   });
 
@@ -125,6 +126,39 @@ describe("NextEventWeatherCard — operational note is derived, never a fixed un
     expect(screen.queryByText(/Clear conditions/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Snow expected/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Reduced visibility/)).not.toBeInTheDocument();
+  });
+});
+
+describe("NextEventWeatherCard — Honolulu home fallback (Staging Visual Correction addendum)", () => {
+  it("renders the real fallback forecast when there is no eligible upcoming event", () => {
+    render(
+      <NextEventWeatherCard
+        data={null}
+        fallback={{ locationLabel: "Honolulu", forecast: { date: "2026-08-29", condition: "SUNNY", weatherCode: 0, highF: 84, lowF: 74, precipitationProbabilityMax: 5, windSpeedMaxMph: 9, sunrise: "x", sunset: "x" } }}
+      />,
+    );
+
+    expect(screen.getByText("Weather")).toBeInTheDocument();
+    expect(screen.getByText("Honolulu")).toBeInTheDocument();
+    expect(screen.getByText("84°")).toBeInTheDocument();
+    expect(screen.queryByText("No upcoming event with a set location yet — weather appears here once one is scheduled.")).not.toBeInTheDocument();
+  });
+
+  it("prefers a real eligible event's own forecast over the fallback when both are provided", () => {
+    render(
+      <NextEventWeatherCard
+        data={nextEventWeather()}
+        fallback={{ locationLabel: "Honolulu", forecast: { date: "2026-08-29", condition: "SUNNY", weatherCode: 0, highF: 84, lowF: 74, precipitationProbabilityMax: 5, windSpeedMaxMph: 9, sunrise: "x", sunset: "x" } }}
+      />,
+    );
+
+    expect(screen.getByText("78°")).toBeInTheDocument();
+    expect(screen.queryByText("84°")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the honest empty state when there's no fallback either", () => {
+    render(<NextEventWeatherCard data={null} fallback={null} />);
+    expect(screen.getByText("No upcoming event with a set location yet — weather appears here once one is scheduled.")).toBeInTheDocument();
   });
 });
 

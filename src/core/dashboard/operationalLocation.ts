@@ -30,3 +30,18 @@ export const DEFAULT_OPERATIONAL_LOCATION: OperationalLocation = {
   latitude: 33.6603,
   longitude: -118.0068,
 };
+
+/**
+ * "Staging Visual Correction" addendum — the Founder Dashboard's Weather
+ * card fallback when no upcoming event carries real coordinates: real
+ * current weather for Honolulu, the same city `WORLD_CLOCK_LOCATIONS`
+ * already names as the Founder's own HOME base. Never shown instead of a
+ * real upcoming event's weather — only when there isn't one.
+ */
+export const FOUNDER_HOME_LOCATION: OperationalLocation = {
+  city: "Honolulu",
+  region: "Hawaii, United States",
+  timezone: "Pacific/Honolulu",
+  latitude: 21.3099,
+  longitude: -157.8581,
+};

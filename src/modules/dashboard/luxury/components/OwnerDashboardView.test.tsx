@@ -69,6 +69,7 @@ function data(overrides: Partial<OwnerDashboardData> = {}): OwnerDashboardData {
     metrics: [],
     upcomingEvents: [],
     nextEventWeather: null,
+    homeWeatherFallback: null,
     weekAgenda: [],
     calendarWidget: { initialEvents: [], initialAnchorIso: "2026-01-01T00:00:00.000Z" },
     priorities: [],

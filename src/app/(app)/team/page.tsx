@@ -9,9 +9,10 @@ import { WORKSPACE_MEMBER_ROLE_LABELS } from "@/core/enums/workspaceRole";
 
 /**
  * "Team page must use the same dashboard system" addendum, then the "Team +
- * Client Compact Clock & Weather Variant" correction — `/team` fetches its
- * own Luxury-shell branding plus a compact single-location Clock+Weather
- * forecast and the same Calendar data every dashboard renders. Unlike
+ * Client Compact Clock & Weather Variant" correction, then the "Staging
+ * Visual Correction" addendum — `/team` fetches its own Luxury-shell
+ * branding plus a compact single-location Clock+Weather forecast and the
+ * same company-wide Today's Focus data every dashboard renders. Unlike
  * `/dashboard/page.tsx`, there's no owner/team branch here: `/team` itself
  * is reached by every role holding `team.view` (see
  * `RouteGuard`/`permissionMatrix.ts`), so `getTeamPageGlanceData` is
@@ -33,7 +34,8 @@ export default async function TeamPage() {
       profileRoleLabel={WORKSPACE_MEMBER_ROLE_LABELS[session.membership.role]}
       profileAvatarUrl={session.profile.avatar_url}
       operationalForecast={glance.data.operationalForecast}
-      calendarWidget={glance.data.calendarWidget}
+      priorities={glance.data.priorities}
+      littleReminder={glance.data.littleReminder}
     />
   );
 }

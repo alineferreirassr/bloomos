@@ -10,9 +10,6 @@ vi.mock("@/modules/dashboard/luxury/components/CompactClockWeatherPanel", () => 
     <div>Compact Clock+Weather{forecast ? ` ${forecast.highF}°` : ""}</div>
   ),
 }));
-vi.mock("@/modules/dashboard/luxury/components/CalendarWidget", () => ({
-  CalendarWidget: () => null,
-}));
 vi.mock("@/modules/team/components/NewInvitationModal", () => ({
   NewInvitationModal: () => null,
 }));
@@ -68,6 +65,8 @@ import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 import { CopilotProvider } from "@/modules/ai/copilot/CopilotProvider";
 import type { Permission } from "@/core/enums/permission";
+import type { PriorityItemData } from "@/modules/dashboard/luxury/components/PriorityList";
+import type { LittleReminderData } from "@/modules/dashboard/luxury/components/LittleReminderCard";
 
 const branding: LuxuryBranding = { logoUrl: null, brandName: "Amoré Bloom", tagline: "", inspirationalMessage: "" };
 
@@ -83,7 +82,10 @@ function snapshot(permissions: Permission[]): MemberSessionSnapshot {
   };
 }
 
-function renderTeam(permissions: Permission[] = ["team.view", "team.manage_roles", "team.invite"]) {
+function renderTeam(
+  permissions: Permission[] = ["team.view", "team.manage_roles", "team.invite"],
+  overrides: { priorities?: PriorityItemData[]; littleReminder?: LittleReminderData | null } = {},
+) {
   return render(
     <MemberSessionProvider snapshot={snapshot(permissions)}>
       <CopilotProvider>
@@ -93,7 +95,8 @@ function renderTeam(permissions: Permission[] = ["team.view", "team.manage_roles
           profileRoleLabel="Owner"
           profileAvatarUrl={null}
           operationalForecast={null}
-          calendarWidget={{ initialEvents: [], initialAnchorIso: "2026-01-01T00:00:00.000Z" }}
+          priorities={overrides.priorities ?? []}
+          littleReminder={overrides.littleReminder ?? null}
         />
       </CopilotProvider>
     </MemberSessionProvider>,
@@ -101,13 +104,32 @@ function renderTeam(permissions: Permission[] = ["team.view", "team.manage_roles
 }
 
 describe("TeamView — shares the Founder dashboard's Luxury system", () => {
-  it("renders the compact Clock+Weather panel and a compact Calendar with an Open link", () => {
+  it("renders the compact Clock+Weather panel, Today's Focus, and Little Reminder — never a Calendar card", () => {
     renderTeam();
 
     expect(screen.getByText("Today, at a glance")).toBeInTheDocument();
     expect(screen.getByText("Compact Clock+Weather")).toBeInTheDocument();
-    expect(screen.getAllByText("Calendar")).toHaveLength(1);
-    expect(screen.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/calendar");
+    expect(screen.getByText("Today's Focus")).toBeInTheDocument();
+    expect(screen.getByText("No priorities set")).toBeInTheDocument();
+    expect(screen.getByText("Little Reminder ♡")).toBeInTheDocument();
+    expect(screen.getByText("Small steps still move you forward.")).toBeInTheDocument();
+    expect(screen.queryByText("Calendar")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open" })).not.toBeInTheDocument();
+  });
+
+  it("renders real workspace-wide priority items instead of the empty state when they exist", () => {
+    renderTeam(["team.view"], { priorities: [{ id: "p1", title: "Confirm final headcount", dueLabel: "Due Sep 1", completed: false, urgent: true }] });
+
+    expect(screen.getByText("Confirm final headcount")).toBeInTheDocument();
+    expect(screen.queryByText("No priorities set")).not.toBeInTheDocument();
+  });
+
+  it("renders the viewer's own real notification in Little Reminder when one exists", () => {
+    renderTeam(["team.view"], { littleReminder: { title: "Client replied", body: "Naomi Whitfield sent a new message." } });
+
+    expect(screen.getByText("Client replied")).toBeInTheDocument();
+    expect(screen.getByText("Naomi Whitfield sent a new message.")).toBeInTheDocument();
+    expect(screen.queryByText("Small steps still move you forward.")).not.toBeInTheDocument();
   });
 
   it("passes the fetched operational forecast through to the compact panel", () => {
@@ -120,7 +142,8 @@ describe("TeamView — shares the Founder dashboard's Luxury system", () => {
             profileRoleLabel="Owner"
             profileAvatarUrl={null}
             operationalForecast={{ date: "2026-08-29", condition: "PARTLY_CLOUDY", weatherCode: 2, highF: 78, lowF: 60, precipitationProbabilityMax: 10, windSpeedMaxMph: 7, sunrise: "x", sunset: "x" }}
-            calendarWidget={{ initialEvents: [], initialAnchorIso: "2026-01-01T00:00:00.000Z" }}
+            priorities={[]}
+            littleReminder={null}
           />
         </CopilotProvider>
       </MemberSessionProvider>,

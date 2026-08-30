@@ -13,9 +13,11 @@ import { buildWelcomeCopy, resolveTimeOfDay } from "@/core/dashboard/buildWelcom
 import { resolveDashboardExperience } from "@/core/dashboard/resolveDashboardExperience";
 import { EVENT_TYPE_LABELS } from "@/core/enums/eventType";
 import { getEventWeather } from "@/core/weather/eventWeatherEngine";
+import { getOperationalLocationForecast } from "@/core/weather/operationalLocationWeather";
+import { FOUNDER_HOME_LOCATION } from "@/core/dashboard/operationalLocation";
 import { formatDateOnlyLabel } from "@/modules/dashboard/luxury/localDate";
 import { getCalendarEventsAction } from "@/modules/calendar/calendarActions";
-import type { EventWeatherForecast } from "@/types/weather";
+import type { EventWeatherForecast, DailyForecast } from "@/types/weather";
 import type { LuxuryMetricCardData } from "@/modules/dashboard/luxury/components/LuxuryMetricCard";
 import type { LittleReminderData } from "@/modules/dashboard/luxury/components/LittleReminderCard";
 import type { EventPreviewCardData } from "@/modules/dashboard/luxury/components/EventPreviewCard";
@@ -53,6 +55,13 @@ export interface OwnerDashboardData {
   upcomingEvents: EventPreviewCardData[];
   /** Null when no upcoming event carries real coordinates/date, or when the forecast lookup itself fails — never a fabricated forecast. */
   nextEventWeather: NextEventWeather | null;
+  /**
+   * "Staging Visual Correction" addendum — real current weather for
+   * Honolulu (the Founder's own HOME base per `WORLD_CLOCK_LOCATIONS`),
+   * shown only when `nextEventWeather` is null so the Weather card never
+   * sits empty. Null only when the lookup itself fails.
+   */
+  homeWeatherFallback: DailyForecast | null;
   weekAgenda: { dayLabel: string; dateLabel: string; events: { id: string; title: string; timeLabel: string | null; href: string }[] }[];
   /** The current month's Events/Tasks, fetched through the same `getCalendarEventsAction` the Advanced Calendar itself uses — the Home Calendar widget's first paint before any client-side month navigation. */
   calendarWidget: { initialEvents: CalendarEvent[]; initialAnchorIso: string };
@@ -256,6 +265,7 @@ export async function getOwnerDashboardData(): Promise<GetOwnerDashboardDataResu
       };
     }
   }
+  const homeWeatherFallback = nextEventWeather ? null : await getOperationalLocationForecast(FOUNDER_HOME_LOCATION);
 
   return {
     success: true,
@@ -265,6 +275,7 @@ export async function getOwnerDashboardData(): Promise<GetOwnerDashboardDataResu
       metrics,
       upcomingEvents,
       nextEventWeather,
+      homeWeatherFallback,
       weekAgenda,
       calendarWidget,
       priorities,

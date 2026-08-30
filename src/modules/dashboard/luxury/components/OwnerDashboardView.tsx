@@ -123,7 +123,7 @@ export function OwnerDashboardView({ data, branding, profileName, profileRoleLab
             <WorldClockCard />
           </div>
           <div className="lg:col-span-1">
-            <NextEventWeatherCard data={data.nextEventWeather} />
+            <NextEventWeatherCard data={data.nextEventWeather} fallback={data.homeWeatherFallback ? { locationLabel: "Honolulu", forecast: data.homeWeatherFallback } : null} />
           </div>
         </div>
 

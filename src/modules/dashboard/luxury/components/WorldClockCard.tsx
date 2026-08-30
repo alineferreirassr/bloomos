@@ -7,16 +7,17 @@ import { AnalogClockFace } from "@/modules/dashboard/luxury/components/AnalogClo
 import { WORLD_CLOCK_LOCATIONS, buildWorldClockDisplays, type WorldClockDisplay } from "@/modules/dashboard/luxury/worldClock";
 
 const REFRESH_INTERVAL_MS = 30_000;
+const CLOCK_FACE_SIZE = 116;
 
 function CityCard({ display }: { display: WorldClockDisplay }) {
   return (
-    <div className="flex flex-1 flex-col items-center rounded-luxury-md border border-luxury-border bg-luxury-surface px-3 py-4 text-center">
-      <AnalogClockFace hour24={display.hour24} minute={display.minute} size={56} />
-      <p className="mt-3 font-luxury-display text-luxury-card-heading font-semibold text-luxury-text">{display.city}</p>
-      <p className="text-luxury-metadata font-medium tracking-wide text-luxury-text-muted uppercase">{display.region}</p>
-      <p className="mt-2 font-luxury-display text-luxury-page leading-none font-semibold text-luxury-text">{display.timeLabel}</p>
-      <p className="mt-1.5 text-luxury-small text-luxury-text-muted">{display.dateLabel}</p>
-      <p className="mt-2 text-luxury-status font-medium tracking-wide text-luxury-rose uppercase">
+    <div className="flex flex-1 flex-col items-center rounded-luxury-lg bg-luxury-surface-tint px-4 py-5 text-center shadow-luxury-sm transition-shadow duration-150 hover:shadow-luxury-md">
+      <AnalogClockFace hour24={display.hour24} minute={display.minute} size={CLOCK_FACE_SIZE} />
+      <p className="mt-4 font-luxury-display text-luxury-card-heading font-semibold text-luxury-text">{display.city}</p>
+      <p className="text-luxury-metadata font-medium tracking-[0.1em] text-luxury-text-muted uppercase">{display.region}</p>
+      <p className="mt-3 font-luxury-display text-luxury-page leading-none font-semibold text-luxury-text">{display.timeLabel}</p>
+      <p className="mt-2 text-luxury-small text-luxury-text-muted">{display.dateLabel}</p>
+      <p className="mt-2 text-luxury-status font-semibold tracking-[0.1em] text-luxury-rose uppercase">
         {display.dayPeriod}
         {display.isHome ? " · Home" : display.hoursFromHome !== null ? ` · ${display.hoursFromHome >= 0 ? "+" : ""}${display.hoursFromHome}h from Honolulu` : ""}
       </p>
@@ -58,7 +59,7 @@ export function WorldClockCard() {
       ) : (
         <div className="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-3" aria-hidden="true">
           {WORLD_CLOCK_LOCATIONS.map((location) => (
-            <div key={location.id} className="h-[9.5rem] rounded-luxury-md border border-luxury-border bg-luxury-surface" />
+            <div key={location.id} className="h-[13rem] rounded-luxury-lg bg-luxury-surface-tint" />
           ))}
         </div>
       )}

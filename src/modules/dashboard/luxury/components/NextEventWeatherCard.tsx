@@ -2,8 +2,10 @@ import Link from "next/link";
 import { WeatherPin } from "@/components/ui/WeatherPin";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
-import { WEATHER_CONDITION_LABEL, type WeatherCondition } from "@/types/weather";
+import { WEATHER_CONDITION_LABEL, type WeatherCondition, type DailyForecast } from "@/types/weather";
 import type { NextEventWeather } from "@/modules/dashboard/luxury/getOwnerDashboardData";
+
+const WEATHER_PIN_SIZE = 104;
 
 const RAIN_CONDITIONS: readonly WeatherCondition[] = ["RAIN", "LIGHT_RAIN_DRIZZLE", "THUNDERSTORM"];
 const CLEAR_CONDITIONS: readonly WeatherCondition[] = ["SUNNY", "PARTLY_CLOUDY", "NIGHT_CLEAR"];
@@ -19,6 +21,26 @@ function operationalNote(condition: WeatherCondition, precipitationProbability: 
   return null;
 }
 
+function MetricsRow({ precipitationProbability, windSpeedMph }: { precipitationProbability: number | null; windSpeedMph: number | null }) {
+  if (precipitationProbability === null && windSpeedMph === null) return null;
+  return (
+    <div className="mt-3 flex gap-5 border-t border-luxury-border pt-3">
+      {precipitationProbability !== null ? (
+        <div>
+          <p className="text-luxury-metadata font-medium tracking-wide text-luxury-text-muted uppercase">Precip</p>
+          <p className="mt-0.5 font-luxury-display text-luxury-card-heading font-semibold text-luxury-text">{precipitationProbability}%</p>
+        </div>
+      ) : null}
+      {windSpeedMph !== null ? (
+        <div>
+          <p className="text-luxury-metadata font-medium tracking-wide text-luxury-text-muted uppercase">Wind</p>
+          <p className="mt-0.5 font-luxury-display text-luxury-card-heading font-semibold text-luxury-text">{Math.round(windSpeedMph)} mph</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 interface NextEventWeatherCardProps {
   data: NextEventWeather | null;
   /**
@@ -30,6 +52,14 @@ interface NextEventWeatherCardProps {
    * on the Founder side.
    */
   contingencyNote?: string | null;
+  /**
+   * "Staging Visual Correction" addendum — the Founder Dashboard's fallback
+   * when there's no eligible upcoming event: real current weather for a
+   * named home location (Honolulu), never fabricated. Only ever shown when
+   * `data` is null — an eligible event's own forecast always takes priority
+   * over this fallback, matching the Founder's own explicit instruction.
+   */
+  fallback?: { locationLabel: string; forecast: DailyForecast } | null;
 }
 
 /**
@@ -47,8 +77,36 @@ interface NextEventWeatherCardProps {
  * eligible event) or a resolved-but-dataless forecast both still render a
  * named message, never nothing.
  */
-export function NextEventWeatherCard({ data, contingencyNote }: NextEventWeatherCardProps) {
+export function NextEventWeatherCard({ data, contingencyNote, fallback }: NextEventWeatherCardProps) {
   if (!data) {
+    if (fallback) {
+      const { forecast } = fallback;
+      const precipitationProbability = forecast.precipitationProbabilityMax;
+      const windSpeedMph = forecast.windSpeedMaxMph;
+      const note = operationalNote(forecast.condition, precipitationProbability);
+      return (
+        <LuxuryCard tone="tint" className="flex flex-col justify-center gap-4 py-6">
+          <SectionHeader title="Weather" action={<span className="text-luxury-small font-medium text-luxury-rose">{fallback.locationLabel}</span>} />
+          <div className="flex items-center gap-5">
+            <WeatherPin condition={forecast.condition} size={WEATHER_PIN_SIZE} />
+            <div className="min-w-0 flex-1">
+              <p className="font-luxury-display text-luxury-display leading-none font-semibold text-luxury-text">{forecast.highF}°</p>
+              <p className="mt-1.5 text-luxury-body text-luxury-text-muted">{WEATHER_CONDITION_LABEL[forecast.condition]}</p>
+              <p className="mt-3 text-luxury-small font-medium tracking-wide text-luxury-text-muted uppercase">
+                H {forecast.highF}° <span className="mx-1 text-luxury-border">·</span> L {forecast.lowF}°
+              </p>
+            </div>
+          </div>
+          <MetricsRow precipitationProbability={precipitationProbability} windSpeedMph={windSpeedMph} />
+          {note ? <p className="text-luxury-small text-luxury-text-muted">{note}</p> : null}
+          {contingencyNote ? (
+            <p className="border-t border-luxury-border pt-3 text-luxury-small text-luxury-text-muted">
+              <span className="font-medium text-luxury-text">Contingency plan:</span> {contingencyNote}
+            </p>
+          ) : null}
+        </LuxuryCard>
+      );
+    }
     return (
       <LuxuryCard>
         <SectionHeader title="Weather" />
@@ -85,10 +143,9 @@ export function NextEventWeatherCard({ data, contingencyNote }: NextEventWeather
   const precipitationProbability = day?.precipitationProbabilityMax ?? snapshot?.precipitationProbability ?? null;
   const windSpeedMph = snapshot?.windSpeedMph ?? day?.windSpeedMaxMph ?? null;
   const note = operationalNote(condition, precipitationProbability);
-  const hasMetricsRow = precipitationProbability !== null || windSpeedMph !== null;
 
   return (
-    <LuxuryCard>
+    <LuxuryCard tone="tint" className="flex flex-col justify-center gap-4 py-6">
       <SectionHeader
         title="Weather"
         action={
@@ -97,41 +154,26 @@ export function NextEventWeatherCard({ data, contingencyNote }: NextEventWeather
           </Link>
         }
       />
-      <p className="text-luxury-small text-luxury-text-muted">
+      <p className="-mt-2 text-luxury-small text-luxury-text-muted">
         {data.dateLabel}
         {snapshot && data.timeLabel ? ` · ${data.timeLabel}` : ""}
       </p>
-      <div className="mt-3 flex items-center gap-4">
-        <WeatherPin condition={condition} size={56} />
-        <div className="min-w-0">
+      <div className="flex items-center gap-5">
+        <WeatherPin condition={condition} size={WEATHER_PIN_SIZE} />
+        <div className="min-w-0 flex-1">
           <p className="font-luxury-display text-luxury-display leading-none font-semibold text-luxury-text">{temperatureLabel}</p>
-          <p className="mt-1 text-luxury-small text-luxury-text-muted">{WEATHER_CONDITION_LABEL[condition]}</p>
+          <p className="mt-1.5 text-luxury-body text-luxury-text-muted">{WEATHER_CONDITION_LABEL[condition]}</p>
+          {day ? (
+            <p className="mt-3 text-luxury-small font-medium tracking-wide text-luxury-text-muted uppercase">
+              H {day.highF}° <span className="mx-1 text-luxury-border">·</span> L {day.lowF}°
+            </p>
+          ) : null}
         </div>
-        {day ? (
-          <p className="ml-auto shrink-0 text-luxury-small text-luxury-text-muted">
-            H {day.highF}° · L {day.lowF}°
-          </p>
-        ) : null}
       </div>
-      {hasMetricsRow ? (
-        <div className="mt-3 flex gap-5 border-t border-luxury-border pt-3">
-          {precipitationProbability !== null ? (
-            <div>
-              <p className="text-luxury-metadata text-luxury-text-muted">Precip</p>
-              <p className="text-luxury-small font-medium text-luxury-text">{precipitationProbability}%</p>
-            </div>
-          ) : null}
-          {windSpeedMph !== null ? (
-            <div>
-              <p className="text-luxury-metadata text-luxury-text-muted">Wind</p>
-              <p className="text-luxury-small font-medium text-luxury-text">{Math.round(windSpeedMph)} mph</p>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-      {note ? <p className="mt-2 text-luxury-small text-luxury-text-muted">{note}</p> : null}
+      <MetricsRow precipitationProbability={precipitationProbability} windSpeedMph={windSpeedMph} />
+      {note ? <p className="text-luxury-small text-luxury-text-muted">{note}</p> : null}
       {contingencyNote ? (
-        <p className="mt-2 border-t border-luxury-border pt-2 text-luxury-small text-luxury-text-muted">
+        <p className="border-t border-luxury-border pt-3 text-luxury-small text-luxury-text-muted">
           <span className="font-medium text-luxury-text">Contingency plan:</span> {contingencyNote}
         </p>
       ) : null}
