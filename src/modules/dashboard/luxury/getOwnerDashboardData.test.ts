@@ -12,6 +12,22 @@ vi.mock("@/lib/auth/memberSessionSnapshot", () => ({
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
+// getCalendarEventsAction fans out to every registered CalendarEventSource
+// (Events + Tasks), which under the real repository path is slow enough in
+// this test environment to blow past the default test timeout — Calendar's
+// own module already has full coverage for that fetch; here only the
+// aggregator's own plumbing (the field getting threaded through) matters.
+vi.mock("@/modules/calendar/calendarActions", () => ({
+  getCalendarEventsAction: vi.fn().mockResolvedValue({ success: true, data: [] }),
+}));
+// getEventWeather() hits the real Open-Meteo fetch (see eventWeatherEngine.ts)
+// when an upcoming event in the mock data store happens to carry
+// coordinates — slow and flaky in a test environment. eventWeatherEngine.test.ts
+// already covers that engine directly; this mock keeps this suite scoped to
+// the aggregator's own plumbing.
+vi.mock("@/core/weather/eventWeatherEngine", () => ({
+  getEventWeather: vi.fn().mockResolvedValue({ success: false, error: { reason: "MISSING_COORDINATES", message: "" } }),
+}));
 
 import { getOwnerDashboardData } from "@/modules/dashboard/luxury/getOwnerDashboardData";
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";

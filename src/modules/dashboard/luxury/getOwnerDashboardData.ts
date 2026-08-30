@@ -23,6 +23,9 @@ import type { LittleReminderData } from "@/modules/dashboard/luxury/components/L
 import type { EventPreviewCardData } from "@/modules/dashboard/luxury/components/EventPreviewCard";
 import type { PriorityItemData } from "@/modules/dashboard/luxury/components/PriorityList";
 import type { ActivityFeedItemData } from "@/modules/dashboard/luxury/components/ActivityFeedList";
+import type { TodaysPriorityData } from "@/modules/dashboard/luxury/components/TodaysPriorityCard";
+import type { ScheduleTimelineItemData } from "@/modules/dashboard/luxury/components/ScheduleTimeline";
+import type { TodaysPulseMetric } from "@/modules/dashboard/luxury/components/TodaysPulseCard";
 import type { RevenueTrendPoint } from "@/modules/dashboard/luxury/components/RevenueTrendChart";
 import type { WelcomeCopy } from "@/core/dashboard/buildWelcomeCopy";
 import type { CalendarEvent } from "@/types/calendarEvent";
@@ -66,6 +69,12 @@ export interface OwnerDashboardData {
   /** The current month's Events/Tasks, fetched through the same `getCalendarEventsAction` the Advanced Calendar itself uses — the Home Calendar widget's first paint before any client-side month navigation. */
   calendarWidget: { initialEvents: CalendarEvent[]; initialAnchorIso: string };
   priorities: PriorityItemData[];
+  /** AF-Inspired "Today, at a Glance" Reconstruction — the single most urgent open item from `priorities` (already sorted by due date, critical/high only), never a separately-computed value. Null exactly when `priorities` is empty. */
+  todaysPriority: TodaysPriorityData | null;
+  /** Today's own Events only (`event_date` = today), never the full `upcomingEvents` list — a coarser, workspace-wide equivalent of Team's per-member `schedule` (no per-event schedule-item breakdown is fetched for every Founder event, unlike Team's single current event). */
+  todaysTimeline: ScheduleTimelineItemData[];
+  /** Three metrics already computed elsewhere on this same page (priorities count, today's event count, pending proposals) — reused, not recomputed, and never padded to match AF's own row count. */
+  todaysPulse: TodaysPulseMetric[];
   revenueSeries: RevenueTrendPoint[];
   recentMessages: ActivityFeedItemData[];
   teamActivity: ActivityFeedItemData[];
@@ -184,6 +193,26 @@ export async function getOwnerDashboardData(): Promise<GetOwnerDashboardDataResu
     urgent: item.due_date !== null && new Date(item.due_date) <= now,
   }));
 
+  // AF-Inspired "Today, at a Glance" Reconstruction — the single most urgent item, not the full list.
+  const todaysPriority: TodaysPriorityData | null = priorities[0] ? { headline: priorities[0].title, meta: priorities[0].dueLabel } : null;
+
+  const todaysEventsForTimeline = activeEvents
+    .filter((e) => e.event_date?.slice(0, 10) === todayIso)
+    .sort((a, b) => (a.start_time ?? "").localeCompare(b.start_time ?? ""));
+  const todaysTimeline: ScheduleTimelineItemData[] = todaysEventsForTimeline.map((event) => ({
+    id: event.id,
+    timeLabel: event.start_time ? new Date(`1970-01-01T${event.start_time}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "All day",
+    title: event.title,
+    subtitle: EVENT_TYPE_LABELS[event.event_type] ?? event.event_type,
+    icon: "Calendar",
+  }));
+
+  const todaysPulse: TodaysPulseMetric[] = [
+    { label: "Priorities", value: String(priorities.length) },
+    { label: "Today's Events", value: String(todaysEventsForTimeline.length) },
+    { label: "Proposals Pending", value: String(pendingProposals) },
+  ];
+
   const recentCompletions = allChecklistItems
     .filter((item) => item.completed_at !== null)
     .sort((a, b) => (b.completed_at ?? "").localeCompare(a.completed_at ?? ""))
@@ -279,6 +308,9 @@ export async function getOwnerDashboardData(): Promise<GetOwnerDashboardDataResu
       weekAgenda,
       calendarWidget,
       priorities,
+      todaysPriority,
+      todaysTimeline,
+      todaysPulse,
       revenueSeries,
       recentMessages,
       teamActivity,

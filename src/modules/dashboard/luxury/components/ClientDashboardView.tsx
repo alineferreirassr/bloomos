@@ -10,6 +10,9 @@ import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHead
 import { EventHeroCard } from "@/modules/dashboard/luxury/components/EventHeroCard";
 import { TaskChecklist } from "@/modules/dashboard/luxury/components/TaskChecklist";
 import { ScheduleTimeline } from "@/modules/dashboard/luxury/components/ScheduleTimeline";
+import { TodaysPriorityCard } from "@/modules/dashboard/luxury/components/TodaysPriorityCard";
+import { TodaysTimelineCard } from "@/modules/dashboard/luxury/components/TodaysTimelineCard";
+import { LittleReminderCard } from "@/modules/dashboard/luxury/components/LittleReminderCard";
 import { IncludedServicesGrid } from "@/modules/dashboard/luxury/components/IncludedServicesGrid";
 import { PaymentSummaryCard } from "@/modules/dashboard/luxury/components/PaymentSummaryCard";
 import { PlannerContactCard } from "@/modules/dashboard/luxury/components/PlannerContactCard";
@@ -47,6 +50,14 @@ interface ClientDashboardViewProps {
  * fixed to Amoré Bloom's shared operational location (Huntington Beach,
  * CA), never the Founder Dashboard's multi-city World Clock and never any
  * Founder-private or client-specific location.
+ *
+ * AF-Inspired "Today, at a Glance" Reconstruction — Today's Priority beside
+ * Little Reminder, then a same-day Today's Timeline check, inserted between
+ * Clock+Weather and Portal Summary. Upcoming Events and Today's Pulse are
+ * intentionally absent here — out of scope and no-client-safe-equivalent,
+ * respectively, per the Founder's own addenda; Client's information
+ * architecture otherwise stays exactly as this checkpoint already
+ * established it.
  */
 export function ClientDashboardView({ data }: ClientDashboardViewProps) {
   const [checklist, setChecklist] = useState(data.checklist);
@@ -74,6 +85,22 @@ export function ClientDashboardView({ data }: ClientDashboardViewProps) {
             un-displaced relative to everything below it. */}
         <div className="animate-fade-up stagger-1">
           <CompactClockWeatherPanel location={DEFAULT_OPERATIONAL_LOCATION} forecast={data.operationalForecast} />
+        </div>
+
+        {/* AF-Inspired "Today, at a Glance" Reconstruction — Today's Priority (the
+            real `nextRecommendedAction` signal, previously computed but never
+            surfaced) beside Little Reminder (the shared component's own graceful
+            fallback, no real per-client notification feed exists) and a same-day
+            Timeline check. No Upcoming Events here — explicitly out of scope for
+            Client per the Founder's own addendum. No Today's Pulse — no client-safe
+            metric exists that wouldn't just duplicate Portal Summary below. */}
+        <div className="animate-fade-up stagger-1 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+          <TodaysPriorityCard priority={data.todaysPriority ? { headline: data.todaysPriority } : null} className="lg:col-span-2" />
+          <LittleReminderCard reminder={null} />
+        </div>
+
+        <div className="animate-fade-up stagger-1">
+          <TodaysTimelineCard items={data.todaysTimeline} showFooterLinks={false} />
         </div>
 
         <div className="animate-fade-up stagger-1">

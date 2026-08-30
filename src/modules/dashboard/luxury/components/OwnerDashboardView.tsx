@@ -16,7 +16,9 @@ import { LuxuryMetricCard } from "@/modules/dashboard/luxury/components/LuxuryMe
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { EventPreviewCard } from "@/modules/dashboard/luxury/components/EventPreviewCard";
-import { PriorityList } from "@/modules/dashboard/luxury/components/PriorityList";
+import { TodaysPriorityCard } from "@/modules/dashboard/luxury/components/TodaysPriorityCard";
+import { TodaysTimelineCard } from "@/modules/dashboard/luxury/components/TodaysTimelineCard";
+import { TodaysPulseCard } from "@/modules/dashboard/luxury/components/TodaysPulseCard";
 import { RevenueTrendChart } from "@/modules/dashboard/luxury/components/RevenueTrendChart";
 import { RecentMessagesCard } from "@/modules/dashboard/luxury/components/RecentMessagesCard";
 import { TeamActivityCard } from "@/modules/dashboard/luxury/components/TeamActivityCard";
@@ -39,39 +41,25 @@ interface OwnerDashboardViewProps {
 }
 
 /**
- * Checkpoint 19, Step 6, then the App Shell + Home redesign, then the
- * Weather + AF-inspired polish pass, then the World Clock + AF-composition
- * pass, then the "remove the dashboard Calendar card + Today's Focus"
- * correction, then the "add Little Reminder beside Today's Focus"
- * correction — the Founder's personal daily workspace, not a
- * business-report landing page. Leads with "what's my day," "what needs my
- * attention," "what's next": greeting, metrics strip, "Today, at a glance"
- * (World Clock — Honolulu/Huntington Beach/Sorocaba, real IANA-timezone
- * math, no third-party API — beside Weather, ~75/25, matching the
- * Founder-approved AF Digital Studio reference density; Weather always
- * renders, with a graceful empty state, instead of silently vanishing on
- * days with no upcoming event carrying real coordinates), then, directly
- * below with nothing in between, "Today's Focus" (the existing My
- * Priorities card, relabeled and widened to ~2/3) beside `LittleReminderCard`
- * (~1/3) — the exact same shared, already-generic component Team's own
- * dashboard renders, fed here by `data.littleReminder` (the Founder's own
- * latest unread real workspace notification, same derivation as
- * `getTeamDashboardData.ts`'s own field, not a second data source). Upcoming
- * Events moves to its own full-width row directly below (no natural
- * existing 2-up partner for it once Little Reminder took its old seat — see
- * the "Little Reminder" checkpoint report for why nothing was invented to
- * fill that slot). My Day (private Mood/Water) follows. The dashboard
- * Calendar card that used to sit beside Weather has been REMOVED from this
- * composition entirely per the Founder's explicit correction — `/calendar`
- * itself, its data, and its permissions are completely untouched; this is a
- * layout-only removal.
- * Revenue Overview, Recent Messages, Team Activity, and the AI Executive
- * Brief are unchanged in content but pushed below that fold — de-emphasized,
- * never deleted. Date/Notifications/Messages moved out of this header into
- * the shell's own persistent `LuxuryTopbar` (see `LuxuryDashboardShell`'s
- * `topbarActions` prop) — `PersonalizedWelcomeHeader` now carries only the
- * greeting, matching the reference product's sparse "Good morning, {name}
- * ♡" pattern.
+ * Checkpoint 19, Step 6, then several visual-correction passes, then the
+ * AF-Inspired "Today, at a Glance" Reconstruction — the Founder's personal
+ * daily workspace, not a business-report landing page. "Today, at a
+ * glance" now follows AF Digital Studio OS's own information architecture,
+ * translated into Amoré Bloom's tokens rather than copied verbatim: World
+ * Clock + Weather (unchanged, ~75/25) → Today's Priority (the single most
+ * urgent open item from `data.priorities`, mirroring AF's own
+ * `pickTodaysPriority` — never the full list rendered in one card anymore)
+ * beside `LittleReminderCard` (unchanged, real unread-notification
+ * derivation) → Upcoming Events (unchanged content, now sitting directly
+ * below Priority/Reminder per the Founder's explicit ordering) → Today's
+ * Timeline (today's own Events, a coarser workspace-wide equivalent of
+ * Team's per-member schedule) beside Today's Pulse (Priorities/Today's
+ * Events/Proposals Pending — real counts already computed elsewhere on
+ * this page, reused rather than recomputed) → My Day (private Mood/Water)
+ * → Revenue Overview/Recent Messages/Team Activity → AI Executive Brief.
+ * The dashboard Calendar card that used to sit beside Weather remains
+ * removed per an earlier Founder correction. Date/Notifications/Messages
+ * live in the shell's persistent `LuxuryTopbar`.
  */
 export function OwnerDashboardView({ data, branding, profileName, profileRoleLabel, profileAvatarUrl }: OwnerDashboardViewProps) {
   const router = useRouter();
@@ -128,11 +116,7 @@ export function OwnerDashboardView({ data, branding, profileName, profileRoleLab
         </div>
 
         <div className="animate-fade-up stagger-3 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
-          <LuxuryCard className="lg:col-span-2">
-            <SectionHeader title="Today's Focus" action={<span className="text-luxury-small text-luxury-text-muted">{data.priorities.length} tasks</span>} />
-            {data.priorities.length === 0 ? <EmptyState title="Nothing needs your attention right now ♡" description="A little breathing room is a good thing." /> : <PriorityList items={data.priorities} />}
-          </LuxuryCard>
-
+          <TodaysPriorityCard priority={data.todaysPriority} viewAllHref="/events" viewAllLabel="View events" className="lg:col-span-2" />
           <LittleReminderCard reminder={data.littleReminder} />
         </div>
 
@@ -151,7 +135,12 @@ export function OwnerDashboardView({ data, branding, profileName, profileRoleLab
           </LuxuryCard>
         </div>
 
-        <section className="animate-fade-up stagger-5 rounded-luxury-lg border border-luxury-border bg-luxury-surface-tint p-5 shadow-luxury-sm sm:p-6">
+        <div className="animate-fade-up stagger-5 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+          <TodaysTimelineCard items={data.todaysTimeline} className="lg:col-span-2" />
+          <TodaysPulseCard metrics={data.todaysPulse} />
+        </div>
+
+        <section className="animate-fade-up stagger-6 rounded-luxury-lg border border-luxury-border bg-luxury-surface-tint p-5 shadow-luxury-sm sm:p-6">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
             <div className="flex items-center gap-2">
               <LuxuryHeartIcon className="h-4.5 w-4.5 text-luxury-rose" />

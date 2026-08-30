@@ -62,6 +62,9 @@ function data(overrides: Partial<TeamDashboardData> = {}): TeamDashboardData {
     progressStages: [],
     teamUpdates: [],
     importantNote: null,
+    todaysPriority: null,
+    upcomingEvents: [],
+    todaysPulse: [],
     weather: null,
     nextEventWeather: null,
     reminder: null,
@@ -120,12 +123,56 @@ describe("TeamDashboardView — shares the Founder dashboard's Today, at a glanc
     expect(screen.getByText(/Tent has a full rain backup plan\./)).toBeInTheDocument();
   });
 
-  it("preserves Today's Work (Schedule/Tasks/Current Event) and My Day below the new section", () => {
+  it("preserves Today's Timeline (wrapping the real per-event Schedule), My Tasks, and My Day below the new section", () => {
     renderTeam();
 
-    expect(screen.getByText("Today's Schedule")).toBeInTheDocument();
+    expect(screen.getByText("Today's Timeline")).toBeInTheDocument();
     expect(screen.getByText("My Tasks")).toBeInTheDocument();
     // "My Day" also labels the sidebar's Team-specific Dashboard nav link, so scope to the section heading.
     expect(screen.getByRole("heading", { name: "My Day" })).toBeInTheDocument();
+  });
+});
+
+describe("TeamDashboardView — AF-Inspired Today's Priority + Upcoming Events + Today's Pulse", () => {
+  it("renders Today's Priority (re-skinned from the existing importantNote) beside Little Reminder, with Upcoming Events directly below and nothing else between them and Today, at a glance", () => {
+    const { container } = renderTeam({
+      importantNote: { id: "task_1", icon: "Checklist", title: "Confirm floral delivery window", description: "Due Aug 30" },
+      todaysPriority: { headline: "Confirm floral delivery window", meta: "Due Aug 30" },
+    });
+
+    expect(screen.getByText("Today's Priority")).toBeInTheDocument();
+    expect(screen.getByText("Confirm floral delivery window")).toBeInTheDocument();
+    expect(screen.getByText("Due Aug 30")).toBeInTheDocument();
+    expect(screen.getByText("Little Reminder ♡")).toBeInTheDocument();
+    expect(screen.getByText("Upcoming Events")).toBeInTheDocument();
+
+    const headings = Array.from(container.querySelectorAll("h2")).map((h) => h.textContent);
+    const glanceIndex = headings.indexOf("Today, at a glance");
+    const priorityIndex = headings.indexOf("Today's Priority");
+    const upcomingIndex = headings.indexOf("Upcoming Events");
+    const timelineIndex = headings.indexOf("Today's Timeline");
+    expect(glanceIndex).toBeGreaterThanOrEqual(0);
+    expect(priorityIndex).toBeGreaterThan(glanceIndex);
+    expect(upcomingIndex).toBeGreaterThan(priorityIndex);
+    expect(timelineIndex).toBeGreaterThan(upcomingIndex);
+  });
+
+  it("renders the empty state when this member has no urgent open item or upcoming events, without fabricating either", () => {
+    renderTeam({ importantNote: null, todaysPriority: null, upcomingEvents: [] });
+
+    expect(screen.getByText("Nothing needs your attention right now ♡")).toBeInTheDocument();
+    expect(screen.getByText("No upcoming events")).toBeInTheDocument();
+  });
+
+  it("renders this member's own real upcoming events in Today's Pulse's neighboring section, never fabricated", () => {
+    renderTeam({
+      upcomingEvents: [{ id: "event_5", title: "Whitfield Anniversary Dinner", dayLabel: "28", monthLabel: "Aug", timeLabel: "19:00:00", categoryLabel: "Anniversary", imageUrl: null, href: "/events/event_5" }],
+      todaysPulse: [{ label: "Today's Events", value: "1" }, { label: "Tasks Today", value: "2" }, { label: "Upcoming Tasks", value: "3" }],
+    });
+
+    expect(screen.getByText("Whitfield Anniversary Dinner")).toBeInTheDocument();
+    expect(screen.getByText("Today's Pulse")).toBeInTheDocument();
+    expect(screen.getByText("Today's Events")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
   });
 });

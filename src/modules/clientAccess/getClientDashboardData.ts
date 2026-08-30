@@ -61,6 +61,21 @@ export interface ClientDashboardData {
   checklistCompleteCount: number;
   checklistTotalCount: number;
   timeline: ScheduleTimelineItemData[];
+  /**
+   * AF-Inspired "Today, at a Glance" Reconstruction — `overview.nextRecommendedAction`,
+   * a real, already-computed single-sentence priority signal that was
+   * previously destructured but never surfaced to the client. Never
+   * fabricated; null exactly when the overview itself has nothing to
+   * recommend.
+   */
+  todaysPriority: string | null;
+  /**
+   * A same-day check of `overview.upcomingEvent.event_date` against today —
+   * never a reuse of `timeline` (that's a historical journey log, always
+   * marked `done: true`, and would misrepresent past milestones as "today"
+   * if repurposed). Empty when there's no real event happening today.
+   */
+  todaysTimeline: ScheduleTimelineItemData[];
   includedServices: IncludedServiceData[];
   paymentTotalLabel: string;
   paymentRows: PaymentSummaryRowData[];
@@ -161,6 +176,23 @@ export async function getClientDashboardData(): Promise<GetClientDashboardDataRe
 
   const includedServices: IncludedServiceData[] = ownEvent ? (await listEventServicesByEvent(ownEvent.id)).map((service) => ({ id: service.id, label: service.name, icon: "Checklist" })) : [];
 
+  // AF-Inspired "Today, at a Glance" Reconstruction.
+  const todaysPriority: string | null = overview.nextRecommendedAction ?? null;
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const todaysTimeline: ScheduleTimelineItemData[] =
+    overview.upcomingEvent && overview.upcomingEvent.event_date?.slice(0, 10) === todayIso
+      ? [
+          {
+            id: overview.upcomingEvent.id,
+            timeLabel: "Today",
+            title: overview.upcomingEvent.title,
+            subtitle: EVENT_TYPE_LABELS[overview.upcomingEvent.event_type] ?? overview.upcomingEvent.event_type,
+            icon: "Calendar",
+          },
+        ]
+      : [];
+
   const relevantContract = contracts.find((contract) => contract.event_id === ownEvent?.id) ?? contracts[0] ?? null;
   const currency = overview.currency;
   const totalMinor = relevantContract?.total_value !== null && relevantContract?.total_value !== undefined ? majorToMinor(relevantContract.total_value) : 0;
@@ -219,6 +251,8 @@ export async function getClientDashboardData(): Promise<GetClientDashboardDataRe
       checklistCompleteCount: checklist.filter((i) => i.status === "completed").length,
       checklistTotalCount: checklist.length,
       timeline: timelineItems,
+      todaysPriority,
+      todaysTimeline,
       includedServices,
       paymentTotalLabel: formatMoney(totalMinor, currency),
       paymentRows,

@@ -12,6 +12,18 @@ vi.mock("@/lib/auth/memberSessionSnapshot", () => ({
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
+// See the identical mock in getOwnerDashboardData.test.ts — Calendar's own
+// module already covers the real fetch; here only the aggregator's own
+// plumbing matters, and the real fan-out is too slow for this test's timeout.
+vi.mock("@/modules/calendar/calendarActions", () => ({
+  getCalendarEventsAction: vi.fn().mockResolvedValue({ success: true, data: [] }),
+}));
+// See the identical mock in getOwnerDashboardData.test.ts — getEventWeather()
+// hits a real network fetch when the member's current event happens to carry
+// coordinates; eventWeatherEngine.test.ts already covers that engine directly.
+vi.mock("@/core/weather/eventWeatherEngine", () => ({
+  getEventWeather: vi.fn().mockResolvedValue({ success: false, error: { reason: "MISSING_COORDINATES", message: "" } }),
+}));
 
 import { getTeamDashboardData } from "@/modules/dashboard/luxury/getTeamDashboardData";
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
@@ -33,6 +45,7 @@ function session(overrides: Partial<MemberSessionSnapshot & { kind: "active" }> 
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.useRealTimers();
   resetTeamRoleLabelStore();
 });
 
@@ -73,5 +86,34 @@ describe("getTeamDashboardData", () => {
     // With no permission and (in this seed data) no events assigned by name to "Sophia Martins",
     // the effective event set must be empty — never a silent fallback to every workspace event.
     expect(result.data.schedule.length).toBe(0);
+  });
+
+  // Today's Work presentational remediation — "Current Event" must never
+  // present a future event as if it were happening today.
+  it("marks currentEventIsToday true when the visible event is actually scheduled today", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-22T12:00:00.000Z")); // event_1's own event_date
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session());
+
+    const result = await getTeamDashboardData();
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.data.currentEvent?.title).toBe("Malibu Sunset Proposal");
+    expect(result.data.currentEventIsToday).toBe(true);
+  });
+
+  it("marks currentEventIsToday false when nothing is scheduled today, even though a next-upcoming event is still shown", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-18T12:00:00.000Z")); // no seed event falls on this date
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session());
+
+    const result = await getTeamDashboardData();
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.data.schedule.length).toBe(0);
+    expect(result.data.currentEvent).not.toBeNull();
+    expect(result.data.currentEventIsToday).toBe(false);
   });
 });

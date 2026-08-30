@@ -15,11 +15,14 @@ import type { LuxuryMetricCardData } from "@/modules/dashboard/luxury/components
 import type { ScheduleTimelineItemData } from "@/modules/dashboard/luxury/components/ScheduleTimeline";
 import type { TaskChecklistItemData } from "@/modules/dashboard/luxury/components/TaskChecklist";
 import type { EventHeroCardData } from "@/modules/dashboard/luxury/components/EventHeroCard";
+import type { EventPreviewCardData } from "@/modules/dashboard/luxury/components/EventPreviewCard";
 import type { ProgressStageData } from "@/modules/dashboard/luxury/components/ProgressCard";
 import type { ActivityFeedItemData } from "@/modules/dashboard/luxury/components/ActivityFeedList";
 import type { ImportantNoteData } from "@/modules/dashboard/luxury/components/ImportantNotesCard";
 import type { WeatherNoticeData } from "@/modules/dashboard/luxury/components/WeatherNoticeCard";
 import type { LittleReminderData } from "@/modules/dashboard/luxury/components/LittleReminderCard";
+import type { TodaysPriorityData } from "@/modules/dashboard/luxury/components/TodaysPriorityCard";
+import type { TodaysPulseMetric } from "@/modules/dashboard/luxury/components/TodaysPulseCard";
 import type { WelcomeCopy } from "@/core/dashboard/buildWelcomeCopy";
 import type { TeamRoleLabel } from "@/types/teamRoleLabel";
 import type { Event } from "@/types/event";
@@ -30,6 +33,8 @@ import type { NextEventWeather } from "@/modules/dashboard/luxury/getOwnerDashbo
 import type { CalendarEvent } from "@/types/calendarEvent";
 
 const GENERIC_ACCESS_ERROR = "The Dashboard isn't available. You may not have access to it.";
+
+const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const PROGRESS_STAGES: { id: string; label: string; icon: string; categories: ChecklistCategory[] }[] = [
   { id: "planning", label: "Planning", icon: "Checklist", categories: ["planning", "legal", "finance"] },
@@ -57,6 +62,12 @@ export interface TeamDashboardData {
   progressStages: ProgressStageData[];
   teamUpdates: ActivityFeedItemData[];
   importantNote: ImportantNoteData | null;
+  /** AF-Inspired "Today, at a Glance" Reconstruction — the same single most-urgent-open-item concept as `importantNote`, re-skinned into the shared `TodaysPriorityCard`. Not a separate computation; null exactly when `importantNote` is null. */
+  todaysPriority: TodaysPriorityData | null;
+  /** This member's own authorized, real `upcomingEvents` (Event[], already computed above for `currentEventSource`'s fallback), mapped the same way Founder's aggregator maps its `upcoming` list — never a broader or Founder-only event set. */
+  upcomingEvents: EventPreviewCardData[];
+  /** Metrics already computed elsewhere on this same page (today's events, tasks today, upcoming tasks) — reused, not recomputed. */
+  todaysPulse: TodaysPulseMetric[];
   weather: WeatherNoticeData | null;
   /**
    * Shares the exact `NextEventWeather` shape `getOwnerDashboardData.ts`
@@ -213,6 +224,29 @@ export async function getTeamDashboardData(): Promise<GetTeamDashboardDataResult
   const highPriorityOpen = openTasks.filter((item) => item.priority === "critical" || item.priority === "high").sort((a, b) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999"))[0] ?? null;
   const importantNote: ImportantNoteData | null = highPriorityOpen ? { id: highPriorityOpen.id, icon: "Checklist", title: highPriorityOpen.title, description: highPriorityOpen.due_date ? `Due ${new Date(highPriorityOpen.due_date).toLocaleDateString("en-US")}` : "No due date set." } : null;
 
+  // AF-Inspired "Today, at a Glance" Reconstruction — re-skin the existing single most-urgent-item concept, no new computation.
+  const todaysPriority: TodaysPriorityData | null = importantNote ? { headline: importantNote.title, meta: importantNote.description } : null;
+
+  const upcomingEventsForPreview: EventPreviewCardData[] = upcomingEvents.slice(0, 4).map((event) => {
+    const date = event.event_date ? new Date(event.event_date) : null;
+    return {
+      id: event.id,
+      title: event.title,
+      dayLabel: date ? String(date.getDate()).padStart(2, "0") : "—",
+      monthLabel: date ? MONTH_LABELS[date.getMonth()] : "",
+      timeLabel: event.start_time,
+      categoryLabel: EVENT_TYPE_LABELS[event.event_type] ?? event.event_type,
+      imageUrl: null,
+      href: `/events/${event.id}`,
+    };
+  });
+
+  const todaysPulse: TodaysPulseMetric[] = [
+    { label: "Today's Events", value: String(todaysEvents.length) },
+    { label: "Tasks Today", value: String(tasksToday.length) },
+    { label: "Upcoming Tasks", value: String(upcomingTasks.length) },
+  ];
+
   const weather: WeatherNoticeData | null = currentEventSource?.weather_plan ? { description: currentEventSource.weather_plan, highLabel: "—", lowLabel: "—" } : null;
   let nextEventWeather: NextEventWeather | null = null;
   if (currentEventSource && currentEventSource.latitude !== null && currentEventSource.longitude !== null && currentEventSource.event_date !== null) {
@@ -260,6 +294,9 @@ export async function getTeamDashboardData(): Promise<GetTeamDashboardDataResult
       progressStages,
       teamUpdates,
       importantNote,
+      todaysPriority,
+      upcomingEvents: upcomingEventsForPreview,
+      todaysPulse,
       weather,
       nextEventWeather,
       reminder,

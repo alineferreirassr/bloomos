@@ -73,6 +73,9 @@ function data(overrides: Partial<OwnerDashboardData> = {}): OwnerDashboardData {
     weekAgenda: [],
     calendarWidget: { initialEvents: [], initialAnchorIso: "2026-01-01T00:00:00.000Z" },
     priorities: [],
+    todaysPriority: null,
+    todaysTimeline: [],
+    todaysPulse: [],
     revenueSeries: [],
     recentMessages: [],
     teamActivity: [],
@@ -179,17 +182,17 @@ describe("OwnerDashboardView — Today, at a glance (World Clock + Weather, no C
   });
 });
 
-describe("OwnerDashboardView — Today's Focus + Little Reminder, directly below World Clock + Weather", () => {
-  it("renders Today's Focus (the real My Priorities data, relabeled) beside Little Reminder, with nothing else between them and Today at a glance", () => {
+describe("OwnerDashboardView — Today's Priority + Little Reminder, directly below World Clock + Weather", () => {
+  it("renders Today's Priority (the single most urgent real item, AF-inspired reconstruction) beside Little Reminder, with Upcoming Events directly below and nothing else between them and Today at a glance", () => {
     const { container } = render(
       <MemberSessionProvider snapshot={ownerSnapshot}>
         <CopilotProvider>
-          <OwnerDashboardView data={data({ priorities: [] })} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} />
+          <OwnerDashboardView data={data({ todaysPriority: null })} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} />
         </CopilotProvider>
       </MemberSessionProvider>,
     );
 
-    expect(screen.getByText("Today's Focus")).toBeInTheDocument();
+    expect(screen.getByText("Today's Priority")).toBeInTheDocument();
     expect(screen.getByText("Nothing needs your attention right now ♡")).toBeInTheDocument();
     expect(screen.getByText("A little breathing room is a good thing.")).toBeInTheDocument();
     expect(screen.getByText("Little Reminder ♡")).toBeInTheDocument();
@@ -197,15 +200,15 @@ describe("OwnerDashboardView — Today's Focus + Little Reminder, directly below
     expect(screen.getByText("Small steps still move you forward.")).toBeInTheDocument();
     expect(screen.getByText("Upcoming Events")).toBeInTheDocument();
 
-    // Section order: "Today, at a glance" heading, then Today's Focus, then Upcoming Events (now its own row), then "My Day" — never Revenue/Messages/etc. in between.
+    // Section order: "Today, at a glance" heading, then Today's Priority, then Upcoming Events (directly below, per the Founder's explicit ordering), then "My Day" — never Revenue/Messages/etc. in between.
     const headings = Array.from(container.querySelectorAll("h2")).map((h) => h.textContent);
     const glanceIndex = headings.indexOf("Today, at a glance");
-    const focusIndex = headings.indexOf("Today's Focus");
+    const priorityIndex = headings.indexOf("Today's Priority");
     const upcomingIndex = headings.indexOf("Upcoming Events");
     const myDayIndex = headings.indexOf("My Day");
     expect(glanceIndex).toBeGreaterThanOrEqual(0);
-    expect(focusIndex).toBeGreaterThan(glanceIndex);
-    expect(upcomingIndex).toBeGreaterThan(focusIndex);
+    expect(priorityIndex).toBeGreaterThan(glanceIndex);
+    expect(upcomingIndex).toBeGreaterThan(priorityIndex);
     expect(myDayIndex).toBeGreaterThan(upcomingIndex);
   });
 
@@ -229,12 +232,12 @@ describe("OwnerDashboardView — Today's Focus + Little Reminder, directly below
     expect(screen.queryByText("Small steps still move you forward.")).not.toBeInTheDocument();
   });
 
-  it("renders real priority items instead of the empty state when priorities exist", () => {
+  it("renders the real headline instead of the empty state when a today's priority exists", () => {
     render(
       <MemberSessionProvider snapshot={ownerSnapshot}>
         <CopilotProvider>
           <OwnerDashboardView
-            data={data({ priorities: [{ id: "p1", title: "Confirm final headcount", dueLabel: "Due Sep 1", completed: false, urgent: true }] })}
+            data={data({ todaysPriority: { headline: "Confirm final headcount", meta: "Due Sep 1" } })}
             branding={branding}
             profileName="Aline Ferreira"
             profileRoleLabel="Owner"
@@ -245,6 +248,7 @@ describe("OwnerDashboardView — Today's Focus + Little Reminder, directly below
     );
 
     expect(screen.getByText("Confirm final headcount")).toBeInTheDocument();
+    expect(screen.getByText("Due Sep 1")).toBeInTheDocument();
     expect(screen.queryByText("Nothing needs your attention right now ♡")).not.toBeInTheDocument();
   });
 });
