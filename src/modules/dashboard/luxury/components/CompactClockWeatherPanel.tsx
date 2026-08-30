@@ -14,14 +14,14 @@ import { WEATHER_CONDITION_LABEL, type DailyForecast } from "@/types/weather";
 
 const REFRESH_INTERVAL_MS = 30_000;
 /**
- * Team + Client Composition Correction — the Founder's own accepted
+ * Team + Client Compact Density Pass — the Founder's own accepted
  * `WorldClockCard` city clock renders at 84px; this pair has only one
- * location instead of three, so a modest bump (not the previous 124px)
+ * location instead of three, so a modest bump (not the previous 92px)
  * keeps it reading as "daily context," never larger/more dominant than
  * the Founder Dashboard's own frozen reference.
  */
-const CLOCK_FACE_SIZE = 92;
-const WEATHER_PIN_SIZE = 84;
+const CLOCK_FACE_SIZE = 84;
+const WEATHER_PIN_SIZE = 76;
 
 interface CompactClockWeatherPanelProps {
   location: OperationalLocation;
@@ -66,25 +66,25 @@ export function CompactClockWeatherPanel({ location, forecast }: CompactClockWea
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <LuxuryCard tone="page" className="flex flex-col items-center justify-center gap-0.5 px-5 py-4 text-center shadow-luxury-sm transition-shadow duration-150 hover:shadow-luxury-md">
+      <LuxuryCard tone="page" className="flex flex-col items-center justify-center px-4 py-2 text-center shadow-luxury-sm transition-shadow duration-150 hover:shadow-luxury-md">
         {display ? (
           <>
             <AnalogClockFace hour24={display.hour24} minute={display.minute} size={CLOCK_FACE_SIZE} />
-            <p className="mt-2 font-luxury-display text-lg leading-tight font-semibold text-luxury-text">{location.city}</p>
+            <p className="mt-1 font-luxury-display text-lg leading-tight font-semibold text-luxury-text">{location.city}</p>
             <p className="text-luxury-metadata font-medium tracking-[0.14em] text-luxury-text-muted uppercase">{location.region}</p>
-            <p className="mt-2 font-luxury-display text-3xl leading-none font-semibold text-luxury-text">{display.timeLabel}</p>
-            <p className="mt-1 text-luxury-small text-luxury-text-muted">{display.dateLabel}</p>
-            <span className="mt-1.5 flex items-center gap-1 text-luxury-status font-semibold tracking-[0.1em] text-luxury-rose uppercase">
+            <p className="mt-1 font-luxury-display text-3xl leading-none font-semibold text-luxury-text">{display.timeLabel}</p>
+            <p className="mt-0.5 text-luxury-small text-luxury-text-muted">{display.dateLabel}</p>
+            <span className="mt-1 flex items-center gap-1 text-luxury-status font-semibold tracking-[0.1em] text-luxury-rose uppercase">
               <DayPeriodGlyph isNight={display.isNight} />
               {display.dayPeriod}
             </span>
           </>
         ) : (
-          <div className="h-[12rem] w-full rounded-luxury-md" aria-hidden="true" />
+          <div className="h-[9rem] w-full rounded-luxury-md" aria-hidden="true" />
         )}
       </LuxuryCard>
 
-      <LuxuryCard tone="surface" className="flex flex-col justify-center gap-2 px-5 py-4 shadow-luxury-sm transition-shadow duration-150 hover:shadow-luxury-md">
+      <LuxuryCard tone="surface" className="flex flex-col justify-center gap-1.5 px-4 py-2 shadow-luxury-sm transition-shadow duration-150 hover:shadow-luxury-md">
         <SectionHeader
           title="♡ Weather"
           action={
@@ -100,7 +100,7 @@ export function CompactClockWeatherPanel({ location, forecast }: CompactClockWea
               <WeatherPin condition={forecast.condition} size={WEATHER_PIN_SIZE} />
               <div className="min-w-0">
                 <p className="font-luxury-display text-luxury-display leading-none font-semibold text-luxury-text">{forecast.highF}°</p>
-                <p className="mt-1 text-luxury-body text-luxury-text-muted">{WEATHER_CONDITION_LABEL[forecast.condition]}</p>
+                <p className="mt-0.5 text-luxury-body text-luxury-text-muted">{WEATHER_CONDITION_LABEL[forecast.condition]}</p>
               </div>
               <div className="ml-auto shrink-0 text-right">
                 <p className="text-luxury-small font-medium tabular-nums text-luxury-text">H {forecast.highF}°</p>
@@ -108,7 +108,7 @@ export function CompactClockWeatherPanel({ location, forecast }: CompactClockWea
               </div>
             </div>
             {hasMetrics ? (
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-luxury-border pt-2 text-luxury-small">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-luxury-border pt-1.5 text-luxury-small">
                 {forecast.precipitationProbabilityMax !== null ? (
                   <div className="flex items-center gap-1.5">
                     <Droplets className="size-3.5 shrink-0 text-luxury-rose" aria-hidden="true" />
