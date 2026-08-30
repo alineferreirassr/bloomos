@@ -1,30 +1,27 @@
 import Link from "next/link";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { formatMoney } from "@/lib/money";
-import type { FinancialSummaryView } from "@/modules/finance/financeActions";
+import type { ClientFinancialSummary } from "@/modules/finance/financialSummary";
 
 interface ClientFinancialSummaryCardProps {
   clientId: string;
-  summary: FinancialSummaryView;
+  summary: ClientFinancialSummary;
   /** All-USD, same convention as EventFinancialSummaryCard until multi-currency Clients exist. */
   currency?: string;
 }
 
-/** `null` means the server redacted this figure for the current session's permissions (see `financeActions.ts`) — rendered as "—", never as $0.00. */
-function money(minor: number | null, currency: string): string {
-  return minor === null ? "—" : formatMoney(minor, currency);
+function money(minor: number, currency: string): string {
+  return formatMoney(minor, currency);
 }
 
 /**
  * Read-only rollup on Client Detail — every figure comes straight from
- * `getClientFinancialSummaryAction` (`modules/finance/financeActions.ts`),
- * never recomputed here. Same stat layout as EventFinancialSummaryCard, scoped
- * to the Client across every one of their Events/standalone Contracts instead
- * of a single Event, so no per-Event status badge (financial status is a
- * per-Event concept, not a per-Client one). Individual fields may be `null`
- * — the caller's session held `finance.view` (or the card wouldn't render at
- * all — see `ClientDetailView.tsx`) but lacked `finance.amounts.view`/
- * `finance.executive.view` for that specific figure.
+ * `computeClientFinancialSummary` (`lib/data/index.ts`'s
+ * `getClientFinancialSummary`), never recomputed here. Same stat layout as
+ * EventFinancialSummaryCard, scoped to the Client across every one of their
+ * Events/standalone Contracts instead of a single Event, so no per-Event
+ * status badge (financial status is a per-Event concept, not a per-Client
+ * one).
  */
 export function ClientFinancialSummaryCard({ clientId, summary, currency = "USD" }: ClientFinancialSummaryCardProps) {
   return (

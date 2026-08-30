@@ -10,8 +10,9 @@ import {
   getTimelineByClientId,
   togglePinNote,
   getEvents,
+  getClientFinancialSummary,
 } from "@/lib/data";
-import { getClientFinancialSummaryAction, type FinancialSummaryView } from "@/modules/finance/financeActions";
+import type { ClientFinancialSummary } from "@/modules/finance/financialSummary";
 import type { Client } from "@/types/client";
 import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
@@ -51,21 +52,20 @@ type LoadState =
       timeline: TimelineActivity[];
       nextAction: string | null;
       events: Event[];
-      /** `null` when the caller's session holds no finance permission at all — the Finance card is omitted, not shown with redacted fields. */
-      financialSummary: FinancialSummaryView | null;
+      financialSummary: ClientFinancialSummary;
     };
 
 async function loadClientDetail(clientId: string): Promise<LoadState> {
   try {
-    const [client, notes, timeline, nextAction, events, financialSummaryResult] = await Promise.all([
+    const [client, notes, timeline, nextAction, events, financialSummary] = await Promise.all([
       getClientById(clientId),
       getNotesByClientId(clientId),
       getTimelineByClientId(clientId),
       getClientNextAction(clientId),
       getEvents({ clientId }),
-      getClientFinancialSummaryAction(clientId),
+      getClientFinancialSummary(clientId),
     ]);
-    return { status: "ready", client, notes, timeline, nextAction, events, financialSummary: financialSummaryResult.data };
+    return { status: "ready", client, notes, timeline, nextAction, events, financialSummary };
   } catch (err) {
     return { status: err instanceof NotFoundError ? "not-found" : "error" };
   }
@@ -293,11 +293,9 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
       </Section>
 
       {/* 07 — Financial Overview */}
-      {financialSummary ? (
-        <Section eyebrow="Where things stand financially" title="Financial Overview">
-          <ClientFinancialSummaryCard clientId={client.id} summary={financialSummary} />
-        </Section>
-      ) : null}
+      <Section eyebrow="Where things stand financially" title="Financial Overview">
+        <ClientFinancialSummaryCard clientId={client.id} summary={financialSummary} />
+      </Section>
 
       {/* 08 — Documents */}
       <Section eyebrow="What exists" title="Documents">
