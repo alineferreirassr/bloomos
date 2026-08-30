@@ -56,7 +56,7 @@ export function CompactClockWeatherPanel({ location, forecast }: CompactClockWea
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-[9fr_11fr]">
-      <LuxuryCard tone="tint" className="flex flex-col items-center justify-center gap-0.5 px-6 py-6 text-center shadow-luxury-sm transition-shadow duration-150 hover:shadow-luxury-md">
+      <LuxuryCard tone="subtle" className="flex flex-col items-center justify-center gap-0.5 px-6 py-6 text-center shadow-luxury-sm transition-shadow duration-150 hover:shadow-luxury-md">
         {display ? (
           <>
             <AnalogClockFace hour24={display.hour24} minute={display.minute} size={CLOCK_FACE_SIZE} />
@@ -74,7 +74,7 @@ export function CompactClockWeatherPanel({ location, forecast }: CompactClockWea
         )}
       </LuxuryCard>
 
-      <LuxuryCard tone="tint" className="flex flex-col justify-center gap-3 px-6 py-6 shadow-luxury-sm transition-shadow duration-150 hover:shadow-luxury-md">
+      <LuxuryCard tone="subtle" className="flex flex-col justify-center gap-3 px-6 py-6 shadow-luxury-sm transition-shadow duration-150 hover:shadow-luxury-md">
         <SectionHeader
           title="♡ Weather"
           action={

@@ -85,7 +85,7 @@ export function NextEventWeatherCard({ data, contingencyNote, fallback }: NextEv
       const windSpeedMph = forecast.windSpeedMaxMph;
       const note = operationalNote(forecast.condition, precipitationProbability);
       return (
-        <LuxuryCard tone="tint" className="flex flex-col justify-center gap-4 py-6">
+        <LuxuryCard tone="subtle" className="flex flex-col justify-center gap-4 py-6">
           <SectionHeader title="♡ Weather" action={<span className="text-luxury-small font-medium text-luxury-rose">{fallback.locationLabel}</span>} />
           <div className="flex items-center gap-5">
             <WeatherPin condition={forecast.condition} size={WEATHER_PIN_SIZE} />
@@ -145,7 +145,7 @@ export function NextEventWeatherCard({ data, contingencyNote, fallback }: NextEv
   const note = operationalNote(condition, precipitationProbability);
 
   return (
-    <LuxuryCard tone="tint" className="flex flex-col justify-center gap-4 py-6">
+    <LuxuryCard tone="subtle" className="flex flex-col justify-center gap-4 py-6">
       <SectionHeader
         title="♡ Weather"
         action={

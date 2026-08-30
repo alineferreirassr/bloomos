@@ -24,37 +24,37 @@ export function AnalogClockFace({ hour24, minute, size = 48, className = "" }: {
         </linearGradient>
       </defs>
 
-      {/* Gold outer ring */}
-      <circle cx="50" cy="50" r="38" fill="url(#clockFaceBody)" stroke="var(--luxury-warning)" strokeWidth="3" />
-      {/* Inner hairline ring, restrained */}
-      <circle cx="50" cy="50" r="33" fill="none" stroke="var(--luxury-border)" strokeWidth="1" />
+      {/* Gold outer ring — thinner, Final Clock + Weather Visual Refinement, for a more delicate/editorial face */}
+      <circle cx="50" cy="50" r="38" fill="url(#clockFaceBody)" stroke="var(--luxury-warning)" strokeWidth="2" />
+      {/* Inner hairline ring, pulled in slightly for more negative space between the two rings */}
+      <circle cx="50" cy="50" r="32" fill="none" stroke="var(--luxury-border)" strokeWidth="0.75" />
 
       {/* Hour ticks at 12/3/6/9 only — restrained, not a full 12-tick face */}
-      <g stroke="var(--luxury-beige)" strokeWidth="1.5" strokeLinecap="round">
-        <line x1="50" y1="15" x2="50" y2="19" />
-        <line x1="85" y1="50" x2="81" y2="50" />
-        <line x1="50" y1="85" x2="50" y2="81" />
-        <line x1="15" y1="50" x2="19" y2="50" />
+      <g stroke="var(--luxury-beige)" strokeWidth="1" strokeLinecap="round">
+        <line x1="50" y1="16" x2="50" y2="19" />
+        <line x1="84" y1="50" x2="81" y2="50" />
+        <line x1="50" y1="84" x2="50" y2="81" />
+        <line x1="16" y1="50" x2="19" y2="50" />
       </g>
 
       {/* Small heart accent, center-low on the face — brand vocabulary, matches WeatherPin's own heart-accent precedent */}
       <path
-        d="M50 63c-2.6-2.5-4.5-4.6-4.5-6.7 0-1.5 1.2-2.7 2.7-2.7.8 0 1.5.4 1.8 1 .3-.6 1-1 1.8-1 1.5 0 2.7 1.2 2.7 2.7 0 2.1-1.9 4.2-4.5 6.7z"
+        d="M50 61.5c-2.2-2.1-3.8-3.9-3.8-5.7 0-1.3 1-2.3 2.3-2.3.7 0 1.3.3 1.5.8.2-.5.8-.8 1.5-.8 1.3 0 2.3 1 2.3 2.3 0 1.8-1.6 3.6-3.8 5.7z"
         fill="var(--luxury-rose)"
         opacity="0.85"
       />
 
-      {/* Hands — real, computed angles, never decorative-fixed */}
+      {/* Hands — real, computed angles, never decorative-fixed; thinner for a lighter, more editorial feel */}
       <g strokeLinecap="round">
-        <line x1="50" y1="50" x2="50" y2="30" stroke="var(--color-accent)" strokeWidth="3" transform={`rotate(${hourAngle} 50 50)`} />
-        <line x1="50" y1="50" x2="50" y2="22" stroke="var(--luxury-rose)" strokeWidth="2" transform={`rotate(${minuteAngle} 50 50)`} />
+        <line x1="50" y1="50" x2="50" y2="30" stroke="var(--color-accent)" strokeWidth="2.2" transform={`rotate(${hourAngle} 50 50)`} />
+        <line x1="50" y1="50" x2="50" y2="22" stroke="var(--luxury-rose)" strokeWidth="1.4" transform={`rotate(${minuteAngle} 50 50)`} />
       </g>
-      <circle cx="50" cy="50" r="2.5" fill="var(--luxury-rose)" />
+      <circle cx="50" cy="50" r="1.8" fill="var(--luxury-rose)" />
 
-      {/* Bow at 12 o'clock — two loops + a small knot, restrained scale */}
-      <g transform="translate(50 12)">
-        <path d="M0 0c-5-4-11-2-11 2s6 4 11 1c5 3 11 3 11-1s-6-6-11-2z" fill="var(--luxury-blush)" stroke="var(--luxury-rose)" strokeWidth="1" />
-        <circle cx="0" cy="0.5" r="1.6" fill="var(--luxury-warning)" />
+      {/* Bow at 12 o'clock — two loops + a small knot, scaled down further for a subtler accent */}
+      <g transform="translate(50 12) scale(0.82)">
+        <path d="M0 0c-5-4-11-2-11 2s6 4 11 1c5 3 11 3 11-1s-6-6-11-2z" fill="var(--luxury-blush)" stroke="var(--luxury-rose)" strokeWidth="0.85" />
+        <circle cx="0" cy="0.5" r="1.4" fill="var(--luxury-warning)" />
       </g>
     </svg>
   );

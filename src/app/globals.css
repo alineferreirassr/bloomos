@@ -131,6 +131,17 @@
   --luxury-sidebar: #f6f2e4;
   --luxury-surface: #fffefa;
   --luxury-surface-tint: #f8f5ea;
+  /* Final Clock + Weather Visual Refinement — new, additive only. Real
+     staging review found World Clock's inner city cards and the Weather
+     card still read "beige" next to their near-white outer container,
+     even after `--luxury-surface-tint` was already lightened once.
+     `--luxury-surface-tint` is consumed by 50+ unrelated screens (detail
+     views, calendars, dispatch, finance, ...), so lightening it further
+     here would ripple far beyond Clock/Weather. This token exists only
+     for that one "barely distinguishable from the outer card" surface —
+     currently WorldClockCard's city cards and the Weather cards — and
+     touches nothing else until a component opts in. */
+  --luxury-surface-subtle: #fdfcf6;
   --luxury-border: color-mix(in srgb, #8a6d3f 30%, transparent);
   --luxury-text: #2a1f1c;
   --luxury-text-muted: color-mix(in srgb, #3d2f26 80%, transparent);
@@ -198,6 +209,7 @@
   --color-luxury-sidebar: var(--luxury-sidebar);
   --color-luxury-surface: var(--luxury-surface);
   --color-luxury-surface-tint: var(--luxury-surface-tint);
+  --color-luxury-surface-subtle: var(--luxury-surface-subtle);
   --color-luxury-border: var(--luxury-border);
   --color-luxury-text: var(--luxury-text);
   --color-luxury-text-muted: var(--luxury-text-muted);

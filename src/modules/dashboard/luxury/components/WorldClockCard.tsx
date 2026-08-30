@@ -12,9 +12,9 @@ const CLOCK_FACE_SIZE = 96;
 
 function CityCard({ display }: { display: WorldClockDisplay }) {
   return (
-    <div className="flex flex-1 flex-col items-center rounded-luxury-lg bg-luxury-surface-tint px-4 py-5 text-center shadow-luxury-sm transition-shadow duration-150 hover:shadow-luxury-md">
+    <div className="flex flex-1 flex-col items-center rounded-luxury-lg border border-luxury-border bg-luxury-surface-subtle px-4 py-4 text-center shadow-luxury-sm transition-shadow duration-150 hover:shadow-luxury-md">
       <AnalogClockFace hour24={display.hour24} minute={display.minute} size={CLOCK_FACE_SIZE} />
-      <p className="mt-4 font-luxury-display text-luxury-card-heading font-semibold text-luxury-text">{display.city}</p>
+      <p className="mt-3 font-luxury-display text-luxury-card-heading font-semibold text-luxury-text">{display.city}</p>
       <p className="text-luxury-metadata font-medium tracking-[0.1em] text-luxury-text-muted uppercase">{display.region}</p>
       <p className="mt-3 font-luxury-display text-luxury-page leading-none font-semibold text-luxury-text">{display.timeLabel}</p>
       <p className="mt-2 text-luxury-small text-luxury-text-muted">{display.dateLabel}</p>
@@ -70,7 +70,7 @@ export function WorldClockCard() {
       ) : (
         <div className="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-3" aria-hidden="true">
           {WORLD_CLOCK_LOCATIONS.map((location) => (
-            <div key={location.id} className="h-[12rem] rounded-luxury-lg bg-luxury-surface-tint" />
+            <div key={location.id} className="h-[11rem] rounded-luxury-lg border border-luxury-border bg-luxury-surface-subtle" />
           ))}
         </div>
       )}
