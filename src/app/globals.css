@@ -26,17 +26,24 @@
     Contrast & Visual Finish Pass — the first refresh went too far toward
     "faded": background/surface/surface-tint sat too close together, the
     border was nearly invisible (6% opacity), and text-muted didn't clear
-    ~3:1 against the canvas. This pass deepens the canvas slightly, widens
-    the value gap between background/sidebar/surface-tint/surface so cards
-    and the sidebar read as distinct surfaces again, and darkens
-    border/text-muted/accent for real definition — without reintroducing
-    a pink cast (no value below is a rose/salmon hue, only warm neutrals,
-    wine, and gold).
+    ~3:1 against the canvas. That pass deepened the canvas via a
+    wheat/tan family (R notably greater than G, greater again than B —
+    e.g. #f4ecd8), which reads as "beige/gold" rather than "ivory" no
+    matter how light it gets, because that R-G-B gap is exactly what a
+    tan/wheat hue looks like.
+
+    Neutral Ivory Correction — keeps the definition the contrast pass
+    added (card/sidebar borders, deepened text-muted, wine accent) but
+    rebuilds background/sidebar/surface/surface-tint around true "ivory"
+    proportions instead: R and G within a couple points of each other,
+    B trailing only slightly behind (matching how a real ivory swatch
+    like #fffff0 is built), rather than the tan family's much wider R>G>B
+    spread. Same values-only, names-unchanged approach.
   */
-  --color-background: #f4ecd8;
-  --color-sidebar: #efe4cb;
-  --color-surface: #fffdf8;
-  --color-surface-tint: #f2e6d0;
+  --color-background: #faf8f1;
+  --color-sidebar: #f6f2e4;
+  --color-surface: #fffefa;
+  --color-surface-tint: #f8f5ea;
   --color-border: color-mix(in srgb, #8a6d3f 30%, transparent);
   --color-text: #2a1f1c;
   --color-text-muted: color-mix(in srgb, #3d2f26 80%, transparent);
@@ -44,7 +51,7 @@
   --color-accent-2: #bf9a52;
   --color-accent-foreground: #ffffff;
 
-  --color-accent-100: #f0d0c0;
+  --color-accent-100: #f5e0d2;
   --color-accent-800: #5c2c20;
   --color-neutral-100: #fffaf6;
   --color-neutral-800: #2a1f1c;
@@ -120,15 +127,15 @@
     docs/luxury-design-system.md for the full rationale and a comparison
     against the three approved reference images.
   */
-  --luxury-background: #f4ecd8;
-  --luxury-sidebar: #efe4cb;
-  --luxury-surface: #fffdf8;
-  --luxury-surface-tint: #f2e6d0;
+  --luxury-background: #faf8f1;
+  --luxury-sidebar: #f6f2e4;
+  --luxury-surface: #fffefa;
+  --luxury-surface-tint: #f8f5ea;
   --luxury-border: color-mix(in srgb, #8a6d3f 30%, transparent);
   --luxury-text: #2a1f1c;
   --luxury-text-muted: color-mix(in srgb, #3d2f26 80%, transparent);
 
-  --luxury-blush: #f0d0c0;
+  --luxury-blush: #f5e0d2;
   --luxury-blush-foreground: #8a4a3f;
   --luxury-rose: #7d3242;
   --luxury-rose-foreground: #ffffff;
