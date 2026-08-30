@@ -54,7 +54,7 @@ interface PendingWrite {
  * count came out wrong. Never clamp `baseGlasses` — only ever clamp the
  * derived `glasses` value.
  */
-export function WaterTrackerCard({ privacyDetail }: { privacyDetail?: string } = {}) {
+export function WaterTrackerCard({ privacyDetail, compact = false }: { privacyDetail?: string; compact?: boolean } = {}) {
   const [date] = useState(todayLocalDate);
   const [baseGlasses, setBaseGlasses] = useState(0);
   const [pendingWrites, setPendingWrites] = useState<PendingWrite[]>([]);
@@ -115,7 +115,7 @@ export function WaterTrackerCard({ privacyDetail }: { privacyDetail?: string } =
   }
 
   return (
-    <LuxuryCard>
+    <LuxuryCard padding={compact ? "compact" : "default"}>
       <SectionHeader
         title="Water Tracker"
         action={
@@ -125,7 +125,7 @@ export function WaterTrackerCard({ privacyDetail }: { privacyDetail?: string } =
         }
       />
       {loadError ? (
-        <div className="mt-4 flex items-center justify-between gap-3 rounded-luxury-md border border-luxury-border bg-luxury-surface px-3 py-2.5 text-luxury-small text-luxury-text-muted">
+        <div className="mt-2 flex items-center justify-between gap-3 rounded-luxury-md border border-luxury-border bg-luxury-surface px-3 py-2.5 text-luxury-small text-luxury-text-muted">
           <span>{LOAD_ERROR_MESSAGE}</span>
           <button
             type="button"
@@ -140,21 +140,21 @@ export function WaterTrackerCard({ privacyDetail }: { privacyDetail?: string } =
           </button>
         </div>
       ) : (
-        <div className="mt-4 flex items-center justify-between gap-3">
+        <div className={`${compact ? "mt-1.5" : "mt-2"} flex items-center justify-between gap-2`}>
           <button
             type="button"
             onClick={handleRemove}
             disabled={loading || glasses === 0}
             aria-label="Remove a glass"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-luxury-full border border-luxury-rose/30 text-luxury-rose transition-colors duration-150 hover:border-luxury-rose hover:bg-luxury-rose hover:text-luxury-rose-foreground focus-visible:outline-none focus-visible:[box-shadow:var(--luxury-focus-ring)] disabled:opacity-30"
+            className={`flex ${compact ? "h-8 w-8" : "h-9 w-9"} shrink-0 items-center justify-center rounded-luxury-full border border-luxury-rose/30 text-luxury-rose transition-colors duration-150 hover:border-luxury-rose hover:bg-luxury-rose hover:text-luxury-rose-foreground focus-visible:outline-none focus-visible:[box-shadow:var(--luxury-focus-ring)] disabled:opacity-30`}
           >
             <Minus className="h-4 w-4" aria-hidden="true" strokeWidth={2.5} />
           </button>
-          <div className="flex flex-1 flex-wrap justify-center gap-2" aria-hidden="true">
+          <div className="flex flex-1 flex-wrap justify-center gap-1.5" aria-hidden="true">
             {Array.from({ length: DAILY_WATER_GOAL_GLASSES }).map((_, index) => (
               <Droplet
                 key={index}
-                className={`h-6 w-6 transition-all duration-200 ${index < glasses ? "fill-luxury-rose text-luxury-rose" : "fill-transparent text-luxury-beige"}`}
+                className={`${compact ? "h-4 w-4" : "h-5 w-5"} transition-all duration-200 ${index < glasses ? "fill-luxury-rose text-luxury-rose" : "fill-transparent text-luxury-beige"}`}
                 strokeWidth={1.75}
               />
             ))}
@@ -164,14 +164,14 @@ export function WaterTrackerCard({ privacyDetail }: { privacyDetail?: string } =
             onClick={handleAdd}
             disabled={loading}
             aria-label="Add a glass"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-luxury-full border border-luxury-rose/30 text-luxury-rose transition-colors duration-150 hover:border-luxury-rose hover:bg-luxury-rose hover:text-luxury-rose-foreground focus-visible:outline-none focus-visible:[box-shadow:var(--luxury-focus-ring)] disabled:opacity-30"
+            className={`flex ${compact ? "h-8 w-8" : "h-9 w-9"} shrink-0 items-center justify-center rounded-luxury-full border border-luxury-rose/30 text-luxury-rose transition-colors duration-150 hover:border-luxury-rose hover:bg-luxury-rose hover:text-luxury-rose-foreground focus-visible:outline-none focus-visible:[box-shadow:var(--luxury-focus-ring)] disabled:opacity-30`}
           >
             <Plus className="h-4 w-4" aria-hidden="true" strokeWidth={2.5} />
           </button>
         </div>
       )}
       {saveError ? <p className="mt-1.5 text-luxury-small text-red-600">{LOAD_ERROR_MESSAGE}</p> : null}
-      <PrivateToYouNotice detail={privacyDetail ?? "Your mood and water tracker are not shared with Aline, managers, or other team members."} />
+      {compact ? null : <PrivateToYouNotice detail={privacyDetail ?? "Your mood and water tracker are not shared with Aline, managers, or other team members."} />}
     </LuxuryCard>
   );
 }

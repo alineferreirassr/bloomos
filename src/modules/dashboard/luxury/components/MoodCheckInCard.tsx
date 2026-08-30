@@ -42,7 +42,7 @@ const LOAD_ERROR_MESSAGE = "Something went wrong. Please try again.";
  * class of gap found and fixed elsewhere in this codebase's Finance
  * mutation modals.
  */
-export function MoodCheckInCard({ privacyDetail }: { privacyDetail?: string } = {}) {
+export function MoodCheckInCard({ privacyDetail, compact = false }: { privacyDetail?: string; compact?: boolean } = {}) {
   const [date] = useState(todayLocalDate);
   const [mood, setMood] = useState<MoodValue | null>(null);
   const [loading, setLoading] = useState(true);
@@ -102,7 +102,7 @@ export function MoodCheckInCard({ privacyDetail }: { privacyDetail?: string } = 
   }
 
   return (
-    <LuxuryCard>
+    <LuxuryCard padding={compact ? "compact" : "default"}>
       <SectionHeader title="How are you feeling today?" />
       {loadError ? (
         <div className="mt-3 flex items-center justify-between gap-3 rounded-luxury-md border border-luxury-border bg-luxury-surface px-3 py-2.5 text-luxury-small text-luxury-text-muted">
@@ -120,7 +120,7 @@ export function MoodCheckInCard({ privacyDetail }: { privacyDetail?: string } = 
           </button>
         </div>
       ) : (
-        <div className="mt-3 grid grid-cols-2 gap-2" role="group" aria-label="Select your mood">
+        <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Select your mood">
           {MOOD_VALUES.map((value) => {
             const Icon = MOOD_ICONS[value];
             const selected = mood === value;
@@ -131,20 +131,20 @@ export function MoodCheckInCard({ privacyDetail }: { privacyDetail?: string } = 
                 onClick={() => handleSelect(value)}
                 disabled={loading}
                 aria-pressed={selected}
-                className={`flex min-h-11 items-center gap-2 rounded-luxury-md border px-2.5 py-2 text-left text-luxury-small font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:[box-shadow:var(--luxury-focus-ring)] disabled:opacity-50 ${
+                className={`inline-flex min-h-9 items-center gap-1.5 rounded-luxury-full border px-3 py-1.5 text-luxury-small font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:[box-shadow:var(--luxury-focus-ring)] disabled:opacity-50 ${
                   selected ? "border-luxury-rose bg-luxury-blush text-luxury-blush-foreground" : "border-luxury-border bg-luxury-surface text-luxury-text-muted hover:border-luxury-rose/40 hover:text-luxury-text"
                 }`}
               >
-                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" strokeWidth={2} />
-                <span className="min-w-0 flex-1">{MOOD_LABELS[value]}</span>
-                {selected ? <Check className="ml-1 h-3.5 w-3.5 shrink-0" aria-hidden="true" strokeWidth={2.5} /> : null}
+                <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" strokeWidth={2} />
+                <span>{MOOD_LABELS[value]}</span>
+                {selected ? <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" strokeWidth={2.5} /> : null}
               </button>
             );
           })}
         </div>
       )}
       {saveError ? <p className="mt-1.5 text-luxury-small text-red-600">{LOAD_ERROR_MESSAGE}</p> : null}
-      <PrivateToYouNotice detail={privacyDetail ?? "Your mood and water tracker are not shared with Aline, managers, or other team members."} />
+      {compact ? null : <PrivateToYouNotice detail={privacyDetail ?? "Your mood and water tracker are not shared with Aline, managers, or other team members."} />}
     </LuxuryCard>
   );
 }

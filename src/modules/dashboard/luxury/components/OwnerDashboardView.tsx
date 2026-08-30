@@ -25,10 +25,7 @@ import { TeamActivityCard } from "@/modules/dashboard/luxury/components/TeamActi
 import { OwnerAIBriefCard } from "@/modules/dashboard/luxury/components/OwnerAIBriefCard";
 import { NextEventWeatherCard } from "@/modules/dashboard/luxury/components/NextEventWeatherCard";
 import { WorldClockCard } from "@/modules/dashboard/luxury/components/WorldClockCard";
-import { MoodCheckInCard } from "@/modules/dashboard/luxury/components/MoodCheckInCard";
-import { WaterTrackerCard } from "@/modules/dashboard/luxury/components/WaterTrackerCard";
-import { LittleReminderCard } from "@/modules/dashboard/luxury/components/LittleReminderCard";
-import { LuxuryHeartIcon } from "@/modules/dashboard/luxury/luxuryIcons";
+import { MyDaySection } from "@/modules/dashboard/luxury/components/MyDaySection";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatMoney } from "@/lib/money";
 
@@ -43,24 +40,24 @@ interface OwnerDashboardViewProps {
 /**
  * Checkpoint 19, Step 6, then several visual-correction passes, then the
  * AF-Inspired "Today, at a Glance" Reconstruction, then the "My Day ♡
- * Position + Team Wellness" correction — the Founder's personal daily
- * workspace, not a business-report landing page. "A little look at
- * today ♡" now follows: World Clock + Weather (unchanged, ~75/25) → My Day
- * (private Mood/Water, moved directly below Clock+Weather so the personal
- * check-in is part of the morning routine, not a secondary widget near the
- * bottom — exactly one instance, never duplicated) → Today's Priority (the
- * single most urgent open item from `data.priorities`, mirroring AF's own
- * `pickTodaysPriority` — never the full list rendered in one card anymore)
- * beside `LittleReminderCard` (unchanged, real unread-notification
- * derivation) → Upcoming Events (unchanged content) → Today's Timeline
- * (today's own Events, a coarser workspace-wide equivalent of Team's
- * per-member schedule) beside Today's Pulse (Priorities/Today's
- * Events/Proposals Pending — real counts already computed elsewhere on
- * this page, reused rather than recomputed) → Revenue Overview/Recent
- * Messages/Team Activity → AI Executive Brief. The dashboard Calendar card
- * that used to sit beside Weather remains removed per an earlier Founder
- * correction. Date/Notifications/Messages live in the shell's persistent
- * `LuxuryTopbar`.
+ * Position + Team Wellness" correction, then the "Dashboard Compact
+ * Composition Refinement" — the Founder's personal daily workspace, not a
+ * business-report landing page. "A little look at today ♡" now follows:
+ * World Clock + Weather (unchanged, ~75/25) → `MyDaySection` (the shared
+ * Founder/Team My Day composition — compact pill-based Mood beside a
+ * stacked Water Tracker + Little Reminder, exactly one instance, never
+ * duplicated; see that component's own doc comment) → Today's Priority
+ * (the single most urgent open item from `data.priorities`, mirroring
+ * AF's own `pickTodaysPriority`) beside Upcoming Events (~40/60, no longer
+ * a full-width row — Little Reminder moved out of this row into My Day) →
+ * Today's Timeline (today's own Events, a coarser workspace-wide
+ * equivalent of Team's per-member schedule) beside Today's Pulse
+ * (Priorities/Today's Events/Proposals Pending — real counts already
+ * computed elsewhere on this page, reused rather than recomputed) →
+ * Revenue Overview/Recent Messages/Team Activity → AI Executive Brief. The
+ * dashboard Calendar card that used to sit beside Weather remains removed
+ * per an earlier Founder correction. Date/Notifications/Messages live in
+ * the shell's persistent `LuxuryTopbar`.
  */
 export function OwnerDashboardView({ data, branding, profileName, profileRoleLabel, profileAvatarUrl }: OwnerDashboardViewProps) {
   const router = useRouter();
@@ -116,41 +113,31 @@ export function OwnerDashboardView({ data, branding, profileName, profileRoleLab
           </div>
         </div>
 
-        <section className="animate-fade-up stagger-3 rounded-luxury-lg border border-luxury-border bg-luxury-surface-tint p-5 shadow-luxury-sm sm:p-6">
-          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-            <div className="flex items-center gap-2">
-              <LuxuryHeartIcon className="h-4.5 w-4.5 text-luxury-rose" />
-              <h2 className="font-luxury-display text-luxury-section font-semibold text-luxury-text">My Day</h2>
-            </div>
-            <p className="text-luxury-small text-luxury-text-muted">A few things just for you.</p>
-          </div>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <MoodCheckInCard privacyDetail="Your mood and water tracker are personal to you and are never visible to your team." />
-            <WaterTrackerCard privacyDetail="Your mood and water tracker are personal to you and are never visible to your team." />
-          </div>
-        </section>
-
-        <div className="animate-fade-up stagger-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
-          <TodaysPriorityCard priority={data.todaysPriority} viewAllHref="/events" viewAllLabel="View events" className="lg:col-span-2" />
-          <LittleReminderCard reminder={data.littleReminder} />
+        <div className="animate-fade-up stagger-3">
+          <MyDaySection littleReminder={data.littleReminder} privacyDetail="Your mood and water tracker are personal to you and are never visible to your team." />
         </div>
 
-        <div className="animate-fade-up stagger-5">
-          <LuxuryCard>
-            <SectionHeader title="Upcoming Events" action={<Link href="/events" className="text-luxury-small font-medium text-luxury-rose">View all</Link>} />
-            {data.upcomingEvents.length === 0 ? (
-              <EmptyState title="No upcoming events" description="Booked events appear here." />
-            ) : (
-              <div className="space-y-1">
-                {data.upcomingEvents.map((event) => (
-                  <EventPreviewCard key={event.id} data={event} />
-                ))}
-              </div>
-            )}
-          </LuxuryCard>
+        <div className="animate-fade-up stagger-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-5">
+          <div className="lg:col-span-2">
+            <TodaysPriorityCard priority={data.todaysPriority} viewAllHref="/events" viewAllLabel="View events" />
+          </div>
+          <div className="lg:col-span-3">
+            <LuxuryCard>
+              <SectionHeader title="Upcoming Events" action={<Link href="/events" className="text-luxury-small font-medium text-luxury-rose">View all</Link>} />
+              {data.upcomingEvents.length === 0 ? (
+                <EmptyState title="No upcoming events" description="Booked events appear here." />
+              ) : (
+                <div className="space-y-1">
+                  {data.upcomingEvents.map((event) => (
+                    <EventPreviewCard key={event.id} data={event} />
+                  ))}
+                </div>
+              )}
+            </LuxuryCard>
+          </div>
         </div>
 
-        <div className="animate-fade-up stagger-6 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+        <div className="animate-fade-up stagger-5 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
           <TodaysTimelineCard items={data.todaysTimeline} className="lg:col-span-2" />
           <TodaysPulseCard metrics={data.todaysPulse} />
         </div>

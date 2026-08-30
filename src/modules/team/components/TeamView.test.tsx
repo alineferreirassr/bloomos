@@ -135,7 +135,7 @@ function renderTeam(
 }
 
 describe("TeamView — shares the Founder dashboard's Luxury system", () => {
-  it("renders the compact Clock+Weather panel, Today's Priority, and Little Reminder — never a Calendar dashboard widget", () => {
+  it("renders the compact Clock+Weather panel, Today's Priority, and Little Reminder (inside My Day) — never a Calendar dashboard widget", () => {
     renderTeam();
 
     expect(screen.getByText("A little look at today ♡")).toBeInTheDocument();
@@ -170,7 +170,7 @@ describe("TeamView — shares the Founder dashboard's Luxury system", () => {
     expect(screen.queryByText("Small steps still move you forward.")).not.toBeInTheDocument();
   });
 
-  it("renders Upcoming Events directly below Priority/Reminder, then Today's Timeline beside Today's Pulse", () => {
+  it("renders Today's Priority and Upcoming Events side by side in one composition row, then Today's Timeline beside Today's Pulse", () => {
     const { container } = renderTeam(["team.view"], {
       upcomingEvents: [{ id: "event_5", title: "Whitfield Anniversary Dinner", dayLabel: "13", monthLabel: "Sep", timeLabel: "19:00:00", categoryLabel: "Anniversary", imageUrl: null, href: "/events/event_5" }],
       todaysPulse: [{ label: "Priorities", value: "1" }, { label: "Today's Events", value: "0" }],
@@ -187,6 +187,11 @@ describe("TeamView — shares the Founder dashboard's Luxury system", () => {
     expect(priorityIndex).toBeGreaterThanOrEqual(0);
     expect(upcomingIndex).toBeGreaterThan(priorityIndex);
     expect(timelineIndex).toBeGreaterThan(upcomingIndex);
+
+    // Today's Priority and Upcoming Events belong to the SAME composition row (stagger-4), side by side.
+    const priorityUpcomingRow = container.querySelector(".stagger-4");
+    expect(priorityUpcomingRow?.textContent).toContain("Today's Priority");
+    expect(priorityUpcomingRow?.textContent).toContain("Upcoming Events");
   });
 
   it("passes the fetched operational forecast through to the compact panel", () => {
@@ -231,7 +236,7 @@ describe("TeamView — shares the Founder dashboard's Luxury system", () => {
 });
 
 describe("TeamView — My Day ♡ (Mood + Water), directly below Clock+Weather", () => {
-  it("renders Mood and Water Tracker directly below Clock+Weather, before Today's Priority, exactly once", () => {
+  it("renders Mood and Water Tracker directly below Clock+Weather, before Today's Priority, exactly once, with Little Reminder inside the same composition", () => {
     const { container } = renderTeam();
 
     expect(screen.getByText("Mood Check-In")).toBeInTheDocument();
@@ -247,6 +252,10 @@ describe("TeamView — My Day ♡ (Mood + Water), directly below Clock+Weather",
     expect(myDayIndex).toBeGreaterThan(glanceIndex);
     expect(priorityIndex).toBeGreaterThan(myDayIndex);
     expect(upcomingIndex).toBeGreaterThan(priorityIndex);
+
+    // Little Reminder now lives INSIDE the My Day composition (stagger-3), never beside Priority.
+    const myDaySection = container.querySelector(".stagger-3");
+    expect(myDaySection?.textContent).toContain("Little Reminder ♡");
   });
 
   it("preserves the existing per-viewer privacy statement — never claims team-shared wellness data", () => {

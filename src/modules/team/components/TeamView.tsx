@@ -35,10 +35,7 @@ import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { LuxuryMetricCard, type LuxuryMetricCardData } from "@/modules/dashboard/luxury/components/LuxuryMetricCard";
 import { CompactClockWeatherPanel } from "@/modules/dashboard/luxury/components/CompactClockWeatherPanel";
-import { MoodCheckInCard } from "@/modules/dashboard/luxury/components/MoodCheckInCard";
-import { WaterTrackerCard } from "@/modules/dashboard/luxury/components/WaterTrackerCard";
-import { LuxuryHeartIcon } from "@/modules/dashboard/luxury/luxuryIcons";
-import { LittleReminderCard } from "@/modules/dashboard/luxury/components/LittleReminderCard";
+import { MyDaySection } from "@/modules/dashboard/luxury/components/MyDaySection";
 import { TodaysPriorityCard } from "@/modules/dashboard/luxury/components/TodaysPriorityCard";
 import { TodaysTimelineCard } from "@/modules/dashboard/luxury/components/TodaysTimelineCard";
 import { TodaysPulseCard } from "@/modules/dashboard/luxury/components/TodaysPulseCard";
@@ -84,39 +81,41 @@ function formatDate(iso: string): string {
  * "Team page must use the same dashboard system" addendum, then the "Team +
  * Client Compact Clock & Weather Variant" correction, then the "Daily
  * Experience — Staging Correction + Copy Refinement" checkpoint, then the
- * "My Day ♡ Position + Team Wellness" correction — `/team` shares the
- * Luxury Dashboard shell and card system `/dashboard` uses. This IS the
- * real acceptance route the Founder inspects on staging — it is a separate
- * component tree from `TeamDashboardView.tsx` (which only renders inside
- * `/dashboard` for manager/staff roles), so both must independently carry
- * the same composition. Its "Today" section is the COMPACT single-location
+ * "My Day ♡ Position + Team Wellness" correction, then the "Dashboard
+ * Compact Composition Refinement" — `/team` shares the Luxury Dashboard
+ * shell and card system `/dashboard` uses. This IS the real acceptance
+ * route the Founder inspects on staging — it is a separate component tree
+ * from `TeamDashboardView.tsx` (which only renders inside `/dashboard` for
+ * manager/staff roles), so both must independently carry the same
+ * composition. Its "Today" section is the COMPACT single-location
  * `CompactClockWeatherPanel` (one Huntington Beach clock + that location's
- * weather), not Founder's multi-city `WorldClockCard`. Directly below: My
- * Day (`MoodCheckInCard`/`WaterTrackerCard` — the SAME shared, already
- * per-user-scoped wellness components Founder's dashboard renders, reused
- * verbatim rather than a second wellness implementation; every read/write
- * flows through `wellnessActions.ts`'s server actions, which resolve the
- * CURRENT authenticated member's own session server-side — never a
- * workspace-wide or Founder-specific query — so each team member only ever
- * sees and edits their own mood/water data, exactly like Founder's), then
- * Today's Priority (the single most urgent workspace-wide item, re-skinned
- * from the same checklist data the old full-list "Today's Focus" card
- * showed) beside `LittleReminderCard` (the viewer's own real latest unread
- * notification), then Upcoming Events (the same workspace-wide upcoming
- * events this page already established as "every role sees the same data"
- * precedent for Weather), then Today's Timeline beside Today's Pulse. No
- * Calendar DASHBOARD WIDGET renders on this page — `/calendar` itself, its
- * data, and its permissions are completely untouched; Today's Timeline's
- * own footer links to it instead. `operationalForecast`/`littleReminder`/
- * `todaysPriority`/`upcomingEvents`/`todaysTimeline`/`todaysPulse` come
- * from `getTeamPageGlanceData` — a role-agnostic sibling of
+ * weather), not Founder's multi-city `WorldClockCard`. Directly below:
+ * `MyDaySection` — the exact same shared component Founder's dashboard
+ * renders (compact pill-based Mood beside a stacked Water Tracker + Little
+ * Reminder), reused verbatim rather than a second implementation; every
+ * wellness read/write flows through `wellnessActions.ts`'s server actions,
+ * which resolve the CURRENT authenticated member's own session
+ * server-side — never a workspace-wide or Founder-specific query — so each
+ * team member only ever sees and edits their own mood/water data, exactly
+ * like Founder's. Then Today's Priority (the single most urgent
+ * workspace-wide item, re-skinned from the same checklist data the old
+ * full-list "Today's Focus" card showed) beside Upcoming Events (~40/60,
+ * no longer a full-width row — Little Reminder moved out of this row into
+ * My Day, the same workspace-wide upcoming events this page already
+ * established as "every role sees the same data" precedent for Weather),
+ * then Today's Timeline beside Today's Pulse. No Calendar DASHBOARD WIDGET
+ * renders on this page — `/calendar` itself, its data, and its permissions
+ * are completely untouched; Today's Timeline's own footer links to it
+ * instead. `operationalForecast`/`littleReminder`/`todaysPriority`/
+ * `upcomingEvents`/`todaysTimeline`/`todaysPulse` come from
+ * `getTeamPageGlanceData` — a role-agnostic sibling of
  * `getOwnerDashboardData` built on the same `events.view`-checked,
  * workspace-wide data that action already exposes, plus a fixed, non-event
  * location forecast, so every role that can already reach this page sees
  * the same workspace-wide data, never anything RLS/permissions wouldn't
  * already let them see elsewhere. Wellness is the one section on this page
  * that is deliberately NOT workspace-wide — it is per-viewer, exactly like
- * Little Reminder. The
+ * Little Reminder now inside it. The
  * roster/invitations management below (members table, role dropdowns,
  * invite modal) is unchanged in behavior — only its presentation now sits
  * inside `LuxuryCard`s instead of the old generic `Card`.
@@ -217,41 +216,31 @@ export function TeamView({ branding, profileName, profileRoleLabel, profileAvata
           <CompactClockWeatherPanel location={DEFAULT_OPERATIONAL_LOCATION} forecast={operationalForecast} />
         </div>
 
-        <section className="animate-fade-up stagger-3 rounded-luxury-lg border border-luxury-border bg-luxury-surface-tint p-5 shadow-luxury-sm sm:p-6">
-          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-            <div className="flex items-center gap-2">
-              <LuxuryHeartIcon className="h-4.5 w-4.5 text-luxury-rose" />
-              <h2 className="font-luxury-display text-luxury-section font-semibold text-luxury-text">My Day</h2>
-            </div>
-            <p className="text-luxury-small text-luxury-text-muted">A few things just for you.</p>
-          </div>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <MoodCheckInCard privacyDetail="Your mood and water tracker are personal to you and are never visible to your team." />
-            <WaterTrackerCard privacyDetail="Your mood and water tracker are personal to you and are never visible to your team." />
-          </div>
-        </section>
-
-        <div className="animate-fade-up stagger-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
-          <TodaysPriorityCard priority={todaysPriority} className="lg:col-span-2" />
-          <LittleReminderCard reminder={littleReminder} />
+        <div className="animate-fade-up stagger-3">
+          <MyDaySection littleReminder={littleReminder} privacyDetail="Your mood and water tracker are personal to you and are never visible to your team." />
         </div>
 
-        <div className="animate-fade-up stagger-5">
-          <LuxuryCard>
-            <SectionHeader title="Upcoming Events" action={<Link href="/events" className="text-luxury-small font-medium text-luxury-rose">View all</Link>} />
-            {upcomingEvents.length === 0 ? (
-              <EmptyState title="No upcoming events" description="Booked events appear here." />
-            ) : (
-              <div className="space-y-1">
-                {upcomingEvents.map((event) => (
-                  <EventPreviewCard key={event.id} data={event} />
-                ))}
-              </div>
-            )}
-          </LuxuryCard>
+        <div className="animate-fade-up stagger-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-5">
+          <div className="lg:col-span-2">
+            <TodaysPriorityCard priority={todaysPriority} />
+          </div>
+          <div className="lg:col-span-3">
+            <LuxuryCard>
+              <SectionHeader title="Upcoming Events" action={<Link href="/events" className="text-luxury-small font-medium text-luxury-rose">View all</Link>} />
+              {upcomingEvents.length === 0 ? (
+                <EmptyState title="No upcoming events" description="Booked events appear here." />
+              ) : (
+                <div className="space-y-1">
+                  {upcomingEvents.map((event) => (
+                    <EventPreviewCard key={event.id} data={event} />
+                  ))}
+                </div>
+              )}
+            </LuxuryCard>
+          </div>
         </div>
 
-        <div className="animate-fade-up stagger-6 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+        <div className="animate-fade-up stagger-5 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
           <TodaysTimelineCard items={todaysTimeline} className="lg:col-span-2" />
           <TodaysPulseCard metrics={todaysPulse} />
         </div>

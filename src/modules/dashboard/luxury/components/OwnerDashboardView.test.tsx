@@ -182,8 +182,8 @@ describe("OwnerDashboardView — A little look at today ♡ (World Clock + Weath
   });
 });
 
-describe("OwnerDashboardView — Today's Priority + Little Reminder, directly below My Day", () => {
-  it("renders Today's Priority (the single most urgent real item, AF-inspired reconstruction) beside Little Reminder, with My Day directly below Clock+Weather and Upcoming Events directly below Priority/Reminder", () => {
+describe("OwnerDashboardView — Dashboard Compact Composition Refinement: Little Reminder moved into My Day, Priority+Upcoming Events side by side", () => {
+  it("renders My Day directly below Clock+Weather, with Little Reminder inside it (not beside Priority), then Today's Priority + Upcoming Events as one row", () => {
     const { container } = render(
       <MemberSessionProvider snapshot={ownerSnapshot}>
         <CopilotProvider>
@@ -200,7 +200,7 @@ describe("OwnerDashboardView — Today's Priority + Little Reminder, directly be
     expect(screen.getByText("Small steps still move you forward.")).toBeInTheDocument();
     expect(screen.getByText("Upcoming Events")).toBeInTheDocument();
 
-    // Section order: "A little look at today ♡" heading, then My Day (moved up, directly below Clock+Weather), then Today's Priority, then Upcoming Events directly below it — never Revenue/Messages/etc. in between.
+    // Section order: "A little look at today ♡" heading, then My Day, then the Priority+Upcoming row — never Revenue/Messages/etc. in between.
     const headings = Array.from(container.querySelectorAll("h2")).map((h) => h.textContent);
     const glanceIndex = headings.indexOf("A little look at today ♡");
     const myDayIndex = headings.indexOf("My Day");
@@ -210,9 +210,18 @@ describe("OwnerDashboardView — Today's Priority + Little Reminder, directly be
     expect(myDayIndex).toBeGreaterThan(glanceIndex);
     expect(priorityIndex).toBeGreaterThan(myDayIndex);
     expect(upcomingIndex).toBeGreaterThan(priorityIndex);
+
+    // Little Reminder now lives INSIDE the My Day composition (stagger-3), never beside Priority.
+    const myDaySection = container.querySelector(".stagger-3");
+    expect(myDaySection?.textContent).toContain("Little Reminder ♡");
+
+    // Today's Priority and Upcoming Events belong to the SAME composition row (stagger-4), side by side.
+    const priorityUpcomingRow = container.querySelector(".stagger-4");
+    expect(priorityUpcomingRow?.textContent).toContain("Today's Priority");
+    expect(priorityUpcomingRow?.textContent).toContain("Upcoming Events");
   });
 
-  it("renders My Day exactly once", () => {
+  it("renders My Day and Little Reminder exactly once each", () => {
     render(
       <MemberSessionProvider snapshot={ownerSnapshot}>
         <CopilotProvider>
@@ -222,6 +231,9 @@ describe("OwnerDashboardView — Today's Priority + Little Reminder, directly be
     );
 
     expect(screen.getAllByRole("heading", { name: "My Day" })).toHaveLength(1);
+    expect(screen.getAllByText("Little Reminder ♡")).toHaveLength(1);
+    expect(screen.getAllByRole("heading", { name: "Today's Priority" })).toHaveLength(1);
+    expect(screen.getAllByRole("heading", { name: "Upcoming Events" })).toHaveLength(1);
   });
 
   it("renders the Founder's own real latest unread notification instead of the fallback when one exists", () => {
