@@ -86,7 +86,7 @@ export function NextEventWeatherCard({ data, contingencyNote, fallback }: NextEv
       const note = operationalNote(forecast.condition, precipitationProbability);
       return (
         <LuxuryCard tone="tint" className="flex flex-col justify-center gap-4 py-6">
-          <SectionHeader title="Weather" action={<span className="text-luxury-small font-medium text-luxury-rose">{fallback.locationLabel}</span>} />
+          <SectionHeader title="♡ Weather" action={<span className="text-luxury-small font-medium text-luxury-rose">{fallback.locationLabel}</span>} />
           <div className="flex items-center gap-5">
             <WeatherPin condition={forecast.condition} size={WEATHER_PIN_SIZE} />
             <div className="min-w-0 flex-1">
@@ -109,7 +109,7 @@ export function NextEventWeatherCard({ data, contingencyNote, fallback }: NextEv
     }
     return (
       <LuxuryCard>
-        <SectionHeader title="Weather" />
+        <SectionHeader title="♡ Weather" />
         <p className="mt-1 text-luxury-small text-luxury-text-muted">No upcoming event with a set location yet — weather appears here once one is scheduled.</p>
         {contingencyNote ? (
           <p className="mt-3 border-t border-luxury-border pt-3 text-luxury-small text-luxury-text-muted">
@@ -127,7 +127,7 @@ export function NextEventWeatherCard({ data, contingencyNote, fallback }: NextEv
   if (!snapshot && !day) {
     return (
       <LuxuryCard>
-        <SectionHeader title="Weather" />
+        <SectionHeader title="♡ Weather" />
         <p className="mt-1 text-luxury-small text-luxury-text-muted">Weather unavailable for {data.title}.</p>
         {contingencyNote ? (
           <p className="mt-3 border-t border-luxury-border pt-3 text-luxury-small text-luxury-text-muted">
@@ -147,7 +147,7 @@ export function NextEventWeatherCard({ data, contingencyNote, fallback }: NextEv
   return (
     <LuxuryCard tone="tint" className="flex flex-col justify-center gap-4 py-6">
       <SectionHeader
-        title="Weather"
+        title="♡ Weather"
         action={
           <Link href={`/events/${data.eventId}`} className="max-w-[9rem] truncate text-luxury-small font-medium text-luxury-rose">
             {data.title}

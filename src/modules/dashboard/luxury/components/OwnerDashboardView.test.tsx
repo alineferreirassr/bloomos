@@ -137,7 +137,7 @@ describe("OwnerDashboardView — Today, at a glance (World Clock + Weather, no C
     expect(screen.getByText("World Clock")).toBeInTheDocument();
 
     // Weather no longer vanishes when nextEventWeather is null — it still renders its own section, once.
-    expect(screen.getAllByText("Weather")).toHaveLength(1);
+    expect(screen.getAllByText("♡ Weather")).toHaveLength(1);
     expect(screen.getByText("No upcoming event with a set location yet — weather appears here once one is scheduled.")).toBeInTheDocument();
 
     // The Founder addendum explicitly requires the dashboard Calendar card gone from this composition — /calendar itself is untouched.
@@ -173,7 +173,7 @@ describe("OwnerDashboardView — Today, at a glance (World Clock + Weather, no C
       </MemberSessionProvider>,
     );
 
-    expect(screen.getAllByText("Weather")).toHaveLength(1);
+    expect(screen.getAllByText("♡ Weather")).toHaveLength(1);
     expect(screen.getByText("78°")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Amelia & Noah Wedding" })).toHaveAttribute("href", "/events/event_1");
   });
@@ -262,6 +262,6 @@ describe("OwnerDashboardView — My Day composition (Mood + Water only)", () => 
     expect(screen.getByText("My Day")).toBeInTheDocument();
     expect(screen.getByText("A few things just for you.")).toBeInTheDocument();
     // Exactly one Weather card exists on the whole page (in Today at a glance), never a second copy inside My Day.
-    expect(screen.getAllByText("Weather")).toHaveLength(1);
+    expect(screen.getAllByText("♡ Weather")).toHaveLength(1);
   });
 });

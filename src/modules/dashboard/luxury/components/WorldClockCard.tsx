@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { AnalogClockFace } from "@/modules/dashboard/luxury/components/AnalogClockFace";
+import { DayPeriodGlyph } from "@/modules/dashboard/luxury/components/DayPeriodGlyph";
 import { WORLD_CLOCK_LOCATIONS, buildWorldClockDisplays, type WorldClockDisplay } from "@/modules/dashboard/luxury/worldClock";
 
 const REFRESH_INTERVAL_MS = 30_000;
-const CLOCK_FACE_SIZE = 116;
+const CLOCK_FACE_SIZE = 96;
 
 function CityCard({ display }: { display: WorldClockDisplay }) {
   return (
@@ -17,10 +18,20 @@ function CityCard({ display }: { display: WorldClockDisplay }) {
       <p className="text-luxury-metadata font-medium tracking-[0.1em] text-luxury-text-muted uppercase">{display.region}</p>
       <p className="mt-3 font-luxury-display text-luxury-page leading-none font-semibold text-luxury-text">{display.timeLabel}</p>
       <p className="mt-2 text-luxury-small text-luxury-text-muted">{display.dateLabel}</p>
-      <p className="mt-2 text-luxury-status font-semibold tracking-[0.1em] text-luxury-rose uppercase">
-        {display.dayPeriod}
-        {display.isHome ? " · Home" : display.hoursFromHome !== null ? ` · ${display.hoursFromHome >= 0 ? "+" : ""}${display.hoursFromHome}h from Honolulu` : ""}
-      </p>
+      <div className="mt-2.5 flex items-center gap-2">
+        <span className="flex items-center gap-1 text-luxury-status font-semibold tracking-[0.1em] text-luxury-rose uppercase">
+          <DayPeriodGlyph isNight={display.isNight} />
+          {display.dayPeriod}
+        </span>
+        {display.isHome ? (
+          <span className="rounded-luxury-full bg-luxury-blush px-2 py-0.5 text-luxury-status font-semibold tracking-[0.1em] text-luxury-blush-foreground uppercase">Home</span>
+        ) : display.hoursFromHome !== null ? (
+          <span className="text-luxury-status font-medium tracking-[0.05em] text-luxury-text-muted">
+            {display.hoursFromHome >= 0 ? "+" : ""}
+            {display.hoursFromHome}h from Honolulu
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -59,7 +70,7 @@ export function WorldClockCard() {
       ) : (
         <div className="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-3" aria-hidden="true">
           {WORLD_CLOCK_LOCATIONS.map((location) => (
-            <div key={location.id} className="h-[13rem] rounded-luxury-lg bg-luxury-surface-tint" />
+            <div key={location.id} className="h-[12rem] rounded-luxury-lg bg-luxury-surface-tint" />
           ))}
         </div>
       )}

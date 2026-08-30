@@ -13,18 +13,28 @@
 */
 
 :root {
-  --color-background: #fdf2ef;
-  --color-sidebar: #fdf2ef;
-  --color-surface: #ffffff;
-  --color-surface-tint: #fdf6f4;
-  --color-border: color-mix(in srgb, #7a4d43 14%, transparent);
+  /*
+    Global Luxury Palette Refresh — the previous values here read as
+    "pink-heavy" (a rose-tinted off-white canvas paired with a saturated
+    coral-red accent). Repointed toward warm ivory/champagne as the
+    dominant neutral, with the accent moved from coral to a muted wine —
+    blush is kept, but only as the pale --color-accent-100 badge tint, not
+    as a page-wide cast. Same "values only, names unchanged" approach as
+    the original Checkpoint 19.1 unification, so every existing bg-surface/
+    text-text/bg-accent call site repaints with zero component edits.
+  */
+  --color-background: #f8f2e6;
+  --color-sidebar: #f8f2e6;
+  --color-surface: #fffdf8;
+  --color-surface-tint: #f6efdf;
+  --color-border: color-mix(in srgb, #8a6d3f 16%, transparent);
   --color-text: #2a1f1c;
-  --color-text-muted: color-mix(in srgb, #2a1f1c 55%, transparent);
-  --color-accent: #d8695a;
-  --color-accent-2: #e8a189;
+  --color-text-muted: color-mix(in srgb, #4a3d35 70%, transparent);
+  --color-accent: #8c3a4a;
+  --color-accent-2: #c9a961;
   --color-accent-foreground: #ffffff;
 
-  --color-accent-100: #f6dcd6;
+  --color-accent-100: #f5ddd2;
   --color-accent-800: #5c2c20;
   --color-neutral-100: #fffaf6;
   --color-neutral-800: #2a1f1c;
@@ -100,20 +110,20 @@
     docs/luxury-design-system.md for the full rationale and a comparison
     against the three approved reference images.
   */
-  --luxury-background: #fdf2ef;
-  --luxury-sidebar: #fdf2ef;
-  --luxury-surface: #ffffff;
-  --luxury-surface-tint: #fdf6f4;
-  --luxury-border: color-mix(in srgb, #7a4d43 14%, transparent);
+  --luxury-background: #f8f2e6;
+  --luxury-sidebar: #f8f2e6;
+  --luxury-surface: #fffdf8;
+  --luxury-surface-tint: #f6efdf;
+  --luxury-border: color-mix(in srgb, #8a6d3f 16%, transparent);
   --luxury-text: #2a1f1c;
-  --luxury-text-muted: color-mix(in srgb, #2a1f1c 55%, transparent);
+  --luxury-text-muted: color-mix(in srgb, #4a3d35 70%, transparent);
 
-  --luxury-blush: #f6dcd6;
+  --luxury-blush: #f5ddd2;
   --luxury-blush-foreground: #8a4a3f;
-  --luxury-rose: #d8695a;
+  --luxury-rose: #8c3a4a;
   --luxury-rose-foreground: #ffffff;
-  --luxury-coral: #e8a189;
-  --luxury-coral-foreground: #5c2c20;
+  --luxury-coral: #c9a961;
+  --luxury-coral-foreground: #5c2530;
   --luxury-ivory: #fffaf6;
   --luxury-warm-white: #fffdfb;
   --luxury-beige: #b3a29a;
@@ -150,7 +160,7 @@
      entrance than the operational app's snappier 200ms default. */
   --luxury-duration-gentle-ms: 260ms;
 
-  --luxury-focus-ring: 0 0 0 3px color-mix(in srgb, #d8695a 35%, transparent);
+  --luxury-focus-ring: 0 0 0 3px color-mix(in srgb, #8c3a4a 35%, transparent);
 
   /* Type scale — Step 2's own named hierarchy. Sizes only; components
      combine these with `--luxury-font-display`/`-body` and a weight. */

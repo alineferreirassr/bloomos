@@ -389,7 +389,8 @@ function Snapshot({ label, value, helper }: { label: string; value: ReactNode; h
   return (
     <div>
       <p className="text-luxury-metadata font-medium tracking-wide text-luxury-text-muted uppercase">{label}</p>
-      <p className="mt-1 text-luxury-small font-medium text-text">{value || "—"}</p>
+      {/* `value` can be arbitrary ReactNode (e.g. TagsEditor renders a <div> of chips) — a <div> here, not a <p>, avoids nesting block-level markup inside a paragraph. */}
+      <div className="mt-1 text-luxury-small font-medium text-text">{value || "—"}</div>
       {helper ? <p className="text-luxury-metadata text-luxury-text-muted">{helper}</p> : null}
     </div>
   );

@@ -90,7 +90,7 @@ describe("TeamDashboardView — shares the Founder dashboard's Today, at a glanc
     expect(screen.getByText("Today, at a glance")).toBeInTheDocument();
     expect(screen.getByText("World Clock")).toBeInTheDocument();
 
-    expect(screen.getAllByText("Weather")).toHaveLength(1);
+    expect(screen.getAllByText("♡ Weather")).toHaveLength(1);
     expect(screen.getByText("No upcoming event with a set location yet — weather appears here once one is scheduled.")).toBeInTheDocument();
 
     // Calendar now lives beside Weather as a compact card, not a full-width row.

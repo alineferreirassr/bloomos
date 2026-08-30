@@ -53,7 +53,7 @@ export function NavigationTree({ modules, pathname, onNavigate }: NavigationTree
 
         const rowClassName = `flex w-full items-center gap-2.5 rounded-full px-3.5 py-2.5 text-left text-[14.5px] transition-colors duration-150 ${
           active
-            ? "bg-accent/12 font-semibold text-text"
+            ? "bg-accent/12 font-semibold text-accent"
             : navModule.disabled
               ? "cursor-default font-normal text-text/35"
               : "font-normal text-text hover:bg-accent/7"

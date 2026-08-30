@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { AnalogClockFace } from "@/modules/dashboard/luxury/components/AnalogClockFace";
+import { DayPeriodGlyph } from "@/modules/dashboard/luxury/components/DayPeriodGlyph";
+import { LocationPinGlyph } from "@/modules/dashboard/luxury/components/LocationPinGlyph";
 import { WeatherPin } from "@/components/ui/WeatherPin";
 import { buildWorldClockDisplay } from "@/modules/dashboard/luxury/worldClock";
 import type { OperationalLocation } from "@/core/dashboard/operationalLocation";
@@ -62,7 +64,10 @@ export function CompactClockWeatherPanel({ location, forecast }: CompactClockWea
             <p className="text-luxury-metadata font-medium tracking-[0.1em] text-luxury-text-muted uppercase">{location.region}</p>
             <p className="mt-3 font-luxury-display text-luxury-display leading-none font-semibold text-luxury-text">{display.timeLabel}</p>
             <p className="mt-2 text-luxury-small text-luxury-text-muted">{display.dateLabel}</p>
-            <p className="mt-2 text-luxury-status font-semibold tracking-[0.1em] text-luxury-rose uppercase">{display.dayPeriod}</p>
+            <span className="mt-2 flex items-center gap-1 text-luxury-status font-semibold tracking-[0.1em] text-luxury-rose uppercase">
+              <DayPeriodGlyph isNight={display.isNight} />
+              {display.dayPeriod}
+            </span>
           </>
         ) : (
           <div className="h-[19rem] w-full rounded-luxury-md" aria-hidden="true" />
@@ -70,7 +75,15 @@ export function CompactClockWeatherPanel({ location, forecast }: CompactClockWea
       </LuxuryCard>
 
       <LuxuryCard tone="tint" className="flex flex-col justify-center gap-3 px-6 py-6 shadow-luxury-sm transition-shadow duration-150 hover:shadow-luxury-md">
-        <SectionHeader title="Weather" action={<span className="text-luxury-small font-medium text-luxury-rose">{location.city}</span>} />
+        <SectionHeader
+          title="♡ Weather"
+          action={
+            <span className="flex items-center gap-1 text-luxury-small font-medium text-luxury-rose">
+              <LocationPinGlyph />
+              {location.city}
+            </span>
+          }
+        />
         {forecast ? (
           <>
             <div className="flex items-center gap-4">

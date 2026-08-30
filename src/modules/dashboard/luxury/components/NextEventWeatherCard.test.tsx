@@ -24,7 +24,7 @@ describe("NextEventWeatherCard — no upcoming event (never vanishes)", () => {
   it("renders a graceful empty state, not nothing, when there is no eligible upcoming event", () => {
     render(<NextEventWeatherCard data={null} />);
 
-    expect(screen.getByText("Weather")).toBeInTheDocument();
+    expect(screen.getByText("♡ Weather")).toBeInTheDocument();
     expect(screen.getByText("No upcoming event with a set location yet — weather appears here once one is scheduled.")).toBeInTheDocument();
   });
 
@@ -138,7 +138,7 @@ describe("NextEventWeatherCard — Honolulu home fallback (Staging Visual Correc
       />,
     );
 
-    expect(screen.getByText("Weather")).toBeInTheDocument();
+    expect(screen.getByText("♡ Weather")).toBeInTheDocument();
     expect(screen.getByText("Honolulu")).toBeInTheDocument();
     expect(screen.getByText("84°")).toBeInTheDocument();
     expect(screen.queryByText("No upcoming event with a set location yet — weather appears here once one is scheduled.")).not.toBeInTheDocument();
