@@ -1,40 +1,53 @@
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { formatMoney } from "@/lib/money";
-import type { ClientFinancialSummary } from "@/modules/finance/financialSummary";
+import type { FinancialSummaryView } from "@/modules/finance/financeActions";
 
 interface ClientFinancialSummaryCardProps {
   clientId: string;
-  summary: ClientFinancialSummary;
+  summary: FinancialSummaryView;
   /** All-USD, same convention as EventFinancialSummaryCard until multi-currency Clients exist. */
   currency?: string;
 }
 
+/** `null` means the server redacted this figure for the current session's permissions (see `financeActions.ts`) — rendered as "—", never as $0.00. */
+function money(minor: number | null, currency: string): string {
+  return minor === null ? "—" : formatMoney(minor, currency);
+}
+
 /**
  * Read-only rollup on Client Detail — every figure comes straight from
- * computeClientFinancialSummary (lib/data/index.ts's getClientFinancialSummary),
+ * `getClientFinancialSummaryAction` (`modules/finance/financeActions.ts`),
  * never recomputed here. Same stat layout as EventFinancialSummaryCard, scoped
  * to the Client across every one of their Events/standalone Contracts instead
  * of a single Event, so no per-Event status badge (financial status is a
- * per-Event concept, not a per-Client one).
+ * per-Event concept, not a per-Client one). Individual fields may be `null`
+ * — the caller's session held `finance.view` (or the card wouldn't render at
+ * all — see `ClientDetailView.tsx`) but lacked `finance.amounts.view`/
+ * `finance.executive.view` for that specific figure.
  */
 export function ClientFinancialSummaryCard({ clientId, summary, currency = "USD" }: ClientFinancialSummaryCardProps) {
   return (
-    <Card>
+    <LuxuryCard>
       <h3 className="font-serif text-[17px] font-semibold text-text">Finance</h3>
-      <dl className="mt-3 grid grid-cols-2 gap-3">
-        <Stat label="Contracted value" value={formatMoney(summary.contracted_value_minor, currency)} />
-        <Stat label="Invoiced" value={formatMoney(summary.invoiced_total_minor, currency)} />
-        <Stat label="Collected" value={formatMoney(summary.collected_minor, currency)} />
-        <Stat label="Refunded" value={formatMoney(summary.refunded_minor, currency)} />
-        <Stat label="Outstanding" value={formatMoney(summary.outstanding_minor, currency)} />
-        <Stat label="Expenses" value={formatMoney(summary.expense_total_minor, currency)} />
-        <Stat label="Gross profit" value={formatMoney(summary.gross_profit_minor, currency)} />
-        <Stat label="Net profit" value={formatMoney(summary.net_profit_minor, currency)} />
-        <Stat label="Deposit required" value={formatMoney(summary.deposit_required_minor, currency)} />
-        <Stat label="Deposit paid" value={formatMoney(summary.deposit_paid_minor, currency)} />
-        <Stat label="Deposit balance" value={formatMoney(summary.deposit_balance_minor, currency)} />
-        <Stat label="Payment completion" value={`${summary.payment_completion_percentage}%`} />
+      <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <PrimaryStat label="Contracted" value={money(summary.contracted_value_minor, currency)} />
+        <PrimaryStat label="Invoiced" value={money(summary.invoiced_total_minor, currency)} />
+        <PrimaryStat label="Collected" value={money(summary.collected_minor, currency)} />
+        <PrimaryStat label="Outstanding" value={money(summary.outstanding_minor, currency)} />
+      </dl>
+      <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-4 sm:grid-cols-4">
+        <Stat label="Refunded" value={money(summary.refunded_minor, currency)} />
+        <Stat label="Expenses" value={money(summary.expense_total_minor, currency)} />
+        <Stat label="Gross profit" value={money(summary.gross_profit_minor, currency)} />
+        <Stat label="Net profit" value={money(summary.net_profit_minor, currency)} />
+        <Stat label="Deposit required" value={money(summary.deposit_required_minor, currency)} />
+        <Stat label="Deposit paid" value={money(summary.deposit_paid_minor, currency)} />
+        <Stat label="Deposit balance" value={money(summary.deposit_balance_minor, currency)} />
+        <Stat
+          label="Payment completion"
+          value={summary.payment_completion_percentage === null ? "—" : `${summary.payment_completion_percentage}%`}
+        />
       </dl>
       <div className="mt-4 flex flex-wrap gap-2">
         <Link
@@ -50,7 +63,16 @@ export function ClientFinancialSummaryCard({ clientId, summary, currency = "USD"
           View Invoices
         </Link>
       </div>
-    </Card>
+    </LuxuryCard>
+  );
+}
+
+function PrimaryStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs font-medium tracking-wide text-text-muted uppercase">{label}</dt>
+      <dd className="mt-0.5 font-serif text-xl font-semibold text-text">{value}</dd>
+    </div>
   );
 }
 

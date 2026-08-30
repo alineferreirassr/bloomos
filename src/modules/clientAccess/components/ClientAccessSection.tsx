@@ -18,7 +18,7 @@ import type { ClientInvitation, ClientInvitationWithToken } from "@/types/client
 import { CLIENT_ACCOUNT_STATUS_LABELS } from "@/core/enums/clientAccountStatus";
 import { INVITATION_STATUS_LABELS } from "@/core/enums/invitationStatus";
 import { isClientAccountBlocked } from "@/core/workflows/clientAccountWorkflow";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -94,7 +94,7 @@ export function ClientAccessSection({ clientId, clientEmail }: ClientAccessSecti
   };
 
   return (
-    <Card>
+    <LuxuryCard>
       <div className="flex items-center justify-between">
         <h3 className="font-serif text-[17px] font-semibold text-text">Client Portal Access</h3>
         {canInvite ? <Button onClick={() => setModalOpen(true)}>Invite</Button> : null}
@@ -213,6 +213,6 @@ export function ClientAccessSection({ clientId, clientEmail }: ClientAccessSecti
         clientId={clientId}
         defaultEmail={clientEmail}
       />
-    </Card>
+    </LuxuryCard>
   );
 }

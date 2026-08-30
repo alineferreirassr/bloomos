@@ -49,10 +49,14 @@ vi.mock("@/lib/data", () => ({
   updateClientTags: vi.fn(),
   getDocumentOwnerSummary: vi.fn(),
   getEvents: vi.fn(),
-  getClientFinancialSummary: vi.fn(),
+}));
+
+vi.mock("@/modules/finance/financeActions", () => ({
+  getClientFinancialSummaryAction: vi.fn(),
 }));
 
 import * as dataLayer from "@/lib/data";
+import * as financeActions from "@/modules/finance/financeActions";
 
 const EMPTY_DOCUMENT_SUMMARY = {
   total: 0,
@@ -87,7 +91,7 @@ describe("ClientDetailView", () => {
   beforeEach(() => {
     vi.mocked(dataLayer.getDocumentOwnerSummary).mockResolvedValue(EMPTY_DOCUMENT_SUMMARY);
     vi.mocked(dataLayer.getEvents).mockResolvedValue([]);
-    vi.mocked(dataLayer.getClientFinancialSummary).mockResolvedValue(EMPTY_FINANCIAL_SUMMARY);
+    vi.mocked(financeActions.getClientFinancialSummaryAction).mockResolvedValue({ success: true, data: EMPTY_FINANCIAL_SUMMARY });
   });
 
   it("renders header, contact, and internal sections once the client loads", async () => {
@@ -136,15 +140,18 @@ describe("ClientDetailView", () => {
     vi.mocked(dataLayer.getEvents).mockResolvedValue([
       makeEvent({ id: "event_9", client_id: "client_1", title: "Naomi's Proposal", status: "confirmed" }),
     ]);
-    vi.mocked(dataLayer.getClientFinancialSummary).mockResolvedValue({
+    vi.mocked(financeActions.getClientFinancialSummaryAction).mockResolvedValue({ success: true, data: {
       ...EMPTY_FINANCIAL_SUMMARY,
       invoiced_total_minor: 500000,
       collected_minor: 250000,
-    });
+    } });
 
     renderClientDetail("client_1");
 
-    expect(await screen.findByText("Events")).toBeInTheDocument();
+    // "Events" now appears both as the outer Section heading and as
+    // ClientEventsSummaryCard's own internal <h3> — target the card's
+    // heading specifically to disambiguate.
+    expect(await screen.findByRole("heading", { level: 3, name: "Events" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Naomi's Proposal" })).toHaveAttribute("href", "/events/event_9");
 
     expect(screen.getByText("Finance")).toBeInTheDocument();

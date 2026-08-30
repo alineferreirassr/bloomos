@@ -1,8 +1,16 @@
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Button } from "@/components/ui/Button";
 import { EventStatusBadge } from "@/modules/events/components/EventStatusBadge";
 import type { Event } from "@/types/event";
+
+function eventMetaLine(event: Event): string | null {
+  const parts: string[] = [];
+  if (event.event_date) parts.push(new Date(event.event_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }));
+  const location = [event.location_name, event.city, event.state].filter(Boolean).join(", ");
+  if (location) parts.push(location);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
 
 interface ClientEventsSummaryCardProps {
   events: Event[];
@@ -20,20 +28,26 @@ interface ClientEventsSummaryCardProps {
  */
 export function ClientEventsSummaryCard({ events }: ClientEventsSummaryCardProps) {
   return (
-    <Card>
+    <LuxuryCard>
       <h3 className="font-serif text-[17px] font-semibold text-text">Events</h3>
       {events.length === 0 ? (
         <p className="mt-2 text-sm text-text-muted">No events linked to this client.</p>
       ) : (
-        <ul className="mt-3 space-y-2 text-sm">
-          {events.map((event) => (
-            <li key={event.id} className="flex items-center justify-between gap-3 border-b border-border/60 pb-2 last:border-0 last:pb-0">
-              <Link href={`/events/${event.id}`} className="min-w-0 truncate text-text hover:text-accent hover:underline">
-                {event.title}
-              </Link>
-              <EventStatusBadge status={event.status} />
-            </li>
-          ))}
+        <ul className="mt-3 space-y-3 text-sm">
+          {events.map((event) => {
+            const meta = eventMetaLine(event);
+            return (
+              <li key={event.id} className="flex items-start justify-between gap-3 border-b border-border/60 pb-3 last:border-0 last:pb-0">
+                <div className="min-w-0">
+                  <Link href={`/events/${event.id}`} className="block truncate text-text hover:text-accent hover:underline">
+                    {event.title}
+                  </Link>
+                  {meta ? <p className="mt-0.5 text-xs text-text-muted">{meta}</p> : null}
+                </div>
+                <EventStatusBadge status={event.status} />
+              </li>
+            );
+          })}
         </ul>
       )}
       <Link href="/events/new">
@@ -41,6 +55,6 @@ export function ClientEventsSummaryCard({ events }: ClientEventsSummaryCardProps
           New Event
         </Button>
       </Link>
-    </Card>
+    </LuxuryCard>
   );
 }

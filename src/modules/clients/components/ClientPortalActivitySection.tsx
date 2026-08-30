@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { getClientAccountsByClientId, getClientPortalActivityForAccount } from "@/lib/data";
 import type { ClientPortalActivity, ClientPortalActivityKind } from "@/types/clientPortalActivity";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
@@ -64,7 +64,7 @@ export function ClientPortalActivitySection({ clientId }: ClientPortalActivitySe
   if (!canView) return null;
 
   return (
-    <Card>
+    <LuxuryCard>
       <h3 className="font-serif text-[17px] font-semibold text-text">Client Portal Activity</h3>
 
       {state.status === "loading" ? (
@@ -86,6 +86,6 @@ export function ClientPortalActivitySection({ clientId }: ClientPortalActivitySe
           ))}
         </ul>
       )}
-    </Card>
+    </LuxuryCard>
   );
 }

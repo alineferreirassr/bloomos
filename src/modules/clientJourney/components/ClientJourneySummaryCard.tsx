@@ -6,13 +6,13 @@ import { evaluateClientJourneyAction } from "@/modules/clientJourney/clientJourn
 import { journeyRouteId } from "@/modules/clientJourney/journeyRoute";
 import type { ClientJourney } from "@/types/clientJourney";
 import { JOURNEY_STAGE_DEFAULT_LABELS } from "@/types/clientJourney";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 
 /**
  * v2.0 Checkpoint 32, Step 10 — the native Journey section on Client
  * Detail. Additive: does not touch the approved existing Client Detail
- * structure, just slots in as one more `<Card>` alongside
+ * structure, just slots in as one more `<LuxuryCard>` alongside
  * `ClientEventsSummaryCard`/`ClientFinancialSummaryCard`. Every figure
  * comes from `evaluateClientJourneyAction` — this card never recomputes
  * anything on its own.
@@ -41,7 +41,7 @@ export function ClientJourneySummaryCard({ clientId }: { clientId: string }) {
   const topAction = journey.nextBestActions[0];
 
   return (
-    <Card>
+    <LuxuryCard>
       <div className="flex items-center justify-between">
         <h3 className="font-serif text-[17px] font-semibold text-text">Journey</h3>
         <Link href={`/client-journeys/${encodeURIComponent(journeyRouteId("client", clientId))}`} className="text-xs text-accent hover:underline">
@@ -64,6 +64,6 @@ export function ClientJourneySummaryCard({ clientId }: { clientId: string }) {
           Next: <span className="text-text">{topAction.label}</span>
         </p>
       )}
-    </Card>
+    </LuxuryCard>
   );
 }
