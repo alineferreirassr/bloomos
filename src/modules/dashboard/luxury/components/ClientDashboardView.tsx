@@ -84,6 +84,11 @@ export function ClientDashboardView({ data }: ClientDashboardViewProps) {
             Latest Documents — keeps its own full prominence immediately after, unchanged and
             un-displaced relative to everything below it. */}
         <div className="animate-fade-up stagger-1">
+          <p className="text-luxury-metadata font-semibold tracking-wide text-luxury-rose uppercase">Today</p>
+          <h2 className="mt-1 font-luxury-display text-luxury-page font-semibold text-luxury-text">A little look at today ♡</h2>
+        </div>
+
+        <div className="animate-fade-up stagger-1">
           <CompactClockWeatherPanel location={DEFAULT_OPERATIONAL_LOCATION} forecast={data.operationalForecast} />
         </div>
 

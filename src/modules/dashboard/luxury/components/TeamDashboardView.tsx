@@ -46,7 +46,7 @@ interface TeamDashboardViewProps {
  * AF-Inspired "Today, at a Glance" Reconstruction — the same "organize my
  * workday, don't monitor me" philosophy as Founder's Home, genuinely
  * sharing its composition rather than a parallel look-alike: greeting →
- * metrics → "Today, at a glance" (World Clock beside Weather + compact
+ * metrics → "A little look at today ♡" (World Clock beside Weather + compact
  * Calendar, unchanged) → Today's Priority (this member's own single
  * most-urgent open item, re-skinned from the existing `importantNote`
  * concept — never a separately-fabricated value) beside `LittleReminderCard`
@@ -96,7 +96,7 @@ export function TeamDashboardView({ data, branding, profileName, profileRoleLabe
 
         <div className="animate-fade-up stagger-2">
           <p className="text-luxury-metadata font-semibold tracking-wide text-luxury-rose uppercase">Your Day</p>
-          <h2 className="mt-1 font-luxury-display text-luxury-page font-semibold text-luxury-text">Today, at a glance</h2>
+          <h2 className="mt-1 font-luxury-display text-luxury-page font-semibold text-luxury-text">A little look at today ♡</h2>
         </div>
 
         <div className="animate-fade-up stagger-2 grid grid-cols-1 items-start gap-4 lg:grid-cols-4">

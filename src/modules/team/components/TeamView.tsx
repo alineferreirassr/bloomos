@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   getWorkspaceMembers,
   updateWorkspaceMemberRole,
@@ -34,12 +35,18 @@ import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { LuxuryMetricCard, type LuxuryMetricCardData } from "@/modules/dashboard/luxury/components/LuxuryMetricCard";
 import { CompactClockWeatherPanel } from "@/modules/dashboard/luxury/components/CompactClockWeatherPanel";
-import { PriorityList } from "@/modules/dashboard/luxury/components/PriorityList";
 import { LittleReminderCard } from "@/modules/dashboard/luxury/components/LittleReminderCard";
+import { TodaysPriorityCard } from "@/modules/dashboard/luxury/components/TodaysPriorityCard";
+import { TodaysTimelineCard } from "@/modules/dashboard/luxury/components/TodaysTimelineCard";
+import { TodaysPulseCard } from "@/modules/dashboard/luxury/components/TodaysPulseCard";
+import { EventPreviewCard } from "@/modules/dashboard/luxury/components/EventPreviewCard";
 import { DEFAULT_OPERATIONAL_LOCATION } from "@/core/dashboard/operationalLocation";
 import type { DailyForecast } from "@/types/weather";
-import type { PriorityItemData } from "@/modules/dashboard/luxury/components/PriorityList";
+import type { TodaysPriorityData } from "@/modules/dashboard/luxury/components/TodaysPriorityCard";
 import type { LittleReminderData } from "@/modules/dashboard/luxury/components/LittleReminderCard";
+import type { ScheduleTimelineItemData } from "@/modules/dashboard/luxury/components/ScheduleTimeline";
+import type { TodaysPulseMetric } from "@/modules/dashboard/luxury/components/TodaysPulseCard";
+import type { EventPreviewCardData } from "@/modules/dashboard/luxury/components/EventPreviewCard";
 import { NewInvitationModal } from "@/modules/team/components/NewInvitationModal";
 import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
@@ -59,8 +66,11 @@ interface TeamViewProps {
   profileRoleLabel: string;
   profileAvatarUrl: string | null;
   operationalForecast: DailyForecast | null;
-  priorities: PriorityItemData[];
   littleReminder: LittleReminderData | null;
+  todaysPriority: TodaysPriorityData | null;
+  upcomingEvents: EventPreviewCardData[];
+  todaysTimeline: ScheduleTimelineItemData[];
+  todaysPulse: TodaysPulseMetric[];
 }
 
 function formatDate(iso: string): string {
@@ -69,19 +79,26 @@ function formatDate(iso: string): string {
 
 /**
  * "Team page must use the same dashboard system" addendum, then the "Team +
- * Client Compact Clock & Weather Variant" correction, then the "Staging
- * Visual Correction" addendum — `/team` shares the Luxury Dashboard shell
- * and card system `/dashboard` uses. Its "Today" section is the COMPACT
- * single-location `CompactClockWeatherPanel` (one Huntington Beach clock +
- * that location's weather), not Founder's multi-city `WorldClockCard` — the
- * Founder Dashboard is the only surface with the full editable World Clock.
- * Directly below, with nothing in between, "Today's Focus" (the same
- * workspace-wide high-priority checklist items Founder's dashboard shows)
- * sits beside the shared `LittleReminderCard` (the viewer's own real latest
- * unread notification). No Calendar card renders on this page at all —
- * `/calendar` itself, its data, and its permissions are completely
- * untouched; this is a layout-only removal. `operationalForecast`/
- * `priorities`/`littleReminder` come from `getTeamPageGlanceData` — a
+ * Client Compact Clock & Weather Variant" correction, then the "Daily
+ * Experience — Staging Correction + Copy Refinement" checkpoint — `/team`
+ * shares the Luxury Dashboard shell and card system `/dashboard` uses. This
+ * IS the real acceptance route the Founder inspects on staging — it is a
+ * separate component tree from `TeamDashboardView.tsx` (which only renders
+ * inside `/dashboard` for manager/staff roles), so both must independently
+ * carry the same AF-Inspired "Today, at a Glance" composition. Its "Today"
+ * section is the COMPACT single-location `CompactClockWeatherPanel` (one
+ * Huntington Beach clock + that location's weather), not Founder's
+ * multi-city `WorldClockCard`. Directly below: Today's Priority (the single
+ * most urgent workspace-wide item, re-skinned from the same checklist data
+ * the old full-list "Today's Focus" card showed) beside `LittleReminderCard`
+ * (the viewer's own real latest unread notification), then Upcoming Events
+ * (the same workspace-wide upcoming events this page already established as
+ * "every role sees the same data" precedent for Weather), then Today's
+ * Timeline beside Today's Pulse. No Calendar DASHBOARD WIDGET renders on
+ * this page — `/calendar` itself, its data, and its permissions are
+ * completely untouched; Today's Timeline's own footer links to it instead.
+ * `operationalForecast`/`littleReminder`/`todaysPriority`/`upcomingEvents`/
+ * `todaysTimeline`/`todaysPulse` come from `getTeamPageGlanceData` — a
  * role-agnostic sibling of `getOwnerDashboardData` built on the same
  * `events.view`-checked, workspace-wide data that action already exposes,
  * plus a fixed, non-event location forecast, so every role that can already
@@ -92,7 +109,7 @@ function formatDate(iso: string): string {
  * invite modal) is unchanged in behavior — only its presentation now sits
  * inside `LuxuryCard`s instead of the old generic `Card`.
  */
-export function TeamView({ branding, profileName, profileRoleLabel, profileAvatarUrl, operationalForecast, priorities, littleReminder }: TeamViewProps) {
+export function TeamView({ branding, profileName, profileRoleLabel, profileAvatarUrl, operationalForecast, littleReminder, todaysPriority, upcomingEvents, todaysTimeline, todaysPulse }: TeamViewProps) {
   const { can } = useMemberSession();
   const canManageRoles = can("team.manage_roles");
   const canInvite = can("team.invite");
@@ -181,7 +198,7 @@ export function TeamView({ branding, profileName, profileRoleLabel, profileAvata
 
         <div className="animate-fade-up stagger-2">
           <p className="text-luxury-metadata font-semibold tracking-wide text-luxury-rose uppercase">Today</p>
-          <h2 className="mt-1 font-luxury-display text-luxury-page font-semibold text-luxury-text">Today, at a glance</h2>
+          <h2 className="mt-1 font-luxury-display text-luxury-page font-semibold text-luxury-text">A little look at today ♡</h2>
         </div>
 
         <div className="animate-fade-up stagger-2">
@@ -189,25 +206,41 @@ export function TeamView({ branding, profileName, profileRoleLabel, profileAvata
         </div>
 
         <div className="animate-fade-up stagger-3 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
-          <LuxuryCard className="lg:col-span-2">
-            <SectionHeader title="Today's Focus" action={<span className="text-luxury-small text-luxury-text-muted">{priorities.length} tasks</span>} />
-            {priorities.length === 0 ? <EmptyState title="No priorities set" description="Star a few to-dos to focus your day." /> : <PriorityList items={priorities} />}
-          </LuxuryCard>
-
+          <TodaysPriorityCard priority={todaysPriority} className="lg:col-span-2" />
           <LittleReminderCard reminder={littleReminder} />
         </div>
 
+        <div className="animate-fade-up stagger-4">
+          <LuxuryCard>
+            <SectionHeader title="Upcoming Events" action={<Link href="/events" className="text-luxury-small font-medium text-luxury-rose">View all</Link>} />
+            {upcomingEvents.length === 0 ? (
+              <EmptyState title="No upcoming events" description="Booked events appear here." />
+            ) : (
+              <div className="space-y-1">
+                {upcomingEvents.map((event) => (
+                  <EventPreviewCard key={event.id} data={event} />
+                ))}
+              </div>
+            )}
+          </LuxuryCard>
+        </div>
+
+        <div className="animate-fade-up stagger-5 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+          <TodaysTimelineCard items={todaysTimeline} className="lg:col-span-2" />
+          <TodaysPulseCard metrics={todaysPulse} />
+        </div>
+
         {state.status === "loading" ? (
-          <div className="animate-fade-up stagger-4 space-y-3">
+          <div className="animate-fade-up stagger-6 space-y-3">
             <Skeleton className="h-24 w-full" />
             <Skeleton className="h-64 w-full" />
           </div>
         ) : state.status === "error" ? (
-          <div className="animate-fade-up stagger-4">
+          <div className="animate-fade-up stagger-6">
             <ErrorState onRetry={load} />
           </div>
         ) : (
-          <div className="animate-fade-up stagger-4 space-y-6">
+          <div className="animate-fade-up stagger-6 space-y-6">
             {actionError ? (
               <div role="alert" className="rounded-luxury-md border border-luxury-border bg-luxury-surface px-3 py-2 text-luxury-small text-luxury-rose">
                 {actionError}

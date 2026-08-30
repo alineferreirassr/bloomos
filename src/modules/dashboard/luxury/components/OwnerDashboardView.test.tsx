@@ -125,7 +125,7 @@ describe("OwnerDashboardView", () => {
   });
 });
 
-describe("OwnerDashboardView — Today, at a glance (World Clock + Weather, no Calendar card)", () => {
+describe("OwnerDashboardView — A little look at today ♡ (World Clock + Weather, no Calendar card)", () => {
   it("renders the eyebrow/heading, World Clock, and a Weather card with a graceful state, even when there is no eligible upcoming event", () => {
     render(
       <MemberSessionProvider snapshot={ownerSnapshot}>
@@ -136,7 +136,7 @@ describe("OwnerDashboardView — Today, at a glance (World Clock + Weather, no C
     );
 
     expect(screen.getByText("Your Day")).toBeInTheDocument();
-    expect(screen.getByText("Today, at a glance")).toBeInTheDocument();
+    expect(screen.getByText("A little look at today ♡")).toBeInTheDocument();
     expect(screen.getByText("World Clock")).toBeInTheDocument();
 
     // Weather no longer vanishes when nextEventWeather is null — it still renders its own section, once.
@@ -200,9 +200,9 @@ describe("OwnerDashboardView — Today's Priority + Little Reminder, directly be
     expect(screen.getByText("Small steps still move you forward.")).toBeInTheDocument();
     expect(screen.getByText("Upcoming Events")).toBeInTheDocument();
 
-    // Section order: "Today, at a glance" heading, then Today's Priority, then Upcoming Events (directly below, per the Founder's explicit ordering), then "My Day" — never Revenue/Messages/etc. in between.
+    // Section order: "A little look at today ♡" heading, then Today's Priority, then Upcoming Events (directly below, per the Founder's explicit ordering), then "My Day" — never Revenue/Messages/etc. in between.
     const headings = Array.from(container.querySelectorAll("h2")).map((h) => h.textContent);
-    const glanceIndex = headings.indexOf("Today, at a glance");
+    const glanceIndex = headings.indexOf("A little look at today ♡");
     const priorityIndex = headings.indexOf("Today's Priority");
     const upcomingIndex = headings.indexOf("Upcoming Events");
     const myDayIndex = headings.indexOf("My Day");

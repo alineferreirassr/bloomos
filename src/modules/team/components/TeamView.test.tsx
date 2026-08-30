@@ -65,8 +65,11 @@ import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 import { CopilotProvider } from "@/modules/ai/copilot/CopilotProvider";
 import type { Permission } from "@/core/enums/permission";
-import type { PriorityItemData } from "@/modules/dashboard/luxury/components/PriorityList";
+import type { TodaysPriorityData } from "@/modules/dashboard/luxury/components/TodaysPriorityCard";
 import type { LittleReminderData } from "@/modules/dashboard/luxury/components/LittleReminderCard";
+import type { EventPreviewCardData } from "@/modules/dashboard/luxury/components/EventPreviewCard";
+import type { ScheduleTimelineItemData } from "@/modules/dashboard/luxury/components/ScheduleTimeline";
+import type { TodaysPulseMetric } from "@/modules/dashboard/luxury/components/TodaysPulseCard";
 
 const branding: LuxuryBranding = { logoUrl: null, brandName: "Amoré Bloom", tagline: "", inspirationalMessage: "" };
 
@@ -84,7 +87,13 @@ function snapshot(permissions: Permission[]): MemberSessionSnapshot {
 
 function renderTeam(
   permissions: Permission[] = ["team.view", "team.manage_roles", "team.invite"],
-  overrides: { priorities?: PriorityItemData[]; littleReminder?: LittleReminderData | null } = {},
+  overrides: {
+    todaysPriority?: TodaysPriorityData | null;
+    littleReminder?: LittleReminderData | null;
+    upcomingEvents?: EventPreviewCardData[];
+    todaysTimeline?: ScheduleTimelineItemData[];
+    todaysPulse?: TodaysPulseMetric[];
+  } = {},
 ) {
   return render(
     <MemberSessionProvider snapshot={snapshot(permissions)}>
@@ -95,8 +104,11 @@ function renderTeam(
           profileRoleLabel="Owner"
           profileAvatarUrl={null}
           operationalForecast={null}
-          priorities={overrides.priorities ?? []}
+          todaysPriority={overrides.todaysPriority ?? null}
           littleReminder={overrides.littleReminder ?? null}
+          upcomingEvents={overrides.upcomingEvents ?? []}
+          todaysTimeline={overrides.todaysTimeline ?? []}
+          todaysPulse={overrides.todaysPulse ?? []}
         />
       </CopilotProvider>
     </MemberSessionProvider>,
@@ -104,24 +116,31 @@ function renderTeam(
 }
 
 describe("TeamView — shares the Founder dashboard's Luxury system", () => {
-  it("renders the compact Clock+Weather panel, Today's Focus, and Little Reminder — never a Calendar card", () => {
+  it("renders the compact Clock+Weather panel, Today's Priority, and Little Reminder — never a Calendar dashboard widget", () => {
     renderTeam();
 
-    expect(screen.getByText("Today, at a glance")).toBeInTheDocument();
+    expect(screen.getByText("A little look at today ♡")).toBeInTheDocument();
     expect(screen.getByText("Compact Clock+Weather")).toBeInTheDocument();
-    expect(screen.getByText("Today's Focus")).toBeInTheDocument();
-    expect(screen.getByText("No priorities set")).toBeInTheDocument();
+    expect(screen.getByText("Today's Priority")).toBeInTheDocument();
+    expect(screen.getByText("Nothing needs your attention right now ♡")).toBeInTheDocument();
     expect(screen.getByText("Little Reminder ♡")).toBeInTheDocument();
     expect(screen.getByText("Small steps still move you forward.")).toBeInTheDocument();
     expect(screen.queryByText("Calendar")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open" })).not.toBeInTheDocument();
   });
 
-  it("renders real workspace-wide priority items instead of the empty state when they exist", () => {
-    renderTeam(["team.view"], { priorities: [{ id: "p1", title: "Confirm final headcount", dueLabel: "Due Sep 1", completed: false, urgent: true }] });
+  it("never renders the old full-list Today's Focus presentation", () => {
+    renderTeam();
+
+    expect(screen.queryByText("Today's Focus")).not.toBeInTheDocument();
+  });
+
+  it("renders the real single headline instead of the empty state when a today's priority exists", () => {
+    renderTeam(["team.view"], { todaysPriority: { headline: "Confirm final headcount", meta: "Due Sep 1" } });
 
     expect(screen.getByText("Confirm final headcount")).toBeInTheDocument();
-    expect(screen.queryByText("No priorities set")).not.toBeInTheDocument();
+    expect(screen.getByText("Due Sep 1")).toBeInTheDocument();
+    expect(screen.queryByText("Nothing needs your attention right now ♡")).not.toBeInTheDocument();
   });
 
   it("renders the viewer's own real notification in Little Reminder when one exists", () => {
@@ -130,6 +149,25 @@ describe("TeamView — shares the Founder dashboard's Luxury system", () => {
     expect(screen.getByText("Client replied")).toBeInTheDocument();
     expect(screen.getByText("Naomi Whitfield sent a new message.")).toBeInTheDocument();
     expect(screen.queryByText("Small steps still move you forward.")).not.toBeInTheDocument();
+  });
+
+  it("renders Upcoming Events directly below Priority/Reminder, then Today's Timeline beside Today's Pulse", () => {
+    const { container } = renderTeam(["team.view"], {
+      upcomingEvents: [{ id: "event_5", title: "Whitfield Anniversary Dinner", dayLabel: "13", monthLabel: "Sep", timeLabel: "19:00:00", categoryLabel: "Anniversary", imageUrl: null, href: "/events/event_5" }],
+      todaysPulse: [{ label: "Priorities", value: "1" }, { label: "Today's Events", value: "0" }],
+    });
+
+    expect(screen.getByText("Whitfield Anniversary Dinner")).toBeInTheDocument();
+    expect(screen.getByText("Today's Timeline")).toBeInTheDocument();
+    expect(screen.getByText("Today's Pulse")).toBeInTheDocument();
+
+    const headings = Array.from(container.querySelectorAll("h2")).map((h) => h.textContent);
+    const priorityIndex = headings.indexOf("Today's Priority");
+    const upcomingIndex = headings.indexOf("Upcoming Events");
+    const timelineIndex = headings.indexOf("Today's Timeline");
+    expect(priorityIndex).toBeGreaterThanOrEqual(0);
+    expect(upcomingIndex).toBeGreaterThan(priorityIndex);
+    expect(timelineIndex).toBeGreaterThan(upcomingIndex);
   });
 
   it("passes the fetched operational forecast through to the compact panel", () => {
@@ -142,8 +180,11 @@ describe("TeamView — shares the Founder dashboard's Luxury system", () => {
             profileRoleLabel="Owner"
             profileAvatarUrl={null}
             operationalForecast={{ date: "2026-08-29", condition: "PARTLY_CLOUDY", weatherCode: 2, highF: 78, lowF: 60, precipitationProbabilityMax: 10, windSpeedMaxMph: 7, sunrise: "x", sunset: "x" }}
-            priorities={[]}
+            todaysPriority={null}
             littleReminder={null}
+            upcomingEvents={[]}
+            todaysTimeline={[]}
+            todaysPulse={[]}
           />
         </CopilotProvider>
       </MemberSessionProvider>,

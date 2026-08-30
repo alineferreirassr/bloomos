@@ -64,6 +64,13 @@ describe("ClientDashboardView — same compact Clock+Weather variant as Team, ne
     expect(screen.getAllByText(/Compact Clock\+Weather for Huntington Beach/)).toHaveLength(1);
   });
 
+  it("uses the shared daily heading copy, never the retired corporate phrasing", () => {
+    render(<ClientDashboardView data={data()} />);
+
+    expect(screen.getByText("A little look at today ♡")).toBeInTheDocument();
+    expect(screen.queryByText("Today, at a glance")).not.toBeInTheDocument();
+  });
+
   it("passes the real fetched forecast through, never a fabricated value", () => {
     render(<ClientDashboardView data={data({ operationalForecast: { date: "2026-08-29", condition: "SUNNY", weatherCode: 0, highF: 82, lowF: 65, precipitationProbabilityMax: 0, windSpeedMaxMph: 4, sunrise: "x", sunset: "x" } })} />);
 

@@ -35,7 +35,7 @@ interface CalendarWidgetProps {
   /**
    * Tighter month-grid/agenda spacing and a small rose capsule around just
    * the selected day's number (instead of a soft wash across the whole
-   * cell) for the "Today, at a glance" right column, where this widget
+   * cell) for the "A little look at today ♡" right column, where this widget
    * sits in a ~25% width card next to Weather rather than owning a
    * full-width row of its own. The underlying grid/data/navigation are
    * unchanged — only spacing and the selection treatment scale down.

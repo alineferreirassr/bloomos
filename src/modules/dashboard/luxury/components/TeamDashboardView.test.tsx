@@ -85,12 +85,12 @@ function renderTeam(overrides: Partial<TeamDashboardData> = {}) {
   );
 }
 
-describe("TeamDashboardView — shares the Founder dashboard's Today, at a glance composition", () => {
+describe("TeamDashboardView — shares the Founder dashboard's daily composition", () => {
   it("renders the eyebrow/heading, the same World Clock component, and a Weather card with a graceful state when no eligible event has weather", () => {
     renderTeam({ nextEventWeather: null });
 
     expect(screen.getByText("Your Day")).toBeInTheDocument();
-    expect(screen.getByText("Today, at a glance")).toBeInTheDocument();
+    expect(screen.getByText("A little look at today ♡")).toBeInTheDocument();
     expect(screen.getByText("World Clock")).toBeInTheDocument();
 
     expect(screen.getAllByText("♡ Weather")).toHaveLength(1);
@@ -134,7 +134,7 @@ describe("TeamDashboardView — shares the Founder dashboard's Today, at a glanc
 });
 
 describe("TeamDashboardView — AF-Inspired Today's Priority + Upcoming Events + Today's Pulse", () => {
-  it("renders Today's Priority (re-skinned from the existing importantNote) beside Little Reminder, with Upcoming Events directly below and nothing else between them and Today, at a glance", () => {
+  it("renders Today's Priority (re-skinned from the existing importantNote) beside Little Reminder, with Upcoming Events directly below and nothing else between them and the daily heading", () => {
     const { container } = renderTeam({
       importantNote: { id: "task_1", icon: "Checklist", title: "Confirm floral delivery window", description: "Due Aug 30" },
       todaysPriority: { headline: "Confirm floral delivery window", meta: "Due Aug 30" },
@@ -147,7 +147,7 @@ describe("TeamDashboardView — AF-Inspired Today's Priority + Upcoming Events +
     expect(screen.getByText("Upcoming Events")).toBeInTheDocument();
 
     const headings = Array.from(container.querySelectorAll("h2")).map((h) => h.textContent);
-    const glanceIndex = headings.indexOf("Today, at a glance");
+    const glanceIndex = headings.indexOf("A little look at today ♡");
     const priorityIndex = headings.indexOf("Today's Priority");
     const upcomingIndex = headings.indexOf("Upcoming Events");
     const timelineIndex = headings.indexOf("Today's Timeline");
