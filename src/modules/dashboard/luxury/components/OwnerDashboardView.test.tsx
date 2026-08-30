@@ -182,8 +182,8 @@ describe("OwnerDashboardView — A little look at today ♡ (World Clock + Weath
   });
 });
 
-describe("OwnerDashboardView — Today's Priority + Little Reminder, directly below World Clock + Weather", () => {
-  it("renders Today's Priority (the single most urgent real item, AF-inspired reconstruction) beside Little Reminder, with Upcoming Events directly below and nothing else between them and Today at a glance", () => {
+describe("OwnerDashboardView — Today's Priority + Little Reminder, directly below My Day", () => {
+  it("renders Today's Priority (the single most urgent real item, AF-inspired reconstruction) beside Little Reminder, with My Day directly below Clock+Weather and Upcoming Events directly below Priority/Reminder", () => {
     const { container } = render(
       <MemberSessionProvider snapshot={ownerSnapshot}>
         <CopilotProvider>
@@ -200,16 +200,28 @@ describe("OwnerDashboardView — Today's Priority + Little Reminder, directly be
     expect(screen.getByText("Small steps still move you forward.")).toBeInTheDocument();
     expect(screen.getByText("Upcoming Events")).toBeInTheDocument();
 
-    // Section order: "A little look at today ♡" heading, then Today's Priority, then Upcoming Events (directly below, per the Founder's explicit ordering), then "My Day" — never Revenue/Messages/etc. in between.
+    // Section order: "A little look at today ♡" heading, then My Day (moved up, directly below Clock+Weather), then Today's Priority, then Upcoming Events directly below it — never Revenue/Messages/etc. in between.
     const headings = Array.from(container.querySelectorAll("h2")).map((h) => h.textContent);
     const glanceIndex = headings.indexOf("A little look at today ♡");
+    const myDayIndex = headings.indexOf("My Day");
     const priorityIndex = headings.indexOf("Today's Priority");
     const upcomingIndex = headings.indexOf("Upcoming Events");
-    const myDayIndex = headings.indexOf("My Day");
     expect(glanceIndex).toBeGreaterThanOrEqual(0);
-    expect(priorityIndex).toBeGreaterThan(glanceIndex);
+    expect(myDayIndex).toBeGreaterThan(glanceIndex);
+    expect(priorityIndex).toBeGreaterThan(myDayIndex);
     expect(upcomingIndex).toBeGreaterThan(priorityIndex);
-    expect(myDayIndex).toBeGreaterThan(upcomingIndex);
+  });
+
+  it("renders My Day exactly once", () => {
+    render(
+      <MemberSessionProvider snapshot={ownerSnapshot}>
+        <CopilotProvider>
+          <OwnerDashboardView data={data()} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} />
+        </CopilotProvider>
+      </MemberSessionProvider>,
+    );
+
+    expect(screen.getAllByRole("heading", { name: "My Day" })).toHaveLength(1);
   });
 
   it("renders the Founder's own real latest unread notification instead of the fallback when one exists", () => {

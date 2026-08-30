@@ -13,6 +13,25 @@ vi.mock("@/modules/dashboard/luxury/components/CompactClockWeatherPanel", () => 
 vi.mock("@/modules/team/components/NewInvitationModal", () => ({
   NewInvitationModal: () => null,
 }));
+// MoodCheckInCard/WaterTrackerCard each call a "use server" action module
+// (wellnessActions.ts) that isn't safe to import into a Vitest/jsdom
+// render tree — same mocking precedent as OwnerDashboardView.test.tsx.
+vi.mock("@/modules/dashboard/luxury/components/MoodCheckInCard", () => ({
+  MoodCheckInCard: ({ privacyDetail }: { privacyDetail?: string }) => (
+    <div>
+      Mood Check-In
+      {privacyDetail ? <p>{privacyDetail}</p> : null}
+    </div>
+  ),
+}));
+vi.mock("@/modules/dashboard/luxury/components/WaterTrackerCard", () => ({
+  WaterTrackerCard: ({ privacyDetail }: { privacyDetail?: string }) => (
+    <div>
+      Water Tracker
+      {privacyDetail ? <p>{privacyDetail}</p> : null}
+    </div>
+  ),
+}));
 vi.mock("@/modules/dashboard/luxury/components/ProfileMenu", () => ({
   ProfileMenu: () => null,
 }));
@@ -208,5 +227,38 @@ describe("TeamView — shares the Founder dashboard's Luxury system", () => {
     await waitFor(() => expect(screen.getByText("Jordan Rivera")).toBeInTheDocument());
     expect(screen.queryByLabelText("Role for staff@amorebloom.com")).not.toBeInTheDocument();
     expect(screen.queryByText("Deactivate")).not.toBeInTheDocument();
+  });
+});
+
+describe("TeamView — My Day ♡ (Mood + Water), directly below Clock+Weather", () => {
+  it("renders Mood and Water Tracker directly below Clock+Weather, before Today's Priority, exactly once", () => {
+    const { container } = renderTeam();
+
+    expect(screen.getByText("Mood Check-In")).toBeInTheDocument();
+    expect(screen.getByText("Water Tracker")).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { name: "My Day" })).toHaveLength(1);
+
+    const headings = Array.from(container.querySelectorAll("h2")).map((h) => h.textContent);
+    const glanceIndex = headings.indexOf("A little look at today ♡");
+    const myDayIndex = headings.indexOf("My Day");
+    const priorityIndex = headings.indexOf("Today's Priority");
+    const upcomingIndex = headings.indexOf("Upcoming Events");
+    expect(glanceIndex).toBeGreaterThanOrEqual(0);
+    expect(myDayIndex).toBeGreaterThan(glanceIndex);
+    expect(priorityIndex).toBeGreaterThan(myDayIndex);
+    expect(upcomingIndex).toBeGreaterThan(priorityIndex);
+  });
+
+  it("preserves the existing per-viewer privacy statement — never claims team-shared wellness data", () => {
+    renderTeam();
+
+    expect(screen.getAllByText("Your mood and water tracker are personal to you and are never visible to your team.").length).toBeGreaterThan(0);
+  });
+
+  it("never renders a second Mood/Water instance for any other team member — exactly the current viewer's own single wellness pair", () => {
+    renderTeam();
+
+    expect(screen.getAllByText("Mood Check-In")).toHaveLength(1);
+    expect(screen.getAllByText("Water Tracker")).toHaveLength(1);
   });
 });
