@@ -51,8 +51,9 @@ describe("NextEventWeatherCard — real forecast data only, never fabricated", (
 
     expect(screen.getByText("78°")).toBeInTheDocument();
     expect(screen.getAllByText("Sunny").length).toBeGreaterThan(0);
-    // The "·" separator is its own <span>, so the H/L line is split across text nodes — match by normalized textContent instead of an exact string.
-    expect(screen.getByText((_, element) => element?.tagName === "P" && (element.textContent?.replace(/\s+/g, " ").trim() ?? "") === "H 82° · L 61°")).toBeInTheDocument();
+    // AF → BloomOS Clock + Weather Visual Parity — H and L now render as two separate right-aligned lines (matching AF's own layout), not one "H · L" paragraph.
+    expect(screen.getByText("H 82°")).toBeInTheDocument();
+    expect(screen.getByText("L 61°")).toBeInTheDocument();
     expect(screen.getByText(/Sep 13/)).toBeInTheDocument();
     expect(screen.getByText(/5:00 PM/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Amelia & Noah Wedding" })).toHaveAttribute("href", "/events/event_1");
@@ -73,7 +74,8 @@ describe("NextEventWeatherCard — real forecast data only, never fabricated", (
 
     expect(screen.getByText("70°")).toBeInTheDocument();
     expect(screen.getAllByText("Partly Cloudy").length).toBeGreaterThan(0);
-    expect(screen.getByText((_, element) => element?.tagName === "P" && (element.textContent?.replace(/\s+/g, " ").trim() ?? "") === "H 70° · L 55°")).toBeInTheDocument();
+    expect(screen.getByText("H 70°")).toBeInTheDocument();
+    expect(screen.getByText("L 55°")).toBeInTheDocument();
     expect(screen.getByText("Sep 13")).toBeInTheDocument();
   });
 

@@ -42,12 +42,14 @@ export function WeatherPin({ condition, size = 40, className = "" }: WeatherPinP
         </radialGradient>
       </defs>
 
-      {/* Pin silhouette: rounded head tapering to a point, glossy fill + fine wine outline — thinner outline, Final Clock + Weather Visual Refinement, to match the analog clock's more delicate line weight. */}
+      {/* Pin silhouette: rounded head tapering to a point, glossy fill + wine outline. AF → BloomOS Clock +
+          Weather Visual Parity — restored to a more substantial outline (AF's own pin uses a real, visible
+          contour, not a hairline) so the pin reads as decorative and sophisticated rather than thin. */}
       <path
         d="M50 6 C73 6 91 24 91 47 C91 68 62 100 52 116 C51 118 49 118 48 116 C38 100 9 68 9 47 C9 24 27 6 50 6 Z"
         fill="url(#weatherPinBody)"
         stroke="var(--color-accent)"
-        strokeWidth="1.5"
+        strokeWidth="2"
         strokeLinejoin="round"
       />
 
@@ -58,10 +60,12 @@ export function WeatherPin({ condition, size = 40, className = "" }: WeatherPinP
         opacity="0.9"
       />
 
-      {/* The "glass" inset the weather glyph sits inside, with a fine gold ring. */}
-      <circle cx="50" cy="46" r="29" fill="url(#weatherPinGlass)" stroke="var(--luxury-warning)" strokeWidth="0.75" opacity="0.95" />
+      {/* A double gold rim around the "glass" inset — AF's own pin anatomy pairs a fine outer contour with
+          a slightly heavier inner ring, rather than a single hairline. */}
+      <circle cx="50" cy="46" r="31.5" fill="none" stroke="var(--luxury-warning)" strokeWidth="0.6" opacity="0.5" />
+      <circle cx="50" cy="46" r="29" fill="url(#weatherPinGlass)" stroke="var(--luxury-warning)" strokeWidth="1.2" opacity="0.95" />
 
-      <g fill="none" stroke="var(--luxury-coral-foreground)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <g fill="none" stroke="var(--luxury-coral-foreground)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <WeatherGlyph condition={condition} />
       </g>
     </svg>

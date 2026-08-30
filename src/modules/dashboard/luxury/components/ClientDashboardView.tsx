@@ -66,12 +66,18 @@ export function ClientDashboardView({ data }: ClientDashboardViewProps) {
       <div className="space-y-6">
         <PersonalizedWelcomeHeader copy={data.welcome} />
 
+        {/* Team + Client Composition Correction — Clock + Weather moved ahead of the Portal Summary
+            strip so it's part of the opening viewport instead of appearing after the (often tall,
+            Announcements-including) summary strip pushes it below the fold. Portal Summary itself —
+            Journey Stage, Unread Messages, Open Proposals, Open Contracts, Outstanding Balance,
+            Latest Documents — keeps its own full prominence immediately after, unchanged and
+            un-displaced relative to everything below it. */}
         <div className="animate-fade-up stagger-1">
-          <PortalSummaryStrip summary={data.portalSummary} />
+          <CompactClockWeatherPanel location={DEFAULT_OPERATIONAL_LOCATION} forecast={data.operationalForecast} />
         </div>
 
         <div className="animate-fade-up stagger-1">
-          <CompactClockWeatherPanel location={DEFAULT_OPERATIONAL_LOCATION} forecast={data.operationalForecast} />
+          <PortalSummaryStrip summary={data.portalSummary} />
         </div>
 
         <div className="animate-fade-up stagger-1 grid grid-cols-1 gap-4 lg:grid-cols-3">

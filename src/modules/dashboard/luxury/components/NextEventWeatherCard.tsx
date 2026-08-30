@@ -1,11 +1,12 @@
 import Link from "next/link";
+import { Droplets, Wind } from "lucide-react";
 import { WeatherPin } from "@/components/ui/WeatherPin";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { WEATHER_CONDITION_LABEL, type WeatherCondition, type DailyForecast } from "@/types/weather";
 import type { NextEventWeather } from "@/modules/dashboard/luxury/getOwnerDashboardData";
 
-const WEATHER_PIN_SIZE = 104;
+const WEATHER_PIN_SIZE = 108;
 
 const RAIN_CONDITIONS: readonly WeatherCondition[] = ["RAIN", "LIGHT_RAIN_DRIZZLE", "THUNDERSTORM"];
 const CLEAR_CONDITIONS: readonly WeatherCondition[] = ["SUNNY", "PARTLY_CLOUDY", "NIGHT_CLEAR"];
@@ -21,20 +22,32 @@ function operationalNote(condition: WeatherCondition, precipitationProbability: 
   return null;
 }
 
+/**
+ * AF → BloomOS Clock + Weather Visual Parity Checkpoint — matches AF's own
+ * `Metric` row (icon + label + right-aligned value, `weather-card.tsx`) in
+ * a 2-column grid. AF's real metrics grid also shows Humidity and UV — but
+ * BloomOS's `DailyForecast`/`WeatherSnapshot` types have no such fields
+ * (mechanically confirmed: no `humidity`/`uv` anywhere in `src/types/weather.ts`),
+ * so only the two metrics BloomOS's provider actually supplies render here.
+ * No placeholder, no fabricated value — an absent field is an absent grid
+ * cell, never a fake "—".
+ */
 function MetricsRow({ precipitationProbability, windSpeedMph }: { precipitationProbability: number | null; windSpeedMph: number | null }) {
   if (precipitationProbability === null && windSpeedMph === null) return null;
   return (
-    <div className="mt-3 flex gap-5 border-t border-luxury-border pt-3">
+    <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 border-t border-luxury-border pt-3 text-luxury-small">
       {precipitationProbability !== null ? (
-        <div>
-          <p className="text-luxury-metadata font-medium tracking-wide text-luxury-text-muted uppercase">Precip</p>
-          <p className="mt-0.5 font-luxury-display text-luxury-card-heading font-semibold text-luxury-text">{precipitationProbability}%</p>
+        <div className="flex items-center gap-1.5">
+          <Droplets className="size-3.5 shrink-0 text-luxury-rose" aria-hidden="true" />
+          <span className="text-luxury-text-muted">Precip</span>
+          <span className="ml-auto font-medium tabular-nums text-luxury-text">{precipitationProbability}%</span>
         </div>
       ) : null}
       {windSpeedMph !== null ? (
-        <div>
-          <p className="text-luxury-metadata font-medium tracking-wide text-luxury-text-muted uppercase">Wind</p>
-          <p className="mt-0.5 font-luxury-display text-luxury-card-heading font-semibold text-luxury-text">{Math.round(windSpeedMph)} mph</p>
+        <div className="flex items-center gap-1.5">
+          <Wind className="size-3.5 shrink-0 text-luxury-rose" aria-hidden="true" />
+          <span className="text-luxury-text-muted">Wind</span>
+          <span className="ml-auto font-medium tabular-nums text-luxury-text">{Math.round(windSpeedMph)} mph</span>
         </div>
       ) : null}
     </div>
@@ -85,16 +98,17 @@ export function NextEventWeatherCard({ data, contingencyNote, fallback }: NextEv
       const windSpeedMph = forecast.windSpeedMaxMph;
       const note = operationalNote(forecast.condition, precipitationProbability);
       return (
-        <LuxuryCard tone="subtle" className="flex flex-col justify-center gap-4 py-6">
+        <LuxuryCard tone="surface" className="flex flex-col justify-center gap-4 py-6">
           <SectionHeader title="♡ Weather" action={<span className="text-luxury-small font-medium text-luxury-rose">{fallback.locationLabel}</span>} />
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-4">
             <WeatherPin condition={forecast.condition} size={WEATHER_PIN_SIZE} />
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0">
               <p className="font-luxury-display text-luxury-display leading-none font-semibold text-luxury-text">{forecast.highF}°</p>
               <p className="mt-1.5 text-luxury-body text-luxury-text-muted">{WEATHER_CONDITION_LABEL[forecast.condition]}</p>
-              <p className="mt-3 text-luxury-small font-medium tracking-wide text-luxury-text-muted uppercase">
-                H {forecast.highF}° <span className="mx-1 text-luxury-border">·</span> L {forecast.lowF}°
-              </p>
+            </div>
+            <div className="ml-auto shrink-0 text-right">
+              <p className="text-luxury-small font-medium tabular-nums text-luxury-text">H {forecast.highF}°</p>
+              <p className="text-luxury-small font-medium tabular-nums text-luxury-text-muted">L {forecast.lowF}°</p>
             </div>
           </div>
           <MetricsRow precipitationProbability={precipitationProbability} windSpeedMph={windSpeedMph} />
@@ -145,7 +159,7 @@ export function NextEventWeatherCard({ data, contingencyNote, fallback }: NextEv
   const note = operationalNote(condition, precipitationProbability);
 
   return (
-    <LuxuryCard tone="subtle" className="flex flex-col justify-center gap-4 py-6">
+    <LuxuryCard tone="surface" className="flex flex-col justify-center gap-4 py-6">
       <SectionHeader
         title="♡ Weather"
         action={
@@ -158,17 +172,18 @@ export function NextEventWeatherCard({ data, contingencyNote, fallback }: NextEv
         {data.dateLabel}
         {snapshot && data.timeLabel ? ` · ${data.timeLabel}` : ""}
       </p>
-      <div className="flex items-center gap-5">
+      <div className="flex items-center gap-4">
         <WeatherPin condition={condition} size={WEATHER_PIN_SIZE} />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0">
           <p className="font-luxury-display text-luxury-display leading-none font-semibold text-luxury-text">{temperatureLabel}</p>
           <p className="mt-1.5 text-luxury-body text-luxury-text-muted">{WEATHER_CONDITION_LABEL[condition]}</p>
-          {day ? (
-            <p className="mt-3 text-luxury-small font-medium tracking-wide text-luxury-text-muted uppercase">
-              H {day.highF}° <span className="mx-1 text-luxury-border">·</span> L {day.lowF}°
-            </p>
-          ) : null}
         </div>
+        {day ? (
+          <div className="ml-auto shrink-0 text-right">
+            <p className="text-luxury-small font-medium tabular-nums text-luxury-text">H {day.highF}°</p>
+            <p className="text-luxury-small font-medium tabular-nums text-luxury-text-muted">L {day.lowF}°</p>
+          </div>
+        ) : null}
       </div>
       <MetricsRow precipitationProbability={precipitationProbability} windSpeedMph={windSpeedMph} />
       {note ? <p className="text-luxury-small text-luxury-text-muted">{note}</p> : null}

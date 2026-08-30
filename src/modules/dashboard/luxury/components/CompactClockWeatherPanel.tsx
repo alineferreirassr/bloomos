@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Droplets, Wind } from "lucide-react";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { AnalogClockFace } from "@/modules/dashboard/luxury/components/AnalogClockFace";
@@ -12,8 +13,15 @@ import type { OperationalLocation } from "@/core/dashboard/operationalLocation";
 import { WEATHER_CONDITION_LABEL, type DailyForecast } from "@/types/weather";
 
 const REFRESH_INTERVAL_MS = 30_000;
-const CLOCK_FACE_SIZE = 126;
-const WEATHER_PIN_SIZE = 100;
+/**
+ * Team + Client Composition Correction — the Founder's own accepted
+ * `WorldClockCard` city clock renders at 84px; this pair has only one
+ * location instead of three, so a modest bump (not the previous 124px)
+ * keeps it reading as "daily context," never larger/more dominant than
+ * the Founder Dashboard's own frozen reference.
+ */
+const CLOCK_FACE_SIZE = 92;
+const WEATHER_PIN_SIZE = 84;
 
 interface CompactClockWeatherPanelProps {
   location: OperationalLocation;
@@ -22,23 +30,25 @@ interface CompactClockWeatherPanelProps {
 }
 
 /**
- * "Team + Client Compact Clock & Weather Variant" addendum, then the
- * Founder's visual-rejection correction, then the "Team Aesthetic Clock +
- * Weather" tightening pass — the shared single-location Clock+Weather pair
+ * "Team + Client Compact Clock & Weather Variant" addendum, then several
+ * visual-correction passes — the shared single-location Clock+Weather pair
  * Team (`/team`) and the Client portal (`/client-access`) both render, as
- * opposed to Founder Dashboard's multi-city `WorldClockCard`. Deliberately
- * reuses the exact same illustrated pieces that card and
- * `NextEventWeatherCard` already established (`AnalogClockFace`'s
- * gold-ring/bow/heart SVG with real computed hand angles, `WeatherPin`'s
- * blush/gold/wine illustration, `buildWorldClockDisplay`'s IANA-timezone
- * math, the same Luxury card/section-header shell/tokens) rather than a
- * parallel implementation or a new palette. Both illustrations render large
- * (still the identical SVGs WorldClockCard/NextEventWeatherCard ship) so
- * their gold-rim/bow/heart/gradient detail reads at a glance; the two cards
- * share identical padding/radius/shadow/tone so they read as one matched
- * pair, and vertical padding/spacing was tightened this pass specifically
- * to cut the empty space the Founder flagged as "too boxy" without shrinking
- * either illustration into an icon.
+ * opposed to Founder Dashboard's multi-city `WorldClockCard`.
+ *
+ * Team + Client Composition Correction — the Founder Dashboard is now
+ * frozen/accepted as-is (not touched by this pass); this component had
+ * grown visually larger and more dominant than that accepted reference
+ * (a bigger clock, a bigger pin, taller padding, an asymmetric 11fr/9fr
+ * grid). Reduced across the board — smaller illustrations, compact
+ * padding, a plain 2-up grid, and city/time typography no larger than
+ * the Founder city card's own — so Team/Client read as "daily context"
+ * widgets, not the page's main feature.
+ *
+ * Clock keeps `tone="page"` (AF's own single-location clock card uses
+ * `bg-ivory`, the same value as the page body) and Weather keeps
+ * `tone="surface"` (AF's `WeatherCard` uses `bg-surface`) — the two
+ * aren't byte-identical in AF either, they belong to one family through
+ * shared radius/border/shadow, not an enforced identical fill.
  */
 export function CompactClockWeatherPanel({ location, forecast }: CompactClockWeatherPanelProps) {
   const [now, setNow] = useState<Date | null>(null);
@@ -55,26 +65,26 @@ export function CompactClockWeatherPanel({ location, forecast }: CompactClockWea
   const hasMetrics = forecast !== null && (forecast.precipitationProbabilityMax !== null || forecast.windSpeedMaxMph !== null);
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-[9fr_11fr]">
-      <LuxuryCard tone="subtle" className="flex flex-col items-center justify-center gap-0.5 px-6 py-6 text-center shadow-luxury-sm transition-shadow duration-150 hover:shadow-luxury-md">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <LuxuryCard tone="page" className="flex flex-col items-center justify-center gap-0.5 px-5 py-4 text-center shadow-luxury-sm transition-shadow duration-150 hover:shadow-luxury-md">
         {display ? (
           <>
             <AnalogClockFace hour24={display.hour24} minute={display.minute} size={CLOCK_FACE_SIZE} />
-            <p className="mt-3.5 font-luxury-display text-luxury-card-heading font-semibold text-luxury-text">{location.city}</p>
-            <p className="text-luxury-metadata font-medium tracking-[0.1em] text-luxury-text-muted uppercase">{location.region}</p>
-            <p className="mt-3 font-luxury-display text-luxury-display leading-none font-semibold text-luxury-text">{display.timeLabel}</p>
-            <p className="mt-2 text-luxury-small text-luxury-text-muted">{display.dateLabel}</p>
-            <span className="mt-2 flex items-center gap-1 text-luxury-status font-semibold tracking-[0.1em] text-luxury-rose uppercase">
+            <p className="mt-2 font-luxury-display text-lg leading-tight font-semibold text-luxury-text">{location.city}</p>
+            <p className="text-luxury-metadata font-medium tracking-[0.14em] text-luxury-text-muted uppercase">{location.region}</p>
+            <p className="mt-2 font-luxury-display text-3xl leading-none font-semibold text-luxury-text">{display.timeLabel}</p>
+            <p className="mt-1 text-luxury-small text-luxury-text-muted">{display.dateLabel}</p>
+            <span className="mt-1.5 flex items-center gap-1 text-luxury-status font-semibold tracking-[0.1em] text-luxury-rose uppercase">
               <DayPeriodGlyph isNight={display.isNight} />
               {display.dayPeriod}
             </span>
           </>
         ) : (
-          <div className="h-[19rem] w-full rounded-luxury-md" aria-hidden="true" />
+          <div className="h-[12rem] w-full rounded-luxury-md" aria-hidden="true" />
         )}
       </LuxuryCard>
 
-      <LuxuryCard tone="subtle" className="flex flex-col justify-center gap-3 px-6 py-6 shadow-luxury-sm transition-shadow duration-150 hover:shadow-luxury-md">
+      <LuxuryCard tone="surface" className="flex flex-col justify-center gap-2 px-5 py-4 shadow-luxury-sm transition-shadow duration-150 hover:shadow-luxury-md">
         <SectionHeader
           title="♡ Weather"
           action={
@@ -86,28 +96,31 @@ export function CompactClockWeatherPanel({ location, forecast }: CompactClockWea
         />
         {forecast ? (
           <>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <WeatherPin condition={forecast.condition} size={WEATHER_PIN_SIZE} />
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0">
                 <p className="font-luxury-display text-luxury-display leading-none font-semibold text-luxury-text">{forecast.highF}°</p>
                 <p className="mt-1 text-luxury-body text-luxury-text-muted">{WEATHER_CONDITION_LABEL[forecast.condition]}</p>
-                <p className="mt-2 text-luxury-small font-medium tracking-wide text-luxury-text-muted uppercase">
-                  H {forecast.highF}° <span className="mx-1 text-luxury-border">·</span> L {forecast.lowF}°
-                </p>
+              </div>
+              <div className="ml-auto shrink-0 text-right">
+                <p className="text-luxury-small font-medium tabular-nums text-luxury-text">H {forecast.highF}°</p>
+                <p className="text-luxury-small font-medium tabular-nums text-luxury-text-muted">L {forecast.lowF}°</p>
               </div>
             </div>
             {hasMetrics ? (
-              <div className="grid grid-cols-2 gap-4 border-t border-luxury-border pt-3">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-luxury-border pt-2 text-luxury-small">
                 {forecast.precipitationProbabilityMax !== null ? (
-                  <div className="border-r border-luxury-border pr-4">
-                    <p className="text-luxury-metadata font-medium tracking-wide text-luxury-text-muted uppercase">Precip</p>
-                    <p className="mt-0.5 font-luxury-display text-luxury-card-heading font-semibold text-luxury-text">{forecast.precipitationProbabilityMax}%</p>
+                  <div className="flex items-center gap-1.5">
+                    <Droplets className="size-3.5 shrink-0 text-luxury-rose" aria-hidden="true" />
+                    <span className="text-luxury-text-muted">Precip</span>
+                    <span className="ml-auto font-medium tabular-nums text-luxury-text">{forecast.precipitationProbabilityMax}%</span>
                   </div>
                 ) : null}
                 {forecast.windSpeedMaxMph !== null ? (
-                  <div>
-                    <p className="text-luxury-metadata font-medium tracking-wide text-luxury-text-muted uppercase">Wind</p>
-                    <p className="mt-0.5 font-luxury-display text-luxury-card-heading font-semibold text-luxury-text">{Math.round(forecast.windSpeedMaxMph)} mph</p>
+                  <div className="flex items-center gap-1.5">
+                    <Wind className="size-3.5 shrink-0 text-luxury-rose" aria-hidden="true" />
+                    <span className="text-luxury-text-muted">Wind</span>
+                    <span className="ml-auto font-medium tabular-nums text-luxury-text">{Math.round(forecast.windSpeedMaxMph)} mph</span>
                   </div>
                 ) : null}
               </div>

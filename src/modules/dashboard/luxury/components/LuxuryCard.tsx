@@ -1,6 +1,6 @@
 import type { HTMLAttributes } from "react";
 
-type LuxuryCardTone = "surface" | "tint" | "subtle";
+type LuxuryCardTone = "surface" | "tint" | "page";
 
 interface LuxuryCardProps extends HTMLAttributes<HTMLDivElement> {
   tone?: LuxuryCardTone;
@@ -9,12 +9,14 @@ interface LuxuryCardProps extends HTMLAttributes<HTMLDivElement> {
 const TONE_BACKGROUND: Record<LuxuryCardTone, string> = {
   surface: "bg-luxury-surface",
   tint: "bg-luxury-surface-tint",
-  /** Final Clock + Weather Visual Refinement — a near-white surface only
-   * barely distinguishable from `surface`, for a card that sits *inside*
-   * another `surface` card (World Clock's city cards, the Weather cards)
-   * and needs definition to come from the border/shadow, not a value gap.
-   * `tint` stays for everywhere else that already uses it. */
-  subtle: "bg-luxury-surface-subtle",
+  /** AF → BloomOS Clock + Weather Visual Parity Checkpoint — mechanically
+   * confirmed from AF Digital Studio OS's own single-location clock card
+   * (`WorldClockCard` "full" layout, `bg-ivory`): a standalone card that
+   * doesn't nest inside another `surface`/`tint` wrapper uses the exact
+   * same background as the page canvas, relying on the border + soft
+   * shadow alone for separation — never a distinct "card" fill. Used by
+   * Team/Client's single Clock card. */
+  page: "bg-luxury-background",
 };
 
 /** Checkpoint 19 — the Luxury Dashboard's own card surface: large radius, soft shadow, a fine champagne/gold hairline border (Contrast & Visual Finish Pass — the reference's light palette still reads distinct cards, which shadow/whitespace alone weren't achieving). `tone="tint"` is the soft blush variant used by "Important Notes"/reminder-style cards. */

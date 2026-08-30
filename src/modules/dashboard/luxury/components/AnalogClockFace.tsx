@@ -1,16 +1,67 @@
+import type { ReactNode } from "react";
+
 /**
- * The Amoré Bloom World Clock face — a gold-ringed analog clock with a
- * small bow at 12 and a heart accent near the center, matching the
- * Founder-approved World Clock reference sheet. Hand-authored inline SVG,
- * the same pattern `WeatherPin.tsx` already established for this codebase
- * (no icon library has anything like this, and a decorative illustration
- * this specific doesn't warrant a new dependency) — every color comes from
- * existing `--luxury-*`/`--color-accent-*` tokens, no new palette.
+ * The Amoré Bloom World Clock face — a gold-ringed, numeral analog clock
+ * with a two-loop blush bow and heart details. AF → BloomOS Clock + Weather
+ * Visual Parity Checkpoint — mechanically reconstructed from AF Digital
+ * Studio OS's own `analogClockSvg` (src/lib/worldclock/clock-art.mjs):
+ * full 1–12 numeral ring, 48 fine minute ticks, a blush (not neutral)
+ * inner hairline, a larger center hub, and hands with a short counter-tail
+ * past center — the density that reads as "decorative/premium" at a small
+ * render size, which four bare tick marks never could. Every color still
+ * comes from existing `--luxury-*` tokens (no hex copied from AF) — hands/
+ * heart/numerals use Amoré's own wine, not AF's gold, per the Founder's
+ * explicit "refined wine hands" brand-adaptation instruction.
  *
  * The hour/minute hands are real, computed rotations from the caller's
  * actual local hour/minute for that city — never a fixed decorative
  * position — so the illustration is honest, not just ornamental.
  */
+function ClockNumerals() {
+  const numerals: ReactNode[] = [];
+  for (let h = 1; h <= 12; h++) {
+    const a = (h * 30 * Math.PI) / 180;
+    const x = 50 + Math.sin(a) * 31.5;
+    const y = 50 - Math.cos(a) * 31.5 + 2.3;
+    numerals.push(
+      <text key={h} x={x} y={y} textAnchor="middle" fontFamily="var(--luxury-font-display)" fontSize="6.2" fill="var(--luxury-rose)" opacity="0.8">
+        {h}
+      </text>,
+    );
+  }
+  return <>{numerals}</>;
+}
+
+function ClockMinuteTicks() {
+  const ticks: React.ReactNode[] = [];
+  for (let i = 0; i < 60; i++) {
+    if (i % 5 === 0) continue;
+    const a = (i * 6 * Math.PI) / 180;
+    const x1 = 50 + Math.sin(a) * 38.2;
+    const y1 = 50 - Math.cos(a) * 38.2;
+    const x2 = 50 + Math.sin(a) * 39.6;
+    const y2 = 50 - Math.cos(a) * 39.6;
+    ticks.push(<line key={i} x1={x1} y1={y1} x2={x2} y2={y2} />);
+  }
+  return (
+    <g stroke="var(--luxury-warning)" strokeWidth="0.5" opacity="0.5">
+      {ticks}
+    </g>
+  );
+}
+
+function ClockHeart({ cx, cy, scale }: { cx: number; cy: number; scale: number }) {
+  return (
+    <path
+      transform={`translate(${cx} ${cy}) scale(${scale})`}
+      d="M0 4c-4-3.5-7-6.4-7-9.4a3.6 3.6 0 0 1 7-1.2 3.6 3.6 0 0 1 7 1.2c0 3-3 5.9-7 9.4z"
+      fill="var(--luxury-blush)"
+      stroke="var(--luxury-rose)"
+      strokeWidth="0.5"
+    />
+  );
+}
+
 export function AnalogClockFace({ hour24, minute, size = 48, className = "" }: { hour24: number; minute: number; size?: number; className?: string }) {
   const minuteAngle = (minute / 60) * 360;
   const hourAngle = ((hour24 % 12) / 12) * 360 + (minute / 60) * 30;
@@ -24,37 +75,33 @@ export function AnalogClockFace({ hour24, minute, size = 48, className = "" }: {
         </linearGradient>
       </defs>
 
-      {/* Gold outer ring — thinner, Final Clock + Weather Visual Refinement, for a more delicate/editorial face */}
-      <circle cx="50" cy="50" r="38" fill="url(#clockFaceBody)" stroke="var(--luxury-warning)" strokeWidth="2" />
-      {/* Inner hairline ring, pulled in slightly for more negative space between the two rings */}
-      <circle cx="50" cy="50" r="32" fill="none" stroke="var(--luxury-border)" strokeWidth="0.75" />
+      {/* Fine outer contour, then the dominant gold ring the face sits inside */}
+      <circle cx="50" cy="50" r="47" fill="none" stroke="var(--luxury-warning)" strokeWidth="1.2" opacity="0.6" />
+      <circle cx="50" cy="50" r="44" fill="url(#clockFaceBody)" stroke="var(--luxury-warning)" strokeWidth="3" />
+      {/* Inner hairline — blush, not neutral, so it reads as a deliberate decorative ring rather than a structural line */}
+      <circle cx="50" cy="50" r="41" fill="none" stroke="var(--luxury-blush)" strokeWidth="0.8" opacity="0.55" />
 
-      {/* Hour ticks at 12/3/6/9 only — restrained, not a full 12-tick face */}
-      <g stroke="var(--luxury-beige)" strokeWidth="1" strokeLinecap="round">
-        <line x1="50" y1="16" x2="50" y2="19" />
-        <line x1="84" y1="50" x2="81" y2="50" />
-        <line x1="50" y1="84" x2="50" y2="81" />
-        <line x1="16" y1="50" x2="19" y2="50" />
-      </g>
+      <ClockMinuteTicks />
+      <ClockNumerals />
 
-      {/* Small heart accent, center-low on the face — brand vocabulary, matches WeatherPin's own heart-accent precedent */}
-      <path
-        d="M50 61.5c-2.2-2.1-3.8-3.9-3.8-5.7 0-1.3 1-2.3 2.3-2.3.7 0 1.3.3 1.5.8.2-.5.8-.8 1.5-.8 1.3 0 2.3 1 2.3 2.3 0 1.8-1.6 3.6-3.8 5.7z"
-        fill="var(--luxury-rose)"
-        opacity="0.85"
-      />
+      {/* Small heart accent, center-low on the face */}
+      <ClockHeart cx={50} cy={60.5} scale={0.42} />
 
-      {/* Hands — real, computed angles, never decorative-fixed; thinner for a lighter, more editorial feel */}
+      {/* Hands — real, computed angles, never decorative-fixed. A short tail past center (AF's own hand
+          anatomy) reads as a more considered, weighted hand than a stick pinned only at one end. */}
       <g strokeLinecap="round">
-        <line x1="50" y1="50" x2="50" y2="30" stroke="var(--color-accent)" strokeWidth="2.2" transform={`rotate(${hourAngle} 50 50)`} />
-        <line x1="50" y1="50" x2="50" y2="22" stroke="var(--luxury-rose)" strokeWidth="1.4" transform={`rotate(${minuteAngle} 50 50)`} />
+        <line x1="50" y1="53" x2="50" y2="29" stroke="var(--color-accent)" strokeWidth="2.6" transform={`rotate(${hourAngle} 50 50)`} />
+        <line x1="50" y1="54" x2="50" y2="19" stroke="var(--luxury-rose)" strokeWidth="1.8" transform={`rotate(${minuteAngle} 50 50)`} />
       </g>
-      <circle cx="50" cy="50" r="1.8" fill="var(--luxury-rose)" />
+      <circle cx="50" cy="50" r="2.8" fill="var(--luxury-rose)" />
+      <ClockHeart cx={50} cy={50} scale={0.32} />
 
-      {/* Bow at 12 o'clock — two loops + a small knot, scaled down further for a subtler accent */}
-      <g transform="translate(50 12) scale(0.82)">
-        <path d="M0 0c-5-4-11-2-11 2s6 4 11 1c5 3 11 3 11-1s-6-6-11-2z" fill="var(--luxury-blush)" stroke="var(--luxury-rose)" strokeWidth="0.85" />
-        <circle cx="0" cy="0.5" r="1.4" fill="var(--luxury-warning)" />
+      {/* Bow at 12 o'clock — two separate loops + a center knot, matching the reference's own anatomy
+          rather than one fused path. */}
+      <g transform="translate(50 9)">
+        <path d="M0 -1C-3-4.5-8-4.5-8-1.2c0 3 4.5 3.6 8 1.7" fill="var(--luxury-blush)" stroke="var(--luxury-rose)" strokeWidth="0.6" />
+        <path d="M0 -1C3-4.5 8-4.5 8-1.2c0 3-4.5 3.6-8 1.7" fill="var(--luxury-blush)" stroke="var(--luxury-rose)" strokeWidth="0.6" />
+        <circle cx="0" cy="-1" r="1.9" fill="var(--luxury-blush)" stroke="var(--luxury-rose)" strokeWidth="0.6" />
       </g>
     </svg>
   );

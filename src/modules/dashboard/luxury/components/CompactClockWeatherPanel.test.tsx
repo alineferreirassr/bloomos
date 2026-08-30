@@ -41,8 +41,9 @@ describe("CompactClockWeatherPanel — Team + Client compact variant", () => {
     render(<CompactClockWeatherPanel location={DEFAULT_OPERATIONAL_LOCATION} forecast={forecast} />);
 
     expect(screen.getByText("78°")).toBeInTheDocument();
-    // The "·" separator is its own <span>, so the H/L line is split across text nodes — match by normalized textContent instead of an exact string.
-    expect(screen.getByText((_, element) => element?.tagName === "P" && (element.textContent?.replace(/\s+/g, " ").trim() ?? "") === "H 78° · L 60°")).toBeInTheDocument();
+    // AF → BloomOS Clock + Weather Visual Parity — H and L now render as two separate right-aligned lines (matching AF's own layout), not one "H · L" paragraph.
+    expect(screen.getByText("H 78°")).toBeInTheDocument();
+    expect(screen.getByText("L 60°")).toBeInTheDocument();
     expect(screen.getByText("10%")).toBeInTheDocument();
     expect(screen.getByText("7 mph")).toBeInTheDocument();
   });
