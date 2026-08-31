@@ -139,14 +139,51 @@ export function WaterTrackerCard({ privacyDetail, compact = false }: { privacyDe
             Retry
           </button>
         </div>
+      ) : compact ? (
+        // Compact: a fixed 4-per-row droplet grid (never an unpredictable flex-wrap
+        // collapse into one tall column at narrow paired-column widths) with the
+        // +/- controls in their own row beneath, so the card stays wide-and-short
+        // rather than narrow-and-tall — a phone-specific internal composition, not
+        // a shrunk copy of the desktop row.
+        <div className="mt-2 flex flex-col items-center gap-2 lg:mt-1.5 lg:gap-1.5">
+          <div className="grid grid-cols-4 gap-2 lg:gap-1.5" aria-hidden="true">
+            {Array.from({ length: DAILY_WATER_GOAL_GLASSES }).map((_, index) => (
+              <Droplet
+                key={index}
+                className={`h-[18px] w-[18px] transition-all duration-200 lg:h-4 lg:w-4 ${index < glasses ? "fill-luxury-rose text-luxury-rose" : "fill-transparent text-luxury-beige"}`}
+                strokeWidth={1.75}
+              />
+            ))}
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleRemove}
+              disabled={loading || glasses === 0}
+              aria-label="Remove a glass"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-luxury-full border border-luxury-rose/30 text-luxury-rose transition-colors duration-150 hover:border-luxury-rose hover:bg-luxury-rose hover:text-luxury-rose-foreground focus-visible:outline-none focus-visible:[box-shadow:var(--luxury-focus-ring)] disabled:opacity-30 lg:h-8 lg:w-8"
+            >
+              <Minus className="h-4 w-4" aria-hidden="true" strokeWidth={2.5} />
+            </button>
+            <button
+              type="button"
+              onClick={handleAdd}
+              disabled={loading}
+              aria-label="Add a glass"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-luxury-full border border-luxury-rose/30 text-luxury-rose transition-colors duration-150 hover:border-luxury-rose hover:bg-luxury-rose hover:text-luxury-rose-foreground focus-visible:outline-none focus-visible:[box-shadow:var(--luxury-focus-ring)] disabled:opacity-30 lg:h-8 lg:w-8"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" strokeWidth={2.5} />
+            </button>
+          </div>
+        </div>
       ) : (
-        <div className={`${compact ? "mt-1.5" : "mt-2"} flex items-center justify-between gap-2`}>
+        <div className="mt-2 flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={handleRemove}
             disabled={loading || glasses === 0}
             aria-label="Remove a glass"
-            className={`flex ${compact ? "h-8 w-8" : "h-9 w-9"} shrink-0 items-center justify-center rounded-luxury-full border border-luxury-rose/30 text-luxury-rose transition-colors duration-150 hover:border-luxury-rose hover:bg-luxury-rose hover:text-luxury-rose-foreground focus-visible:outline-none focus-visible:[box-shadow:var(--luxury-focus-ring)] disabled:opacity-30`}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-luxury-full border border-luxury-rose/30 text-luxury-rose transition-colors duration-150 hover:border-luxury-rose hover:bg-luxury-rose hover:text-luxury-rose-foreground focus-visible:outline-none focus-visible:[box-shadow:var(--luxury-focus-ring)] disabled:opacity-30"
           >
             <Minus className="h-4 w-4" aria-hidden="true" strokeWidth={2.5} />
           </button>
@@ -154,7 +191,7 @@ export function WaterTrackerCard({ privacyDetail, compact = false }: { privacyDe
             {Array.from({ length: DAILY_WATER_GOAL_GLASSES }).map((_, index) => (
               <Droplet
                 key={index}
-                className={`${compact ? "h-4 w-4" : "h-5 w-5"} transition-all duration-200 ${index < glasses ? "fill-luxury-rose text-luxury-rose" : "fill-transparent text-luxury-beige"}`}
+                className={`h-5 w-5 transition-all duration-200 ${index < glasses ? "fill-luxury-rose text-luxury-rose" : "fill-transparent text-luxury-beige"}`}
                 strokeWidth={1.75}
               />
             ))}
@@ -164,7 +201,7 @@ export function WaterTrackerCard({ privacyDetail, compact = false }: { privacyDe
             onClick={handleAdd}
             disabled={loading}
             aria-label="Add a glass"
-            className={`flex ${compact ? "h-8 w-8" : "h-9 w-9"} shrink-0 items-center justify-center rounded-luxury-full border border-luxury-rose/30 text-luxury-rose transition-colors duration-150 hover:border-luxury-rose hover:bg-luxury-rose hover:text-luxury-rose-foreground focus-visible:outline-none focus-visible:[box-shadow:var(--luxury-focus-ring)] disabled:opacity-30`}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-luxury-full border border-luxury-rose/30 text-luxury-rose transition-colors duration-150 hover:border-luxury-rose hover:bg-luxury-rose hover:text-luxury-rose-foreground focus-visible:outline-none focus-visible:[box-shadow:var(--luxury-focus-ring)] disabled:opacity-30"
           >
             <Plus className="h-4 w-4" aria-hidden="true" strokeWidth={2.5} />
           </button>

@@ -19,13 +19,13 @@ export function PortalSummaryStrip({ summary }: { summary: PortalHomeSummaryData
     <div className="space-y-4">
       <div>
         <SectionHeader title="Portal Summary" />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <LuxuryMetricCard data={{ id: "journey-stage", label: "Journey Stage", value: summary.journeyStageLabel ?? "Not started", helper: summary.journeyNextStepLabel, icon: "Checklist" }} />
-          <LuxuryMetricCard data={{ id: "unread-messages", label: "Unread Messages", value: String(summary.unreadMessageCount), icon: "Message" }} />
-          <LuxuryMetricCard data={{ id: "open-proposals", label: "Open Proposals", value: String(summary.openProposalsCount), icon: "Document" }} />
-          <LuxuryMetricCard data={{ id: "open-contracts", label: "Open Contracts", value: String(summary.openContractsCount), icon: "Document" }} />
-          <LuxuryMetricCard data={{ id: "outstanding-balance", label: "Outstanding Balance", value: summary.outstandingBalanceLabel, icon: "Payment" }} />
-          <LuxuryMetricCard data={{ id: "latest-documents", label: "Latest Documents", value: String(summary.latestDocuments.length), icon: "Document" }} />
+        <div className="grid grid-cols-2 gap-1.5 sm:gap-3 sm:grid-cols-3">
+          <LuxuryMetricCard data={{ id: "journey-stage", label: "Journey Stage", value: summary.journeyStageLabel ?? "Not started", helper: summary.journeyNextStepLabel, icon: "Checklist" }} compact />
+          <LuxuryMetricCard data={{ id: "unread-messages", label: "Unread Messages", value: String(summary.unreadMessageCount), icon: "Message" }} compact />
+          <LuxuryMetricCard data={{ id: "open-proposals", label: "Open Proposals", value: String(summary.openProposalsCount), icon: "Document" }} compact />
+          <LuxuryMetricCard data={{ id: "open-contracts", label: "Open Contracts", value: String(summary.openContractsCount), icon: "Document" }} compact />
+          <LuxuryMetricCard data={{ id: "outstanding-balance", label: "Outstanding Balance", value: summary.outstandingBalanceLabel, icon: "Payment" }} compact />
+          <LuxuryMetricCard data={{ id: "latest-documents", label: "Latest Documents", value: String(summary.latestDocuments.length), icon: "Document" }} compact />
         </div>
       </div>
 

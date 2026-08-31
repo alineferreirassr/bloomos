@@ -25,11 +25,20 @@ import { PrivateToYouNotice } from "@/modules/dashboard/luxury/components/Privat
  * sentence appearing twice. `compact` is opt-in on every card (default
  * `false`), so `TeamDashboardView.tsx`'s own unrelated, unchanged
  * rendering of these same cards is byte-for-byte unaffected.
+ *
+ * "Responsive Desktop-Parity Refinement" checkpoint — the 3fr/2fr column
+ * split is now UNCONDITIONAL (no `lg:` gate) so the desktop composition
+ * carries down to 375px instead of collapsing to a full-width stack below
+ * 1024px. Mood's own pill chips already `flex-wrap` internally (see
+ * `MoodCheckInCard`), and Water Tracker's droplet row already wraps too
+ * (see `WaterTrackerCard`), so narrowing this column doesn't clip either —
+ * it just wraps onto more rows, which is the intended compact behavior,
+ * not a layout break.
  */
 export function MyDaySection({ littleReminder, privacyDetail }: { littleReminder: LittleReminderData | null; privacyDetail?: string }) {
   const detail = privacyDetail ?? "Your mood and water tracker are not shared with Aline, managers, or other team members.";
   return (
-    <section className="rounded-luxury-lg border border-luxury-border bg-luxury-surface-tint p-3 shadow-luxury-sm sm:p-4">
+    <section className="rounded-luxury-lg border border-luxury-border bg-luxury-surface-tint p-2.5 shadow-luxury-sm sm:p-4">
       <div className="mb-2 flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between">
         <div className="flex items-center gap-2">
           <LuxuryHeartIcon className="h-4.5 w-4.5 text-luxury-rose" />
@@ -37,9 +46,11 @@ export function MyDaySection({ littleReminder, privacyDetail }: { littleReminder
         </div>
         <p className="text-luxury-small text-luxury-text-muted">A few things just for you.</p>
       </div>
-      <div className="grid grid-cols-1 items-start gap-2 lg:grid-cols-[3fr_2fr]">
-        <MoodCheckInCard privacyDetail={privacyDetail} compact />
-        <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-[3fr_2fr] items-start gap-2">
+        <div className="min-w-0">
+          <MoodCheckInCard privacyDetail={privacyDetail} compact />
+        </div>
+        <div className="flex min-w-0 flex-col gap-2">
           <WaterTrackerCard privacyDetail={privacyDetail} compact />
           <LittleReminderCard reminder={littleReminder} compact />
         </div>

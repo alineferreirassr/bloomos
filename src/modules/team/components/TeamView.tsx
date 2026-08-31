@@ -195,6 +195,7 @@ export function TeamView({ branding, profileName, profileRoleLabel, profileAvata
       branding={branding}
       sidebarFooter={<ProfileMenu name={profileName} roleLabel={profileRoleLabel} avatarUrl={profileAvatarUrl} />}
       topbarActions={<DashboardDateSelector />}
+      contentPadding="compact"
     >
       <div className="space-y-6">
         <PersonalizedWelcomeHeader copy={{ greeting: "Team", subtitle: `Amoré Bloom's internal team members and invitations. ${getDataPersistenceMessage()}` }} />
@@ -220,29 +221,25 @@ export function TeamView({ branding, profileName, profileRoleLabel, profileAvata
           <MyDaySection littleReminder={littleReminder} privacyDetail="Your mood and water tracker are personal to you and are never visible to your team." />
         </div>
 
-        <div className="animate-fade-up stagger-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-5">
-          <div className="lg:col-span-2">
-            <TodaysPriorityCard priority={todaysPriority} />
-          </div>
-          <div className="lg:col-span-3">
-            <LuxuryCard>
-              <SectionHeader title="Upcoming Events" action={<Link href="/events" className="text-luxury-small font-medium text-luxury-rose">View all</Link>} />
-              {upcomingEvents.length === 0 ? (
-                <EmptyState title="No upcoming events" description="Booked events appear here." />
-              ) : (
-                <div className="space-y-1">
-                  {upcomingEvents.map((event) => (
-                    <EventPreviewCard key={event.id} data={event} />
-                  ))}
-                </div>
-              )}
-            </LuxuryCard>
-          </div>
+        <div className="animate-fade-up stagger-4 grid grid-cols-[38fr_62fr] items-start gap-1.5 sm:gap-3 lg:grid-cols-[2fr_3fr] lg:gap-4">
+          <TodaysPriorityCard priority={todaysPriority} compact className="min-w-0" />
+          <LuxuryCard padding="compact" className="min-w-0 lg:p-5">
+            <SectionHeader title="Upcoming Events" action={<Link href="/events" className="text-luxury-small font-medium text-luxury-rose">View all</Link>} />
+            {upcomingEvents.length === 0 ? (
+              <EmptyState title="No upcoming events" description="Booked events appear here." />
+            ) : (
+              <div className="space-y-1">
+                {upcomingEvents.map((event) => (
+                  <EventPreviewCard key={event.id} data={event} compact />
+                ))}
+              </div>
+            )}
+          </LuxuryCard>
         </div>
 
-        <div className="animate-fade-up stagger-5 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
-          <TodaysTimelineCard items={todaysTimeline} className="lg:col-span-2" />
-          <TodaysPulseCard metrics={todaysPulse} />
+        <div className="animate-fade-up stagger-5 grid grid-cols-[65fr_35fr] items-start gap-1.5 sm:gap-3 lg:grid-cols-[3fr_2fr] lg:gap-4">
+          <TodaysTimelineCard items={todaysTimeline} compact className="min-w-0" />
+          <TodaysPulseCard metrics={todaysPulse} compact className="min-w-0" />
         </div>
 
         {state.status === "loading" ? (

@@ -120,10 +120,15 @@ export function MoodCheckInCard({ privacyDetail, compact = false }: { privacyDet
           </button>
         </div>
       ) : (
-        <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Select your mood">
+        <div
+          className={compact ? "mt-2 grid grid-cols-2 gap-1.5 lg:flex lg:flex-wrap lg:gap-1" : "mt-2 flex flex-wrap gap-1.5"}
+          role="group"
+          aria-label="Select your mood"
+        >
           {MOOD_VALUES.map((value) => {
             const Icon = MOOD_ICONS[value];
             const selected = mood === value;
+            const spansFullRow = compact && (value === "overwhelmed" || value === "prefer_not_to_say");
             return (
               <button
                 key={value}
@@ -131,13 +136,15 @@ export function MoodCheckInCard({ privacyDetail, compact = false }: { privacyDet
                 onClick={() => handleSelect(value)}
                 disabled={loading}
                 aria-pressed={selected}
-                className={`inline-flex min-h-9 items-center gap-1.5 rounded-luxury-full border px-3 py-1.5 text-luxury-small font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:[box-shadow:var(--luxury-focus-ring)] disabled:opacity-50 ${
+                className={`inline-flex items-center rounded-luxury-full border font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:[box-shadow:var(--luxury-focus-ring)] disabled:opacity-50 ${
+                  compact ? "min-h-9 justify-center gap-1.5 px-2.5 py-1.5 text-luxury-small lg:min-h-8 lg:gap-1 lg:px-2 lg:py-1" : "min-h-9 gap-1.5 px-3 py-1.5 text-luxury-small"
+                } ${spansFullRow ? "col-span-2 lg:col-span-1" : ""} ${
                   selected ? "border-luxury-rose bg-luxury-blush text-luxury-blush-foreground" : "border-luxury-border bg-luxury-surface text-luxury-text-muted hover:border-luxury-rose/40 hover:text-luxury-text"
                 }`}
               >
-                <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" strokeWidth={2} />
+                <Icon className={`shrink-0 ${compact ? "h-3.5 w-3.5 lg:h-3 lg:w-3" : "h-3.5 w-3.5"}`} aria-hidden="true" strokeWidth={2} />
                 <span>{MOOD_LABELS[value]}</span>
-                {selected ? <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" strokeWidth={2.5} /> : null}
+                {selected ? <Check className={`shrink-0 ${compact ? "h-3.5 w-3.5 lg:h-3 lg:w-3" : "h-3.5 w-3.5"}`} aria-hidden="true" strokeWidth={2.5} /> : null}
               </button>
             );
           })}

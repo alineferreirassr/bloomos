@@ -12,20 +12,20 @@ export interface TodaysPulseMetric {
   value: string;
 }
 
-export function TodaysPulseCard({ metrics, className = "" }: { metrics: TodaysPulseMetric[]; className?: string }) {
+export function TodaysPulseCard({ metrics, compact = false, className = "" }: { metrics: TodaysPulseMetric[]; compact?: boolean; className?: string }) {
   const allZero = metrics.length > 0 && metrics.every((metric) => metric.value === "0");
   return (
-    <LuxuryCard className={className}>
+    <LuxuryCard padding={compact ? "compact" : "default"} className={`${compact ? "lg:p-5" : ""} ${className}`}>
       <h2 className="font-luxury-display text-luxury-card-heading font-semibold text-luxury-text">Today&apos;s Pulse</h2>
-      <dl className="mt-3 space-y-2.5">
+      <dl className={compact ? "mt-2 space-y-1.5" : "mt-3 space-y-2.5"}>
         {metrics.map((metric, index) => (
-          <div key={metric.label} className={`flex items-center justify-between ${index > 0 ? "border-t border-luxury-border pt-2.5" : ""}`}>
+          <div key={metric.label} className={`flex items-center justify-between ${index > 0 ? `border-t border-luxury-border ${compact ? "pt-1.5" : "pt-2.5"}` : ""}`}>
             <dt className="text-luxury-small text-luxury-text-muted">{metric.label}</dt>
             <dd className="font-luxury-display text-luxury-card-heading font-semibold text-luxury-text">{metric.value}</dd>
           </div>
         ))}
       </dl>
-      {allZero ? <p className="mt-3 text-luxury-small text-luxury-rose">All done for today ♡</p> : null}
+      {allZero ? <p className="mt-2 text-luxury-small text-luxury-rose">All done for today ♡</p> : null}
     </LuxuryCard>
   );
 }

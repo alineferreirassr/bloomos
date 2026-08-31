@@ -12,8 +12,20 @@ export interface EventPreviewCardData {
   href: string;
 }
 
-/** Checkpoint 19, Step 3/6 — one row in the Owner Dashboard's "Upcoming Events" list: a small thumbnail, a day/month date badge, title, time, and category pill — matches the approved Owner reference image's list rows exactly. */
-export function EventPreviewCard({ data }: { data: EventPreviewCardData }) {
+/**
+ * Checkpoint 19, Step 3/6 — one row in the Owner Dashboard's "Upcoming
+ * Events" list: a small thumbnail, a day/month date badge, title, time, and
+ * category pill — matches the approved Owner reference image's list rows
+ * exactly.
+ *
+ * "Mobile Legibility Correction" addendum — `compact` (opt-in, default
+ * `false`) lets the title wrap onto two lines instead of hard-truncating to
+ * one, since Team's narrower mobile "Upcoming Events" column was cutting a
+ * real event title down to two or three characters ("Whi..."). Owner
+ * Dashboard's own usage passes no `compact`, so its wider column — where
+ * truncation rarely even triggers — renders exactly as before.
+ */
+export function EventPreviewCard({ data, compact = false }: { data: EventPreviewCardData; compact?: boolean }) {
   return (
     <Link
       href={data.href}
@@ -27,7 +39,7 @@ export function EventPreviewCard({ data }: { data: EventPreviewCardData }) {
         <span className="font-luxury-display text-base leading-none font-semibold text-luxury-text">{data.dayLabel}</span>
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-luxury-body font-semibold text-luxury-text">{data.title}</span>
+        <span className={`block text-luxury-body font-semibold text-luxury-text ${compact ? "line-clamp-2 break-words" : "truncate"}`}>{data.title}</span>
         <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
           {data.timeLabel ? <span className="text-luxury-small text-luxury-text-muted">{data.timeLabel}</span> : null}
           <span className="rounded-luxury-full bg-luxury-blush px-2 py-0.5 text-[10px] font-semibold text-luxury-blush-foreground">{data.categoryLabel}</span>

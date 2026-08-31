@@ -73,7 +73,7 @@ export function ClientDashboardView({ data }: ClientDashboardViewProps) {
   };
 
   return (
-    <LuxuryClientDashboardShell logoUrl={data.logoUrl} brandName={data.brandName} sidebarFooter={<p className="text-luxury-small text-luxury-text-muted">Need help? Reach out anytime.</p>}>
+    <LuxuryClientDashboardShell logoUrl={data.logoUrl} brandName={data.brandName} sidebarFooter={<p className="text-luxury-small text-luxury-text-muted">Need help? Reach out anytime.</p>} contentPadding="compact">
       <div className="space-y-6">
         <PersonalizedWelcomeHeader copy={data.welcome} />
 
@@ -99,13 +99,15 @@ export function ClientDashboardView({ data }: ClientDashboardViewProps) {
             Timeline check. No Upcoming Events here — explicitly out of scope for
             Client per the Founder's own addendum. No Today's Pulse — no client-safe
             metric exists that wouldn't just duplicate Portal Summary below. */}
-        <div className="animate-fade-up stagger-1 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
-          <TodaysPriorityCard priority={data.todaysPriority ? { headline: data.todaysPriority } : null} className="lg:col-span-2" />
-          <LittleReminderCard reminder={null} />
+        <div className="animate-fade-up stagger-1 grid grid-cols-[70fr_30fr] items-start gap-1.5 sm:gap-3 lg:grid-cols-[2fr_1fr] lg:gap-4">
+          <TodaysPriorityCard priority={data.todaysPriority ? { headline: data.todaysPriority } : null} compact className="min-w-0" />
+          <div className="min-w-0">
+            <LittleReminderCard reminder={null} compact />
+          </div>
         </div>
 
         <div className="animate-fade-up stagger-1">
-          <TodaysTimelineCard items={data.todaysTimeline} showFooterLinks={false} />
+          <TodaysTimelineCard items={data.todaysTimeline} showFooterLinks={false} compact />
         </div>
 
         <div className="animate-fade-up stagger-1">

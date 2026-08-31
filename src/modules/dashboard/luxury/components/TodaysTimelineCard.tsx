@@ -15,6 +15,7 @@ export function TodaysTimelineCard({
   addEventHref = "/calendar",
   viewCalendarHref = "/calendar",
   showFooterLinks = true,
+  compact = false,
   className = "",
 }: {
   items: ScheduleTimelineItemData[];
@@ -22,24 +23,26 @@ export function TodaysTimelineCard({
   viewCalendarHref?: string;
   /** False for the Client Portal, which has no internal `/calendar` route of its own — never point a client at BloomOS's internal team calendar. */
   showFooterLinks?: boolean;
+  /** Trims card padding and empty-state spacing for narrow paired layouts — opt-in, default unchanged. */
+  compact?: boolean;
   className?: string;
 }) {
   return (
-    <LuxuryCard className={className}>
+    <LuxuryCard padding={compact ? "compact" : "default"} className={`${compact ? "lg:p-5" : ""} ${className}`}>
       <h2 className="font-luxury-display text-luxury-card-heading font-semibold text-luxury-text">Today&apos;s Timeline</h2>
       <p className="mt-1 text-luxury-small text-luxury-text-muted">A gentle look at your day.</p>
       {items.length === 0 ? (
-        <div className="mt-4 space-y-1">
+        <div className={`${compact ? "mt-2" : "mt-4"} space-y-1`}>
           <p className="font-luxury-display text-lg leading-tight font-semibold text-luxury-text">Your day is open ♡</p>
           <p className="text-luxury-small text-luxury-text-muted">Nothing is scheduled yet.</p>
         </div>
       ) : (
-        <div className="mt-4">
+        <div className={compact ? "mt-2" : "mt-4"}>
           <ScheduleTimeline items={items} />
         </div>
       )}
       {showFooterLinks ? (
-        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-luxury-border pt-3">
+        <div className={`${compact ? "mt-2" : "mt-4"} flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-luxury-border pt-3`}>
           <Link href={addEventHref} className="text-luxury-small font-medium text-luxury-rose hover:underline">
             + Add event
           </Link>
