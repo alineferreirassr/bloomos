@@ -1,5 +1,5 @@
-import { CalendarDashboardView } from "@/modules/scheduling/components/CalendarDashboardView";
+import { AdvancedCalendarView } from "@/modules/calendar/components/AdvancedCalendarView";
 
 export default function CalendarPage() {
-  return <CalendarDashboardView />;
+  return <AdvancedCalendarView />;
 }

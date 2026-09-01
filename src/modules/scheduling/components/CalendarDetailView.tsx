@@ -96,7 +96,7 @@ export function CalendarDetailView({ calendarId }: { calendarId: string }) {
 
   return (
     <div>
-      <PageHeader title={calendar.name} subtitle={calendar.description ?? `${calendar.context_type.replace(/_/g, " ")} calendar in ${calendar.time_zone}.`} icon={EventsIcon} breadcrumb={[{ label: "Calendar", href: "/calendar" }, { label: calendar.name }]} />
+      <PageHeader title={calendar.name} subtitle={calendar.description ?? `${calendar.context_type.replace(/_/g, " ")} calendar in ${calendar.time_zone}.`} icon={EventsIcon} breadcrumb={[{ label: "Scheduling", href: "/scheduling" }, { label: calendar.name }]} />
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <KpiCard label="Upcoming Appointments" value={String(view?.entries.length ?? 0)} icon={EventsIcon} />

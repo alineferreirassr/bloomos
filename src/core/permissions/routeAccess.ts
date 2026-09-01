@@ -82,8 +82,18 @@ export const ROUTE_ACCESS_MAP: RouteAccessEntry[] = [
   // Action itself, the same "route view, action-level manage" split
   // `/client-portal` already uses.
   { prefix: "/assets", requirement: { kind: "permission", permission: "assets.view" } },
-  // v2.0 Checkpoint 27 — Enterprise Scheduling Platform. Same minimal session-gate discipline `workforceActions.ts`/`capabilityActions.ts` use — `scheduling.manage` exists in `permissionMatrix.ts` for future UI-level gating of create/edit affordances, never checked inline in `schedulingActions.ts` itself.
-  { prefix: "/calendar", requirement: { kind: "permission", permission: "scheduling.view" } },
+  // Advanced Calendar phase — `/calendar` is now the operational Month/Week/
+  // Day/Agenda calendar (a view over Events/Tasks), gated the same as
+  // `/events` since that's the domain it actually reads.
+  { prefix: "/calendar", requirement: { kind: "permission", permission: "events.view" } },
+  // v2.0 Checkpoint 27 — Enterprise Scheduling Platform. Relocated from
+  // `/calendar` to `/scheduling` during the Advanced Calendar phase once
+  // `/calendar` itself became the real day-planner — same minimal
+  // session-gate discipline `workforceActions.ts`/`capabilityActions.ts`
+  // use; `scheduling.manage` exists in `permissionMatrix.ts` for future
+  // UI-level gating of create/edit affordances, never checked inline in
+  // `schedulingActions.ts` itself.
+  { prefix: "/scheduling", requirement: { kind: "permission", permission: "scheduling.view" } },
   // v2.0 Checkpoint 27.1 — Resource Allocation Platform. Same discipline — `allocations.manage` exists in `permissionMatrix.ts` for future UI-level gating, never checked inline in `allocationActions.ts` itself. Covers `/allocations`, `/allocations/requests/[id]`, and `/allocations/bundles` via prefix matching.
   { prefix: "/allocations", requirement: { kind: "permission", permission: "allocations.view" } },
   // v2.0 Checkpoint 27.2 — Operational Planning Platform. Same discipline — `operational_planning.manage` exists in `permissionMatrix.ts` for future UI-level gating, never checked inline in `operationalPlanningActions.ts` itself. Named `/operational-planning`, not `/operations` — Checkpoint 21's Operations Dashboard already owns that prefix and is a distinct concept (live event execution vs. reusable execution plans). Covers `/operational-planning`, `/operational-planning/plans/[id]`, and `/operational-planning/templates` via prefix matching.

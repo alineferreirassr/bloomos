@@ -50,7 +50,7 @@ function CalendarRow({ calendar, healthScore, appointmentCount }: { calendar: Ca
       </div>
       <div className="flex items-center gap-2">
         {healthScore !== undefined ? <span className="text-xs text-text-muted">Health {Math.round(healthScore)}</span> : null}
-        <Link href={`/calendar/${calendar.id}`}>
+        <Link href={`/scheduling/${calendar.id}`}>
           <Button variant="secondary">View</Button>
         </Link>
       </div>
