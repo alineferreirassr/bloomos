@@ -32,6 +32,11 @@ export const ROUTE_ACCESS_MAP: RouteAccessEntry[] = [
   { prefix: "/workspace", requirement: { kind: "active-membership" } },
   { prefix: "/dashboard", requirement: { kind: "active-membership" } },
   { prefix: "/account", requirement: { kind: "active-membership" } },
+  // AF-inspired Relationships/CRM landing (Checkpoint "Relationships UX
+  // Phase 01") — same gate as /clients since the landing surfaces both
+  // lead and client data; a member without clients.view has no CRM
+  // destination to land on anyway.
+  { prefix: "/relationships", requirement: { kind: "permission", permission: "clients.view" } },
   { prefix: "/leads", requirement: { kind: "permission", permission: "leads.view" } },
   { prefix: "/pipeline/commercial", requirement: { kind: "permission", permission: "leads.view" } },
   { prefix: "/pipeline/operational", requirement: { kind: "permission", permission: "events.view" } },
