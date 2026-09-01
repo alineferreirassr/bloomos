@@ -9,6 +9,10 @@ import { EXECUTIVE_DASHBOARD_WIDGET_LABELS, type ExecutiveDashboardWidgetId } fr
 /** A `DashboardWidgetPreference` whose `widgetId` is narrowed to this dashboard's own known widget ids — `getDashboardLayoutAction`/`saveDashboardLayoutAction` only ever persist ids from `EXECUTIVE_DASHBOARD_WIDGET_IDS`, so this cast reflects a real, server-enforced invariant rather than an unchecked assumption. */
 type KnownDashboardWidgetPreference = Omit<DashboardWidgetPreference, "widgetId"> & { widgetId: ExecutiveDashboardWidgetId };
 import { ExportMenu } from "@/modules/analytics/export/components/ExportMenu";
+import { PerformanceStorySection } from "@/modules/analytics/components/PerformanceStorySection";
+import { ClientBookingInsightsSection } from "@/modules/analytics/components/ClientBookingInsightsSection";
+import { OperationalInsightsSection } from "@/modules/analytics/components/OperationalInsightsSection";
+import { AttentionInsightsSection } from "@/modules/analytics/components/AttentionInsightsSection";
 import { Card } from "@/components/ui/Card";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -285,6 +289,11 @@ export function ExecutiveDashboardOverview() {
           <p className="mt-1 text-xs text-text-muted">Restricted — ask an Owner or Admin for the revenue forecast.</p>
         )}
       </Card>
+
+      <PerformanceStorySection />
+      <ClientBookingInsightsSection />
+      <OperationalInsightsSection />
+      <AttentionInsightsSection />
     </div>
   );
 }
