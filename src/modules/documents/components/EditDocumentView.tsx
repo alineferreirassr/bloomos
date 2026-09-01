@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getDocumentById, updateDocumentMetadata } from "@/lib/data";
+import { getDocumentById } from "@/lib/data";
+import { updateDocumentMetadataAction as updateDocumentMetadata } from "@/modules/documents/documentActions";
 import type { Document } from "@/types/document";
 import { NotFoundError } from "@/core/errors";
 import { Skeleton } from "@/components/ui/Skeleton";

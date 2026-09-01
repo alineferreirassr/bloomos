@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { createDocumentMetadata } from "@/lib/data";
+import { createDocumentMetadataAction as createDocumentMetadata } from "@/modules/documents/documentActions";
 import { DocumentForm } from "@/modules/documents/components/DocumentForm";
 import { documentMetadataFormToInput, type DocumentMetadataFormInput } from "@/modules/documents/schema";
 import type { EntityType } from "@/core/enums/entityType";

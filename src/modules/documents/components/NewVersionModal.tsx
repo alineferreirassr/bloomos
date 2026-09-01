@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { FormField } from "@/components/forms/FormField";
-import { createDocumentVersion } from "@/lib/data";
+import { createDocumentVersionAction as createDocumentVersion } from "@/modules/documents/documentActions";
 import { DOCUMENT_VISIBILITIES, DOCUMENT_VISIBILITY_LABELS } from "@/core/enums/documentVisibility";
 import { newDocumentVersionFormSchema, newDocumentVersionFormToInput, type NewDocumentVersionFormInput } from "@/modules/documents/schema";
 import type { Document } from "@/types/document";

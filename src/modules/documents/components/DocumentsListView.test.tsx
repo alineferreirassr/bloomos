@@ -41,6 +41,10 @@ vi.mock("@/lib/data", () => ({
   getPayments: vi.fn(),
 }));
 
+vi.mock("@/modules/documents/documentActions", () => ({
+  createDocumentFolderAction: vi.fn(),
+}));
+
 import * as dataLayer from "@/lib/data";
 
 function mockCommon() {

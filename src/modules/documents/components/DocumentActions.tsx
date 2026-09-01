@@ -4,7 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
-import { activateDocument, archiveDocument, expireDocument, restoreDocument, softDeleteDocument } from "@/lib/data";
+import {
+  activateDocumentAction as activateDocument,
+  archiveDocumentAction as archiveDocument,
+  expireDocumentAction as expireDocument,
+  restoreDocumentAction as restoreDocument,
+  softDeleteDocumentAction as softDeleteDocument,
+} from "@/modules/documents/documentActions";
 import type { Document } from "@/types/document";
 import { canTransitionDocumentStatus, isDocumentTerminal } from "@/core/workflows/documentWorkflow";
 import { ConfirmDocumentActionModal } from "@/modules/documents/components/ConfirmDocumentActionModal";

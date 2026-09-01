@@ -5,7 +5,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { FormField } from "@/components/forms/FormField";
-import { applyDefaultFolderTemplate } from "@/lib/data";
+import { applyDefaultFolderTemplateAction as applyDefaultFolderTemplate } from "@/modules/documents/documentActions";
 import { FOLDER_TEMPLATE_KINDS, type FolderTemplateKind } from "@/modules/documents/constants/folderTemplates";
 import type { DocumentFolder } from "@/types/documentFolder";
 

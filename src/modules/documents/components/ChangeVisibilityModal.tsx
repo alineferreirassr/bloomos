@@ -5,7 +5,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { FormField } from "@/components/forms/FormField";
-import { updateDocumentVisibility } from "@/lib/data";
+import { updateDocumentVisibilityAction as updateDocumentVisibility } from "@/modules/documents/documentActions";
 import { DOCUMENT_VISIBILITIES, DOCUMENT_VISIBILITY_LABELS, type DocumentVisibility } from "@/core/enums/documentVisibility";
 import type { Document } from "@/types/document";
 
@@ -37,7 +37,8 @@ export function ChangeVisibilityModal({ open, onClose, document, onChanged }: Ch
   return (
     <Modal open={open} onClose={onClose} title="Change Visibility">
       <p className="text-sm text-text-muted">
-        Presentation only in this phase — no authentication or access enforcement reads this value yet.
+        Changing this requires permission to manage Documents. This value does not yet restrict who on the team can
+        read the Document itself — that enforcement is a separate, not-yet-implemented phase.
       </p>
       <div className="mt-4">
         <FormField label="Visibility" htmlFor="change_visibility">

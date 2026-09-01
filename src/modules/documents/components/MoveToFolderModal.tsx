@@ -5,7 +5,8 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { FormField } from "@/components/forms/FormField";
-import { getDocumentFolders, moveDocumentToFolder } from "@/lib/data";
+import { getDocumentFolders } from "@/lib/data";
+import { moveDocumentToFolderAction as moveDocumentToFolder } from "@/modules/documents/documentActions";
 import type { DocumentFolder } from "@/types/documentFolder";
 import type { Document } from "@/types/document";
 

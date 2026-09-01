@@ -25,15 +25,20 @@ function renderFolderActions(props: Parameters<typeof FolderActions>[0]) {
 }
 
 vi.mock("@/lib/data", () => ({
-  archiveDocumentFolder: vi.fn(),
-  restoreDocumentFolder: vi.fn(),
-  createDocumentFolder: vi.fn(),
-  updateDocumentFolder: vi.fn(),
   getDocumentFolders: vi.fn(),
-  applyDefaultFolderTemplate: vi.fn(),
+}));
+
+vi.mock("@/modules/documents/documentActions", () => ({
+  archiveDocumentFolderAction: vi.fn(),
+  restoreDocumentFolderAction: vi.fn(),
+  createDocumentFolderAction: vi.fn(),
+  updateDocumentFolderAction: vi.fn(),
+  moveDocumentFolderAction: vi.fn(),
+  applyDefaultFolderTemplateAction: vi.fn(),
 }));
 
 import * as dataLayer from "@/lib/data";
+import * as documentActions from "@/modules/documents/documentActions";
 
 describe("FolderActions", () => {
   beforeEach(() => {
@@ -62,7 +67,7 @@ describe("FolderActions", () => {
 
   it("archives directly, without a confirmation modal", async () => {
     const user = userEvent.setup();
-    vi.mocked(dataLayer.archiveDocumentFolder).mockResolvedValue({
+    vi.mocked(documentActions.archiveDocumentFolderAction).mockResolvedValue({
       success: true,
       data: makeDocumentFolder({ archived_at: "2026-01-01T00:00:00.000Z" }),
     });
@@ -71,13 +76,13 @@ describe("FolderActions", () => {
 
     await user.click(screen.getByRole("button", { name: /^archive$/i }));
 
-    await waitFor(() => expect(dataLayer.archiveDocumentFolder).toHaveBeenCalledWith("docfolder_1"));
+    await waitFor(() => expect(documentActions.archiveDocumentFolderAction).toHaveBeenCalledWith("docfolder_1"));
     expect(onChanged).toHaveBeenCalled();
   });
 
   it("restores directly, without a confirmation modal", async () => {
     const user = userEvent.setup();
-    vi.mocked(dataLayer.restoreDocumentFolder).mockResolvedValue({ success: true, data: makeDocumentFolder() });
+    vi.mocked(documentActions.restoreDocumentFolderAction).mockResolvedValue({ success: true, data: makeDocumentFolder() });
     const onChanged = vi.fn();
     renderFolderActions({
       folder: makeDocumentFolder({ id: "docfolder_1", archived_at: "2026-01-01T00:00:00.000Z" }),
@@ -87,13 +92,13 @@ describe("FolderActions", () => {
 
     await user.click(screen.getByRole("button", { name: /restore/i }));
 
-    await waitFor(() => expect(dataLayer.restoreDocumentFolder).toHaveBeenCalledWith("docfolder_1"));
+    await waitFor(() => expect(documentActions.restoreDocumentFolderAction).toHaveBeenCalledWith("docfolder_1"));
     expect(onChanged).toHaveBeenCalled();
   });
 
   it("renames through the Rename modal", async () => {
     const user = userEvent.setup();
-    vi.mocked(dataLayer.updateDocumentFolder).mockResolvedValue({ success: true, data: makeDocumentFolder({ name: "Renamed" }) });
+    vi.mocked(documentActions.updateDocumentFolderAction).mockResolvedValue({ success: true, data: makeDocumentFolder({ name: "Renamed" }) });
     const onChanged = vi.fn();
     renderFolderActions({ folder: makeDocumentFolder({ id: "docfolder_1", name: "Old Name" }), childCount: 0, onChanged });
 
@@ -105,9 +110,29 @@ describe("FolderActions", () => {
     await user.click(within(dialog).getByRole("button", { name: /^save$/i }));
 
     await waitFor(() =>
-      expect(dataLayer.updateDocumentFolder).toHaveBeenCalledWith(
+      expect(documentActions.updateDocumentFolderAction).toHaveBeenCalledWith(
         "docfolder_1",
         expect.objectContaining({ name: "Renamed" }),
+      ),
+    );
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("creates a subfolder through the Add Subfolder modal, using the protected action", async () => {
+    const user = userEvent.setup();
+    vi.mocked(documentActions.createDocumentFolderAction).mockResolvedValue({ success: true, data: makeDocumentFolder({ name: "New Sub" }) });
+    const onChanged = vi.fn();
+    renderFolderActions({ folder: makeDocumentFolder({ id: "docfolder_1" }), childCount: 2, onChanged });
+
+    await user.click(screen.getByRole("button", { name: /add subfolder/i }));
+    const dialog = await screen.findByRole("dialog", { name: /add subfolder/i });
+    const nameField = within(dialog).getByLabelText(/^name \*/i);
+    await user.type(nameField, "New Sub");
+    await user.click(within(dialog).getByRole("button", { name: /^create$/i }));
+
+    await waitFor(() =>
+      expect(documentActions.createDocumentFolderAction).toHaveBeenCalledWith(
+        expect.objectContaining({ parent_folder_id: "docfolder_1", name: "New Sub" }),
       ),
     );
     expect(onChanged).toHaveBeenCalled();

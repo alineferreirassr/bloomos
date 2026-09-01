@@ -28,18 +28,22 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
+vi.mock("@/modules/documents/documentActions", () => ({
+  activateDocumentAction: vi.fn(),
+  archiveDocumentAction: vi.fn(),
+  expireDocumentAction: vi.fn(),
+  restoreDocumentAction: vi.fn(),
+  softDeleteDocumentAction: vi.fn(),
+  updateDocumentVisibilityAction: vi.fn(),
+  moveDocumentToFolderAction: vi.fn(),
+  createDocumentVersionAction: vi.fn(),
+}));
+
 vi.mock("@/lib/data", () => ({
-  activateDocument: vi.fn(),
-  archiveDocument: vi.fn(),
-  expireDocument: vi.fn(),
-  restoreDocument: vi.fn(),
-  softDeleteDocument: vi.fn(),
-  updateDocumentVisibility: vi.fn(),
-  moveDocumentToFolder: vi.fn(),
-  createDocumentVersion: vi.fn(),
   getDocumentFolders: vi.fn(),
 }));
 
+import * as documentActions from "@/modules/documents/documentActions";
 import * as dataLayer from "@/lib/data";
 
 describe("DocumentActions", () => {
@@ -75,20 +79,20 @@ describe("DocumentActions", () => {
 
   it("activates directly, without a confirmation modal", async () => {
     const user = userEvent.setup();
-    vi.mocked(dataLayer.activateDocument).mockResolvedValue({ success: true, data: makeDocument({ status: "active" }) });
+    vi.mocked(documentActions.activateDocumentAction).mockResolvedValue({ success: true, data: makeDocument({ status: "active" }) });
     const onChanged = vi.fn();
     renderDocumentActions({ document: makeDocument({ id: "document_1", status: "draft" }), onChanged: onChanged });
 
     await user.click(screen.getByRole("button", { name: /^activate$/i }));
 
-    await waitFor(() => expect(dataLayer.activateDocument).toHaveBeenCalledWith("document_1"));
+    await waitFor(() => expect(documentActions.activateDocumentAction).toHaveBeenCalledWith("document_1"));
     expect(onChanged).toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("archives through a confirmation modal", async () => {
     const user = userEvent.setup();
-    vi.mocked(dataLayer.archiveDocument).mockResolvedValue({ success: true, data: makeDocument({ status: "archived" }) });
+    vi.mocked(documentActions.archiveDocumentAction).mockResolvedValue({ success: true, data: makeDocument({ status: "archived" }) });
     const onChanged = vi.fn();
     renderDocumentActions({ document: makeDocument({ id: "document_1", status: "active" }), onChanged: onChanged });
 
@@ -96,13 +100,13 @@ describe("DocumentActions", () => {
     const dialog = screen.getByRole("dialog", { name: /archive document/i });
     await user.click(within(dialog).getByRole("button", { name: /^archive$/i }));
 
-    await waitFor(() => expect(dataLayer.archiveDocument).toHaveBeenCalledWith("document_1"));
+    await waitFor(() => expect(documentActions.archiveDocumentAction).toHaveBeenCalledWith("document_1"));
     expect(onChanged).toHaveBeenCalled();
   });
 
   it("soft-deletes through a confirmation modal", async () => {
     const user = userEvent.setup();
-    vi.mocked(dataLayer.softDeleteDocument).mockResolvedValue({ success: true, data: makeDocument({ status: "deleted" }) });
+    vi.mocked(documentActions.softDeleteDocumentAction).mockResolvedValue({ success: true, data: makeDocument({ status: "deleted" }) });
     const onChanged = vi.fn();
     renderDocumentActions({ document: makeDocument({ id: "document_1", status: "active" }), onChanged: onChanged });
 
@@ -110,13 +114,13 @@ describe("DocumentActions", () => {
     const dialog = screen.getByRole("dialog", { name: /soft delete document/i });
     await user.click(within(dialog).getByRole("button", { name: /soft delete/i }));
 
-    await waitFor(() => expect(dataLayer.softDeleteDocument).toHaveBeenCalledWith("document_1"));
+    await waitFor(() => expect(documentActions.softDeleteDocumentAction).toHaveBeenCalledWith("document_1"));
     expect(onChanged).toHaveBeenCalled();
   });
 
   it("changes visibility through the Change Visibility modal", async () => {
     const user = userEvent.setup();
-    vi.mocked(dataLayer.updateDocumentVisibility).mockResolvedValue({
+    vi.mocked(documentActions.updateDocumentVisibilityAction).mockResolvedValue({
       success: true,
       data: makeDocument({ visibility: "client" }),
     });
@@ -128,13 +132,13 @@ describe("DocumentActions", () => {
     await user.selectOptions(within(dialog).getByLabelText(/visibility/i), "client");
     await user.click(within(dialog).getByRole("button", { name: /^save$/i }));
 
-    await waitFor(() => expect(dataLayer.updateDocumentVisibility).toHaveBeenCalledWith("document_1", "client"));
+    await waitFor(() => expect(documentActions.updateDocumentVisibilityAction).toHaveBeenCalledWith("document_1", "client"));
     expect(onChanged).toHaveBeenCalled();
   });
 
   it("surfaces an error and does not call onChanged when a quick action fails", async () => {
     const user = userEvent.setup();
-    vi.mocked(dataLayer.archiveDocument).mockResolvedValue({ success: false, error: "This document is already archived." });
+    vi.mocked(documentActions.archiveDocumentAction).mockResolvedValue({ success: false, error: "This document is already archived." });
     const onChanged = vi.fn();
     renderDocumentActions({ document: makeDocument({ id: "document_1", status: "active" }), onChanged: onChanged });
 
@@ -148,7 +152,7 @@ describe("DocumentActions", () => {
 
   it("creates a new version through the Add New Version modal and navigates to it", async () => {
     const user = userEvent.setup();
-    vi.mocked(dataLayer.createDocumentVersion).mockResolvedValue({
+    vi.mocked(documentActions.createDocumentVersionAction).mockResolvedValue({
       success: true,
       data: makeDocument({ id: "document_2", version: 2 }),
     });
@@ -160,7 +164,7 @@ describe("DocumentActions", () => {
     await user.click(within(dialog).getByRole("button", { name: /add version/i }));
 
     await waitFor(() =>
-      expect(dataLayer.createDocumentVersion).toHaveBeenCalledWith(
+      expect(documentActions.createDocumentVersionAction).toHaveBeenCalledWith(
         expect.objectContaining({ document_id: "document_1", media_asset_id: "media_1" }),
       ),
     );
@@ -168,7 +172,7 @@ describe("DocumentActions", () => {
 
   it("creates a metadata-only new version when the MediaAsset id field is left blank", async () => {
     const user = userEvent.setup();
-    vi.mocked(dataLayer.createDocumentVersion).mockResolvedValue({
+    vi.mocked(documentActions.createDocumentVersionAction).mockResolvedValue({
       success: true,
       data: makeDocument({ id: "document_2", version: 2 }),
     });
@@ -179,7 +183,7 @@ describe("DocumentActions", () => {
     await user.click(within(dialog).getByRole("button", { name: /add version/i }));
 
     await waitFor(() =>
-      expect(dataLayer.createDocumentVersion).toHaveBeenCalledWith(
+      expect(documentActions.createDocumentVersionAction).toHaveBeenCalledWith(
         expect.objectContaining({ document_id: "document_1", media_asset_id: null }),
       ),
     );

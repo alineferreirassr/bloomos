@@ -2,7 +2,12 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { archiveDocumentFolder, createDocumentFolder, restoreDocumentFolder, updateDocumentFolder } from "@/lib/data";
+import {
+  archiveDocumentFolderAction as archiveDocumentFolder,
+  restoreDocumentFolderAction as restoreDocumentFolder,
+  createDocumentFolderAction as createDocumentFolder,
+  updateDocumentFolderAction as updateDocumentFolder,
+} from "@/modules/documents/documentActions";
 import type { DocumentFolder } from "@/types/documentFolder";
 import { FolderFormModal } from "@/modules/documents/components/FolderFormModal";
 import { MoveFolderModal } from "@/modules/documents/components/MoveFolderModal";
