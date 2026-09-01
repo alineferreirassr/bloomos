@@ -69,6 +69,14 @@ vi.mock("@/lib/data", () => ({
   recordInventoryMovement: vi.fn(),
 }));
 
+vi.mock("@/modules/finance/financeActions", () => ({
+  getEventFinancialSummaryAction: vi.fn(),
+}));
+
+vi.mock("@/modules/weather/weatherActions", () => ({
+  getEventWeatherAction: vi.fn(),
+}));
+
 // `generateEventOperationsBrief` is a `"use server"` action whose real
 // module graph reaches `fetchEventContext.server.ts` (guarded by the
 // `server-only` package) — Next's real RSC build compiles a `"use server"`
@@ -113,6 +121,8 @@ vi.mock("@/modules/communication/timeline/components/EntityTimelinePanel", () =>
 vi.mock("@/modules/communication/comments/components/CommentsPanel", () => ({ CommentsPanel: () => null }));
 
 import * as dataLayer from "@/lib/data";
+import * as financeActions from "@/modules/finance/financeActions";
+import * as weatherActions from "@/modules/weather/weatherActions";
 
 function mockReady(overrides: Partial<ReturnType<typeof makeEvent>> = {}) {
   const event = makeEvent({
@@ -135,6 +145,35 @@ function mockReady(overrides: Partial<ReturnType<typeof makeEvent>> = {}) {
   vi.mocked(dataLayer.getChecklistByEventId).mockResolvedValue([]);
   vi.mocked(dataLayer.getScheduleByEventId).mockResolvedValue([]);
   vi.mocked(dataLayer.getEventNextAction).mockResolvedValue(null);
+  vi.mocked(financeActions.getEventFinancialSummaryAction).mockResolvedValue({
+    success: true,
+    data: {
+      contracted_value_minor: 0,
+      invoiced_total_minor: 0,
+      collected_minor: 0,
+      refunded_minor: 0,
+      outstanding_minor: 0,
+      expense_total_minor: 0,
+      planned_expense_total_minor: 0,
+      committed_expense_total_minor: 0,
+      paid_expense_total_minor: 0,
+      gross_profit_minor: 0,
+      net_profit_minor: 0,
+      cash_profit_minor: 0,
+      gross_margin_percent: 0,
+      deposit_required_minor: 0,
+      deposit_paid_minor: 0,
+      deposit_balance_minor: 0,
+      payment_completion_percentage: 0,
+    },
+  });
+  vi.mocked(weatherActions.getEventWeatherAction).mockResolvedValue({
+    success: false,
+    error: "Weather unavailable for this event.",
+  });
+  // Still called directly by eventOperationsData.ts (EventCommandCenter's own
+  // data source) — EventDetailView.tsx itself moved to
+  // getEventFinancialSummaryAction above, but that's a separate consumer.
   vi.mocked(dataLayer.getEventFinancialSummary).mockResolvedValue({
     contracted_value_minor: 0,
     invoiced_total_minor: 0,
@@ -142,8 +181,13 @@ function mockReady(overrides: Partial<ReturnType<typeof makeEvent>> = {}) {
     refunded_minor: 0,
     outstanding_minor: 0,
     expense_total_minor: 0,
+    planned_expense_total_minor: 0,
+    committed_expense_total_minor: 0,
+    paid_expense_total_minor: 0,
     gross_profit_minor: 0,
     net_profit_minor: 0,
+    cash_profit_minor: 0,
+    gross_margin_percent: 0,
     deposit_required_minor: 0,
     deposit_paid_minor: 0,
     deposit_balance_minor: 0,

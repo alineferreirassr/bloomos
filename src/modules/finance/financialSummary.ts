@@ -35,9 +35,22 @@ export interface EventFinancialSummary {
   collected_minor: number;
   refunded_minor: number;
   outstanding_minor: number;
+  /** Canonical "Accrual Expenses" — every non-cancelled Expense regardless of its payment status (planned/approved/due/paid/reimbursed/archived all count). Unchanged by the Finance F1 pass — see the three status-scoped fields below for planned vs. committed vs. actually-paid breakdowns. */
   expense_total_minor: number;
+  /** Canonical "Planned Expenses" — status === "planned" only: a cost estimate not yet approved. */
+  planned_expense_total_minor: number;
+  /** Canonical "Committed Expenses" — status in ("approved","due"): approved and/or obligated, but no cash has left the business yet. */
+  committed_expense_total_minor: number;
+  /** Canonical "Paid Expenses" — status in ("paid","reimbursed"): cash actually spent. Note this plus planned+committed will not always equal `expense_total_minor`, since "archived" expenses count toward the accrual total but their pre-archive status isn't separately tracked here — see financialSummary.ts's own module doc comment. */
+  paid_expense_total_minor: number;
+  /** Revenue-basis profit: Invoiced Revenue minus Accrual Expenses — "what this Event is expected to net once everything billed is collected and every committed cost is accounted for." Unchanged by Finance F1. */
   gross_profit_minor: number;
+  /** Collected cash minus Accrual Expenses — the codebase's existing "Net Profit," unchanged by Finance F1. Note this mixes a cash-basis revenue figure with an accrual-basis expense figure by design (see the module doc comment) — for a pure cash-in/cash-out figure use `cash_profit_minor` instead. */
   net_profit_minor: number;
+  /** Canonical "Cash Profit" — Collected Cash minus Paid Expenses: the one pure cash-basis figure in this summary (money that has actually moved in both directions). New in Finance F1. */
+  cash_profit_minor: number;
+  /** Canonical "Profit Margin" — Gross Profit as a percentage of Invoiced Revenue. New in Finance F1; 0 when there's no invoiced revenue to divide by (matches `calculatePercentage`'s own zero-denominator behavior). */
+  gross_margin_percent: number;
   deposit_required_minor: number;
   deposit_paid_minor: number;
   deposit_balance_minor: number;
@@ -62,6 +75,23 @@ export interface EventFinancialSummary {
  *   rather than recomputing `invoiced_total_minor - collected_minor`, since
  *   a standalone Payment (no invoice_id) that isn't tied to any Invoice
  *   would otherwise be double-counted as "collected but not invoiced".
+ *
+ * Finance F1 — canonical semantics contract (see docs/finance-canonical-semantics.md
+ * for the full write-up shared across every future Finance surface):
+ * revenue has two bases (`invoiced_total_minor` = accrual, `collected_minor`
+ * = cash) and, as of this pass, so do expenses (`expense_total_minor` =
+ * accrual/"Accrual Expenses" regardless of payment status, unchanged; the
+ * new `planned_expense_total_minor`/`committed_expense_total_minor`/
+ * `paid_expense_total_minor` split that same population by status). Three
+ * profit figures follow from those two bases: `gross_profit_minor`
+ * (invoiced − accrual expenses, unchanged), `net_profit_minor` (collected −
+ * accrual expenses, unchanged — a deliberate cash-revenue/accrual-expense
+ * hybrid that already existed before this pass), and the new
+ * `cash_profit_minor` (collected − paid expenses, the one figure in this
+ * summary where both sides are real cash that has actually moved). No
+ * existing field's meaning changed in this pass — every addition above is
+ * a new, separately-named field precisely so nothing that already reads
+ * this type silently starts seeing a different number under the same name.
  */
 /**
  * Pure — the shared arithmetic behind both computeEventFinancialSummary and
@@ -89,9 +119,18 @@ function summarizeFinancials(
   const collected_minor = Math.max(0, subtractMinor(grossCollected, refunded_minor));
 
   const expense_total_minor = sumMinor(expenses.map((e) => e.amount_minor));
+  const planned_expense_total_minor = sumMinor(expenses.filter((e) => e.status === "planned").map((e) => e.amount_minor));
+  const committed_expense_total_minor = sumMinor(
+    expenses.filter((e) => e.status === "approved" || e.status === "due").map((e) => e.amount_minor),
+  );
+  const paid_expense_total_minor = sumMinor(
+    expenses.filter((e) => e.status === "paid" || e.status === "reimbursed").map((e) => e.amount_minor),
+  );
 
   const gross_profit_minor = subtractMinor(invoiced_total_minor, expense_total_minor);
   const net_profit_minor = subtractMinor(collected_minor, expense_total_minor);
+  const cash_profit_minor = subtractMinor(collected_minor, paid_expense_total_minor);
+  const gross_margin_percent = calculatePercentage(gross_profit_minor, invoiced_total_minor);
 
   const depositRequiringContracts = contracts.filter((c) => c.deposit_required);
   const deposit_required_minor = sumMinor(
@@ -116,8 +155,13 @@ function summarizeFinancials(
     refunded_minor,
     outstanding_minor,
     expense_total_minor,
+    planned_expense_total_minor,
+    committed_expense_total_minor,
+    paid_expense_total_minor,
     gross_profit_minor,
     net_profit_minor,
+    cash_profit_minor,
+    gross_margin_percent,
     deposit_required_minor,
     deposit_paid_minor,
     deposit_balance_minor,

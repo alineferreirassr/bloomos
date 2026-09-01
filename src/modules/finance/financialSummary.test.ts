@@ -115,6 +115,68 @@ describe("computeEventFinancialSummary", () => {
     const summary = computeEventFinancialSummary("event_1", [], invoices, [], []);
     expect(summary.invoiced_total_minor).toBe(100000);
   });
+
+  // Finance F1 — canonical semantics: planned vs. committed vs. paid expenses,
+  // and the new cash-basis profit/margin figures.
+  it("splits expenses into planned/committed/paid buckets by status, independent of the unchanged accrual expense_total_minor", () => {
+    const expenses = [
+      makeExpense({ event_id: "event_1", amount_minor: 10000, status: "planned" }),
+      makeExpense({ event_id: "event_1", amount_minor: 20000, status: "approved" }),
+      makeExpense({ event_id: "event_1", amount_minor: 30000, status: "due" }),
+      makeExpense({ event_id: "event_1", amount_minor: 40000, status: "paid" }),
+      makeExpense({ event_id: "event_1", amount_minor: 50000, status: "reimbursed" }),
+      makeExpense({ event_id: "event_1", amount_minor: 999, status: "cancelled" }),
+    ];
+    const summary = computeEventFinancialSummary("event_1", [], [], [], expenses);
+    expect(summary.expense_total_minor).toBe(150000); // every non-cancelled expense, unchanged behavior
+    expect(summary.planned_expense_total_minor).toBe(10000);
+    expect(summary.committed_expense_total_minor).toBe(50000); // approved + due
+    expect(summary.paid_expense_total_minor).toBe(90000); // paid + reimbursed
+  });
+
+  it("computes cash_profit_minor as collected cash minus paid (not accrual) expenses — distinct from both gross_profit and net_profit", () => {
+    const invoices = [makeInvoice({ event_id: "event_1", total_minor: 100000, paid_minor: 60000, balance_minor: 40000 })];
+    const payments = [makePayment({ event_id: "event_1", amount_minor: 60000, status: "succeeded" })];
+    const expenses = [
+      makeExpense({ event_id: "event_1", amount_minor: 15000, status: "paid" }),
+      makeExpense({ event_id: "event_1", amount_minor: 25000, status: "planned" }), // not yet paid — must not reduce cash_profit
+    ];
+    const summary = computeEventFinancialSummary("event_1", [], invoices, payments, expenses);
+    expect(summary.expense_total_minor).toBe(40000); // accrual: both count
+    expect(summary.paid_expense_total_minor).toBe(15000); // cash: only the paid one counts
+    expect(summary.gross_profit_minor).toBe(60000); // 100000 invoiced - 40000 accrual expenses
+    expect(summary.net_profit_minor).toBe(20000); // 60000 collected - 40000 accrual expenses
+    expect(summary.cash_profit_minor).toBe(45000); // 60000 collected - 15000 paid expenses
+  });
+
+  it("computes gross_margin_percent as gross_profit over invoiced revenue, and returns 0 rather than dividing by zero when nothing is invoiced", () => {
+    const invoices = [makeInvoice({ event_id: "event_1", total_minor: 100000 })];
+    const expenses = [makeExpense({ event_id: "event_1", amount_minor: 30000, status: "paid" })];
+    const summary = computeEventFinancialSummary("event_1", [], invoices, [], expenses);
+    expect(summary.gross_margin_percent).toBe(70); // (100000-30000)/100000
+
+    const zeroRevenueSummary = computeEventFinancialSummary("event_1", [], [], [], expenses);
+    expect(zeroRevenueSummary.gross_margin_percent).toBe(0);
+  });
+
+  it("lets gross_margin_percent go negative when expenses exceed invoiced revenue, rather than clamping", () => {
+    const invoices = [makeInvoice({ event_id: "event_1", total_minor: 50000 })];
+    const expenses = [makeExpense({ event_id: "event_1", amount_minor: 80000, status: "paid" })];
+    const summary = computeEventFinancialSummary("event_1", [], invoices, [], expenses);
+    expect(summary.gross_profit_minor).toBe(-30000);
+    expect(summary.gross_margin_percent).toBe(-60);
+  });
+
+  it("nets refunds out of cash_profit_minor the same way it nets them out of collected_minor", () => {
+    const payments = [
+      makePayment({ event_id: "event_1", amount_minor: 100000, status: "succeeded", payment_type: "deposit" }),
+      makePayment({ event_id: "event_1", amount_minor: 30000, status: "succeeded", payment_type: "refund" }),
+    ];
+    const expenses = [makeExpense({ event_id: "event_1", amount_minor: 10000, status: "paid" })];
+    const summary = computeEventFinancialSummary("event_1", [], [], payments, expenses);
+    expect(summary.collected_minor).toBe(70000);
+    expect(summary.cash_profit_minor).toBe(60000); // 70000 collected (net of refund) - 10000 paid expenses
+  });
 });
 
 describe("computeWorkspaceFinancialSummary", () => {

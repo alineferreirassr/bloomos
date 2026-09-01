@@ -1,9 +1,14 @@
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { formatMoney } from "@/lib/money";
-import type { ContractFinanceSummary, ContractDepositStatus } from "@/lib/data";
+import type { ContractDepositStatus } from "@/lib/data";
+import type { ContractFinancialSummaryView } from "@/modules/finance/financeActions";
 import { InvoiceStatusBadge } from "@/modules/finance/components/InvoiceStatusBadge";
+
+function money(minor: number | null, currency: string): string {
+  return minor === null ? "—" : formatMoney(minor, currency);
+}
 
 const DEPOSIT_STATUS_LABELS: Record<ContractDepositStatus, string> = {
   not_required: "Not required",
@@ -22,20 +27,23 @@ const DEPOSIT_STATUS_TONES: Record<ContractDepositStatus, BadgeTone> = {
 interface ContractFinanceSummaryCardProps {
   contractId: string;
   clientId: string;
-  summary: ContractFinanceSummary;
+  summary: ContractFinancialSummaryView;
   currency?: string;
 }
 
 /**
  * Small Finance rollup on Contract Detail — every figure comes straight
- * from getContractFinanceSummary() (lib/data/index.ts), never recomputed
- * here. "Create Invoice" carries both contractId and clientId so the new-
- * Invoice form's Contract dropdown (which only populates once a Client is
- * selected) actually shows this Contract preselected.
+ * from getContractFinanceSummary() (lib/data/index.ts) via the server-side
+ * getContractFinancialSummaryAction (financeActions.ts), which redacts
+ * every monetary field to `null` (rendered here as "—") for a caller
+ * lacking `finance.amounts.view`; never recomputed here. "Create Invoice"
+ * carries both contractId and clientId so the new-Invoice form's Contract
+ * dropdown (which only populates once a Client is selected) actually shows
+ * this Contract preselected.
  */
 export function ContractFinanceSummaryCard({ contractId, clientId, summary, currency = "USD" }: ContractFinanceSummaryCardProps) {
   return (
-    <Card>
+    <LuxuryCard>
       <div className="flex items-center justify-between">
         <h3 className="font-serif text-[17px] font-semibold text-text">Finance</h3>
         <Badge tone={DEPOSIT_STATUS_TONES[summary.depositStatus]}>
@@ -43,9 +51,9 @@ export function ContractFinanceSummaryCard({ contractId, clientId, summary, curr
         </Badge>
       </div>
       <dl className="mt-3 grid grid-cols-2 gap-3">
-        <Stat label="Total invoiced" value={formatMoney(summary.totalInvoicedMinor, currency)} />
-        <Stat label="Total collected" value={formatMoney(summary.totalCollectedMinor, currency)} />
-        <Stat label="Outstanding" value={formatMoney(summary.outstandingMinor, currency)} />
+        <Stat label="Total invoiced" value={money(summary.totalInvoicedMinor, currency)} />
+        <Stat label="Total collected" value={money(summary.totalCollectedMinor, currency)} />
+        <Stat label="Outstanding" value={money(summary.outstandingMinor, currency)} />
       </dl>
 
       {summary.invoices.length > 0 ? (
@@ -58,7 +66,7 @@ export function ContractFinanceSummaryCard({ contractId, clientId, summary, curr
               >
                 <span className="truncate text-text">{invoice.invoice_number}</span>
                 <span className="flex shrink-0 items-center gap-1.5">
-                  <span className="text-text-muted">{formatMoney(invoice.total_minor, invoice.currency)}</span>
+                  <span className="text-text-muted">{money(invoice.total_minor, invoice.currency)}</span>
                   <InvoiceStatusBadge status={invoice.status} />
                 </span>
               </Link>
@@ -77,7 +85,7 @@ export function ContractFinanceSummaryCard({ contractId, clientId, summary, curr
           Create Invoice
         </Link>
       </div>
-    </Card>
+    </LuxuryCard>
   );
 }
 

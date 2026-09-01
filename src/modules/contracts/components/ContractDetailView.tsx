@@ -7,15 +7,17 @@ import {
   getClientById,
   getContract,
   getContractExhibitsByContractId,
-  getContractFinanceSummary,
   getContractNextAction,
   getContractTemplateById,
   getEventById,
   getNotesByContractId,
   getTimelineByContractId,
   togglePinNote,
-  type ContractFinanceSummary,
 } from "@/lib/data";
+import {
+  getContractFinancialSummaryAction,
+  type ContractFinancialSummaryView,
+} from "@/modules/finance/financeActions";
 import type { Contract } from "@/types/contract";
 import type { Client } from "@/types/client";
 import type { Event } from "@/types/event";
@@ -56,13 +58,13 @@ type LoadState =
       notes: Note[];
       timeline: TimelineActivity[];
       nextAction: string | null;
-      financeSummary: ContractFinanceSummary;
+      financeSummary: ContractFinancialSummaryView | null;
     };
 
 async function loadContractDetail(contractId: string): Promise<LoadState> {
   try {
     const contract = await getContract(contractId);
-    const [client, event, template, exhibits, notes, timeline, nextAction, financeSummary] = await Promise.all([
+    const [client, event, template, exhibits, notes, timeline, nextAction, financeSummaryResult] = await Promise.all([
       getClientById(contract.client_id).catch(() => null),
       contract.event_id ? getEventById(contract.event_id).catch(() => null) : Promise.resolve(null),
       contract.template_id ? getContractTemplateById(contract.template_id).catch(() => null) : Promise.resolve(null),
@@ -70,8 +72,9 @@ async function loadContractDetail(contractId: string): Promise<LoadState> {
       getNotesByContractId(contractId),
       getTimelineByContractId(contractId),
       getContractNextAction(contractId),
-      getContractFinanceSummary(contractId),
+      getContractFinancialSummaryAction(contractId),
     ]);
+    const financeSummary = financeSummaryResult.data;
 
     return { status: "ready", contract, client, event, template, exhibits, notes, timeline, nextAction, financeSummary };
   } catch (err) {
@@ -310,7 +313,7 @@ export function ContractDetailView({ contractId }: { contractId: string }) {
         </div>
 
         <div className="space-y-6">
-          {client ? (
+          {client && financeSummary ? (
             <ContractFinanceSummaryCard contractId={contract.id} clientId={client.id} summary={financeSummary} />
           ) : null}
           <DocumentsSummarySection

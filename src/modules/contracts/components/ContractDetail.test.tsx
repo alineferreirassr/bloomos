@@ -38,10 +38,13 @@ vi.mock("@/lib/data", () => ({
   getNotesByContractId: vi.fn(),
   getTimelineByContractId: vi.fn(),
   getContractNextAction: vi.fn(),
-  getContractFinanceSummary: vi.fn(),
   createContractNote: vi.fn(),
   togglePinNote: vi.fn(),
   getDocumentOwnerSummary: vi.fn(),
+}));
+
+vi.mock("@/modules/finance/financeActions", () => ({
+  getContractFinancialSummaryAction: vi.fn(),
 }));
 
 vi.mock("@/modules/contractPlatform/contractPlatformActions", () => ({
@@ -56,6 +59,7 @@ vi.mock("@/modules/contractPlatform/contractPlatformActions", () => ({
 }));
 
 import * as dataLayer from "@/lib/data";
+import * as financeActions from "@/modules/finance/financeActions";
 
 function mockReady(overrides: Partial<ReturnType<typeof makeContract>> = {}) {
   const contract = makeContract({
@@ -90,14 +94,17 @@ function mockReady(overrides: Partial<ReturnType<typeof makeContract>> = {}) {
   vi.mocked(dataLayer.getNotesByContractId).mockResolvedValue([]);
   vi.mocked(dataLayer.getTimelineByContractId).mockResolvedValue([]);
   vi.mocked(dataLayer.getContractNextAction).mockResolvedValue("Mark the contract as completed");
-  vi.mocked(dataLayer.getContractFinanceSummary).mockResolvedValue({
-    invoices: [],
-    totalInvoicedMinor: 0,
-    totalCollectedMinor: 0,
-    outstandingMinor: 0,
-    depositStatus: "not_required",
-    depositRequiredMinor: 0,
-    depositPaidMinor: 0,
+  vi.mocked(financeActions.getContractFinancialSummaryAction).mockResolvedValue({
+    success: true,
+    data: {
+      invoices: [],
+      totalInvoicedMinor: 0,
+      totalCollectedMinor: 0,
+      outstandingMinor: 0,
+      depositStatus: "not_required",
+      depositRequiredMinor: 0,
+      depositPaidMinor: 0,
+    },
   });
   vi.mocked(dataLayer.getDocumentOwnerSummary).mockResolvedValue({
     total: 0,

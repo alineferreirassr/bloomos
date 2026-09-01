@@ -1,14 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ContractFinanceSummaryCard } from "@/modules/finance/components/ContractFinanceSummaryCard";
-import { makeInvoice } from "@/modules/finance/testUtils";
-import type { ContractFinanceSummary } from "@/lib/data";
+import type { ContractFinancialSummaryView } from "@/modules/finance/financeActions";
 
 describe("ContractFinanceSummaryCard", () => {
   it("renders totals, the deposit status badge, and linked invoices", () => {
-    const summary: ContractFinanceSummary = {
+    const summary: ContractFinancialSummaryView = {
       invoices: [
-        makeInvoice({ id: "invoice_1", invoice_number: "INV-2026-0001", status: "sent", total_minor: 250000 }),
+        { id: "invoice_1", invoice_number: "INV-2026-0001", status: "sent", currency: "USD", total_minor: 250000 },
       ],
       totalInvoicedMinor: 250000,
       totalCollectedMinor: 100000,
@@ -28,7 +27,7 @@ describe("ContractFinanceSummaryCard", () => {
   });
 
   it("shows a no-invoices message when nothing is linked yet", () => {
-    const summary: ContractFinanceSummary = {
+    const summary: ContractFinancialSummaryView = {
       invoices: [],
       totalInvoicedMinor: 0,
       totalCollectedMinor: 0,
@@ -45,7 +44,7 @@ describe("ContractFinanceSummaryCard", () => {
   });
 
   it("links Create Invoice to the new-invoice route with the contract and client prefilled", () => {
-    const summary: ContractFinanceSummary = {
+    const summary: ContractFinancialSummaryView = {
       invoices: [],
       totalInvoicedMinor: 0,
       totalCollectedMinor: 0,
@@ -61,5 +60,23 @@ describe("ContractFinanceSummaryCard", () => {
       "href",
       "/finance/invoices/new?contractId=contract_1&clientId=client_1",
     );
+  });
+
+  it("Phase 06C — renders redacted amounts as '—' when the caller lacks finance.amounts.view, without profit/margin ever appearing", () => {
+    const summary: ContractFinancialSummaryView = {
+      invoices: [{ id: "invoice_1", invoice_number: "INV-2026-0001", status: "sent", currency: "USD", total_minor: null }],
+      totalInvoicedMinor: null,
+      totalCollectedMinor: null,
+      outstandingMinor: null,
+      depositStatus: "deposit_partial",
+      depositRequiredMinor: null,
+      depositPaidMinor: null,
+    };
+
+    render(<ContractFinanceSummaryCard contractId="contract_1" clientId="client_1" summary={summary} />);
+
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
+    expect(screen.getByText("INV-2026-0001")).toBeInTheDocument();
+    expect(screen.getByText("Deposit partially paid")).toBeInTheDocument();
   });
 });

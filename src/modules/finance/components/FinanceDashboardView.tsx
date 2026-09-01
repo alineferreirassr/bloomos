@@ -2,21 +2,21 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { getClients } from "@/lib/data";
 import {
-  getClients,
-  getFinanceDashboardData,
-  getChartOfAccounts,
-  getAccountingPeriods,
-  getJournalEntries,
-  type FinanceDashboardData,
-} from "@/lib/data";
+  getFinanceDashboardDataAction,
+  getFinanceLedgerSummaryAction,
+  getFinancialReconciliationDiagnosticAction,
+  type FinanceDashboardViewData,
+  type FinanceLedgerSummaryData,
+  type FinancialReconciliationDiagnosticView,
+} from "@/modules/finance/financeActions";
 import { getDataPersistenceMessage } from "@/lib/dataModeCopy";
 import { PaymentForecastCard } from "@/modules/ai/copilot/assistants/PaymentForecastCard";
 import type { Client } from "@/types/client";
-import type { AccountingPeriod } from "@/types/accountingPeriod";
 import { getFullName } from "@/lib/personName";
-import type { JournalEntry } from "@/types/journalEntry";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -35,12 +35,13 @@ import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 type LoadState =
   | { status: "loading" }
   | { status: "error" }
-  | { status: "ready"; data: FinanceDashboardData; clientsById: Map<string, Client> };
+  | { status: "ready"; data: FinanceDashboardViewData; clientsById: Map<string, Client> };
 
 async function loadDashboard(): Promise<LoadState> {
   try {
-    const [data, clients] = await Promise.all([getFinanceDashboardData(), getClients({ includeArchived: true })]);
-    return { status: "ready", data, clientsById: new Map(clients.map((c) => [c.id, c])) };
+    const [result, clients] = await Promise.all([getFinanceDashboardDataAction(), getClients({ includeArchived: true })]);
+    if (!result.success) return { status: "error" };
+    return { status: "ready", data: result.data, clientsById: new Map(clients.map((c) => [c.id, c])) };
   } catch {
     return { status: "error" };
   }
@@ -60,32 +61,40 @@ async function loadDashboard(): Promise<LoadState> {
 type LedgerSummaryState =
   | { status: "loading" }
   | { status: "error" }
-  | {
-      status: "ready";
-      activeAccountCount: number;
-      openPeriod: AccountingPeriod | null;
-      periodCounts: { open: number; closed: number; locked: number };
-      latestEntries: JournalEntry[];
-    };
+  /** The caller lacks `finance.accounting.view` — an expected permission boundary, not a fetch failure, so the whole section is omitted rather than shown as an error. */
+  | { status: "no-access" }
+  | ({ status: "ready" } & FinanceLedgerSummaryData);
 
 async function loadLedgerSummary(): Promise<LedgerSummaryState> {
   try {
-    const [accounts, periods, latestEntries] = await Promise.all([
-      getChartOfAccounts(),
-      getAccountingPeriods(),
-      getJournalEntries({ limit: 5 }),
-    ]);
-    return {
-      status: "ready",
-      activeAccountCount: accounts.length,
-      openPeriod: periods.find((period) => period.status === "open") ?? null,
-      periodCounts: {
-        open: periods.filter((period) => period.status === "open").length,
-        closed: periods.filter((period) => period.status === "closed").length,
-        locked: periods.filter((period) => period.status === "locked").length,
-      },
-      latestEntries,
-    };
+    const result = await getFinanceLedgerSummaryAction();
+    if (!result.success) return { status: "no-access" };
+    return { status: "ready", ...result.data };
+  } catch {
+    return { status: "error" };
+  }
+}
+
+/**
+ * Finance F1.5 — the Founder-only reconciliation diagnostic. Same
+ * loaded-independently, no-access-is-not-an-error shape as the Ledger
+ * summary above (a fetch failure or a permission boundary here never
+ * blanks the rest of the Finance Dashboard). Read-only — this block never
+ * triggers any mutation; it only calls
+ * getFinancialReconciliationDiagnosticAction(), which itself only reads.
+ */
+type ReconciliationDiagnosticState =
+  | { status: "loading" }
+  | { status: "error" }
+  /** The caller lacks `finance.executive.view` — omit the block, same convention as the Ledger summary's "no-access". */
+  | { status: "no-access" }
+  | ({ status: "ready" } & FinancialReconciliationDiagnosticView);
+
+async function loadReconciliationDiagnostic(): Promise<ReconciliationDiagnosticState> {
+  try {
+    const result = await getFinancialReconciliationDiagnosticAction();
+    if (!result.success) return { status: "no-access" };
+    return { status: "ready", ...result.data };
   } catch {
     return { status: "error" };
   }
@@ -110,6 +119,7 @@ export function FinanceDashboardView() {
   const canCreate = can("finance.create");
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [ledgerState, setLedgerState] = useState<LedgerSummaryState>({ status: "loading" });
+  const [reconciliationState, setReconciliationState] = useState<ReconciliationDiagnosticState>({ status: "loading" });
 
   useEffect(() => {
     let cancelled = false;
@@ -131,9 +141,24 @@ export function FinanceDashboardView() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    loadReconciliationDiagnostic().then((next) => {
+      if (!cancelled) setReconciliationState(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const retryLedger = () => {
     setLedgerState({ status: "loading" });
     loadLedgerSummary().then(setLedgerState);
+  };
+
+  const retryReconciliation = () => {
+    setReconciliationState({ status: "loading" });
+    loadReconciliationDiagnostic().then(setReconciliationState);
   };
 
   const retry = () => {
@@ -162,30 +187,33 @@ export function FinanceDashboardView() {
   const { metrics, recentInvoices, recentPayments, overdueInvoices, unpaidExpenses, alerts, eventsWithOutstandingBalance } =
     data;
 
+  /** `null` means the server redacted this figure for the current session's permissions (see `financeActions.ts`) — rendered as "—", never as $0.00. */
+  const money = (minor: number | null, currency = "USD") => (minor === null ? "—" : formatMoney(minor, currency));
+
   const metricCards = [
-    { label: "Total Invoiced", value: formatMoney(metrics.totalInvoicedMinor, "USD"), href: "/finance/invoices" },
-    { label: "Total Collected", value: formatMoney(metrics.totalCollectedMinor, "USD"), href: "/finance/payments" },
+    { label: "Total Invoiced", value: money(metrics.totalInvoicedMinor), href: "/finance/invoices" },
+    { label: "Total Collected", value: money(metrics.totalCollectedMinor), href: "/finance/payments" },
     {
       label: "Outstanding Receivables",
-      value: formatMoney(metrics.outstandingReceivablesMinor, "USD"),
+      value: money(metrics.outstandingReceivablesMinor),
       href: "/finance/invoices",
     },
     {
       label: "Overdue Receivables",
-      value: formatMoney(metrics.overdueReceivablesMinor, "USD"),
+      value: money(metrics.overdueReceivablesMinor),
       href: "/finance/invoices",
     },
-    { label: "Deposits Pending", value: formatMoney(metrics.depositsPendingMinor, "USD"), href: "/finance/invoices" },
+    { label: "Deposits Pending", value: money(metrics.depositsPendingMinor), href: "/finance/invoices" },
     {
       label: "Expenses This Month",
-      value: formatMoney(metrics.expensesThisMonthMinor, "USD"),
+      value: money(metrics.expensesThisMonthMinor),
       href: "/finance/expenses",
     },
-    { label: "Gross Profit", value: formatMoney(metrics.grossProfitMinor, "USD"), href: "/finance" },
-    { label: "Net Profit", value: formatMoney(metrics.netProfitMinor, "USD"), href: "/finance" },
+    { label: "Gross Profit", value: money(metrics.grossProfitMinor), href: "/finance" },
+    { label: "Net Profit", value: money(metrics.netProfitMinor), href: "/finance" },
     {
       label: "Refunds This Month",
-      value: formatMoney(metrics.refundsThisMonthMinor, "USD"),
+      value: money(metrics.refundsThisMonthMinor),
       href: "/finance/payments",
     },
     { label: "Unpaid Expenses", value: String(metrics.unpaidExpensesCount), href: "/finance/expenses" },
@@ -214,7 +242,7 @@ export function FinanceDashboardView() {
         <div className="animate-fade-up stagger-1 space-y-2">
           {alerts.map((alert) => (
             <Link key={alert.message} href={alert.href} className="block">
-              <Card
+              <LuxuryCard
                 className={`transition-colors duration-150 hover:border-accent/50 ${
                   alert.severity === "danger" ? "border-danger/40 bg-danger/5" : "border-accent/40 bg-accent/5"
                 }`}
@@ -222,183 +250,185 @@ export function FinanceDashboardView() {
                 <p className={`text-sm font-medium ${alert.severity === "danger" ? "text-danger" : "text-accent"}`}>
                   {alert.message}
                 </p>
-              </Card>
+              </LuxuryCard>
             </Link>
           ))}
         </div>
       ) : null}
 
-      <div className="animate-fade-up stagger-2 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <div className="flex items-center justify-between">
-            <h3 className="font-serif text-[17px] font-semibold text-text">Recent Invoices</h3>
-            <Link href="/finance/invoices" className="text-xs text-accent hover:underline">
-              View all
-            </Link>
-          </div>
-          {recentInvoices.length === 0 ? (
-            <p className="mt-3 text-sm text-text-muted">No invoices yet.</p>
-          ) : (
-            <ul className="mt-3 space-y-2">
-              {recentInvoices.map((invoice) => (
-                <li key={invoice.id}>
-                  <Link
-                    href={`/finance/invoices/${invoice.id}`}
-                    className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 hover:border-accent/50"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-text">{invoice.invoice_number}</p>
-                      <p className="mt-0.5 text-xs text-text-muted">{clientName(clientsById, invoice.client_id)}</p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <span className="text-sm text-text">{formatMoney(invoice.total_minor, invoice.currency)}</span>
-                      <InvoiceStatusBadge status={invoice.status} />
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+      <div>
+        <SectionHeader title="Overview" />
+        <div className="animate-fade-up stagger-2 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <LuxuryCard>
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif text-[17px] font-semibold text-text">Recent Invoices</h3>
+              <Link href="/finance/invoices" className="text-xs text-accent hover:underline">
+                View all
+              </Link>
+            </div>
+            {recentInvoices.length === 0 ? (
+              <p className="mt-3 text-sm text-text-muted">No invoices yet.</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {recentInvoices.map((invoice) => (
+                  <li key={invoice.id}>
+                    <Link
+                      href={`/finance/invoices/${invoice.id}`}
+                      className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 hover:border-accent/50"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-text">{invoice.invoice_number}</p>
+                        <p className="mt-0.5 text-xs text-text-muted">{clientName(clientsById, invoice.client_id)}</p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <span className="text-sm text-text">{money(invoice.total_minor, invoice.currency)}</span>
+                        <InvoiceStatusBadge status={invoice.status} />
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </LuxuryCard>
 
-        <Card>
-          <div className="flex items-center justify-between">
-            <h3 className="font-serif text-[17px] font-semibold text-text">Recent Payments</h3>
-            <Link href="/finance/payments" className="text-xs text-accent hover:underline">
-              View all
-            </Link>
-          </div>
-          {recentPayments.length === 0 ? (
-            <p className="mt-3 text-sm text-text-muted">No payments yet.</p>
-          ) : (
-            <ul className="mt-3 space-y-2">
-              {recentPayments.map((payment) => (
-                <li key={payment.id}>
-                  <Link
-                    href={`/finance/payments/${payment.id}`}
-                    className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 hover:border-accent/50"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-text">
-                        {clientName(clientsById, payment.client_id)}
-                      </p>
-                      <p className="mt-0.5 text-xs text-text-muted">{formatEventDate(payment.transaction_date)}</p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <span className="text-sm text-text">{formatMoney(payment.amount_minor, payment.currency)}</span>
-                      <PaymentStatusBadge status={payment.status} />
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+          <LuxuryCard>
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif text-[17px] font-semibold text-text">Recent Payments</h3>
+              <Link href="/finance/payments" className="text-xs text-accent hover:underline">
+                View all
+              </Link>
+            </div>
+            {recentPayments.length === 0 ? (
+              <p className="mt-3 text-sm text-text-muted">No payments yet.</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {recentPayments.map((payment) => (
+                  <li key={payment.id}>
+                    <Link
+                      href={`/finance/payments/${payment.id}`}
+                      className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 hover:border-accent/50"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-text">
+                          {clientName(clientsById, payment.client_id)}
+                        </p>
+                        <p className="mt-0.5 text-xs text-text-muted">{formatEventDate(payment.transaction_date)}</p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <span className="text-sm text-text">{money(payment.amount_minor, payment.currency)}</span>
+                        <PaymentStatusBadge status={payment.status} />
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </LuxuryCard>
 
-        <Card>
-          <div className="flex items-center justify-between">
-            <h3 className="font-serif text-[17px] font-semibold text-text">Overdue Invoices</h3>
-            <Link href="/finance/invoices" className="text-xs text-accent hover:underline">
-              View all
-            </Link>
-          </div>
-          {overdueInvoices.length === 0 ? (
-            <p className="mt-3 text-sm text-text-muted">No overdue invoices.</p>
-          ) : (
-            <ul className="mt-3 space-y-2">
-              {overdueInvoices.map((invoice) => (
-                <li key={invoice.id}>
-                  <Link
-                    href={`/finance/invoices/${invoice.id}`}
-                    className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 hover:border-accent/50"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-text">{invoice.invoice_number}</p>
-                      <p className="mt-0.5 text-xs text-text-muted">
-                        {clientName(clientsById, invoice.client_id)} · Due {formatEventDate(invoice.due_date)}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-sm text-danger">
-                      {formatMoney(invoice.balance_minor, invoice.currency)}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+          <LuxuryCard>
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif text-[17px] font-semibold text-text">Overdue Invoices</h3>
+              <Link href="/finance/invoices" className="text-xs text-accent hover:underline">
+                View all
+              </Link>
+            </div>
+            {overdueInvoices.length === 0 ? (
+              <p className="mt-3 text-sm text-text-muted">No overdue invoices.</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {overdueInvoices.map((invoice) => (
+                  <li key={invoice.id}>
+                    <Link
+                      href={`/finance/invoices/${invoice.id}`}
+                      className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 hover:border-accent/50"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-text">{invoice.invoice_number}</p>
+                        <p className="mt-0.5 text-xs text-text-muted">
+                          {clientName(clientsById, invoice.client_id)} · Due {formatEventDate(invoice.due_date)}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-sm text-danger">
+                        {money(invoice.balance_minor, invoice.currency)}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </LuxuryCard>
 
-        <Card>
-          <div className="flex items-center justify-between">
-            <h3 className="font-serif text-[17px] font-semibold text-text">Unpaid Expenses</h3>
-            <Link href="/finance/expenses" className="text-xs text-accent hover:underline">
-              View all
-            </Link>
-          </div>
-          {unpaidExpenses.length === 0 ? (
-            <p className="mt-3 text-sm text-text-muted">No unpaid expenses.</p>
-          ) : (
-            <ul className="mt-3 space-y-2">
-              {unpaidExpenses.map((expense) => (
-                <li key={expense.id}>
-                  <Link
-                    href={`/finance/expenses/${expense.id}`}
-                    className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 hover:border-accent/50"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-text">{expense.description}</p>
-                      <p className="mt-0.5 text-xs text-text-muted">
-                        Due {formatEventDate(expense.due_date)}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <span className="text-sm text-text">{formatMoney(expense.amount_minor, expense.currency)}</span>
-                      <ExpenseStatusBadge status={expense.status} />
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+          <LuxuryCard>
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif text-[17px] font-semibold text-text">Unpaid Expenses</h3>
+              <Link href="/finance/expenses" className="text-xs text-accent hover:underline">
+                View all
+              </Link>
+            </div>
+            {unpaidExpenses.length === 0 ? (
+              <p className="mt-3 text-sm text-text-muted">No unpaid expenses.</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {unpaidExpenses.map((expense) => (
+                  <li key={expense.id}>
+                    <Link
+                      href={`/finance/expenses/${expense.id}`}
+                      className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 hover:border-accent/50"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-text">{expense.description}</p>
+                        <p className="mt-0.5 text-xs text-text-muted">
+                          Due {formatEventDate(expense.due_date)}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <span className="text-sm text-text">{money(expense.amount_minor, expense.currency)}</span>
+                        <ExpenseStatusBadge status={expense.status} />
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </LuxuryCard>
 
-        <Card className="lg:col-span-2">
-          <div className="flex items-center justify-between">
-            <h3 className="font-serif text-[17px] font-semibold text-text">Events With Outstanding Balances</h3>
-            <Link href="/events" className="text-xs text-accent hover:underline">
-              View all
-            </Link>
-          </div>
-          {eventsWithOutstandingBalance.length === 0 ? (
-            <p className="mt-3 text-sm text-text-muted">No events currently have an outstanding balance.</p>
-          ) : (
-            <ul className="mt-3 space-y-2">
-              {eventsWithOutstandingBalance.map(({ event, outstandingMinor, status }) => (
-                <li key={event.id}>
-                  <Link
-                    href={`/events/${event.id}`}
-                    className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 hover:border-accent/50"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-text">{event.title}</p>
-                      <p className="mt-0.5 text-xs text-text-muted">{formatEventDate(event.event_date)}</p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <span className="text-sm text-text">{formatMoney(outstandingMinor, "USD")}</span>
-                      <EventFinancialStatusBadge status={status} />
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+          <LuxuryCard className="lg:col-span-2">
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif text-[17px] font-semibold text-text">Events With Outstanding Balances</h3>
+              <Link href="/events" className="text-xs text-accent hover:underline">
+                View all
+              </Link>
+            </div>
+            {eventsWithOutstandingBalance.length === 0 ? (
+              <p className="mt-3 text-sm text-text-muted">No events currently have an outstanding balance.</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {eventsWithOutstandingBalance.map(({ event, outstandingMinor, status }) => (
+                  <li key={event.id}>
+                    <Link
+                      href={`/events/${event.id}`}
+                      className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 hover:border-accent/50"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-text">{event.title}</p>
+                        <p className="mt-0.5 text-xs text-text-muted">{formatEventDate(event.event_date)}</p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <span className="text-sm text-text">{money(outstandingMinor)}</span>
+                        <EventFinancialStatusBadge status={status} />
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </LuxuryCard>
+        </div>
       </div>
 
+      {ledgerState.status === "no-access" ? null : (
       <div>
-        <div className="flex items-center justify-between">
-          <h3 className="font-serif text-xl font-semibold text-text">General Ledger</h3>
-        </div>
+        <SectionHeader title="General Ledger" />
 
         {ledgerState.status === "loading" ? (
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -435,7 +465,7 @@ export function FinanceDashboardView() {
             </div>
 
             <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <Card>
+              <LuxuryCard>
                 <div className="flex items-center justify-between">
                   <h3 className="font-serif text-[17px] font-semibold text-text">Latest Journal Entries</h3>
                   <Link href="/finance/journal" className="text-xs text-accent hover:underline">
@@ -462,9 +492,9 @@ export function FinanceDashboardView() {
                     ))}
                   </ul>
                 )}
-              </Card>
+              </LuxuryCard>
 
-              <Card>
+              <LuxuryCard>
                 <h3 className="font-serif text-[17px] font-semibold text-text">Ledger Navigation</h3>
                 <div className="mt-3 space-y-2">
                   <Link
@@ -491,11 +521,62 @@ export function FinanceDashboardView() {
                     </Link>
                   ) : null}
                 </div>
-              </Card>
+              </LuxuryCard>
             </div>
           </>
         )}
       </div>
+      )}
+
+      {reconciliationState.status === "no-access" ? null : (
+      <div className="mt-8">
+        <SectionHeader title="Financial Reconciliation" />
+
+        {reconciliationState.status === "loading" ? (
+          <div className="mt-4">
+            <Skeleton className="h-[120px] rounded-xl" />
+          </div>
+        ) : reconciliationState.status === "error" ? (
+          <div className="mt-4">
+            <ErrorState message="Could not load the reconciliation diagnostic." onRetry={retryReconciliation} />
+          </div>
+        ) : (
+          <LuxuryCard className="mt-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="font-serif text-[17px] font-semibold text-text">
+                {formatEventDate(reconciliationState.periodStartDate)} – {formatEventDate(reconciliationState.periodEndDate)}
+              </h3>
+              <span className={`text-sm font-medium ${reconciliationState.isReconciled ? "text-emerald-700" : "text-amber-700"}`}>
+                {reconciliationState.isReconciled ? "✓ Reconciled" : "⚠ Review required"}
+              </span>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div>
+                <p className="text-xs text-text-muted">Operational Expenses</p>
+                <p className="mt-1 text-lg font-semibold text-text">{formatMoney(reconciliationState.operationalExpenseMinor, "USD")}</p>
+              </div>
+              <div>
+                <p className="text-xs text-text-muted">Ledger Expenses</p>
+                <p className="mt-1 text-lg font-semibold text-text">{formatMoney(reconciliationState.ledgerExpenseMinor, "USD")}</p>
+              </div>
+              <div>
+                <p className="text-xs text-text-muted">Difference</p>
+                <p className="mt-1 text-lg font-semibold text-text">
+                  {formatMoney(reconciliationState.operationalExpenseMinor - reconciliationState.ledgerExpenseMinor, "USD")}
+                </p>
+              </div>
+            </div>
+
+            {reconciliationState.notComparableMetrics.length > 0 ? (
+              <p className="mt-4 border-t border-border pt-3 text-xs text-text-muted">
+                Revenue and Net Income aren&rsquo;t shown here — {reconciliationState.notComparableReason}
+              </p>
+            ) : null}
+          </LuxuryCard>
+        )}
+      </div>
+      )}
     </div>
   );
 }

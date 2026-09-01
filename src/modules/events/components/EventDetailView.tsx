@@ -9,7 +9,6 @@ import {
   getContracts,
   getEventById,
   getEventFinancialStatus,
-  getEventFinancialSummary,
   getEventNextAction,
   getNotesByEventId,
   getScheduleByEventId,
@@ -17,6 +16,7 @@ import {
   listEventServicesByEvent,
   togglePinNote,
 } from "@/lib/data";
+import { getEventFinancialSummaryAction, type FinancialSummaryView } from "@/modules/finance/financeActions";
 import type { Event } from "@/types/event";
 import type { Client } from "@/types/client";
 import type { Note } from "@/types/note";
@@ -26,7 +26,8 @@ import type { EventScheduleItem } from "@/types/eventScheduleItem";
 import type { Contract } from "@/types/contract";
 import type { EventService } from "@/types/eventService";
 import { NotFoundError } from "@/core/errors";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { NotesSection } from "@/modules/notes/components/NotesSection";
@@ -57,7 +58,7 @@ import { useSetCopilotPageContext } from "@/modules/ai/copilot/CopilotPageContex
 import { EventAssistantCard } from "@/modules/ai/copilot/assistants/EventAssistantCard";
 import { EventCommandCenter } from "@/modules/operations/components/EventCommandCenter";
 import { OperationsAssistantCard } from "@/modules/ai/copilot/assistants/OperationsAssistantCard";
-import type { EventFinancialSummary } from "@/modules/finance/financialSummary";
+import { EventWeatherCard } from "@/modules/events/components/EventWeatherCard";
 import type { EventFinancialStatus } from "@/modules/finance/eventFinancialStatus";
 
 type LoadState =
@@ -74,7 +75,8 @@ type LoadState =
       schedule: EventScheduleItem[];
       nextAction: string | null;
       health: EventHealthDetails;
-      financialSummary: EventFinancialSummary;
+      /** `null` when the caller's session holds no finance permission at all — the Finance card is omitted, not shown with redacted fields. */
+      financialSummary: FinancialSummaryView | null;
       financialStatus: EventFinancialStatus;
       contracts: Contract[];
       assignedServices: EventService[];
@@ -89,7 +91,7 @@ type LoadState =
 async function loadEventDetail(eventId: string): Promise<LoadState> {
   try {
     const event = await getEventById(eventId);
-    const [client, notes, timeline, checklist, schedule, nextAction, financialSummary, financialStatus, contracts, assignedServices] =
+    const [client, notes, timeline, checklist, schedule, nextAction, financialSummaryResult, financialStatus, contracts, assignedServices] =
       await Promise.all([
         getClientById(event.client_id).catch(() => null),
         getNotesByEventId(eventId),
@@ -97,11 +99,12 @@ async function loadEventDetail(eventId: string): Promise<LoadState> {
         getChecklistByEventId(eventId),
         getScheduleByEventId(eventId),
         getEventNextAction(eventId),
-        getEventFinancialSummary(eventId),
+        getEventFinancialSummaryAction(eventId),
         getEventFinancialStatus(eventId),
         getContracts({ eventId }),
         listEventServicesByEvent(eventId),
       ]);
+    const financialSummary = financialSummaryResult.data;
 
     const checklistStats = computeChecklistStats(checklist);
     // event_date is a "YYYY-MM-DD" date-only string — new Date(event_date)
@@ -208,15 +211,15 @@ export function EventDetailView({ eventId }: { eventId: string }) {
   const notesReadOnly = event.status === "archived" || event.status === "cancelled";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="font-serif text-3xl font-semibold text-text">{event.title}</h2>
+        <h2 className="font-serif text-3xl font-semibold text-text">{event.title}</h2>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <EventStatusBadge status={event.status} />
           <EventLifecycleBadge stage={event.lifecycle_stage} />
           <EventPriorityBadge priority={event.priority} />
         </div>
-        <p className="mt-1 text-sm text-text-muted">
+        <p className="mt-3 text-sm text-text-muted">
           {EVENT_TYPE_LABELS[event.event_type]}
           {client ? (
             <>
@@ -239,134 +242,152 @@ export function EventDetailView({ eventId }: { eventId: string }) {
       {event.status === "archived" ? <EventArchivedBanner /> : null}
 
       {nextAction ? (
-        <Card className="border-accent/40 bg-accent/5">
+        <LuxuryCard tone="tint">
           <p className="text-xs font-medium uppercase tracking-wide text-accent">Next recommended action</p>
           <p className="mt-1 text-sm text-text">{nextAction}</p>
-        </Card>
+        </LuxuryCard>
       ) : null}
 
-      <EventCommandCenter eventId={event.id} />
+      <div>
+        <SectionHeader title="Overview" />
+        <div className="space-y-6">
+          <EventCommandCenter eventId={event.id} />
+          <EventWeatherCard eventId={eventId} />
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Event Summary</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Event type" value={EVENT_TYPE_LABELS[event.event_type]} />
-              <Field label="Package" value={event.package_name} />
-              <Field label="Assigned owner" value={event.assigned_owner} />
-              <Field label="Created" value={new Date(event.created_at).toLocaleDateString()} />
-              <Field label="Updated" value={new Date(event.updated_at).toLocaleDateString()} />
-              {event.originating_lead_id ? (
-                <Field
-                  label="Originating Lead"
-                  value={
-                    <Link href={`/leads/${event.originating_lead_id}`} className="text-accent hover:underline">
-                      View original Lead →
-                    </Link>
-                  }
-                />
-              ) : null}
-            </dl>
-          </Card>
+        <div className="space-y-8 lg:col-span-2">
+          <div>
+            <SectionHeader title="Planning" />
+            <div className="space-y-6">
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Event Summary</h3>
+                <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Event type" value={EVENT_TYPE_LABELS[event.event_type]} />
+                  <Field label="Package" value={event.package_name} />
+                  <Field label="Assigned owner" value={event.assigned_owner} />
+                  <Field label="Created" value={new Date(event.created_at).toLocaleDateString()} />
+                  <Field label="Updated" value={new Date(event.updated_at).toLocaleDateString()} />
+                  {event.originating_lead_id ? (
+                    <Field
+                      label="Originating Lead"
+                      value={
+                        <Link href={`/leads/${event.originating_lead_id}`} className="text-accent hover:underline">
+                          View original Lead →
+                        </Link>
+                      }
+                    />
+                  ) : null}
+                </dl>
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Client</h3>
-            {client ? (
-              <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field
-                  label="Name"
-                  value={
-                    <Link href={`/clients/${client.id}`} className="text-accent hover:underline">
-                      {client.first_name} {client.last_name}
-                    </Link>
-                  }
-                />
-                <Field label="Email" value={client.email} />
-                <Field label="Phone" value={client.phone} />
-              </dl>
-            ) : (
-              <p className="mt-2 text-sm text-text-muted">Client not found.</p>
-            )}
-          </Card>
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Client</h3>
+                {client ? (
+                  <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field
+                      label="Name"
+                      value={
+                        <Link href={`/clients/${client.id}`} className="text-accent hover:underline">
+                          {client.first_name} {client.last_name}
+                        </Link>
+                      }
+                    />
+                    <Field label="Email" value={client.email} />
+                    <Field label="Phone" value={client.phone} />
+                  </dl>
+                ) : (
+                  <p className="mt-2 text-sm text-text-muted">Client not found.</p>
+                )}
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Date &amp; Time</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Event date" value={formatEventDate(event.event_date)} />
-              <Field label="Start time" value={event.start_time} />
-              <Field label="End time" value={event.end_time} />
-              <Field label="Timezone" value={event.timezone} />
-            </dl>
-          </Card>
+              <LuxuryCard>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-serif text-[17px] font-semibold text-text">Date &amp; Time</h3>
+                  <Link href="/calendar" className="text-xs text-accent hover:underline">
+                    View on Calendar →
+                  </Link>
+                </div>
+                <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Event date" value={formatEventDate(event.event_date)} />
+                  <Field label="Start time" value={event.start_time} />
+                  <Field label="End time" value={event.end_time} />
+                  <Field label="Timezone" value={event.timezone} />
+                </dl>
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Location</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Location name" value={event.location_name} />
-              <Field label="Address" value={event.address} />
-              <Field label="City" value={event.city} />
-              <Field label="State" value={event.state} />
-              <Field label="ZIP code" value={event.zip_code} />
-            </dl>
-          </Card>
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Location</h3>
+                <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Location name" value={event.location_name} />
+                  <Field label="Address" value={event.address} />
+                  <Field label="City" value={event.city} />
+                  <Field label="State" value={event.state} />
+                  <Field label="ZIP code" value={event.zip_code} />
+                </dl>
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Budget, Package &amp; Guests</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Budget min" value={formatCurrency(event.budget_min)} />
-              <Field label="Budget max" value={formatCurrency(event.budget_max)} />
-              <Field label="Package" value={event.package_name} />
-              <Field label="Guest count" value={event.guest_count === null ? null : String(event.guest_count)} />
-            </dl>
-          </Card>
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Budget, Package &amp; Guests</h3>
+                <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Budget min" value={formatCurrency(event.budget_min)} />
+                  <Field label="Budget max" value={formatCurrency(event.budget_max)} />
+                  <Field label="Package" value={event.package_name} />
+                  <Field label="Guest count" value={event.guest_count === null ? null : String(event.guest_count)} />
+                </dl>
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Theme &amp; Color Palette</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Theme" value={event.theme} />
-              <Field label="Color palette" value={event.color_palette} />
-            </dl>
-          </Card>
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Theme &amp; Color Palette</h3>
+                <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Theme" value={event.theme} />
+                  <Field label="Color palette" value={event.color_palette} />
+                </dl>
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Surprise &amp; Confidentiality</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Surprise event" value={event.surprise_event ? "Yes" : "No"} />
-              <Field label="Confidentiality notes" value={event.confidentiality_notes} />
-            </dl>
-          </Card>
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Surprise &amp; Confidentiality</h3>
+                <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Surprise event" value={event.surprise_event ? "Yes" : "No"} />
+                  <Field label="Confidentiality notes" value={event.confidentiality_notes} />
+                </dl>
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Accessibility &amp; Dietary Notes</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Accessibility notes" value={event.accessibility_notes} />
-              <Field label="Dietary notes" value={event.dietary_notes} />
-            </dl>
-          </Card>
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Accessibility &amp; Dietary Notes</h3>
+                <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Accessibility notes" value={event.accessibility_notes} />
+                  <Field label="Dietary notes" value={event.dietary_notes} />
+                </dl>
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Weather Plan &amp; Backup Location</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Weather plan" value={event.weather_plan} />
-              <Field label="Backup location" value={event.backup_location} />
-            </dl>
-          </Card>
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Weather Plan &amp; Backup Location</h3>
+                <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Weather plan" value={event.weather_plan} />
+                  <Field label="Backup location" value={event.backup_location} />
+                </dl>
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Internal Summary</h3>
-            <p className="mt-2 text-sm text-text">{event.internal_summary || "—"}</p>
-          </Card>
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Internal Summary</h3>
+                <p className="mt-2 text-sm text-text">{event.internal_summary || "—"}</p>
+              </LuxuryCard>
+            </div>
+          </div>
 
-          <EventOperationsBriefSection eventId={event.id} />
+          <div>
+            <SectionHeader title="Execution" />
+            <div className="space-y-6">
+              <EventOperationsBriefSection eventId={event.id} />
+              <EventAssistantCard eventId={event.id} />
+              <OperationsAssistantCard eventId={event.id} />
+              <ProposalGeneratorPanel eventId={event.id} />
+            </div>
+          </div>
 
-          <EventAssistantCard eventId={event.id} />
-
-          <OperationsAssistantCard eventId={event.id} />
-
-          <ProposalGeneratorPanel eventId={event.id} />
-
-          <Card>
+          <LuxuryCard>
             <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
             <div className="mt-3">
               <NotesSection
@@ -380,17 +401,20 @@ export function EventDetailView({ eventId }: { eventId: string }) {
                 onNotesChanged={refetch}
               />
             </div>
-          </Card>
+          </LuxuryCard>
         </div>
 
         <div className="space-y-6">
+          <SectionHeader title="At a glance" />
           <EventHealthCard health={health} />
-          <EventFinancialSummaryCard
-            eventId={event.id}
-            clientId={event.client_id}
-            summary={financialSummary}
-            status={financialStatus}
-          />
+          {financialSummary ? (
+            <EventFinancialSummaryCard
+              eventId={event.id}
+              clientId={event.client_id}
+              summary={financialSummary}
+              status={financialStatus}
+            />
+          ) : null}
           <ChecklistSummaryCard eventId={event.id} stats={checklistStats} />
           <ScheduleSummaryCard eventId={event.id} stats={scheduleStats} />
           <EventContractsSummaryCard contracts={contracts} />
@@ -401,27 +425,27 @@ export function EventDetailView({ eventId }: { eventId: string }) {
             newDocumentParams={{ eventId: event.id, clientId: event.client_id }}
           />
 
-          <Card>
+          <LuxuryCard>
             <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
             <div className="mt-3">
               <Timeline activities={timeline} />
             </div>
-          </Card>
+          </LuxuryCard>
 
-          <Card>
+          <LuxuryCard>
             <h3 className="font-serif text-[17px] font-semibold text-text">Communication Timeline</h3>
             <p className="mt-1 text-xs text-text-muted">Comments, notifications, and other activity for this event — v2 Checkpoint 24.</p>
             <div className="mt-3">
               <EntityTimelinePanel ownerType="event" ownerId={event.id} />
             </div>
-          </Card>
+          </LuxuryCard>
 
-          <Card>
+          <LuxuryCard>
             <h3 className="font-serif text-[17px] font-semibold text-text">Comments</h3>
             <div className="mt-3">
               <CommentsPanel ownerType="event" ownerId={event.id} />
             </div>
-          </Card>
+          </LuxuryCard>
         </div>
       </div>
     </div>
