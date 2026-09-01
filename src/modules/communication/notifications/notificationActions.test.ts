@@ -70,3 +70,40 @@ describe("notification actions", () => {
     expect(afterAll.every((n) => n.read_at !== null)).toBe(true);
   });
 });
+
+describe("notification actions — ownership enforcement (Phase 09D)", () => {
+  const otherWorkspaceMember: MemberSessionSnapshot = {
+    ...session,
+    workspace: { id: "ws_other", name: "Other Workspace" },
+    membership: { id: "member_other", role: "manager", status: "active", created_at: "2026-01-01T00:00:00Z" },
+  };
+
+  it("a caller cannot read/pin/archive a notification belonging to a different workspace, even knowing its real id", async () => {
+    const created = await mockNotificationsRepository.createInAppNotification("ws_1", { recipientMemberId: "member_1", title: "Private", body: "Body" });
+    if (!created.success) throw new Error("setup failed");
+    const id = created.data.id;
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(otherWorkspaceMember);
+    expect((await markNotificationReadAction(id)).success).toBe(false);
+    expect((await pinNotificationAction(id)).success).toBe(false);
+    expect((await archiveNotificationAction(id)).success).toBe(false);
+    expect((await unpinNotificationAction(id)).success).toBe(false);
+    expect((await undoArchiveNotificationAction(id)).success).toBe(false);
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session);
+    const stillUnread = await mockNotificationsRepository.getNotificationsForMember("ws_1", "member_1");
+    expect(stillUnread.find((n) => n.id === id)?.read_at).toBeNull();
+  });
+
+  it("a nonexistent id and a foreign-workspace id fail with the same error", async () => {
+    const created = await mockNotificationsRepository.createInAppNotification("ws_1", { recipientMemberId: "member_1", title: "Private", body: "Body" });
+    if (!created.success) throw new Error("setup failed");
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(otherWorkspaceMember);
+    const foreign = await markNotificationReadAction(created.data.id);
+    const nonexistent = await markNotificationReadAction("notif_nonexistent");
+    expect(foreign.success).toBe(false);
+    expect(nonexistent.success).toBe(false);
+    if (!foreign.success && !nonexistent.success) expect(foreign.error).toBe(nonexistent.error);
+  });
+});

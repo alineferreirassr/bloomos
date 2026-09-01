@@ -76,8 +76,11 @@ function recordNotificationTimelineEvent(workspaceId: string, notification: Noti
   recordTimelineActivity(workspaceId, "notification", event.ownerId, event.type, event.description);
 }
 
-/** Confirms `id` is really one of the caller's own notifications before any state-transition mutation touches it — mirrors `markAllNotificationsRead`'s own `workspace_id`+`recipient_member_id` scoping, which the single-id mutations below never had. */
-async function requireOwnedNotification(id: string, workspaceId: string, memberId: string): Promise<Notification | null> {
+/**
+ * Confirms `id` is really one of the caller's own notifications before any state-transition mutation touches it — mirrors `markAllNotificationsRead`'s own `workspace_id`+`recipient_member_id` scoping, which the single-id mutations below never had.
+ * Phase 09D — exported so `modules/communication/notifications/notificationActions.ts` (the Communications Center's own, differently-permission-gated action file) can close the identical gap it had, without adopting this file's `notifications.*` permission gate. Two call sites, one ownership-check implementation — never re-derive this logic a third time.
+ */
+export async function requireOwnedNotification(id: string, workspaceId: string, memberId: string): Promise<Notification | null> {
   const own = await getCoreNotificationsService().getNotificationsForMember(workspaceId, memberId);
   return own.find((n) => n.id === id) ?? null;
 }
