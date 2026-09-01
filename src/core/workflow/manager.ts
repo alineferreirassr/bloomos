@@ -20,7 +20,7 @@ export function getWorkflowManager(): WorkflowManager {
 
 export interface WorkflowManager {
   createWorkflow(workspaceId: string, createdBy: string, input: CreateWorkflowInput): Promise<DataResult<Workflow>>;
-  getWorkflowById(id: string): Promise<Workflow | null>;
+  getWorkflowById(id: string, workspaceId?: string): Promise<Workflow | null>;
   listWorkflows(workspaceId: string): Promise<Workflow[]>;
   updateWorkflowDraft(id: string, input: UpdateWorkflowDraftInput): Promise<DataResult<Workflow>>;
   archiveWorkflow(id: string): Promise<DataResult<Workflow>>;
@@ -42,8 +42,8 @@ async function createWorkflow(workspaceId: string, createdBy: string, input: Cre
   return result;
 }
 
-async function getWorkflowById(id: string): Promise<Workflow | null> {
-  return knowledgeStore().getWorkflowById(id);
+async function getWorkflowById(id: string, workspaceId?: string): Promise<Workflow | null> {
+  return knowledgeStore().getWorkflowById(id, workspaceId);
 }
 
 async function listWorkflows(workspaceId: string): Promise<Workflow[]> {

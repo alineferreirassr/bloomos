@@ -32,7 +32,8 @@ export interface RecordPublishedVersionInput {
  */
 export interface WorkflowRepository {
   createWorkflow(workspaceId: string, createdBy: string, input: CreateWorkflowInput): Promise<DataResult<Workflow>>;
-  getWorkflowById(id: string): Promise<Workflow | null>;
+  /** Phase 09B — when `workspaceId` is supplied, a Workflow belonging to a different workspace is treated as not found rather than disclosed, closing the Public API's cross-workspace IDOR. Internal callers that already re-check `workflow.workspaceId === session.workspace.id` themselves keep calling this with just `id` — behavior for them is unchanged. */
+  getWorkflowById(id: string, workspaceId?: string): Promise<Workflow | null>;
   listWorkflows(workspaceId: string): Promise<Workflow[]>;
   updateWorkflowDraft(id: string, input: UpdateWorkflowDraftInput): Promise<DataResult<Workflow>>;
   archiveWorkflow(id: string): Promise<DataResult<Workflow>>;

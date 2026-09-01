@@ -191,12 +191,27 @@ export async function getWorkflowErrorsAction(): Promise<GetWorkflowErrorsResult
   return { success: true, data: errors.map((error) => ({ ...error, acknowledgement: getWorkflowErrorAcknowledgement(error.executionId, error.actionId) })) };
 }
 
+/**
+ * Phase 09B — `executionId` names an `AutomationExecution`, which is the
+ * only place workspace ownership for this action/error pair actually
+ * lives (a `WorkflowErrorRecord`'s `actionId` isn't itself a stored,
+ * ownable entity). Ownership is therefore derived the same way
+ * `rerunExecution()` already does it just above — by loading the real
+ * execution and comparing its `workspaceId` to the caller's own session,
+ * never a client-supplied workspace id — closing the gap where any
+ * Owner/Admin who learned another workspace's `executionId`/`actionId`
+ * could flip its acknowledgement flag.
+ */
 async function setErrorAcknowledgement(executionId: string, actionId: string, status: WorkflowErrorAcknowledgementStatus): Promise<{ success: true } | { success: false; error: string }> {
   const session = await resolveMemberSessionSnapshot();
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("workspace.manage")) return { success: false, error: ELEVATED_PERMISSION_ERROR };
+
+  const execution = await getAutomationManager().getExecutionById(executionId);
+  if (!execution || execution.workspaceId !== session.workspace.id) return { success: false, error: GENERIC_ACCESS_ERROR };
+
   setWorkflowErrorAcknowledgement(executionId, actionId, status);
-  getLogger().info("Workflow error acknowledgement set", { executionId, actionId, status });
+  getLogger().info("Workflow error acknowledgement set", { executionId, actionId, status, workspaceId: session.workspace.id });
   return { success: true };
 }
 

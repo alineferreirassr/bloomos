@@ -36,8 +36,11 @@ async function createWorkflow(workspaceId: string, createdBy: string, input: Cre
   return ok(workflow);
 }
 
-async function getWorkflowById(id: string): Promise<Workflow | null> {
-  return workflows.find((workflow) => workflow.id === id) ?? null;
+async function getWorkflowById(id: string, workspaceId?: string): Promise<Workflow | null> {
+  const workflow = workflows.find((workflow) => workflow.id === id) ?? null;
+  if (!workflow) return null;
+  if (workspaceId !== undefined && workflow.workspaceId !== workspaceId) return null;
+  return workflow;
 }
 
 async function listWorkflows(workspaceId: string): Promise<Workflow[]> {
