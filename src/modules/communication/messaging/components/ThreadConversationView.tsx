@@ -15,6 +15,32 @@ function formatTimestamp(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+/** One or more consecutive messages from the same author, grouped so the sender's name renders once per group instead of once per message. Purely a rendering grouping — never changes what was fetched or sent. */
+interface MessageGroup {
+  authorMemberId: string;
+  authorName: string;
+  mine: boolean;
+  messages: InternalMessage[];
+}
+
+function groupMessagesByAuthor(messages: InternalMessage[], myMemberId: string | undefined): MessageGroup[] {
+  const groups: MessageGroup[] = [];
+  for (const message of messages) {
+    const previous = groups[groups.length - 1];
+    if (previous && previous.authorMemberId === message.author_member_id) {
+      previous.messages.push(message);
+    } else {
+      groups.push({
+        authorMemberId: message.author_member_id,
+        authorName: message.author_name,
+        mine: message.author_member_id === myMemberId,
+        messages: [message],
+      });
+    }
+  }
+  return groups;
+}
+
 /**
  * v2.0 Checkpoint 24, Step 12 — Internal Messaging's own conversation view.
  * Read Receipts are real (`read_by_member_ids`, rendered as "Seen" once
@@ -29,6 +55,7 @@ export function ThreadConversationView({ threadId }: { threadId: string }) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [body, setBody] = useState("");
   const session = useMemberSession();
+  const myMemberId = session.membership?.id;
 
   const fetchData = () => {
     getThreadMessagesAction(threadId).then((result) => {
@@ -51,27 +78,60 @@ export function ThreadConversationView({ threadId }: { threadId: string }) {
     }
   }
 
+  /**
+   * `ThreadConversationView` only ever receives a bare `threadId` — no
+   * thread/participant object is fetched or passed in. The only source of
+   * "who am I talking to" is the `author_name` already present on each
+   * loaded `InternalMessage`, so the header subtitle is derived from that
+   * real, already-fetched data (no new server action, no invented name). If
+   * the other participant hasn't sent a message yet, no name can be shown —
+   * the header simply omits the subtitle rather than guessing.
+   */
+  const otherParticipantNames =
+    state.status === "ready"
+      ? Array.from(new Set(state.messages.filter((m) => m.author_member_id !== myMemberId).map((m) => m.author_name)))
+      : [];
+  const subtitle = otherParticipantNames.length > 0 ? `With ${otherParticipantNames.join(", ")}` : undefined;
+
+  const groups = state.status === "ready" ? groupMessagesByAuthor(state.messages, myMemberId) : [];
+
   return (
     <div className="space-y-4">
-      <PageHeader title="Conversation" />
+      <PageHeader
+        title="Conversation"
+        subtitle={subtitle}
+        breadcrumb={[{ label: "Inbox", href: "/inbox" }, { label: "Conversation" }]}
+      />
       {state.status === "loading" ? (
         <Skeleton className="h-64 w-full" />
       ) : state.status === "error" ? (
         <ErrorState message={state.message} onRetry={fetchData} />
       ) : (
-        <ul className="space-y-2">
-          {state.messages.map((m) => {
-            const mine = m.author_member_id === session.membership?.id;
-            return (
-              <li key={m.id} className={`max-w-[80%] rounded-md border border-border/60 p-2.5 ${mine ? "ml-auto bg-surface-tint" : ""}`}>
-                <p className="text-sm text-text">{m.body}</p>
-                <p className="mt-1 text-xs text-text-muted">
-                  {m.author_name} · {formatTimestamp(m.created_at)}
-                  {mine && m.read_by_member_ids.length > 1 ? " · Seen" : ""}
-                </p>
-              </li>
-            );
-          })}
+        <ul className="space-y-4">
+          {groups.map((group, index) => (
+            <li
+              key={`${group.authorMemberId}-${index}`}
+              className={`flex flex-col gap-1 ${group.mine ? "items-end" : "items-start"}`}
+            >
+              {!group.mine ? (
+                <p className="px-1 text-xs font-medium text-text-muted">{group.authorName}</p>
+              ) : null}
+              {group.messages.map((m) => (
+                <div
+                  key={m.id}
+                  className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 sm:max-w-[70%] ${
+                    group.mine ? "bg-surface-tint text-text" : "border border-border/60 bg-surface text-text"
+                  }`}
+                >
+                  <p className="text-sm break-words whitespace-pre-wrap">{m.body}</p>
+                  <p className={`mt-1 text-[11px] text-text-muted ${group.mine ? "text-right" : "text-left"}`}>
+                    {formatTimestamp(m.created_at)}
+                    {group.mine && m.read_by_member_ids.length > 1 ? " · Seen" : ""}
+                  </p>
+                </div>
+              ))}
+            </li>
+          ))}
         </ul>
       )}
       <div className="flex gap-2">
@@ -86,7 +146,7 @@ export function ThreadConversationView({ threadId }: { threadId: string }) {
           placeholder="Type a message…"
           className="min-w-0 flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-muted focus-visible:border-accent focus-visible:outline-none"
         />
-        <Button onClick={handleSend} disabled={body.trim().length === 0}>
+        <Button variant="primary" onClick={handleSend} disabled={body.trim().length === 0}>
           Send
         </Button>
       </div>
