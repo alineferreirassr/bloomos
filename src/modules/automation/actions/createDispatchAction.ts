@@ -12,6 +12,15 @@ export const CREATE_DISPATCH_ACTION_ID = "create-dispatch";
  * `createTaskAction` bypasses `getCoreNotesService()`'s own "use server"
  * layer, using the trigger context's own `workspaceId`/`userId` instead of
  * a live request session.
+ *
+ * Phase 09B.1 — `requiredPermissions: ["dispatch.manage"]` reuses the
+ * exact permission `createDispatchBatchAction()` itself requires for this
+ * same mutation, so a Workflow can never grant this Action less authority
+ * than its canonical manual counterpart already demands. `runAutomationAction`
+ * (`core/automation/actionRunner.ts`) enforces this independently of, and
+ * in addition to, whatever the compiled Workflow's own `executionPolicy`
+ * requires — a Workflow author may layer on further restrictions there,
+ * but cannot lower this floor.
  */
 const createDispatchAction: AutomationActionDefinition = {
   id: CREATE_DISPATCH_ACTION_ID,
@@ -19,7 +28,7 @@ const createDispatchAction: AutomationActionDefinition = {
   description: "Creates a new Dispatch Batch from a list of real Dispatch Order ids.",
   category: "operations",
   version: "automation-action-create-dispatch-v1",
-  requiredPermissions: [],
+  requiredPermissions: ["dispatch.manage"],
   featureFlag: null,
   minimumRole: null,
   async execute(params: AutomationActionParams): Promise<AutomationActionResultDetail> {

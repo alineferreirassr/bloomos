@@ -14,6 +14,16 @@ export const GENERATE_DOCUMENT_ACTION_ID = "generate-document";
  * its own `resolveMemberSessionSnapshot()` — using the trigger context's
  * own `workspaceId`/`userId`/`role`/`permissions` instead of a live request
  * session.
+ *
+ * Phase 09B.1 — `requiredPermissions: ["documents.create"]` matches every
+ * real `DocumentType.requiredPermissions` (`modules/documentTemplates/types/*`)
+ * and the exact permission `generateDocumentActionFactory.ts`'s own 5
+ * hardcoded sibling Actions already require — this generic Action was the
+ * one outlier shipping `[]`, not a deliberately different policy.
+ * `runAutomationAction` (`core/automation/actionRunner.ts`) enforces this
+ * independently of, and in addition to, whatever the compiled Workflow's
+ * own `executionPolicy` requires — a Workflow author may layer on further
+ * restrictions there, but cannot lower this floor.
  */
 const generateDocumentAction: AutomationActionDefinition = {
   id: GENERATE_DOCUMENT_ACTION_ID,
@@ -21,7 +31,7 @@ const generateDocumentAction: AutomationActionDefinition = {
   description: "Compiles a real, published Document Template into a new Document.",
   category: "general",
   version: "automation-action-generate-document-v1",
-  requiredPermissions: [],
+  requiredPermissions: ["documents.create"],
   featureFlag: null,
   minimumRole: null,
   async execute(params: AutomationActionParams): Promise<AutomationActionResultDetail> {
