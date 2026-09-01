@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { getRouteAccessRequirement } from "@/core/permissions/routeAccess";
+import { resolveMemberAccessDecision } from "@/core/guards/memberAccess";
+import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/team/permissionMatrix";
+import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 
 describe("getRouteAccessRequirement", () => {
   it("requires only active membership for the dashboard", () => {
@@ -27,6 +30,13 @@ describe("getRouteAccessRequirement", () => {
     expect(getRouteAccessRequirement("/pipeline/operational")).toEqual({ kind: "permission", permission: "events.view" });
   });
 
+  it("requires finance.view for Vendors and Purchases — Finance F1.5: revisited from F1's provisional events.view, since both pages show real financial amounts (Finance-domain content, not Events-domain content)", () => {
+    expect(getRouteAccessRequirement("/vendors")).toEqual({ kind: "permission", permission: "finance.view" });
+    expect(getRouteAccessRequirement("/purchases")).toEqual({ kind: "permission", permission: "finance.view" });
+    expect(getRouteAccessRequirement("/vendors/vendor_1")).toEqual({ kind: "permission", permission: "finance.view" });
+    expect(getRouteAccessRequirement("/purchases/new")).toEqual({ kind: "permission", permission: "finance.view" });
+  });
+
   it("requires clients.portal_view for the Client Portal admin section, including its sub-routes", () => {
     expect(getRouteAccessRequirement("/client-portal")).toEqual({ kind: "permission", permission: "clients.portal_view" });
     expect(getRouteAccessRequirement("/client-portal/accounts")).toEqual({ kind: "permission", permission: "clients.portal_view" });
@@ -51,5 +61,19 @@ describe("getRouteAccessRequirement", () => {
   it("never matches a route that merely starts with the same characters as a prefix", () => {
     // "/financewhatever" must not match "/finance"
     expect(getRouteAccessRequirement("/financewhatever")).toBeNull();
+  });
+
+  it("Finance F1.5 — grants every current role direct URL access to /vendors and /purchases (all four hold finance.view today, same as they held events.view in F1), and would deny a role that didn't", () => {
+    const roles: WorkspaceMemberRole[] = ["owner", "admin", "manager", "staff"];
+    for (const role of roles) {
+      const requirement = getRouteAccessRequirement("/vendors");
+      const decision = resolveMemberAccessDecision({ kind: "active", permissions: [...DEFAULT_ROLE_PERMISSIONS[role]] }, requirement);
+      expect(decision).toEqual({ allowed: true });
+    }
+
+    // A role holding no permissions at all must be denied — proves the
+    // route is genuinely gated now, not just coincidentally open.
+    const noPermissions = resolveMemberAccessDecision({ kind: "active", permissions: [] }, getRouteAccessRequirement("/purchases"));
+    expect(noPermissions).toEqual({ allowed: false, reason: "forbidden" });
   });
 });

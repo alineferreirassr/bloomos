@@ -48,7 +48,41 @@ export const ROUTE_ACCESS_MAP: RouteAccessEntry[] = [
   // consistent with the Event Command Center living on /events/[id] itself.
   { prefix: "/operations", requirement: { kind: "permission", permission: "events.view" } },
   { prefix: "/contracts", requirement: { kind: "permission", permission: "contracts.view" } },
+  // Finance F1 gated these on `events.view` (provisional — these two had no
+  // entry at all before, closing an open-to-everyone gap was the priority).
+  // Finance F1.5 revisits that choice: both pages display real financial
+  // amounts (vendor payment terms, Purchase Order totals/spend) — that's
+  // Finance-domain content, not Events-domain content, even though the
+  // `/operations` entry below happens to bundle them together for its own
+  // unrelated reason. `finance.view` is the existing permission that
+  // precisely means "operational-level financial visibility every
+  // finance-capable role keeps" (see the `finance.*` block's own comment
+  // above) — exactly Vendors/Purchases' sensitivity level, and it puts
+  // these two routes in the same permission family as the rest of Finance,
+  // so a future amount-redaction pass (finance.amounts.view, same pattern
+  // `financeActions.ts` already uses) has something consistent to layer
+  // onto. Every role holding `events.view` today also holds `finance.view`
+  // (see permissionMatrix.ts), so this changes zero current-role access —
+  // it only changes which permission is doing the gating.
+  { prefix: "/vendors", requirement: { kind: "permission", permission: "finance.view" } },
+  { prefix: "/purchases", requirement: { kind: "permission", permission: "finance.view" } },
   { prefix: "/finance", requirement: { kind: "permission", permission: "finance.view" } },
+  // Phase 06B — Permission Hardening. `/finance` alone (above) still gates
+  // every Finance page at minimum — these three narrower entries win by
+  // longest-prefix match for the specific executive/accounting surfaces the
+  // Founder-approved policy excludes from Manager/Staff by default: reports
+  // (General Ledger, Trial Balance, P&L, Balance Sheet — all under
+  // `/finance/reports`) need `finance.reports.view`; the Chart of Accounts,
+  // Journal, and Accounting Periods each need `finance.accounting.view`. A
+  // member without the narrower permission still passes the outer
+  // `/finance` gate and hits its own `RouteGuard` on the nested layout,
+  // which is what actually blocks it — see `finance/reports/layout.tsx`,
+  // `finance/accounts/layout.tsx`, `finance/journal/layout.tsx`,
+  // `finance/periods/layout.tsx`.
+  { prefix: "/finance/reports", requirement: { kind: "permission", permission: "finance.reports.view" } },
+  { prefix: "/finance/accounts", requirement: { kind: "permission", permission: "finance.accounting.view" } },
+  { prefix: "/finance/journal", requirement: { kind: "permission", permission: "finance.accounting.view" } },
+  { prefix: "/finance/periods", requirement: { kind: "permission", permission: "finance.accounting.view" } },
   { prefix: "/documents", requirement: { kind: "permission", permission: "documents.view" } },
   { prefix: "/document-templates", requirement: { kind: "permission", permission: "documents.view" } },
   { prefix: "/team", requirement: { kind: "permission", permission: "team.view" } },

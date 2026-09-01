@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useMemberSession } from "@/components/providers/MemberSessionProvider";
+import type { Permission } from "@/core/enums/permission";
 
-const TABS = [
+const TABS: ReadonlyArray<{ href: string; label: string; requires?: Permission }> = [
   { href: "/finance", label: "Overview" },
-  { href: "/finance/accounts", label: "Chart of Accounts" },
-  { href: "/finance/journal", label: "Journal Entries" },
-  { href: "/finance/periods", label: "Accounting Periods" },
-  { href: "/finance/reports", label: "Reports" },
-] as const;
+  { href: "/finance/accounts", label: "Chart of Accounts", requires: "finance.accounting.view" },
+  { href: "/finance/journal", label: "Journal Entries", requires: "finance.accounting.view" },
+  { href: "/finance/periods", label: "Accounting Periods", requires: "finance.accounting.view" },
+  { href: "/finance/reports", label: "Reports", requires: "finance.reports.view" },
+];
 
 /**
  * Local sub-navigation for the Ledger surfaces only — Invoices/Payments/
@@ -17,14 +19,19 @@ const TABS = [
  * page's own cards/links, unchanged. Active state matches by exact href for
  * "/finance" (so it doesn't also highlight on /finance/invoices) and by
  * prefix for the other three (so /finance/journal/[id] still highlights
- * "Journal Entries").
+ * "Journal Entries"). Phase 06B — a tab whose `requires` permission the
+ * caller doesn't hold is omitted entirely (never rendered-then-hidden) —
+ * navigation must reflect the same `finance.accounting.view`/
+ * `finance.reports.view` boundary the routes themselves enforce.
  */
 export function FinanceLedgerNav() {
   const pathname = usePathname();
+  const { can } = useMemberSession();
+  const visibleTabs = TABS.filter((tab) => !tab.requires || can(tab.requires));
 
   return (
     <nav aria-label="Finance Ledger" className="flex flex-wrap gap-2 border-b border-border pb-3">
-      {TABS.map((tab) => {
+      {visibleTabs.map((tab) => {
         const isActive = tab.href === "/finance" ? pathname === "/finance" : pathname.startsWith(tab.href);
         return (
           <Link

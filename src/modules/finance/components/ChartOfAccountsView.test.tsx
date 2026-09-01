@@ -3,6 +3,26 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ChartOfAccountsView } from "@/modules/finance/components/ChartOfAccountsView";
 import { makeChartOfAccount } from "@/modules/finance/testUtils";
+import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
+import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+
+const fullPermissionSnapshot: Extract<MemberSessionSnapshot, { kind: "active" }> = {
+  kind: "active",
+  user: { id: "user_1", email: "owner@amorebloom.com" },
+  profile: { full_name: "Amoré Bloom Owner", avatar_url: null },
+  workspace: { id: "ws_amore_bloom", name: "Amoré Bloom" },
+  membership: { id: "member_1", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
+  permissions: ["finance.view", "finance.accounting.view", "finance.reports.view"],
+  workspaceDisplayName: "Amoré Bloom",
+};
+
+function renderView() {
+  return render(
+    <MemberSessionProvider snapshot={fullPermissionSnapshot}>
+      <ChartOfAccountsView />
+    </MemberSessionProvider>,
+  );
+}
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/finance/accounts",
@@ -21,7 +41,7 @@ describe("ChartOfAccountsView", () => {
       makeChartOfAccount({ id: "a2", account_number: 4000, name: "Service Revenue", account_type: "revenue", normal_balance: "credit" }),
     ]);
 
-    render(<ChartOfAccountsView />);
+    renderView();
 
     expect(await screen.findByText("Cash")).toBeInTheDocument();
     expect(screen.getAllByText("Service Revenue").length).toBeGreaterThan(0);
@@ -34,7 +54,7 @@ describe("ChartOfAccountsView", () => {
       makeChartOfAccount({ id: "a2", account_number: 4000, name: "Service Revenue" }),
     ]);
 
-    render(<ChartOfAccountsView />);
+    renderView();
     await screen.findAllByText("Cash");
 
     await user.type(screen.getByLabelText(/search accounts/i), "revenue");
@@ -47,7 +67,7 @@ describe("ChartOfAccountsView", () => {
     const user = userEvent.setup();
     vi.mocked(dataLayer.getChartOfAccounts).mockResolvedValue([]);
 
-    render(<ChartOfAccountsView />);
+    renderView();
     await waitFor(() => expect(dataLayer.getChartOfAccounts).toHaveBeenCalledWith({ includeArchived: false }));
 
     await user.click(screen.getByRole("checkbox", { name: /include inactive/i }));
@@ -60,7 +80,7 @@ describe("ChartOfAccountsView", () => {
       makeChartOfAccount({ id: "a1", name: "Old Account", archived_at: "2026-01-01T00:00:00.000Z" }),
     ]);
 
-    render(<ChartOfAccountsView />);
+    renderView();
 
     expect(await screen.findAllByText("Inactive")).not.toHaveLength(0);
   });
@@ -68,7 +88,7 @@ describe("ChartOfAccountsView", () => {
   it("shows an empty state when no accounts match", async () => {
     vi.mocked(dataLayer.getChartOfAccounts).mockResolvedValue([]);
 
-    render(<ChartOfAccountsView />);
+    renderView();
 
     expect(await screen.findByText(/no accounts yet/i)).toBeInTheDocument();
   });
@@ -76,7 +96,7 @@ describe("ChartOfAccountsView", () => {
   it("shows an error state when loading fails", async () => {
     vi.mocked(dataLayer.getChartOfAccounts).mockRejectedValue(new Error("boom"));
 
-    render(<ChartOfAccountsView />);
+    renderView();
 
     expect(await screen.findByText(/could not load the chart of accounts/i)).toBeInTheDocument();
   });
