@@ -18,7 +18,7 @@ Merges:
 1. Internal Messaging threads for the current member (`mockMessageThreadRepository.listThreadsForMember`), each item's `unreadCount` computed as messages not yet in `read_by_member_ids` for the current member.
 2. Client Portal threads workspace-wide (`listClientPortalThreadsForWorkspace`), each item's `unreadCount` taken directly from `ClientPortalMessageThread.unread_count`.
 
-Both are normalized into one `InboxItem` shape (`source`, `subject`, `previewBody`, `participantLabel`, `unreadCount`, `pinned`, `archived`, `lastMessageAt`, `href`) and sorted pinned-first, then by recency. `UnifiedInboxView.tsx` (`/inbox`) renders this list; clicking an internal thread routes to `/inbox/[threadId]` (`ThreadConversationView.tsx`), clicking a Client Portal thread routes to the existing `/client-portal/messages` page.
+Both are normalized into one `InboxItem` shape (`source`, `subject`, `previewBody`, `participantLabel`, `unreadCount`, `pinned`, `archived`, `lastMessageAt`, `href`) and sorted pinned-first, then by recency. `UnifiedInboxView.tsx` (`/inbox`) renders this list; clicking an internal thread routes to `/inbox/[threadId]` (`ThreadConversationView.tsx`), clicking a Client Portal thread routes to `/inbox/client-portal/[threadId]` (`ClientPortalThreadView.tsx`, read-only staff view — Phase 09C.2).
 
 ## Known limitation: Client Portal unread count is client-side only
 

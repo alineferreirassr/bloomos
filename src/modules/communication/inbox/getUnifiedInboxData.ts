@@ -59,7 +59,7 @@ export async function getUnifiedInboxData(): Promise<{ success: true; data: Inbo
     pinned: false,
     archived: false,
     lastMessageAt: thread.last_message_at,
-    href: `/client-portal/messages?thread=${thread.id}`,
+    href: `/inbox/client-portal/${thread.id}`,
   }));
 
   const merged = [...internalItems, ...clientPortalItems].sort((a, b) => {
