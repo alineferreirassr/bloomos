@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { setMediaAssetStatus, getMediaAssetDownloadUrl, setMediaAssetTags, updateMediaAssetMetadata } from "@/lib/data";
+import Link from "next/link";
+import { setMediaAssetStatus, getMediaAssetDownloadUrl, setMediaAssetTags, updateMediaAssetMetadata, getEventById, getClientById } from "@/lib/data";
 import { getNodeRelationshipsAction, type NodeKnowledgeData } from "@/modules/knowledgeGraph/knowledgeGraphActions";
 import { AssetIntelligencePanel } from "@/modules/assets/components/AssetIntelligencePanel";
+import { AssetThumbnail } from "@/modules/assets/components/AssetThumbnail";
 import { RELATIONSHIP_TYPE_LABELS, RELATIONSHIP_ROLE_LABELS } from "@/types/knowledgeGraph";
 import type { MediaAsset } from "@/types/mediaAsset";
 import { categorizeAsset, ASSET_CATEGORY_LABELS } from "@/modules/assets/assetCategory";
@@ -16,6 +18,11 @@ import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { AssetsIcon } from "@/components/ui/icons";
 import { useMemberSession } from "@/components/providers/MemberSessionProvider";
+
+interface RelatedEntity {
+  label: string;
+  href: string;
+}
 
 const STATUS_TONE: Record<MediaAsset["status"], BadgeTone> = {
   approved: "success",
@@ -43,6 +50,8 @@ export function AssetDetailView({ asset: initialAsset }: { asset: MediaAsset }) 
   const [asset, setAsset] = useState(initialAsset);
   const [busy, setBusy] = useState(false);
   const [knowledge, setKnowledge] = useState<NodeKnowledgeData | null>(null);
+  const [relatedResolved, setRelatedResolved] = useState<{ forAssetId: string; entity: RelatedEntity | null } | null>(null);
+  const related = relatedResolved?.forAssetId === asset.id ? relatedResolved.entity : null;
   const canManage = can("assets.manage");
   const category = categorizeAsset(asset);
 
@@ -55,6 +64,31 @@ export function AssetDetailView({ asset: initialAsset }: { asset: MediaAsset }) 
       cancelled = true;
     };
   }, [asset.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const forAssetId = asset.id;
+    if (asset.owner_type === "event") {
+      getEventById(asset.owner_id)
+        .then((event) => {
+          if (!cancelled) setRelatedResolved({ forAssetId, entity: { label: event.title, href: `/events/${event.id}` } });
+        })
+        .catch(() => {
+          if (!cancelled) setRelatedResolved({ forAssetId, entity: null });
+        });
+    } else if (asset.owner_type === "client") {
+      getClientById(asset.owner_id)
+        .then((client) => {
+          if (!cancelled) setRelatedResolved({ forAssetId, entity: { label: `${client.first_name} ${client.last_name}`.trim(), href: `/clients/${client.id}` } });
+        })
+        .catch(() => {
+          if (!cancelled) setRelatedResolved({ forAssetId, entity: null });
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [asset.id, asset.owner_type, asset.owner_id]);
 
   async function handleStatusChange(next: "approved" | "rejected" | "needs_revision") {
     if (!user) return;
@@ -112,6 +146,8 @@ export function AssetDetailView({ asset: initialAsset }: { asset: MediaAsset }) 
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
+          <AssetThumbnail asset={asset} variant="hero" className="mb-4" />
+
           <h2 className="mb-3 text-sm font-semibold">Overview</h2>
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <div>
@@ -133,14 +169,32 @@ export function AssetDetailView({ asset: initialAsset }: { asset: MediaAsset }) 
               <dd className="mt-1">{new Date(asset.updated_at).toLocaleString()}</dd>
             </div>
             {asset.width && asset.height ? (
-              <>
-                <div>
-                  <dt className="text-text-muted">Dimensions</dt>
-                  <dd className="mt-1">
-                    {asset.width} × {asset.height} ({computeAspectRatio(asset)}, {computeOrientation(asset)})
-                  </dd>
-                </div>
-              </>
+              <div>
+                <dt className="text-text-muted">Dimensions</dt>
+                <dd className="mt-1">
+                  {asset.width} × {asset.height} ({computeAspectRatio(asset)}, {computeOrientation(asset)})
+                </dd>
+              </div>
+            ) : null}
+            {category === "video" && asset.duration ? (
+              <div>
+                <dt className="text-text-muted">Duration</dt>
+                <dd className="mt-1">
+                  {Math.floor(asset.duration / 60)}:{Math.round(asset.duration % 60)
+                    .toString()
+                    .padStart(2, "0")}
+                </dd>
+              </div>
+            ) : null}
+            {related ? (
+              <div>
+                <dt className="text-text-muted capitalize">{asset.owner_type}</dt>
+                <dd className="mt-1">
+                  <Link href={related.href} className="text-accent hover:underline">
+                    {related.label}
+                  </Link>
+                </dd>
+              </div>
             ) : null}
             {asset.rejection_reason ? (
               <div className="col-span-2">
