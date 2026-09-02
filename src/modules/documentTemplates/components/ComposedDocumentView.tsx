@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -107,24 +108,24 @@ export function ComposedDocumentView({ documentId }: { documentId: string }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="font-serif text-xl font-semibold text-text">{document.metadata.title}</h1>
-          <p className="text-xs text-text/55">
-            {documentType?.label ?? document.documentTypeId}
-            {template ? (
-              <>
-                {" · from "}
-                <Link href={`/document-templates/${template.id}`} className="underline">
-                  {template.name}
-                </Link>
-              </>
-            ) : null}
-          </p>
+      <div>
+        <h1 className="font-serif text-3xl font-semibold text-text text-balance">{document.metadata.title}</h1>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <Badge tone={document.status === "published" ? "success" : document.status === "archived" ? "neutral" : "outline"}>{document.status}</Badge>
         </div>
+        <p className="mt-3 text-sm text-text-muted">
+          {documentType?.label ?? document.documentTypeId}
+          {template ? (
+            <>
+              {" · from "}
+              <Link href={`/document-templates/${template.id}`} className="text-accent hover:underline">
+                {template.name}
+              </Link>
+            </>
+          ) : null}
+        </p>
         {canPublish ? (
-          <div className="flex flex-wrap gap-1.5">
+          <div className="mt-4 flex flex-wrap gap-1.5">
             <Button type="button" variant="secondary" onClick={handleDownload}>
               Download
             </Button>
@@ -142,13 +143,16 @@ export function ComposedDocumentView({ documentId }: { documentId: string }) {
       </div>
 
       <div className="flex flex-col gap-4 lg:flex-row">
-        <Card className="min-w-0 flex-1">
-          <BlockPreview blocks={document.content} />
-        </Card>
+        <div className="min-w-0 flex-1">
+          <SectionHeader title="Overview" />
+          <LuxuryCard tone="tint">
+            <BlockPreview blocks={document.content} />
+          </LuxuryCard>
+        </div>
 
         <div className="lg:w-80 shrink-0">
-          <h2 className="mb-2 font-serif text-sm font-semibold text-text">Version History</h2>
-          <Card>
+          <SectionHeader title="Versions" />
+          <LuxuryCard>
             {versions.length === 0 ? (
               <p className="text-sm text-text/55">No published versions yet — this Document is still a draft.</p>
             ) : (
@@ -169,7 +173,7 @@ export function ComposedDocumentView({ documentId }: { documentId: string }) {
                 ))}
               </ul>
             )}
-          </Card>
+          </LuxuryCard>
         </div>
       </div>
 

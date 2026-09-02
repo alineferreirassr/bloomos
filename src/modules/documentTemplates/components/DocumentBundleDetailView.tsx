@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -125,54 +126,59 @@ export function DocumentBundleDetailView({ bundleId }: DocumentBundleDetailViewP
         </span>
       </div>
 
-      <Card>
-        <h2 className="font-serif text-[15px] font-semibold text-text">Bundle Health</h2>
-        <div className="mt-3 space-y-3">
-          <ProgressBar value={health.overallScore} label="Overall health" />
-          <ul className="space-y-1.5">
-            {health.categories.map((category) => (
-              <li key={category.category} className="flex items-center justify-between text-xs">
-                <span className="text-text-muted">{category.category.replace(/_/g, " ")}</span>
-                <span className="text-text">{category.score === null ? "N/A" : `${category.score}%`}</span>
-              </li>
-            ))}
-          </ul>
-          {health.categories.flatMap((c) => c.issues).length > 0 ? (
-            <ul className="space-y-1 border-t border-border pt-2">
-              {health.categories.flatMap((c) => c.issues).map((issue, index) => (
-                <li key={index} className="text-xs text-warning">
-                  {issue}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      </Card>
+      <div>
+        <SectionHeader title="Overview" />
+        <div className="space-y-6">
+          <LuxuryCard>
+            <h2 className="font-serif text-[15px] font-semibold text-text">Bundle Health</h2>
+            <div className="mt-3 space-y-3">
+              <ProgressBar value={health.overallScore} label="Overall health" />
+              <ul className="space-y-1.5">
+                {health.categories.map((category) => (
+                  <li key={category.category} className="flex items-center justify-between text-xs">
+                    <span className="text-text-muted">{category.category.replace(/_/g, " ")}</span>
+                    <span className="text-text">{category.score === null ? "N/A" : `${category.score}%`}</span>
+                  </li>
+                ))}
+              </ul>
+              {health.categories.flatMap((c) => c.issues).length > 0 ? (
+                <ul className="space-y-1 border-t border-border pt-2">
+                  {health.categories.flatMap((c) => c.issues).map((issue, index) => (
+                    <li key={index} className="text-xs text-warning">
+                      {issue}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          </LuxuryCard>
 
-      <Card>
-        <h2 className="mb-3 font-serif text-[15px] font-semibold text-text">Items</h2>
-        {resolvedItems.length === 0 ? (
-          <p className="text-sm text-text-muted">No items in this bundle yet.</p>
-        ) : (
-          <ul className="space-y-2">
-            {resolvedItems.map((resolved) => (
-              <li key={resolved.item.id} className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-                <div className="min-w-0">
-                  <p className="truncate text-sm text-text">{resolved.title}</p>
-                  <p className="text-xs text-text-muted">
-                    {resolved.item.kind.replace(/_/g, " ")}
-                    {resolved.subtitle ? ` · ${resolved.subtitle}` : ""}
-                    {!resolved.available ? " · No longer available" : ""}
-                  </p>
-                </div>
-                <Button variant="ghost" onClick={() => handleRemoveItem(resolved.item.id)} disabled={busy}>
-                  Remove
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+          <LuxuryCard>
+            <h2 className="mb-3 font-serif text-[15px] font-semibold text-text">Items</h2>
+            {resolvedItems.length === 0 ? (
+              <p className="text-sm text-text-muted">No items in this bundle yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {resolvedItems.map((resolved) => (
+                  <li key={resolved.item.id} className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-text">{resolved.title}</p>
+                      <p className="text-xs text-text-muted">
+                        {resolved.item.kind.replace(/_/g, " ")}
+                        {resolved.subtitle ? ` · ${resolved.subtitle}` : ""}
+                        {!resolved.available ? " · No longer available" : ""}
+                      </p>
+                    </div>
+                    <Button variant="ghost" onClick={() => handleRemoveItem(resolved.item.id)} disabled={busy}>
+                      Remove
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </LuxuryCard>
+        </div>
+      </div>
     </div>
   );
 }

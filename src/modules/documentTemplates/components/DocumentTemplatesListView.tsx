@@ -3,11 +3,12 @@
 import { createElement, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { registerCommand, unregisterCommand } from "@/core/commandPalette";
 import { getDocumentTemplatesListData, type DocumentTemplatesListData } from "@/modules/documentTemplates/getDocumentTemplatesListData";
 import { resolveDocumentTypeIcon } from "@/modules/documentTemplates/documentTypeIcons";
@@ -110,22 +111,22 @@ export function DocumentTemplatesListView() {
       <DocumentSearchBox />
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Card>
+        <LuxuryCard>
           <p className="text-[11px] uppercase tracking-wide text-text/55">Templates</p>
           <p className="mt-1 font-serif text-2xl font-semibold text-text">{stats.totalTemplates}</p>
-        </Card>
-        <Card>
+        </LuxuryCard>
+        <LuxuryCard>
           <p className="text-[11px] uppercase tracking-wide text-text/55">Published</p>
           <p className="mt-1 font-serif text-2xl font-semibold text-text">{stats.publishedTemplates}</p>
-        </Card>
-        <Card>
+        </LuxuryCard>
+        <LuxuryCard>
           <p className="text-[11px] uppercase tracking-wide text-text/55">Documents Generated</p>
           <p className="mt-1 font-serif text-2xl font-semibold text-text">{stats.totalDocuments}</p>
-        </Card>
-        <Card>
+        </LuxuryCard>
+        <LuxuryCard>
           <p className="text-[11px] uppercase tracking-wide text-text/55">This Week</p>
           <p className="mt-1 font-serif text-2xl font-semibold text-text">{stats.documentsThisWeek}</p>
-        </Card>
+        </LuxuryCard>
       </div>
 
       <div className="flex flex-col gap-4 lg:flex-row">
@@ -144,27 +145,29 @@ export function DocumentTemplatesListView() {
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {typeTemplates.map((template) => (
                     <Link key={template.id} href={`/document-templates/${template.id}`}>
-                      <Card className="transition-colors duration-150 hover:border-accent/50">
+                      <LuxuryCard className="transition-colors duration-150 hover:border-accent/50">
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-medium text-text">{template.name}</span>
                           <Badge tone={template.status === "published" ? "success" : template.status === "archived" ? "neutral" : "outline"}>{template.status}</Badge>
                         </div>
                         <p className="mt-1 text-xs text-text/55">{template.description || "No description."}</p>
-                      </Card>
+                      </LuxuryCard>
                     </Link>
                   ))}
                 </div>
               </div>
             );
           })}
-          {templates.length === 0 ? <p className="text-sm text-text/55">No Templates yet — create one to get started.</p> : null}
+          {templates.length === 0 ? (
+            <EmptyState title="No Templates yet" description="Create one to get started." />
+          ) : null}
         </div>
 
         <div className="lg:w-96 shrink-0">
           <h2 className="mb-2 font-serif text-base font-semibold text-text">Recent Documents</h2>
-          <Card>
+          <LuxuryCard>
             {recentDocuments.length === 0 ? (
-              <p className="text-sm text-text/55">No Documents generated yet.</p>
+              <EmptyState title="No Documents generated yet." />
             ) : (
               <ul className="flex flex-col gap-2">
                 {recentDocuments.map((document) => (
@@ -180,7 +183,7 @@ export function DocumentTemplatesListView() {
                 ))}
               </ul>
             )}
-          </Card>
+          </LuxuryCard>
         </div>
       </div>
 

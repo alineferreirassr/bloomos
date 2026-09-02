@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -65,24 +65,24 @@ export function DocumentBundlesSection({ clientId }: DocumentBundlesSectionProps
 
   if (error) {
     return (
-      <Card>
+      <LuxuryCard>
         <h3 className="font-serif text-[17px] font-semibold text-text">Document Bundles</h3>
         <p className="mt-2 text-sm text-text-muted">Could not load document bundles.</p>
-      </Card>
+      </LuxuryCard>
     );
   }
 
   if (!bundles) {
     return (
-      <Card>
+      <LuxuryCard>
         <h3 className="font-serif text-[17px] font-semibold text-text">Document Bundles</h3>
         <Skeleton className="mt-3 h-16 w-full" />
-      </Card>
+      </LuxuryCard>
     );
   }
 
   return (
-    <Card>
+    <LuxuryCard>
       <div className="flex items-center justify-between">
         <h3 className="font-serif text-[17px] font-semibold text-text">Document Bundles</h3>
         <Button variant="secondary" onClick={handleCreate} disabled={creating}>
@@ -110,6 +110,6 @@ export function DocumentBundlesSection({ clientId }: DocumentBundlesSectionProps
           ))}
         </ul>
       )}
-    </Card>
+    </LuxuryCard>
   );
 }

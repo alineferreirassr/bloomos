@@ -2,7 +2,7 @@
 
 import { createElement, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -208,31 +208,31 @@ export function TemplateEditorView({ templateId }: { templateId: string }) {
         </div>
       </div>
 
-      <Card>
+      <LuxuryCard>
         <div className="flex flex-col gap-2">
           <Input value={name} placeholder="Template name" onChange={(event) => setName(event.target.value)} />
           <Textarea value={description} placeholder="Description" onChange={(event) => setDescription(event.target.value)} />
         </div>
-      </Card>
+      </LuxuryCard>
 
       <div className="flex flex-col gap-4 lg:flex-row">
         <div className="min-w-0 flex-1">
-          <Card>
+          <LuxuryCard>
             <h2 className="mb-2 font-serif text-sm font-semibold text-text">Header</h2>
             <BlockEditor blocks={header} onChange={setHeader} />
-          </Card>
-          <Card className="mt-4">
+          </LuxuryCard>
+          <LuxuryCard className="mt-4">
             <h2 className="mb-2 font-serif text-sm font-semibold text-text">Content</h2>
             <BlockEditor blocks={content} onChange={setContent} />
-          </Card>
-          <Card className="mt-4">
+          </LuxuryCard>
+          <LuxuryCard className="mt-4">
             <h2 className="mb-2 font-serif text-sm font-semibold text-text">Footer</h2>
             <BlockEditor blocks={footer} onChange={setFooter} />
-          </Card>
+          </LuxuryCard>
         </div>
 
         <div className="lg:w-96 shrink-0">
-          <Card>
+          <LuxuryCard>
             <Tabs defaultValue="variables">
               <TabList aria-label="Template Editor panels">
                 <Tab value="variables">Variables</Tab>
@@ -270,7 +270,7 @@ export function TemplateEditorView({ templateId }: { templateId: string }) {
                 <SuggestionsPanel templateId={templateId} content={content} onApplyWording={handleApplyWording} onAddMissingSection={handleAddMissingSection} />
               </TabPanel>
             </Tabs>
-          </Card>
+          </LuxuryCard>
         </div>
       </div>
 
