@@ -5,7 +5,8 @@ import Link from "next/link";
 import { listResourceBundlesAction } from "@/modules/allocation/allocationActions";
 import type { ResourceBundle } from "@/types/allocation";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -20,11 +21,11 @@ import { AssetsIcon } from "@/components/ui/icons";
  * `duplicateResourceBundleAction` exist and are fully tested in
  * `allocationActions.ts`, ready for a future form.
  */
-const STATUS_TONE: Record<ResourceBundle["status"], BadgeTone> = { active: "success", archived: "outline" };
+const STATUS_TONE: Record<ResourceBundle["status"], BadgeTone> = { active: "success", archived: "neutral" };
 
 function BundleCard({ bundle }: { bundle: ResourceBundle }) {
   return (
-    <Card className="mb-4">
+    <LuxuryCard className="mb-4">
       <div className="mb-2 flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold">{bundle.name}</h2>
         <Badge tone={STATUS_TONE[bundle.status]}>{bundle.status}</Badge>
@@ -60,7 +61,7 @@ function BundleCard({ bundle }: { bundle: ResourceBundle }) {
           )}
         </div>
       </div>
-    </Card>
+    </LuxuryCard>
   );
 }
 
@@ -109,7 +110,10 @@ export function BundleManagementView() {
           {bundles.length === 0 ? (
             <EmptyState title="No resource bundles yet" description="Resource bundles are created through the Resource Bundle registry." icon={AssetsIcon} />
           ) : (
-            bundles.map((b) => <BundleCard key={b.id} bundle={b} />)
+            <>
+              <SectionHeader title="Resource Bundles" />
+              {bundles.map((b) => <BundleCard key={b.id} bundle={b} />)}
+            </>
           )}
         </>
       ) : !error ? (

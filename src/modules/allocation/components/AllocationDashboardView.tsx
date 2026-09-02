@@ -5,7 +5,8 @@ import Link from "next/link";
 import { listAllocationRequestsAction, listResourceBundlesAction, evaluateResourceAllocationHealthAction, type EvaluateResourceAllocationHealthResult } from "@/modules/allocation/allocationActions";
 import type { AllocationRequest, ResourceBundle, AllocationFindingSeverity } from "@/types/allocation";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -132,21 +133,23 @@ export function AllocationDashboardView() {
             <KpiCard label="Available Resources" value={String(health.resourcePool.availableCount)} icon={CheckIcon} />
           </div>
 
-          <Card className="mb-6">
+          <SectionHeader title="Overview" />
+          <LuxuryCard tone="tint" className="mb-6">
             <h2 className="mb-3 text-sm font-semibold">
               High-Severity Findings <span className="font-normal text-text-muted">({highFindings.length})</span>
             </h2>
             {highFindings.length === 0 ? <p className="text-sm text-success">No high-severity allocation findings.</p> : <ul role="list">{highFindings.map((f) => <FindingRow key={f.id} description={f.description} severity={f.severity} />)}</ul>}
-          </Card>
+          </LuxuryCard>
 
-          <Card className="mb-6">
+          <LuxuryCard className="mb-6">
             <h2 className="mb-3 text-sm font-semibold">
               Other Findings <span className="font-normal text-text-muted">({otherFindings.length})</span>
             </h2>
             {otherFindings.length === 0 ? <p className="text-sm text-text-muted">Nothing else to report.</p> : <ul role="list">{otherFindings.slice(0, 10).map((f) => <FindingRow key={f.id} description={f.description} severity={f.severity} />)}</ul>}
-          </Card>
+          </LuxuryCard>
 
-          <Card className="mb-6">
+          <SectionHeader title="Allocation Requests" />
+          <LuxuryCard className="mb-6">
             <h2 className="mb-3 text-sm font-semibold">
               Allocation Requests <span className="font-normal text-text-muted">({sortedRequests.length})</span>
             </h2>
@@ -159,10 +162,11 @@ export function AllocationDashboardView() {
                 ))}
               </ul>
             )}
-          </Card>
+          </LuxuryCard>
 
+          <SectionHeader title="Resource Pool & Bundles" />
           <div className="grid gap-6 md:grid-cols-2">
-            <Card>
+            <LuxuryCard>
               <h2 className="mb-3 text-sm font-semibold">Resource Pool</h2>
               <div className="grid grid-cols-2 gap-3">
                 <PoolStat label="Available" value={health.resourcePool.availableCount} tone="success" />
@@ -173,9 +177,9 @@ export function AllocationDashboardView() {
               <p className="mt-3 text-xs text-text-muted">
                 {health.resourcePool.sharedCount} shared resource{health.resourcePool.sharedCount === 1 ? "" : "s"} · {health.resourcePool.criticalCount} single point{health.resourcePool.criticalCount === 1 ? "" : "s"} of failure
               </p>
-            </Card>
+            </LuxuryCard>
 
-            <Card>
+            <LuxuryCard>
               <h2 className="mb-3 text-sm font-semibold">
                 Resource Bundles <span className="font-normal text-text-muted">({bundles?.length ?? 0})</span>
               </h2>
@@ -194,7 +198,7 @@ export function AllocationDashboardView() {
               <Link href="/allocations/bundles" className="mt-3 inline-block">
                 <Button variant="secondary">Manage Bundles</Button>
               </Link>
-            </Card>
+            </LuxuryCard>
           </div>
         </>
       ) : !error ? (
