@@ -5,7 +5,8 @@ import Link from "next/link";
 import { getOperationalAlertAction, acknowledgeAlertAction, resolveAlertAction, dismissAlertAction, escalateAlertAction } from "@/modules/operationsCenter/operationsCenterActions";
 import type { AlertStatus, OperationalAlert, OperationalSeverity } from "@/types/operationsCenter";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -73,14 +74,16 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
         }
       />
 
-      <Card className="mb-6">
+      <SectionHeader title="Overview" />
+
+      <LuxuryCard className="mb-6">
         <h2 className="mb-2 text-sm font-semibold">Description</h2>
         <p className="text-sm">{alert.description}</p>
         {alert.source_record_id ? <p className="mt-2 text-xs text-text-muted">Source record: {alert.source_record_id}</p> : null}
-      </Card>
+      </LuxuryCard>
 
       {isOpen ? (
-        <Card className="mb-6">
+        <LuxuryCard tone="tint" className="mb-6">
           <h2 className="mb-3 text-sm font-semibold">Actions</h2>
           <div className="flex flex-wrap gap-2">
             {alert.status === "open" ? (
@@ -100,15 +103,17 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
               </Button>
             ) : null}
           </div>
-        </Card>
+        </LuxuryCard>
       ) : (
-        <Card className="mb-6">
+        <LuxuryCard tone="tint" className="mb-6">
           <h2 className="mb-2 text-sm font-semibold">Resolution</h2>
           <p className="text-sm text-text-muted">{alert.resolution_reason ?? "No resolution reason recorded."}</p>
-        </Card>
+        </LuxuryCard>
       )}
 
-      <Card className="mb-6">
+      <SectionHeader title="Activity" />
+
+      <LuxuryCard className="mb-6">
         <h2 className="mb-3 text-sm font-semibold">Lifecycle</h2>
         <ul role="list" className="text-sm">
           <li className="border-b border-border/50 py-2">Opened {new Date(alert.created_at).toLocaleString()}</li>
@@ -117,12 +122,12 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
           {alert.dismissed_at ? <li className="border-b border-border/50 py-2">Dismissed {new Date(alert.dismissed_at).toLocaleString()}</li> : null}
           {alert.resolved_at ? <li className="py-2">Resolved {new Date(alert.resolved_at).toLocaleString()} by {alert.resolved_by}</li> : null}
         </ul>
-      </Card>
+      </LuxuryCard>
 
-      <Card className="mb-6">
+      <LuxuryCard className="mb-6">
         <h2 className="mb-3 text-sm font-semibold">Comments</h2>
         <CommentsPanel ownerType="operational_alert" ownerId={alert.id} />
-      </Card>
+      </LuxuryCard>
 
       <Link href="/operations-center" className="mt-2 inline-block text-sm text-accent hover:underline">
         ← Back to Operations Center

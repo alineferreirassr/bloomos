@@ -5,7 +5,8 @@ import Link from "next/link";
 import { getOperationalIncidentAction, setIncidentStatusAction } from "@/modules/operationsCenter/operationsCenterActions";
 import type { IncidentStatus, OperationalIncident, OperationalSeverity } from "@/types/operationsCenter";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -86,13 +87,15 @@ export function IncidentDetailView({ incidentId }: { incidentId: string }) {
         }
       />
 
-      <Card className="mb-6">
+      <SectionHeader title="Overview" />
+
+      <LuxuryCard className="mb-6">
         <h2 className="mb-2 text-sm font-semibold">Summary</h2>
         <p className="whitespace-pre-line text-sm">{incident.description}</p>
-      </Card>
+      </LuxuryCard>
 
       {incident.status !== "resolved" ? (
-        <Card className="mb-6">
+        <LuxuryCard tone="tint" className="mb-6">
           <h2 className="mb-3 text-sm font-semibold">Actions</h2>
           <div className="flex flex-wrap gap-2">
             {incident.status === "open" ? (
@@ -104,15 +107,17 @@ export function IncidentDetailView({ incidentId }: { incidentId: string }) {
               Resolve
             </Button>
           </div>
-        </Card>
+        </LuxuryCard>
       ) : (
-        <Card className="mb-6">
+        <LuxuryCard tone="tint" className="mb-6">
           <h2 className="mb-2 text-sm font-semibold">Resolution Notes</h2>
           <p className="text-sm text-text-muted">{incident.resolution_notes ?? "No resolution notes recorded."}</p>
-        </Card>
+        </LuxuryCard>
       )}
 
-      <Card className="mb-6">
+      <SectionHeader title="Related" />
+
+      <LuxuryCard className="mb-6">
         <h2 className="mb-3 text-sm font-semibold">Related Resources</h2>
         <RelatedList label="Dispatch Orders" ids={incident.related_dispatch_order_ids} />
         <RelatedList label="Field Operations" ids={incident.related_field_operation_ids} />
@@ -128,9 +133,9 @@ export function IncidentDetailView({ incidentId }: { incidentId: string }) {
         incident.related_equipment_ids.length === 0 ? (
           <p className="text-sm text-text-muted">No related resources recorded on this incident.</p>
         ) : null}
-      </Card>
+      </LuxuryCard>
 
-      <Card className="mb-6">
+      <LuxuryCard className="mb-6">
         <h2 className="mb-3 text-sm font-semibold">
           Source Alerts <span className="font-normal text-text-muted">({incident.source_alert_ids.length})</span>
         </h2>
@@ -148,21 +153,23 @@ export function IncidentDetailView({ incidentId }: { incidentId: string }) {
             ))}
           </ul>
         )}
-      </Card>
+      </LuxuryCard>
 
-      <Card className="mb-6">
+      <SectionHeader title="Activity" />
+
+      <LuxuryCard className="mb-6">
         <h2 className="mb-3 text-sm font-semibold">Lifecycle</h2>
         <ul role="list" className="text-sm">
           <li className="border-b border-border/50 py-2">Opened {new Date(incident.created_at).toLocaleString()}</li>
           {incident.acknowledged_at ? <li className="border-b border-border/50 py-2">Acknowledged {new Date(incident.acknowledged_at).toLocaleString()}</li> : null}
           {incident.resolved_at ? <li className="py-2">Resolved {new Date(incident.resolved_at).toLocaleString()}</li> : null}
         </ul>
-      </Card>
+      </LuxuryCard>
 
-      <Card className="mb-6">
+      <LuxuryCard className="mb-6">
         <h2 className="mb-3 text-sm font-semibold">Comments</h2>
         <CommentsPanel ownerType="operational_incident" ownerId={incident.id} />
-      </Card>
+      </LuxuryCard>
 
       <Link href="/operations-center" className="mt-2 inline-block text-sm text-accent hover:underline">
         ← Back to Operations Center

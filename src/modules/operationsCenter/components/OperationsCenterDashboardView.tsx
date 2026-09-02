@@ -5,7 +5,8 @@ import Link from "next/link";
 import { evaluateOperationsCenterAction, acknowledgeAlertAction, resolveAlertAction, type EvaluateOperationsCenterResult } from "@/modules/operationsCenter/operationsCenterActions";
 import type { OperationalSeverity, OperationalStatus } from "@/types/operationsCenter";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -121,12 +122,14 @@ export function OperationsCenterDashboardView() {
             <KpiCard label="Overall Health" value={String(data.health.overallOperationsCenterHealth)} icon={CheckIcon} />
           </div>
 
-          <Card className="mb-6">
+          <SectionHeader title="Overview" />
+
+          <LuxuryCard className="mb-6">
             <h2 className="mb-2 text-sm font-semibold">Operations Brief</h2>
             <p className="text-sm text-text-muted">{data.digest}</p>
-          </Card>
+          </LuxuryCard>
 
-          <Card className="mb-6">
+          <LuxuryCard tone="tint" className="mb-6">
             <h2 className="mb-3 text-sm font-semibold">
               Priority Queue <span className="font-normal text-text-muted">({data.priorityQueue.length})</span>
             </h2>
@@ -143,16 +146,18 @@ export function OperationsCenterDashboardView() {
                     <Badge tone={SEVERITY_TONE[item.severity]}>{item.severity}</Badge>
                     {item.deepLink ? (
                       <Link href={item.deepLink} className="text-sm text-accent hover:underline">
-                        View
+                        View →
                       </Link>
                     ) : null}
                   </li>
                 ))}
               </ul>
             )}
-          </Card>
+          </LuxuryCard>
 
-          <Card className="mb-6">
+          <SectionHeader title="Alerts & Incidents" />
+
+          <LuxuryCard className="mb-6">
             <h2 className="mb-3 text-sm font-semibold">
               Open Alerts <span className="font-normal text-text-muted">({openAlerts.length})</span>
             </h2>
@@ -183,9 +188,9 @@ export function OperationsCenterDashboardView() {
                 ))}
               </ul>
             )}
-          </Card>
+          </LuxuryCard>
 
-          <Card className="mb-6">
+          <LuxuryCard className="mb-6">
             <h2 className="mb-3 text-sm font-semibold">
               Open Incidents <span className="font-normal text-text-muted">({openIncidents.length})</span>
             </h2>
@@ -208,10 +213,12 @@ export function OperationsCenterDashboardView() {
                 ))}
               </ul>
             )}
-          </Card>
+          </LuxuryCard>
+
+          <SectionHeader title="Resources" />
 
           <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
-            <Card>
+            <LuxuryCard>
               <h2 className="mb-3 text-sm font-semibold">Resource Overview</h2>
               <ul role="list" className="grid grid-cols-2 gap-3 text-sm">
                 <li>
@@ -230,9 +237,9 @@ export function OperationsCenterDashboardView() {
                   Teams active <span className="font-semibold">{data.resourceOverview.teamsActive}</span>
                 </li>
               </ul>
-            </Card>
+            </LuxuryCard>
 
-            <Card>
+            <LuxuryCard>
               <h2 className="mb-3 text-sm font-semibold">Location Summary</h2>
               <p className="mb-2 text-xs text-text-muted">List-based summary only — provider-ready placeholder, never a real map, no exact coordinates exposed.</p>
               <ul role="list" className="grid grid-cols-2 gap-3 text-sm">
@@ -244,7 +251,7 @@ export function OperationsCenterDashboardView() {
                 </li>
               </ul>
               <p className="mt-2 text-xs text-text-muted">{data.locationSummary.locationAccuracySummary}</p>
-            </Card>
+            </LuxuryCard>
           </div>
         </>
       ) : (
