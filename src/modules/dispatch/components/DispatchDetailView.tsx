@@ -5,7 +5,7 @@ import Link from "next/link";
 import { getDispatchOrderAction, evaluateDispatchOrderAction } from "@/modules/dispatch/dispatchActions";
 import type { DispatchOrder, DispatchOrderResult, DispatchQueueState } from "@/types/dispatch";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -24,14 +24,14 @@ import { VendorsIcon, CheckIcon } from "@/components/ui/icons";
  * "no create/mutate control wired yet" scope every prior platform detail
  * view in this codebase carries.
  */
-const DISPATCH_STATUS_TONE: Record<DispatchOrder["status"], BadgeTone> = { draft: "neutral", dispatched: "success", cancelled: "danger", archived: "outline" };
+const DISPATCH_STATUS_TONE: Record<DispatchOrder["status"], BadgeTone> = { draft: "neutral", dispatched: "success", cancelled: "danger", archived: "neutral" };
 const QUEUE_STATE_TONE: Record<DispatchQueueState, BadgeTone> = {
   queued: "neutral",
-  assigned: "accent",
+  assigned: "outline",
   pending: "warning",
   accepted: "success",
   declined: "danger",
-  cancelled: "outline",
+  cancelled: "danger",
   expired: "danger",
   completed_placeholder: "outline",
 };
@@ -83,7 +83,7 @@ export function DispatchDetailView({ orderId }: { orderId: string }) {
         <KpiCard label="Declined" value={String(declinedCount)} icon={CheckIcon} />
       </div>
 
-      <Card className="mb-6">
+      <LuxuryCard className="mb-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold">Evaluation</h2>
           <Button variant="secondary" onClick={evaluate} disabled={result === "loading"}>
@@ -136,9 +136,9 @@ export function DispatchDetailView({ orderId }: { orderId: string }) {
         ) : (
           <p className="text-sm text-text-muted">Run an evaluation to see validation, health scores, and readiness.</p>
         )}
-      </Card>
+      </LuxuryCard>
 
-      <Card>
+      <LuxuryCard tone="tint">
         <h2 className="mb-3 text-sm font-semibold">
           Assignments <span className="font-normal text-text-muted">({order.assignments.length})</span>
         </h2>
@@ -147,20 +147,22 @@ export function DispatchDetailView({ orderId }: { orderId: string }) {
         ) : (
           <ul role="list">
             {order.assignments.map((a) => (
-              <li key={a.id} role="listitem" className="flex items-center justify-between gap-3 border-b border-border/50 py-2 last:border-b-0">
+              <li key={a.id} role="listitem" className="flex flex-col gap-2 border-b border-border/50 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:py-2">
                 <div className="min-w-0 flex-1">
                   <span className="text-sm font-medium">
                     {a.resource_type} · {a.resource_id}
                   </span>
                   {a.reason ? <p className="mt-0.5 text-xs text-text-muted">{a.reason}</p> : null}
                 </div>
-                <span className="text-xs text-text-muted">{a.attempts.length} attempt{a.attempts.length === 1 ? "" : "s"}</span>
-                <Badge tone={QUEUE_STATE_TONE[a.queue_state]}>{a.queue_state.replace(/_/g, " ")}</Badge>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-text-muted">{a.attempts.length} attempt{a.attempts.length === 1 ? "" : "s"}</span>
+                  <Badge tone={QUEUE_STATE_TONE[a.queue_state]}>{a.queue_state.replace(/_/g, " ")}</Badge>
+                </div>
               </li>
             ))}
           </ul>
         )}
-      </Card>
+      </LuxuryCard>
 
       <Link href="/dispatch" className="mt-2 inline-block text-sm text-accent hover:underline">
         ← Back to Dispatch

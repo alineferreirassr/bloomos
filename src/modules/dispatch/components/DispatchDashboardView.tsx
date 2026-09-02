@@ -5,7 +5,8 @@ import Link from "next/link";
 import { listDispatchOrdersAction, evaluateDispatchPlatformHealthAction, type EvaluateDispatchPlatformHealthResult } from "@/modules/dispatch/dispatchActions";
 import type { DispatchOrder, DispatchFindingSeverity } from "@/types/dispatch";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -26,7 +27,7 @@ import { VendorsIcon, CheckIcon, AnalyticsIcon } from "@/components/ui/icons";
  */
 const SEVERITY_TONE: Record<DispatchFindingSeverity, BadgeTone> = { high: "danger", medium: "warning", low: "neutral" };
 const SEVERITY_LABEL: Record<DispatchFindingSeverity, string> = { high: "High", medium: "Medium", low: "Low" };
-const DISPATCH_STATUS_TONE: Record<DispatchOrder["status"], BadgeTone> = { draft: "neutral", dispatched: "success", cancelled: "danger", archived: "outline" };
+const DISPATCH_STATUS_TONE: Record<DispatchOrder["status"], BadgeTone> = { draft: "neutral", dispatched: "success", cancelled: "danger", archived: "neutral" };
 
 function FindingRow({ description, severity }: { description: string; severity: DispatchFindingSeverity }) {
   return (
@@ -39,17 +40,17 @@ function FindingRow({ description, severity }: { description: string; severity: 
 
 function OrderRow({ order, health }: { order: DispatchOrder; health: number | undefined }) {
   return (
-    <li role="listitem" className="flex items-center justify-between gap-3 border-b border-border/50 py-2 last:border-b-0">
+    <li role="listitem" className="flex flex-col gap-2 border-b border-border/50 py-3 last:border-b-0 md:flex-row md:items-center md:justify-between md:gap-3 md:py-2">
       <div className="min-w-0 flex-1">
         <span className="truncate text-sm font-medium">Order #{order.id.slice(-8)}</span>
         <p className="mt-0.5 text-xs text-text-muted">
           {order.priority} priority · {order.assignments.length} assignment{order.assignments.length === 1 ? "" : "s"}
         </p>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {health !== undefined ? <span className="text-xs text-text-muted">Health {health}</span> : null}
         <Badge tone={DISPATCH_STATUS_TONE[order.status]}>{order.status}</Badge>
-        <Link href={`/dispatch/${order.id}`}>
+        <Link href={`/dispatch/${order.id}`} className="ml-auto md:ml-0">
           <Button variant="secondary">View</Button>
         </Link>
       </div>
@@ -134,21 +135,23 @@ export function DispatchDashboardView() {
             <KpiCard label="Average Dispatch Health" value={averageHealth === null ? "—" : String(averageHealth)} icon={CheckIcon} />
           </div>
 
-          <Card className="mb-6">
+          <SectionHeader title="Findings" />
+          <LuxuryCard tone="tint" className="mb-6">
             <h2 className="mb-3 text-sm font-semibold">
               High-Severity Findings <span className="font-normal text-text-muted">({highFindings.length})</span>
             </h2>
             {highFindings.length === 0 ? <p className="text-sm text-success">No high-severity findings.</p> : <ul role="list">{highFindings.map((f) => <FindingRow key={f.id} description={f.description} severity={f.severity} />)}</ul>}
-          </Card>
+          </LuxuryCard>
 
-          <Card className="mb-6">
+          <LuxuryCard className="mb-6">
             <h2 className="mb-3 text-sm font-semibold">
               Other Findings <span className="font-normal text-text-muted">({otherFindings.length})</span>
             </h2>
             {otherFindings.length === 0 ? <p className="text-sm text-text-muted">Nothing else to report.</p> : <ul role="list">{otherFindings.slice(0, 10).map((f) => <FindingRow key={f.id} description={f.description} severity={f.severity} />)}</ul>}
-          </Card>
+          </LuxuryCard>
 
-          <Card>
+          <SectionHeader title="Dispatch Queue" />
+          <LuxuryCard>
             <h2 className="mb-3 text-sm font-semibold">
               Dispatch Orders <span className="font-normal text-text-muted">({sortedOrders.length})</span>
             </h2>
@@ -161,7 +164,7 @@ export function DispatchDashboardView() {
                 ))}
               </ul>
             )}
-          </Card>
+          </LuxuryCard>
         </>
       ) : !error ? (
         <p className="text-sm text-text-muted">Loading dispatch health…</p>
