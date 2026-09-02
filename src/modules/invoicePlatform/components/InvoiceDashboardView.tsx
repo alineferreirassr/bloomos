@@ -6,7 +6,7 @@ import { listInvoiceSummariesAction, getInvoiceAnalyticsAction } from "@/modules
 import type { InvoiceSummary, InvoiceAnalyticsSnapshot, InvoiceDocumentStatus } from "@/types/invoicePlatform";
 import { INVOICE_TEMPLATE_LABELS, INVOICE_READINESS_LABELS } from "@/types/invoicePlatform";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -98,27 +98,27 @@ export function InvoiceDashboardView() {
           </div>
 
           <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-            <Card>
+            <LuxuryCard>
               <h2 className="mb-2 text-sm font-semibold">Average Invoice / Deposit / Balance</h2>
               <p className="text-2xl font-semibold">{formatMoney(analytics.averageInvoice_minor, "USD")}</p>
               <p className="text-xs text-text-muted">
                 Deposit {formatMoney(analytics.averageDeposit_minor, "USD")} · Balance {formatMoney(analytics.averageBalance_minor, "USD")}
               </p>
-            </Card>
-            <Card>
+            </LuxuryCard>
+            <LuxuryCard>
               <h2 className="mb-2 text-sm font-semibold">Average Discount / Credit</h2>
               <p className="text-2xl font-semibold">{formatMoney(analytics.averageDiscount_minor, "USD")}</p>
               <p className="text-xs text-text-muted">Credit {formatMoney(analytics.averageCredit_minor, "USD")} average per invoice</p>
-            </Card>
-            <Card>
+            </LuxuryCard>
+            <LuxuryCard>
               <h2 className="mb-2 text-sm font-semibold">Average Installments</h2>
               <p className="text-2xl font-semibold">{analytics.averageInstallments}</p>
               <p className="text-xs text-text-muted">{analytics.totalInvoices} total invoice{analytics.totalInvoices === 1 ? "" : "s"}</p>
-            </Card>
+            </LuxuryCard>
           </div>
 
           <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Card>
+            <LuxuryCard>
               <h2 className="mb-3 text-sm font-semibold">Top Templates</h2>
               {topTemplates.length === 0 ? (
                 <p className="text-sm text-text-muted">No template usage yet.</p>
@@ -132,8 +132,8 @@ export function InvoiceDashboardView() {
                   ))}
                 </ul>
               )}
-            </Card>
-            <Card>
+            </LuxuryCard>
+            <LuxuryCard>
               <h2 className="mb-3 text-sm font-semibold">Readiness</h2>
               {Object.keys(readinessCounts).length === 0 ? (
                 <p className="text-sm text-text-muted">No invoices yet.</p>
@@ -147,7 +147,7 @@ export function InvoiceDashboardView() {
                   ))}
                 </ul>
               )}
-            </Card>
+            </LuxuryCard>
           </div>
 
           <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -163,7 +163,7 @@ export function InvoiceDashboardView() {
             </select>
           </div>
 
-          <Card className="mb-6">
+          <LuxuryCard className="mb-6">
             {filtered.length === 0 ? (
               <EmptyState title="No invoices match this filter" description="Try a different status." icon={FinanceIcon} />
             ) : (
@@ -186,9 +186,9 @@ export function InvoiceDashboardView() {
                 ))}
               </ul>
             )}
-          </Card>
+          </LuxuryCard>
 
-          <Card>
+          <LuxuryCard>
             <h2 className="mb-3 text-sm font-semibold">Recent Activity</h2>
             {recentActivity.length === 0 ? (
               <p className="text-sm text-text-muted">No recent invoice activity.</p>
@@ -204,7 +204,7 @@ export function InvoiceDashboardView() {
                 ))}
               </ul>
             )}
-          </Card>
+          </LuxuryCard>
         </>
       ) : (
         <p className="text-sm text-text-muted">Loading invoices…</p>

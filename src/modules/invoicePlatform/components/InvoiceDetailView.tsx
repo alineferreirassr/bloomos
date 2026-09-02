@@ -14,8 +14,7 @@ import {
 } from "@/modules/invoicePlatform/invoicePlatformActions";
 import type { InvoiceDetail, InvoiceTemplate, InvoiceComparisonResult, InvoiceLineItem, InvoiceLineItemKind } from "@/types/invoicePlatform";
 import { INVOICE_LINE_ITEM_KINDS, INVOICE_LINE_ITEM_KIND_LABELS, INVOICE_READINESS_LABELS } from "@/types/invoicePlatform";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -190,69 +189,77 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
 
   return (
     <div>
-      <PageHeader
-        title={snapshot?.header.title ?? detail.invoice.title}
-        subtitle={`Invoice ${detail.invoice.invoice_number} — currently ${detail.builderState?.status ?? "not yet built"}`}
-        icon={FinanceIcon}
-        breadcrumb={[{ label: "Invoices", href: "/invoices" }, { label: snapshot?.header.title ?? detail.invoice.title }]}
-        actions={
-          <div className="flex flex-wrap items-center gap-3">
-            <Badge tone={READINESS_TONE[detail.readiness.state] ?? "neutral"}>{INVOICE_READINESS_LABELS[detail.readiness.state]}</Badge>
-            <Link href={`/clients/${detail.invoice.client_id}`} className="text-sm underline">
-              View client
-            </Link>
-            {detail.invoice.contract_id && (
-              <Link href={`/contracts/${detail.invoice.contract_id}`} className="text-sm underline">
+      <div className="mb-6">
+        <Link href="/invoices" className="text-sm text-accent hover:underline">
+          ← Back to Invoices
+        </Link>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <h2 className="font-serif text-3xl font-semibold text-text">{snapshot?.header.title ?? detail.invoice.title}</h2>
+          <Badge tone={READINESS_TONE[detail.readiness.state] ?? "neutral"}>{INVOICE_READINESS_LABELS[detail.readiness.state]}</Badge>
+        </div>
+        <p className="mt-1 text-sm text-text-muted">
+          Invoice {detail.invoice.invoice_number} — currently {detail.builderState?.status ?? "not yet built"}
+          {" · "}
+          <Link href={`/clients/${detail.invoice.client_id}`} className="text-accent hover:underline">
+            View client
+          </Link>
+          {detail.invoice.contract_id && (
+            <>
+              {" · "}
+              <Link href={`/contracts/${detail.invoice.contract_id}`} className="text-accent hover:underline">
                 View contract
               </Link>
-            )}
-            <Button variant="secondary" onClick={() => setBuilderOpen((v) => !v)} disabled={acting}>
-              New Version
+            </>
+          )}
+        </p>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button variant="secondary" onClick={() => setBuilderOpen((v) => !v)} disabled={acting}>
+            New Version
+          </Button>
+          {detail.builderState && detail.builderState.status !== "published" && (
+            <Button variant="secondary" onClick={handlePublish} disabled={acting}>
+              Publish
             </Button>
-            {detail.builderState && detail.builderState.status !== "published" && (
-              <Button variant="secondary" onClick={handlePublish} disabled={acting}>
-                Publish
-              </Button>
-            )}
-            {detail.builderState && detail.builderState.status !== "archived" && (
-              <Button variant="secondary" onClick={handleArchive} disabled={acting}>
-                Archive
-              </Button>
-            )}
-            <Button onClick={handleMarkReady} disabled={acting || !detail.readiness.canPublish || detail.builderState?.ready_at != null}>
-              Mark Ready
+          )}
+          {detail.builderState && detail.builderState.status !== "archived" && (
+            <Button variant="secondary" onClick={handleArchive} disabled={acting}>
+              Archive
             </Button>
-          </div>
-        }
-      />
+          )}
+          <Button onClick={handleMarkReady} disabled={acting || !detail.readiness.canPublish || detail.builderState?.ready_at != null}>
+            Mark Ready
+          </Button>
+        </div>
+      </div>
 
       {!detail.readiness.canPublish && detail.readiness.reasons.length > 0 && (
-        <Card className="mb-6 border-warning/40 bg-warning/5">
+        <LuxuryCard className="mb-6 border-warning/40 bg-warning/5">
           <p className="text-sm text-warning">{detail.readiness.reasons[0]}</p>
-        </Card>
+        </LuxuryCard>
       )}
 
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
-        <Card>
+        <LuxuryCard>
           <h2 className="mb-2 text-sm font-semibold">Overall Health</h2>
           <p className="text-2xl font-semibold">{detail.health.overallScore}</p>
-        </Card>
-        <Card>
+        </LuxuryCard>
+        <LuxuryCard>
           <h2 className="mb-2 text-sm font-semibold">Current Version</h2>
           <p className="text-2xl font-semibold">{detail.currentVersion?.version_number ?? "—"}</p>
-        </Card>
-        <Card>
+        </LuxuryCard>
+        <LuxuryCard>
           <h2 className="mb-2 text-sm font-semibold">Grand Total</h2>
           <p className="text-2xl font-semibold">{snapshot ? formatMoney(snapshot.pricing.grandTotal_minor, snapshot.pricing.currency) : "—"}</p>
-        </Card>
-        <Card>
+        </LuxuryCard>
+        <LuxuryCard>
           <h2 className="mb-2 text-sm font-semibold">Outstanding Balance</h2>
           <p className="text-2xl font-semibold">{snapshot ? formatMoney(snapshot.pricing.outstandingBalance_minor, snapshot.pricing.currency) : "—"}</p>
-        </Card>
+        </LuxuryCard>
       </div>
 
       {builderOpen && (
-        <Card className="mb-6">
+        <LuxuryCard className="mb-6">
           <h2 className="mb-3 text-sm font-semibold">Build a New Version</h2>
           <label className="text-sm">
             Template
@@ -306,10 +313,10 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
           <Button className="mt-4" onClick={handleCreateVersion} disabled={acting || !selectedTemplate}>
             Create Version
           </Button>
-        </Card>
+        </LuxuryCard>
       )}
 
-      <Card className="mb-6">
+      <LuxuryCard className="mb-6">
         <h2 className="mb-3 text-sm font-semibold">Line Items</h2>
         {!snapshot || snapshot.lineItems.length === 0 ? (
           <p className="text-sm text-text-muted">No line items yet — build a version to add content.</p>
@@ -325,10 +332,10 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
             ))}
           </ul>
         )}
-      </Card>
+      </LuxuryCard>
 
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Card>
+        <LuxuryCard>
           <h2 className="mb-3 text-sm font-semibold">Installments</h2>
           {!snapshot || snapshot.paymentSchedule.length === 0 ? (
             <p className="text-sm text-text-muted">No payment schedule yet.</p>
@@ -342,8 +349,8 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
               ))}
             </ul>
           )}
-        </Card>
-        <Card>
+        </LuxuryCard>
+        <LuxuryCard>
           <h2 className="mb-3 text-sm font-semibold">Credits &amp; Adjustments</h2>
           {!snapshot || snapshot.adjustments.length === 0 ? (
             <p className="text-sm text-text-muted">No credits or adjustments yet.</p>
@@ -357,10 +364,10 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
               ))}
             </ul>
           )}
-        </Card>
+        </LuxuryCard>
       </div>
 
-      <Card className="mb-6">
+      <LuxuryCard className="mb-6">
         <h2 className="mb-3 text-sm font-semibold">Version History</h2>
         {!detail.builderState || detail.builderState.versions.length === 0 ? (
           <p className="text-sm text-text-muted">No versions yet.</p>
@@ -422,9 +429,9 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
             )}
           </div>
         )}
-      </Card>
+      </LuxuryCard>
 
-      <Card className="mb-6">
+      <LuxuryCard className="mb-6">
         <h2 className="mb-3 text-sm font-semibold">Health Breakdown</h2>
         <ul role="list" className="grid grid-cols-1 gap-2 md:grid-cols-2">
           {detail.health.categories.map((c) => (
@@ -434,12 +441,12 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
             </li>
           ))}
         </ul>
-      </Card>
+      </LuxuryCard>
 
-      <Card>
+      <LuxuryCard>
         <h2 className="mb-3 text-sm font-semibold">Internal Notes &amp; Comments</h2>
         <CommentsPanel ownerType="invoice" ownerId={invoiceId} />
-      </Card>
+      </LuxuryCard>
     </div>
   );
 }
