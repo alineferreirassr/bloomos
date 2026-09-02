@@ -4,7 +4,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { getVendorById } from "@/lib/data";
 import type { Vendor } from "@/types/vendor";
 import { NotFoundError } from "@/core/errors";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -69,79 +70,90 @@ export function VendorDetailView({ vendorId }: { vendorId: string }) {
   return (
     <div className="space-y-6">
       <div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-start gap-3">
           <BloomAvatar name={vendor.company_name} />
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-3xl font-semibold text-text">{vendor.company_name}</h2>
+          <div className="min-w-0">
+            <h2 className="font-serif text-3xl font-semibold text-text text-balance">{vendor.company_name}</h2>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <VendorStatusBadge status={vendor.status} />
               <PreferredBadge isPreferred={vendor.is_preferred} />
             </div>
-            <p className="mt-1 text-sm text-text-muted">{vendor.display_name ?? vendor.email ?? ""}</p>
+            <p className="mt-3 text-sm text-text-muted">{vendor.display_name ?? vendor.email ?? ""}</p>
           </div>
         </div>
 
-        <div className="mt-4">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <VendorActions vendor={vendor} onChanged={refetch} />
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Company</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Company name" value={vendor.company_name} />
-              <Field label="Display name" value={vendor.display_name} />
-              <Field label="Tax ID" value={vendor.tax_id} />
-              <Field label="Website" value={vendor.website} />
-              <Field label="Currency" value={vendor.default_currency} />
-            </dl>
-          </Card>
+        <div className="space-y-8 lg:col-span-2">
+          <div>
+            <SectionHeader title="Overview" />
+            <div className="space-y-6">
+              <LuxuryCard tone="tint">
+                <h3 className="font-serif text-[17px] font-semibold text-text">Company</h3>
+                <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Company name" value={vendor.company_name} />
+                  <Field label="Display name" value={vendor.display_name} />
+                  <Field label="Tax ID" value={vendor.tax_id} />
+                  <Field label="Website" value={vendor.website} />
+                  <Field label="Currency" value={vendor.default_currency} />
+                </dl>
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Contact</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Email" value={vendor.email} />
-              <Field label="Phone" value={vendor.phone} />
-            </dl>
-          </Card>
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Contact</h3>
+                <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Email" value={vendor.email} />
+                  <Field label="Phone" value={vendor.phone} />
+                </dl>
+              </LuxuryCard>
 
-          <Card>
-            {/* Renamed from "Notes" to "Internal Notes" — this is the plain
-                free-text field on the Vendor row itself (set via the Vendor
-                form), distinct from the structured, multi-entry Notes feature
-                below it. Keeping both headed "Notes" would be ambiguous. */}
-            <h3 className="font-serif text-[17px] font-semibold text-text">Internal Notes</h3>
-            <p className="mt-3 text-sm text-text">{vendor.notes || "—"}</p>
-          </Card>
-
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
-            <div className="mt-3">
-              <VendorNotesSection workspaceId={vendor.workspace_id} vendorId={vendor.id} />
+              <LuxuryCard>
+                {/* Renamed from "Notes" to "Internal Notes" — this is the plain
+                    free-text field on the Vendor row itself (set via the Vendor
+                    form), distinct from the structured, multi-entry Notes feature
+                    below it. Keeping both headed "Notes" would be ambiguous. */}
+                <h3 className="font-serif text-[17px] font-semibold text-text">Internal Notes</h3>
+                <p className="mt-3 text-sm text-text">{vendor.notes || "—"}</p>
+              </LuxuryCard>
             </div>
-          </Card>
+          </div>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Documents</h3>
-            <div className="mt-3">
-              <VendorDocumentsSection vendorId={vendor.id} />
+          <div>
+            <SectionHeader title="Procurement" />
+            <div className="space-y-6">
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
+                <div className="mt-3">
+                  <VendorNotesSection workspaceId={vendor.workspace_id} vendorId={vendor.id} />
+                </div>
+              </LuxuryCard>
+
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Documents</h3>
+                <div className="mt-3">
+                  <VendorDocumentsSection vendorId={vendor.id} />
+                </div>
+              </LuxuryCard>
+
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Inventory</h3>
+                <div className="mt-3">
+                  <VendorInventorySection vendorId={vendor.id} />
+                </div>
+              </LuxuryCard>
+
+              <VendorOperationsCard vendorId={vendor.id} />
             </div>
-          </Card>
-
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Inventory</h3>
-            <div className="mt-3">
-              <VendorInventorySection vendorId={vendor.id} />
-            </div>
-          </Card>
-
-          <VendorOperationsCard vendorId={vendor.id} />
+          </div>
         </div>
 
         <div className="space-y-6">
-          <Card>
+          <SectionHeader title="Activity" />
+          <LuxuryCard>
             <h3 className="font-serif text-[17px] font-semibold text-text">Internal</h3>
             <dl className="mt-3 grid grid-cols-1 gap-3">
               <div>
@@ -166,9 +178,9 @@ export function VendorDetailView({ vendorId }: { vendorId: string }) {
                 <Field label="Archived" value={new Date(vendor.archived_at).toLocaleDateString()} />
               ) : null}
             </dl>
-          </Card>
+          </LuxuryCard>
 
-          <Card>
+          <LuxuryCard>
             <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
             <div className="mt-3">
               {/* Keyed on updated_at (not just vendorId, which never changes) so
@@ -177,7 +189,7 @@ export function VendorDetailView({ vendorId }: { vendorId: string }) {
                   wouldn't trigger a Timeline refresh. */}
               <VendorTimelineSection key={vendor.updated_at} vendorId={vendor.id} />
             </div>
-          </Card>
+          </LuxuryCard>
         </div>
       </div>
     </div>

@@ -44,51 +44,51 @@ export function VendorListTable({ vendors, onChanged }: VendorListTableProps) {
   };
 
   return (
-    <div className="hidden overflow-x-auto rounded-lg border border-border bg-surface shadow-sm md:block">
+    <div className="hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
       <table className="w-full border-collapse text-left text-sm">
         <thead className="sticky top-0 z-[var(--z-index-dropdown)] bg-surface">
-          <tr>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">
+          <tr className="border-b border-border/70">
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">
               <span className="sr-only">Preferred</span>
             </th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Company Name</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Display Name</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Status</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Email</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Phone</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Currency</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Tags</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Updated</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Company Name</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Display Name</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Status</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Email</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Phone</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Currency</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Tags</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Updated</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">
               <span className="sr-only">Actions</span>
             </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-border/60">
           {vendors.map((vendor) => (
-            <tr key={vendor.id} className="transition-colors duration-150 hover:bg-accent-100/40">
-              <td className="border-b border-border px-2.5 py-2">
+            <tr key={vendor.id} className="transition-colors duration-150 hover:bg-accent-100/25">
+              <td className="px-5 py-4">
                 <PreferredStar isPreferred={vendor.is_preferred} />
               </td>
-              <td className="border-b border-border px-2.5 py-2">
-                <Link href={`/vendors/${vendor.id}`} className="font-medium text-text hover:text-accent">
+              <td className="px-5 py-4">
+                <Link href={`/vendors/${vendor.id}`} className="text-[15px] font-medium text-text hover:text-accent">
                   {vendor.company_name}
                 </Link>
               </td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{vendor.display_name ?? "—"}</td>
-              <td className="border-b border-border px-2.5 py-2">
+              <td className="px-5 py-4 text-text-muted">{vendor.display_name ?? "—"}</td>
+              <td className="px-5 py-4">
                 <VendorStatusBadge status={vendor.status} />
               </td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{vendor.email ?? "—"}</td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{vendor.phone ?? "—"}</td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{vendor.default_currency}</td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">
+              <td className="px-5 py-4 text-text-muted">{vendor.email ?? "—"}</td>
+              <td className="px-5 py-4 text-text-muted">{vendor.phone ?? "—"}</td>
+              <td className="px-5 py-4 text-text-muted">{vendor.default_currency}</td>
+              <td className="px-5 py-4 text-text-muted">
                 {vendor.tags.length > 0 ? vendor.tags.join(", ") : "—"}
               </td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">
+              <td className="px-5 py-4 text-text-muted">
                 {new Date(vendor.updated_at).toLocaleDateString()}
               </td>
-              <td className="border-b border-border px-2.5 py-2">
+              <td className="px-5 py-4">
                 <ActionMenu actions={actionsFor(vendor)} />
               </td>
             </tr>

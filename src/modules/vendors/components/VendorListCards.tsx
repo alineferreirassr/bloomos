@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import type { Vendor } from "@/types/vendor";
 import { ActionMenu, type ActionMenuAction } from "@/components/ui/ActionMenu";
 import { archiveVendor, restoreVendor } from "@/lib/data";
@@ -47,7 +47,7 @@ export function VendorListCards({ vendors, onChanged }: VendorListCardsProps) {
   return (
     <div className="space-y-3 md:hidden">
       {vendors.map((vendor) => (
-        <Card key={vendor.id}>
+        <LuxuryCard key={vendor.id}>
           <div className="flex items-start justify-between gap-3">
             <Link href={`/vendors/${vendor.id}`} className="block min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
@@ -67,7 +67,7 @@ export function VendorListCards({ vendors, onChanged }: VendorListCardsProps) {
             <span>{vendor.default_currency}</span>
             {vendor.tags.length > 0 ? <span>{vendor.tags.join(", ")}</span> : null}
           </div>
-        </Card>
+        </LuxuryCard>
       ))}
     </div>
   );
