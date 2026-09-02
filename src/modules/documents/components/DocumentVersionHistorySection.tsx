@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { DocumentVisibilityBadge } from "@/modules/documents/components/DocumentVisibilityBadge";
 import { formatBytes, formatDocumentDate } from "@/modules/documents/mappers";
 import type { Document } from "@/types/document";
@@ -12,15 +12,15 @@ import type { Document } from "@/types/document";
 export function DocumentVersionHistorySection({ versions }: { versions: Document[] }) {
   if (versions.length <= 1) {
     return (
-      <Card>
+      <LuxuryCard>
         <h3 className="font-serif text-[17px] font-semibold text-text">Version History</h3>
         <p className="mt-2 text-sm text-text-muted">This document has only one version.</p>
-      </Card>
+      </LuxuryCard>
     );
   }
 
   return (
-    <Card>
+    <LuxuryCard>
       <h3 className="font-serif text-[17px] font-semibold text-text">Version History</h3>
       <ul className="mt-3 space-y-3" data-testid="document-version-history-list">
         {[...versions].reverse().map((version) => (
@@ -42,6 +42,6 @@ export function DocumentVersionHistorySection({ versions }: { versions: Document
           </li>
         ))}
       </ul>
-    </Card>
+    </LuxuryCard>
   );
 }

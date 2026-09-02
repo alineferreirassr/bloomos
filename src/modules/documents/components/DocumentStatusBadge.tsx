@@ -3,7 +3,7 @@ import { DOCUMENT_STATUS_LABELS, type DocumentStatus } from "@/core/enums/docume
 
 const STATUS_TONES: Record<DocumentStatus, BadgeTone> = {
   draft: "outline",
-  active: "accent",
+  active: "success",
   superseded: "neutral",
   expired: "danger",
   archived: "neutral",

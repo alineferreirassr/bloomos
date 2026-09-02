@@ -27,7 +27,7 @@ import type { Expense } from "@/types/expense";
 import type { DocumentFolder } from "@/types/documentFolder";
 import type { EntityType } from "@/core/enums/entityType";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -328,13 +328,13 @@ export function DocumentsListView({ initialOwnerType, initialOwnerId, initialFol
         )}
       </div>
 
-      <Card className="mt-6 border-accent/30 bg-accent/5">
+      <LuxuryCard className="mt-6 border-accent/30 bg-accent/5">
         <p className="text-xs text-text-muted">
           <span className="font-medium text-text">Visibility is presentation-only in this phase.</span> Access
           rules (who can actually see a Client- or Team-visible document) will be enforced later by
           authentication and Supabase Row-Level Security — see <code>docs/permissions.md</code>.
         </p>
-      </Card>
+      </LuxuryCard>
 
       <NewFolderModal open={newFolderOpen} onClose={() => setNewFolderOpen(false)} />
     </div>

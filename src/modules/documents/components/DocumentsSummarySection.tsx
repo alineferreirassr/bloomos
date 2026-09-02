@@ -5,7 +5,7 @@ import Link from "next/link";
 import { getDocumentOwnerSummary } from "@/lib/data";
 import type { DocumentOwnerSummary } from "@/modules/documents/documentStats";
 import type { EntityType } from "@/core/enums/entityType";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { DocumentCategoryBadge } from "@/modules/documents/components/DocumentCategoryBadge";
 import { formatBytes } from "@/modules/documents/mappers";
@@ -51,26 +51,26 @@ export function DocumentsSummarySection({ ownerType, ownerId, newDocumentParams 
 
   if (error) {
     return (
-      <Card>
+      <LuxuryCard>
         <h3 className="font-serif text-[17px] font-semibold text-text">Documents</h3>
         <p className="mt-2 text-sm text-text-muted">Could not load the document summary.</p>
-      </Card>
+      </LuxuryCard>
     );
   }
 
   if (!summary) {
     return (
-      <Card>
+      <LuxuryCard>
         <h3 className="font-serif text-[17px] font-semibold text-text">Documents</h3>
         <Skeleton className="mt-3 h-24 w-full" />
-      </Card>
+      </LuxuryCard>
     );
   }
 
   const categoriesPresent = DOCUMENT_CATEGORIES.filter((category) => summary.byCategory[category] > 0);
 
   return (
-    <Card>
+    <LuxuryCard>
       <div className="flex items-center justify-between">
         <h3 className="font-serif text-[17px] font-semibold text-text">Documents</h3>
         <span className="text-xs text-text-muted">{formatBytes(summary.totalStorageBytes)}</span>
@@ -126,7 +126,7 @@ export function DocumentsSummarySection({ ownerType, ownerId, newDocumentParams 
           View Documents
         </Link>
       </div>
-    </Card>
+    </LuxuryCard>
   );
 }
 

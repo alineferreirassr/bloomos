@@ -31,7 +31,8 @@ import type { DocumentFolder } from "@/types/documentFolder";
 import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
 import { NotFoundError } from "@/core/errors";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { NotesSection } from "@/modules/notes/components/NotesSection";
@@ -197,171 +198,194 @@ export function DocumentDetailView({ documentId }: { documentId: string }) {
         <Link href="/documents" className="text-sm text-accent hover:underline">
           ← Back to Documents
         </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <h2 className="font-serif text-3xl font-semibold text-text">{document.title}</h2>
-          <DocumentStatusBadge status={document.status} />
-          <DocumentCategoryBadge category={document.category} />
-          <DocumentVisibilityBadge visibility={document.visibility} />
+        <div className="mt-3">
+          <h2 className="font-serif text-3xl font-semibold text-text text-balance">{document.title}</h2>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <DocumentStatusBadge status={document.status} />
+            <DocumentCategoryBadge category={document.category} />
+            <DocumentVisibilityBadge visibility={document.visibility} />
+          </div>
+          <p className="mt-3 text-sm text-text-muted">
+            {document.file_name ?? "No file attached"} · v{document.version}
+            {document.is_latest_version ? "" : " (superseded)"}
+            {" · "}
+            {ownerHref ? (
+              <Link href={ownerHref} className="text-accent hover:underline">
+                {ownerLabel}
+              </Link>
+            ) : (
+              ownerLabel
+            )}
+          </p>
         </div>
-        <p className="mt-1 text-sm text-text-muted">
-          {document.file_name ?? "No file attached"} · v{document.version}
-          {document.is_latest_version ? "" : " (superseded)"}
-          {" · "}
-          {ownerHref ? (
-            <Link href={ownerHref} className="text-accent hover:underline">
-              {ownerLabel}
-            </Link>
-          ) : (
-            ownerLabel
-          )}
-        </p>
 
-        <div className="mt-4">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <DocumentActions document={document} onChanged={refetch} />
         </div>
       </div>
 
       {document.status === "deleted" ? (
-        <Card className="border-danger/40 bg-danger/5">
+        <LuxuryCard className="border-danger/40 bg-danger/5">
           <p className="text-sm text-danger">
             This document has been soft-deleted and is read-only. It is never physically removed — version history
             and Timeline remain intact, and it can be restored.
           </p>
-        </Card>
+        </LuxuryCard>
       ) : null}
 
       {nextAction ? (
-        <Card className="border-accent/40 bg-accent/5">
+        <LuxuryCard className="border-accent/40 bg-accent/5">
           <p className="text-xs font-medium uppercase tracking-wide text-accent">Next recommended action</p>
           <p className="mt-1 text-sm text-text">{nextAction}</p>
-        </Card>
+        </LuxuryCard>
       ) : null}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">File Metadata</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Title" value={document.title} />
-              <Field label="Description" value={document.description} />
-              <Field label="Original file name" value={document.original_file_name} />
-              <Field label="Normalized file name" value={document.file_name} />
-              <Field label="Extension" value={document.file_extension?.toUpperCase() ?? null} />
-              <Field label="MIME type" value={document.mime_type} />
-              <Field label="Size" value={document.size_bytes !== null ? formatBytes(document.size_bytes) : null} />
-              <Field label="Checksum" value={document.checksum} />
-            </dl>
-          </Card>
+        <div className="space-y-8 lg:col-span-2">
+          <div>
+            <SectionHeader title="Overview" />
+            <div className="space-y-6">
+              <LuxuryCard tone="tint">
+                <h3 className="font-serif text-[17px] font-semibold text-text">File Metadata</h3>
+                <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Title" value={document.title} />
+                  <Field label="Description" value={document.description} />
+                  <Field label="Original file name" value={document.original_file_name} />
+                  <Field label="Normalized file name" value={document.file_name} />
+                  <Field label="Extension" value={document.file_extension?.toUpperCase() ?? null} />
+                  <Field label="MIME type" value={document.mime_type} />
+                  <Field label="Size" value={document.size_bytes !== null ? formatBytes(document.size_bytes) : null} />
+                  <Field label="Checksum" value={document.checksum} />
+                </dl>
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">File</h3>
-            <p className="mt-1 text-xs text-text-muted">
-              The physical file is a MediaAsset in the Shared Media Library, linked via media_asset_id — this Document
-              record carries business metadata only.
-            </p>
-            {document.media_asset_id ? (
-              <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label="Storage provider" value={document.storage_provider} />
-                <Field label="Bucket" value={document.storage_bucket} />
-                <Field label="Path" value={<code className="text-xs">{document.storage_path}</code>} />
-              </dl>
-            ) : (
-              <p className="mt-3 text-sm text-text-muted">No file attached to this version yet.</p>
-            )}
-          </Card>
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">File</h3>
+                <p className="mt-1 text-xs text-text-muted">
+                  The physical file is a MediaAsset in the Shared Media Library, linked via media_asset_id — this
+                  Document record carries business metadata only.
+                </p>
+                {document.media_asset_id ? (
+                  <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field label="Storage provider" value={document.storage_provider} />
+                    <Field label="Bucket" value={document.storage_bucket} />
+                    <Field label="Path" value={<code className="text-xs">{document.storage_path}</code>} />
+                  </dl>
+                ) : (
+                  <p className="mt-3 text-sm text-text-muted">No file attached to this version yet.</p>
+                )}
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Owner &amp; Folder</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Owner type" value={OWNER_TYPE_LABELS[document.owner_type]} />
-              <Field
-                label="Owner"
-                value={ownerHref ? <Link href={ownerHref} className="text-accent hover:underline">{ownerLabel}</Link> : ownerLabel}
-              />
-              <Field
-                label="Folder"
-                value={
-                  folder ? (
-                    <Link href={`/documents/folders/${folder.id}`} className="text-accent hover:underline">
-                      {folder.name}
-                    </Link>
-                  ) : (
-                    "Unfiled"
-                  )
-                }
-              />
-            </dl>
-          </Card>
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Owner &amp; Folder</h3>
+                <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Owner type" value={OWNER_TYPE_LABELS[document.owner_type]} />
+                  <Field
+                    label="Owner"
+                    value={ownerHref ? <Link href={ownerHref} className="text-accent hover:underline">{ownerLabel}</Link> : ownerLabel}
+                  />
+                  <Field
+                    label="Folder"
+                    value={
+                      folder ? (
+                        <Link href={`/documents/folders/${folder.id}`} className="text-accent hover:underline">
+                          {folder.name}
+                        </Link>
+                      ) : (
+                        "Unfiled"
+                      )
+                    }
+                  />
+                </dl>
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Cross-Module References</h3>
-            {!client && !event && !contract && !exhibit && !invoice && !payment && !expense ? (
-              <p className="mt-2 text-sm text-text-muted">No cross-module references set.</p>
-            ) : (
-              <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {client ? (
-                  <Field label="Client" value={<Link href={`/clients/${client.id}`} className="text-accent hover:underline">{client.first_name} {client.last_name}</Link>} />
-                ) : null}
-                {event ? (
-                  <Field label="Event" value={<Link href={`/events/${event.id}`} className="text-accent hover:underline">{event.title}</Link>} />
-                ) : null}
-                {contract ? (
-                  <Field label="Contract" value={<Link href={`/contracts/${contract.id}`} className="text-accent hover:underline">{contract.contract_number}</Link>} />
-                ) : null}
-                {exhibit ? <Field label="Contract Exhibit" value={exhibit.title} /> : null}
-                {invoice ? (
-                  <Field label="Invoice" value={<Link href={`/finance/invoices/${invoice.id}`} className="text-accent hover:underline">{invoice.invoice_number}</Link>} />
-                ) : null}
-                {payment ? (
-                  <Field label="Payment" value={<Link href={`/finance/payments/${payment.id}`} className="text-accent hover:underline">{payment.reference ?? `Payment on ${payment.transaction_date}`}</Link>} />
-                ) : null}
-                {expense ? (
-                  <Field label="Expense" value={<Link href={`/finance/expenses/${expense.id}`} className="text-accent hover:underline">{expense.description}</Link>} />
-                ) : null}
-              </dl>
-            )}
-          </Card>
-
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Dates</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Uploaded" value={new Date(document.uploaded_at).toLocaleString()} />
-              <Field label="Expires" value={formatDocumentDate(document.expires_at)} />
-              <Field label="Archived" value={document.archived_at ? new Date(document.archived_at).toLocaleString() : null} />
-              <Field label="Deleted" value={document.deleted_at ? new Date(document.deleted_at).toLocaleString() : null} />
-              <Field label="Created" value={new Date(document.created_at).toLocaleDateString()} />
-              <Field label="Updated" value={new Date(document.updated_at).toLocaleDateString()} />
-            </dl>
-          </Card>
-
-          <DocumentVersionHistorySection versions={versions} />
-
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
-            <div className="mt-3">
-              <NotesSection
-                workspaceId={document.workspace_id}
-                ownerType="document"
-                ownerId={document.id}
-                notes={notes}
-                onCreateNote={(input) => createDocumentNote(document.id, input)}
-                onTogglePin={togglePinNote}
-                readOnly={notesReadOnly}
-                onNotesChanged={refetch}
-              />
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Dates</h3>
+                <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Uploaded" value={new Date(document.uploaded_at).toLocaleString()} />
+                  <Field label="Expires" value={formatDocumentDate(document.expires_at)} />
+                  <Field label="Archived" value={document.archived_at ? new Date(document.archived_at).toLocaleString() : null} />
+                  <Field label="Deleted" value={document.deleted_at ? new Date(document.deleted_at).toLocaleString() : null} />
+                  <Field label="Created" value={new Date(document.created_at).toLocaleDateString()} />
+                  <Field label="Updated" value={new Date(document.updated_at).toLocaleDateString()} />
+                </dl>
+              </LuxuryCard>
             </div>
-          </Card>
+          </div>
+
+          <div>
+            <SectionHeader title="Related Records" />
+            <div className="space-y-6">
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Cross-Module References</h3>
+                {!client && !event && !contract && !exhibit && !invoice && !payment && !expense ? (
+                  <p className="mt-2 text-sm text-text-muted">No cross-module references set.</p>
+                ) : (
+                  <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {client ? (
+                      <Field label="Client" value={<Link href={`/clients/${client.id}`} className="text-accent hover:underline">{client.first_name} {client.last_name}</Link>} />
+                    ) : null}
+                    {event ? (
+                      <Field label="Event" value={<Link href={`/events/${event.id}`} className="text-accent hover:underline">{event.title}</Link>} />
+                    ) : null}
+                    {contract ? (
+                      <Field label="Contract" value={<Link href={`/contracts/${contract.id}`} className="text-accent hover:underline">{contract.contract_number}</Link>} />
+                    ) : null}
+                    {exhibit ? <Field label="Contract Exhibit" value={exhibit.title} /> : null}
+                    {invoice ? (
+                      <Field label="Invoice" value={<Link href={`/finance/invoices/${invoice.id}`} className="text-accent hover:underline">{invoice.invoice_number}</Link>} />
+                    ) : null}
+                    {payment ? (
+                      <Field label="Payment" value={<Link href={`/finance/payments/${payment.id}`} className="text-accent hover:underline">{payment.reference ?? `Payment on ${payment.transaction_date}`}</Link>} />
+                    ) : null}
+                    {expense ? (
+                      <Field label="Expense" value={<Link href={`/finance/expenses/${expense.id}`} className="text-accent hover:underline">{expense.description}</Link>} />
+                    ) : null}
+                  </dl>
+                )}
+              </LuxuryCard>
+            </div>
+          </div>
+
+          <div>
+            <SectionHeader title="Versions" />
+            <div className="space-y-6">
+              <DocumentVersionHistorySection versions={versions} />
+            </div>
+          </div>
+
+          <div>
+            <SectionHeader title="Activity" />
+            <div className="space-y-6">
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
+                <div className="mt-3">
+                  <NotesSection
+                    workspaceId={document.workspace_id}
+                    ownerType="document"
+                    ownerId={document.id}
+                    notes={notes}
+                    onCreateNote={(input) => createDocumentNote(document.id, input)}
+                    onTogglePin={togglePinNote}
+                    readOnly={notesReadOnly}
+                    onNotesChanged={refetch}
+                  />
+                </div>
+              </LuxuryCard>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-6">
-          <Card>
+          <SectionHeader title="Activity" />
+          <LuxuryCard>
             <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
             <div className="mt-3">
               <Timeline activities={timeline} />
             </div>
-          </Card>
+          </LuxuryCard>
 
-          <Card>
+          <LuxuryCard>
             <h3 className="font-serif text-[17px] font-semibold text-text">Future Integrations</h3>
             <p className="mt-2 text-xs text-text-muted">Not built yet — reserved for upcoming phases.</p>
             <ul className="mt-3 space-y-1.5 text-sm text-text-muted">
@@ -370,7 +394,7 @@ export function DocumentDetailView({ documentId }: { documentId: string }) {
               <li>Client Portal / Team Portal access</li>
               <li>OCR, PDF generation, e-signature</li>
             </ul>
-          </Card>
+          </LuxuryCard>
         </div>
       </div>
     </div>

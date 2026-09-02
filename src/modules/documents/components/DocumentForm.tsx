@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import {
   getClients,
   getContractExhibitsByContractId,
@@ -170,13 +170,13 @@ export function DocumentForm({ defaultValues, onSubmit }: DocumentFormProps) {
 
   return (
     <form onSubmit={submit} noValidate className="space-y-8">
-      <Card className="border-accent/30 bg-accent/5">
+      <LuxuryCard className="border-accent/30 bg-accent/5">
         <p className="text-xs text-text-muted">
           <span className="font-medium text-text">This creates the Document&apos;s metadata record only.</span> New
           documents always start as <span className="font-medium text-text">Draft</span>, with no file attached.
           Attach or replace the file from the detail page afterward, then activate once ready.
         </p>
-      </Card>
+      </LuxuryCard>
 
       {formError ? (
         <div

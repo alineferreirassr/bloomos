@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { DocumentStatusBadge } from "@/modules/documents/components/DocumentStatusBadge";
 import { DocumentVisibilityBadge } from "@/modules/documents/components/DocumentVisibilityBadge";
 import { formatBytes } from "@/modules/documents/mappers";
@@ -10,7 +10,7 @@ export function DocumentListCards({ rows }: { rows: DocumentListRow[] }) {
     <div className="space-y-3 md:hidden">
       {rows.map(({ document, ownerLabel, nextAction }) => (
         <Link key={document.id} href={`/documents/${document.id}`} className="block">
-          <Card className="transition-colors duration-150 hover:border-accent/50">
+          <LuxuryCard className="transition-colors duration-150 hover:border-accent/50">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate font-medium tracking-tight text-text">{document.title}</p>
@@ -28,7 +28,7 @@ export function DocumentListCards({ rows }: { rows: DocumentListRow[] }) {
               <span>{document.size_bytes !== null ? formatBytes(document.size_bytes) : "No file"}</span>
             </div>
             {nextAction ? <p className="mt-2 text-xs text-accent">{nextAction}</p> : null}
-          </Card>
+          </LuxuryCard>
         </Link>
       ))}
     </div>

@@ -18,7 +18,7 @@ import type { Document } from "@/types/document";
 import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
 import { NotFoundError } from "@/core/errors";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -143,14 +143,14 @@ export function FolderDetailView({ folderId }: { folderId: string }) {
       </div>
 
       {isArchived ? (
-        <Card className="border-danger/40 bg-danger/5">
+        <LuxuryCard className="border-danger/40 bg-danger/5">
           <p className="text-sm text-danger">This folder is archived. Restore it to add or move items into it.</p>
-        </Card>
+        </LuxuryCard>
       ) : null}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <Card>
+          <LuxuryCard>
             <h3 className="font-serif text-[17px] font-semibold text-text">Child Folders</h3>
             {subtree.length === 0 ? (
               <p className="mt-3 text-sm text-text-muted">No subfolders yet.</p>
@@ -159,9 +159,9 @@ export function FolderDetailView({ folderId }: { folderId: string }) {
                 <FolderTree nodes={subtree} />
               </div>
             )}
-          </Card>
+          </LuxuryCard>
 
-          <Card>
+          <LuxuryCard>
             <h3 className="font-serif text-[17px] font-semibold text-text">Documents in this Folder</h3>
             {documents.length === 0 ? (
               <EmptyState
@@ -189,9 +189,9 @@ export function FolderDetailView({ folderId }: { folderId: string }) {
                 ))}
               </ul>
             )}
-          </Card>
+          </LuxuryCard>
 
-          <Card>
+          <LuxuryCard>
             <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
             <div className="mt-3">
               <NotesSection
@@ -205,16 +205,16 @@ export function FolderDetailView({ folderId }: { folderId: string }) {
                 onNotesChanged={refetch}
               />
             </div>
-          </Card>
+          </LuxuryCard>
         </div>
 
         <div className="space-y-6">
-          <Card>
+          <LuxuryCard>
             <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
             <div className="mt-3">
               <Timeline activities={timeline} />
             </div>
-          </Card>
+          </LuxuryCard>
         </div>
       </div>
     </div>
