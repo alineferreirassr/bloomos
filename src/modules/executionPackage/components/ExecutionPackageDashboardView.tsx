@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { listExecutionPackagesAction, evaluateExecutionPackagePlatformHealthAction, type EvaluateExecutionPackagePlatformHealthResult } from "@/modules/executionPackage/executionPackageActions";
-import type { ExecutionPackage, PackageFindingSeverity } from "@/types/executionPackage";
+import type { ExecutionPackage, PackageFindingSeverity, PackageReadinessState } from "@/types/executionPackage";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -26,7 +27,17 @@ import { InventoryIcon, CheckIcon, AnalyticsIcon } from "@/components/ui/icons";
  */
 const SEVERITY_TONE: Record<PackageFindingSeverity, BadgeTone> = { high: "danger", medium: "warning", low: "neutral" };
 const SEVERITY_LABEL: Record<PackageFindingSeverity, string> = { high: "High", medium: "Medium", low: "Low" };
-const PACKAGE_STATUS_TONE: Record<ExecutionPackage["status"], BadgeTone> = { draft: "neutral", validated: "accent", approved: "success", archived: "outline" };
+const PACKAGE_STATUS_TONE: Record<ExecutionPackage["status"], BadgeTone> = { draft: "neutral", validated: "outline", approved: "success", archived: "neutral" };
+const READINESS_TONE: Record<PackageReadinessState, BadgeTone> = {
+  ready: "success",
+  blocked: "danger",
+  incomplete: "warning",
+  waiting_approval: "warning",
+  waiting_resources: "warning",
+  waiting_schedule: "warning",
+  waiting_dependencies: "warning",
+  waiting_evidence: "warning",
+};
 
 function FindingRow({ description, severity }: { description: string; severity: PackageFindingSeverity }) {
   return (
@@ -37,7 +48,7 @@ function FindingRow({ description, severity }: { description: string; severity: 
   );
 }
 
-function PackageRow({ pkg, health, readinessState }: { pkg: ExecutionPackage; health: number | undefined; readinessState: string | undefined }) {
+function PackageRow({ pkg, health, readinessState }: { pkg: ExecutionPackage; health: number | undefined; readinessState: PackageReadinessState | undefined }) {
   return (
     <li role="listitem" className="flex items-center justify-between gap-3 border-b border-border/50 py-2 last:border-b-0">
       <div className="min-w-0 flex-1">
@@ -48,7 +59,7 @@ function PackageRow({ pkg, health, readinessState }: { pkg: ExecutionPackage; he
       </div>
       <div className="flex items-center gap-2">
         {health !== undefined ? <span className="text-xs text-text-muted">Health {health}</span> : null}
-        {readinessState ? <Badge tone="neutral">{readinessState.replace(/_/g, " ")}</Badge> : null}
+        {readinessState ? <Badge tone={READINESS_TONE[readinessState]}>{readinessState.replace(/_/g, " ")}</Badge> : null}
         <Badge tone={PACKAGE_STATUS_TONE[pkg.status]}>{pkg.status}</Badge>
         <Link href={`/execution-packages/${pkg.id}`}>
           <Button variant="secondary">View</Button>
@@ -134,21 +145,23 @@ export function ExecutionPackageDashboardView() {
             <KpiCard label="Average Package Health" value={averageHealth === null ? "—" : String(averageHealth)} icon={CheckIcon} />
           </div>
 
-          <Card className="mb-6">
+          <SectionHeader title="Findings" />
+          <LuxuryCard tone="tint" className="mb-6">
             <h2 className="mb-3 text-sm font-semibold">
               High-Severity Findings <span className="font-normal text-text-muted">({highFindings.length})</span>
             </h2>
             {highFindings.length === 0 ? <p className="text-sm text-success">No high-severity findings.</p> : <ul role="list">{highFindings.map((f) => <FindingRow key={f.id} description={f.description} severity={f.severity} />)}</ul>}
-          </Card>
+          </LuxuryCard>
 
-          <Card className="mb-6">
+          <LuxuryCard className="mb-6">
             <h2 className="mb-3 text-sm font-semibold">
               Other Findings <span className="font-normal text-text-muted">({otherFindings.length})</span>
             </h2>
             {otherFindings.length === 0 ? <p className="text-sm text-text-muted">Nothing else to report.</p> : <ul role="list">{otherFindings.slice(0, 10).map((f) => <FindingRow key={f.id} description={f.description} severity={f.severity} />)}</ul>}
-          </Card>
+          </LuxuryCard>
 
-          <Card>
+          <SectionHeader title="Execution Packages" />
+          <LuxuryCard>
             <h2 className="mb-3 text-sm font-semibold">
               Execution Packages <span className="font-normal text-text-muted">({sortedPackages.length})</span>
             </h2>
@@ -161,7 +174,7 @@ export function ExecutionPackageDashboardView() {
                 ))}
               </ul>
             )}
-          </Card>
+          </LuxuryCard>
         </>
       ) : !error ? (
         <p className="text-sm text-text-muted">Loading execution package health…</p>

@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getExecutionPackageAction, evaluateExecutionPackageAction } from "@/modules/executionPackage/executionPackageActions";
 import type { ExecutionPackage, ExecutionPackageResult } from "@/types/executionPackage";
+import type { DeliverableStatus } from "@/types/operationalPlanning";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -23,7 +25,8 @@ import { InventoryIcon, CheckIcon } from "@/components/ui/icons";
  * precedent: it's a genuine re-derivation of already-computed data,
  * never a mutation.
  */
-const PACKAGE_STATUS_TONE: Record<ExecutionPackage["status"], BadgeTone> = { draft: "neutral", validated: "accent", approved: "success", archived: "outline" };
+const PACKAGE_STATUS_TONE: Record<ExecutionPackage["status"], BadgeTone> = { draft: "neutral", validated: "outline", approved: "success", archived: "neutral" };
+const DELIVERABLE_STATUS_TONE: Record<DeliverableStatus, BadgeTone> = { pending: "neutral", ready: "outline", delivered: "success", rejected: "danger" };
 
 export function ExecutionPackageDetailView({ packageId }: { packageId: string }) {
   const [pkg, setPkg] = useState<ExecutionPackage | null>(null);
@@ -71,7 +74,8 @@ export function ExecutionPackageDetailView({ packageId }: { packageId: string })
         <KpiCard label="Dependency Checks" value={String(snapshot.dependency_checks.length)} icon={CheckIcon} />
       </div>
 
-      <Card className="mb-6">
+      <SectionHeader title="Evaluation" />
+      <LuxuryCard tone="tint" className="mb-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold">Evaluation</h2>
           <Button variant="secondary" onClick={evaluate} disabled={result === "loading"}>
@@ -124,10 +128,11 @@ export function ExecutionPackageDetailView({ packageId }: { packageId: string })
         ) : (
           <p className="text-sm text-text-muted">Run an evaluation to see validation, health scores, and readiness.</p>
         )}
-      </Card>
+      </LuxuryCard>
 
+      <SectionHeader title="Snapshot" />
       <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
-        <Card>
+        <LuxuryCard>
           <h2 className="mb-3 text-sm font-semibold">Snapshot — Allocation, Schedule &amp; Plan</h2>
           <ul role="list">
             <li role="listitem" className="flex items-center justify-between gap-3 border-b border-border/50 py-2">
@@ -143,9 +148,9 @@ export function ExecutionPackageDetailView({ packageId }: { packageId: string })
               <Badge tone={snapshot.operational_plan_id ? "success" : "neutral"}>{snapshot.operational_plan_id ?? "none"}</Badge>
             </li>
           </ul>
-        </Card>
+        </LuxuryCard>
 
-        <Card>
+        <LuxuryCard>
           <h2 className="mb-3 text-sm font-semibold">
             Deliverables &amp; Evidence <span className="font-normal text-text-muted">({snapshot.deliverables.length + snapshot.evidence_requirements.length})</span>
           </h2>
@@ -156,7 +161,7 @@ export function ExecutionPackageDetailView({ packageId }: { packageId: string })
               {snapshot.deliverables.map((d) => (
                 <li key={d.id} role="listitem" className="flex items-center justify-between gap-3 border-b border-border/50 py-2 last:border-b-0">
                   <span className="text-sm">{d.title}</span>
-                  <Badge tone="neutral">{d.status}</Badge>
+                  <Badge tone={DELIVERABLE_STATUS_TONE[d.status]}>{d.status}</Badge>
                 </li>
               ))}
               {snapshot.evidence_requirements.map((e) => (
@@ -167,10 +172,11 @@ export function ExecutionPackageDetailView({ packageId }: { packageId: string })
               ))}
             </ul>
           )}
-        </Card>
+        </LuxuryCard>
       </div>
 
-      <Card className="mb-6">
+      <SectionHeader title="Instructions" />
+      <LuxuryCard className="mb-6">
         <h2 className="mb-3 text-sm font-semibold">
           Instructions <span className="font-normal text-text-muted">({currentVersion.instructions.sections.length})</span>
         </h2>
@@ -186,9 +192,10 @@ export function ExecutionPackageDetailView({ packageId }: { packageId: string })
             ))}
           </ul>
         )}
-      </Card>
+      </LuxuryCard>
 
-      <Card>
+      <SectionHeader title="Version History" />
+      <LuxuryCard>
         <h2 className="mb-3 text-sm font-semibold">
           Version History <span className="font-normal text-text-muted">({pkg.versions.length})</span>
         </h2>
@@ -204,7 +211,7 @@ export function ExecutionPackageDetailView({ packageId }: { packageId: string })
             </li>
           ))}
         </ul>
-      </Card>
+      </LuxuryCard>
 
       <Link href="/execution-packages" className="mt-2 inline-block text-sm text-accent hover:underline">
         ← Back to Execution Packages
