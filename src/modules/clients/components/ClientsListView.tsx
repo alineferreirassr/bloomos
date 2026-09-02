@@ -128,23 +128,22 @@ export function ClientsListView() {
         }
       />
 
+      <div className="space-y-8">
       {insight ? (
-        <div className="animate-fade-up mb-6">
+        <div className="animate-fade-up">
           <ModuleInsightCard insight={insight} />
         </div>
       ) : null}
 
       {kpis ? (
-        <div className="animate-fade-up stagger-1 mb-6 grid grid-cols-2 gap-3 md:grid-cols-3">
+        <div className="animate-fade-up stagger-1 grid grid-cols-2 gap-3 md:grid-cols-3">
           <KpiCard icon={ClientsIcon} label="Total Clients" value={kpis.total.toLocaleString()} />
           <KpiCard icon={CheckIcon} label="Active" value={kpis.active.toLocaleString()} />
           <KpiCard icon={BloomAiIcon} label="VIP" value={kpis.vip.toLocaleString()} />
         </div>
       ) : null}
 
-      <div className="mb-6">
-        <ClientFilters value={filters} onChange={handleFiltersChange} />
-      </div>
+      <ClientFilters value={filters} onChange={handleFiltersChange} />
 
       <div>
         {state.status === "loading" ? (
@@ -178,6 +177,7 @@ export function ClientsListView() {
             <ClientListCards clients={state.clients} nextActionByClientId={state.nextActionByClientId} />
           </div>
         )}
+      </div>
       </div>
     </div>
   );

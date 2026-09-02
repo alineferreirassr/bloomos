@@ -21,8 +21,9 @@ describe("ClientListTable (desktop)", () => {
     expect(screen.getByText("Priya Nair")).toBeInTheDocument();
     expect(screen.getByText("Active")).toBeInTheDocument();
     expect(screen.getByText("Planning")).toBeInTheDocument();
-    // "VIP" appears both as the column header and as client_a's badge.
-    expect(screen.getAllByText("VIP")).toHaveLength(2);
+    // Relationships/CRM visual pass folded VIP into the Status cell as an inline badge
+    // (no separate VIP column), so "VIP" now appears exactly once, on client_a's row.
+    expect(screen.getAllByText("VIP")).toHaveLength(1);
     expect(screen.getByText("Add a note for this client")).toBeInTheDocument();
   });
 });

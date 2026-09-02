@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import type { Client } from "@/types/client";
 import { ClientStatusBadge } from "@/modules/clients/components/ClientStatusBadge";
 import { VipBadge } from "@/modules/clients/components/VipBadge";
@@ -16,7 +16,7 @@ export function ClientListCards({ clients, nextActionByClientId }: ClientListCar
         const nextAction = nextActionByClientId[client.id];
         return (
           <Link key={client.id} href={`/clients/${client.id}`} className="block">
-            <Card className="transition-colors duration-150 hover:border-accent/50">
+            <LuxuryCard className="transition-transform duration-150 hover:-translate-y-0.5">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="font-medium tracking-tight text-text">
@@ -39,7 +39,7 @@ export function ClientListCards({ clients, nextActionByClientId }: ClientListCar
               {nextAction ? (
                 <p className="mt-3 text-xs font-medium text-accent">{nextAction}</p>
               ) : null}
-            </Card>
+            </LuxuryCard>
           </Link>
         );
       })}

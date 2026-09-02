@@ -8,52 +8,54 @@ interface ClientListTableProps {
   nextActionByClientId: Record<string, string | null>;
 }
 
+/* Relationships/CRM visual pass — same premium editorial recipe as Leads:
+   quiet row dividers, comfortable height, strong primary identity. Column
+   count trimmed from 10 to 6 by combining Name+Partner into one identity
+   cell, Email+Phone into one contact cell, and Status+VIP into one badge
+   group — no field is deleted, "Created" moves to the detail page only
+   (pure admin metadata, not needed to scan who needs attention). Same
+   data, same links/actions as before. */
 export function ClientListTable({ clients, nextActionByClientId }: ClientListTableProps) {
   return (
-    <div className="hidden overflow-x-auto rounded-lg border border-border bg-surface shadow-sm md:block">
+    <div className="hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
       <table className="w-full border-collapse text-left text-sm">
         <thead className="sticky top-0 z-[var(--z-index-dropdown)] bg-surface">
-          <tr>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Name</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Partner</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Email</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Phone</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Status</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">VIP</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Tags</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Source</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Created</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Next action</th>
+          <tr className="border-b border-border/70">
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Client</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Contact</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Status</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Tags</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Source</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Next action</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-border/60">
           {clients.map((client) => (
-            <tr key={client.id} className="transition-colors duration-150 hover:bg-accent-100/40">
-              <td className="border-b border-border px-2.5 py-2">
+            <tr key={client.id} className="transition-colors duration-150 hover:bg-accent-100/25">
+              <td className="px-5 py-4">
                 <Link
                   href={`/clients/${client.id}`}
-                  className="font-medium text-text hover:text-accent"
+                  className="text-[15px] font-medium text-text hover:text-accent"
                 >
                   {client.first_name} {client.last_name}
                 </Link>
+                {client.partner_name ? <p className="mt-0.5 text-xs text-text-muted">& {client.partner_name}</p> : null}
               </td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{client.partner_name ?? "—"}</td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{client.email}</td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{client.phone ?? "—"}</td>
-              <td className="border-b border-border px-2.5 py-2">
-                <ClientStatusBadge status={client.internal_status} />
+              <td className="px-5 py-4 text-text-muted">
+                <p>{client.email}</p>
+                {client.phone ? <p className="mt-0.5 text-xs">{client.phone}</p> : null}
               </td>
-              <td className="border-b border-border px-2.5 py-2">
-                <VipBadge isVip={client.is_vip} />
+              <td className="px-5 py-4">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <ClientStatusBadge status={client.internal_status} />
+                  <VipBadge isVip={client.is_vip} />
+                </div>
               </td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">
+              <td className="px-5 py-4 text-text-muted">
                 {client.tags.length > 0 ? client.tags.join(", ") : "—"}
               </td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{client.source ?? "—"}</td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">
-                {new Date(client.created_at).toLocaleDateString()}
-              </td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{nextActionByClientId[client.id] ?? "—"}</td>
+              <td className="px-5 py-4 text-text-muted">{client.source ?? "—"}</td>
+              <td className="px-5 py-4 text-text-muted">{nextActionByClientId[client.id] ?? "—"}</td>
             </tr>
           ))}
         </tbody>
