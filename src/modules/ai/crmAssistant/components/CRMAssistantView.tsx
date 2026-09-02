@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -97,13 +97,13 @@ export function CRMAssistantView() {
   }, []);
 
   return (
-    <div>
-      <div className="flex flex-wrap items-start justify-between gap-2">
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 ref={headingRef} tabIndex={-1} className="font-serif text-3xl font-semibold text-text">
             CRM Assistant
           </h2>
-          <p className="mt-1 max-w-prose text-sm text-text-muted">
+          <p className="mt-2 max-w-prose text-sm text-text-muted">
             Bloom AI reads this Workspace&apos;s Clients, Leads, Contracts, Payments, Events, and its own AI Memory to
             surface who needs attention, what&apos;s at risk, and what to prioritize next. It never sends anything or
             changes any record — review every suggestion before acting on it.
@@ -114,7 +114,7 @@ export function CRMAssistantView() {
         </Button>
       </div>
 
-      <div aria-live="polite" className="mt-6">
+      <div aria-live="polite">
         {status === "loading" ? (
           <div className="space-y-3">
             <Skeleton className="h-24 w-full" />
@@ -144,7 +144,7 @@ export function CRMAssistantView() {
 
 function ActionList({ title, headingId, actions, emptyLabel }: { title: string; headingId: string; actions: CrmAssistantResolvedAction[]; emptyLabel: string }) {
   return (
-    <Card>
+    <LuxuryCard>
       <h3 id={headingId} className="font-serif text-[17px] font-semibold text-text">
         {title}
       </h3>
@@ -165,7 +165,7 @@ function ActionList({ title, headingId, actions, emptyLabel }: { title: string; 
           ))}
         </ul>
       )}
-    </Card>
+    </LuxuryCard>
   );
 }
 
@@ -183,14 +183,14 @@ function CrmReport({ result, onCopy }: { result: GeneratedCrmAssistantBrief; onC
         </Button>
       </div>
 
-      <Card>
+      <LuxuryCard>
         <h3 id="crm-executive-summary-heading" className="font-serif text-[17px] font-semibold text-text">
           Executive Summary
         </h3>
         <p className="mt-2 text-sm text-text" aria-labelledby="crm-executive-summary-heading">
           {brief.executiveSummary}
         </p>
-      </Card>
+      </LuxuryCard>
 
       <RelationshipHealthCard brief={brief} />
 
@@ -212,7 +212,7 @@ function CrmReport({ result, onCopy }: { result: GeneratedCrmAssistantBrief; onC
       <RecentMemoriesCard brief={brief} />
 
       {brief.missingInformation.length > 0 ? (
-        <Card>
+        <LuxuryCard>
           <h3 id="crm-missing-info-heading" className="font-serif text-[17px] font-semibold text-text">
             Missing Information
           </h3>
@@ -221,7 +221,7 @@ function CrmReport({ result, onCopy }: { result: GeneratedCrmAssistantBrief; onC
               <li key={item}>{item}</li>
             ))}
           </ul>
-        </Card>
+        </LuxuryCard>
       ) : null}
     </div>
   );
@@ -230,7 +230,7 @@ function CrmReport({ result, onCopy }: { result: GeneratedCrmAssistantBrief; onC
 function RelationshipHealthCard({ brief }: { brief: GeneratedCrmAssistantBrief["brief"] }) {
   const health = brief.relationshipHealth;
   return (
-    <Card>
+    <LuxuryCard>
       <h3 id="crm-relationship-health-heading" className="font-serif text-[17px] font-semibold text-text">
         Relationship Health
       </h3>
@@ -257,13 +257,13 @@ function RelationshipHealthCard({ brief }: { brief: GeneratedCrmAssistantBrief["
           </ul>
         </div>
       ) : null}
-    </Card>
+    </LuxuryCard>
   );
 }
 
 function ClientRiskCard({ brief }: { brief: GeneratedCrmAssistantBrief["brief"] }) {
   return (
-    <Card>
+    <LuxuryCard>
       <h3 id="crm-client-risk-heading" className="font-serif text-[17px] font-semibold text-text">
         Client Risk
       </h3>
@@ -281,13 +281,13 @@ function ClientRiskCard({ brief }: { brief: GeneratedCrmAssistantBrief["brief"] 
           ))}
         </ul>
       )}
-    </Card>
+    </LuxuryCard>
   );
 }
 
 function ContractStatusCard({ brief }: { brief: GeneratedCrmAssistantBrief["brief"] }) {
   return (
-    <Card>
+    <LuxuryCard>
       <h3 id="crm-contract-status-heading" className="font-serif text-[17px] font-semibold text-text">
         Contract Status
       </h3>
@@ -305,13 +305,13 @@ function ContractStatusCard({ brief }: { brief: GeneratedCrmAssistantBrief["brie
           ))}
         </ul>
       )}
-    </Card>
+    </LuxuryCard>
   );
 }
 
 function PaymentStatusCard({ brief }: { brief: GeneratedCrmAssistantBrief["brief"] }) {
   return (
-    <Card>
+    <LuxuryCard>
       <h3 id="crm-payment-status-heading" className="font-serif text-[17px] font-semibold text-text">
         Payment Status
       </h3>
@@ -332,14 +332,14 @@ function PaymentStatusCard({ brief }: { brief: GeneratedCrmAssistantBrief["brief
           ))}
         </ul>
       )}
-    </Card>
+    </LuxuryCard>
   );
 }
 
 function RecentMemoriesCard({ brief }: { brief: GeneratedCrmAssistantBrief["brief"] }) {
   if (brief.relevantMemories.length === 0) return null;
   return (
-    <Card>
+    <LuxuryCard>
       <h3 id="crm-recent-memories-heading" className="font-serif text-[17px] font-semibold text-text">
         Recent AI Recommendations
       </h3>
@@ -352,7 +352,7 @@ function RecentMemoriesCard({ brief }: { brief: GeneratedCrmAssistantBrief["brie
           </li>
         ))}
       </ul>
-    </Card>
+    </LuxuryCard>
   );
 }
 
