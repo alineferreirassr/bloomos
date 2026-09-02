@@ -5,7 +5,8 @@ import Link from "next/link";
 import { listPlanTemplatesAction } from "@/modules/operationalPlanning/operationalPlanningActions";
 import type { PlanTemplate } from "@/types/operationalPlanning";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -20,12 +21,12 @@ import { DocumentTemplatesIcon } from "@/components/ui/icons";
  * `updatePlanTemplateAction`/`duplicatePlanTemplateAction` exist and are
  * fully tested in `operationalPlanningActions.ts`, ready for a future form.
  */
-const STATUS_TONE: Record<PlanTemplate["status"], BadgeTone> = { active: "success", archived: "outline" };
+const STATUS_TONE: Record<PlanTemplate["status"], BadgeTone> = { active: "success", archived: "neutral" };
 
 function TemplateCard({ template }: { template: PlanTemplate }) {
   const stepCount = template.phases.reduce((sum, p) => sum + p.steps.length, 0);
   return (
-    <Card className="mb-4">
+    <LuxuryCard className="mb-4">
       <div className="mb-2 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">{template.name}</h2>
@@ -60,7 +61,7 @@ function TemplateCard({ template }: { template: PlanTemplate }) {
           <p className="text-sm font-medium">{template.approvals.length}</p>
         </div>
       </div>
-    </Card>
+    </LuxuryCard>
   );
 }
 
@@ -111,7 +112,10 @@ export function PlanTemplateLibraryView() {
           {templates.length === 0 ? (
             <EmptyState title="No plan templates yet" description="Plan templates are created through the Plan Template registry." icon={DocumentTemplatesIcon} />
           ) : (
-            templates.map((t) => <TemplateCard key={t.id} template={t} />)
+            <>
+              <SectionHeader title="Templates" />
+              {templates.map((t) => <TemplateCard key={t.id} template={t} />)}
+            </>
           )}
         </>
       ) : !error ? (

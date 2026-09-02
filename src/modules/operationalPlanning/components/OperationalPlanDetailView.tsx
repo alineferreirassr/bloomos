@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { getOperationalPlanAction, evaluateOperationalPlanAction } from "@/modules/operationalPlanning/operationalPlanningActions";
-import type { OperationalPlan, OperationalPlanResult } from "@/types/operationalPlanning";
+import type { OperationalPlan, OperationalPlanResult, ExecutionStep } from "@/types/operationalPlanning";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -25,7 +26,8 @@ import { DocumentTemplatesIcon, CheckIcon } from "@/components/ui/icons";
  * stay unwired, matching every prior platform detail view's disclosed
  * "no create/mutate form yet" scope.
  */
-const PLAN_STATUS_TONE: Record<OperationalPlan["status"], BadgeTone> = { draft: "neutral", active: "accent", approved: "success", completed: "success", archived: "outline" };
+const PLAN_STATUS_TONE: Record<OperationalPlan["status"], BadgeTone> = { draft: "neutral", active: "outline", approved: "success", completed: "success", archived: "neutral" };
+const STEP_STATUS_TONE: Record<ExecutionStep["status"], BadgeTone> = { pending: "neutral", in_progress: "outline", completed: "success", skipped: "neutral", blocked: "danger" };
 
 function ScoreItem({ label, value }: { label: string; value: number }) {
   return (
@@ -82,7 +84,8 @@ export function OperationalPlanDetailView({ planId }: { planId: string }) {
         <KpiCard label="Approvals" value={String(plan.approvals.length)} icon={CheckIcon} />
       </div>
 
-      <Card className="mb-6">
+      <SectionHeader title="Evaluation" />
+      <LuxuryCard tone="tint" className="mb-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold">Evaluation</h2>
           <Button variant="secondary" onClick={evaluate} disabled={result === "loading"}>
@@ -123,9 +126,10 @@ export function OperationalPlanDetailView({ planId }: { planId: string }) {
         ) : (
           <p className="text-sm text-text-muted">Run an evaluation to see validation, health scores, and the critical path.</p>
         )}
-      </Card>
+      </LuxuryCard>
 
-      <Card className="mb-6">
+      <SectionHeader title="Phases & Steps" />
+      <LuxuryCard className="mb-6">
         <h2 className="mb-3 text-sm font-semibold">
           Phases <span className="font-normal text-text-muted">({sortedPhases.length})</span>
         </h2>
@@ -149,7 +153,7 @@ export function OperationalPlanDetailView({ planId }: { planId: string }) {
                         {step.dependencies.length > 0 ? <p className="mt-0.5 text-xs text-text-muted">{step.dependencies.length} dependenc{step.dependencies.length === 1 ? "y" : "ies"}</p> : null}
                       </div>
                       <span className="text-xs text-text-muted">{step.estimated_duration_minutes}m</span>
-                      <Badge tone="neutral">{step.status}</Badge>
+                      <Badge tone={STEP_STATUS_TONE[step.status]}>{step.status}</Badge>
                     </li>
                   ))}
                 </ul>
@@ -157,10 +161,11 @@ export function OperationalPlanDetailView({ planId }: { planId: string }) {
             </div>
           ))
         )}
-      </Card>
+      </LuxuryCard>
 
+      <SectionHeader title="Requirements & Approvals" />
       <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
-        <Card>
+        <LuxuryCard>
           <h2 className="mb-3 text-sm font-semibold">
             Milestones <span className="font-normal text-text-muted">({plan.milestones.length})</span>
           </h2>
@@ -176,9 +181,9 @@ export function OperationalPlanDetailView({ planId }: { planId: string }) {
               ))}
             </ul>
           )}
-        </Card>
+        </LuxuryCard>
 
-        <Card>
+        <LuxuryCard>
           <h2 className="mb-3 text-sm font-semibold">
             Deliverables <span className="font-normal text-text-muted">({plan.deliverables.length})</span>
           </h2>
@@ -194,9 +199,9 @@ export function OperationalPlanDetailView({ planId }: { planId: string }) {
               ))}
             </ul>
           )}
-        </Card>
+        </LuxuryCard>
 
-        <Card>
+        <LuxuryCard>
           <h2 className="mb-3 text-sm font-semibold">
             Evidence Requirements <span className="font-normal text-text-muted">({plan.evidence_requirements.length})</span>
           </h2>
@@ -212,9 +217,9 @@ export function OperationalPlanDetailView({ planId }: { planId: string }) {
               ))}
             </ul>
           )}
-        </Card>
+        </LuxuryCard>
 
-        <Card>
+        <LuxuryCard>
           <h2 className="mb-3 text-sm font-semibold">
             Approvals <span className="font-normal text-text-muted">({plan.approvals.length})</span>
           </h2>
@@ -230,14 +235,16 @@ export function OperationalPlanDetailView({ planId }: { planId: string }) {
               ))}
             </ul>
           )}
-        </Card>
+        </LuxuryCard>
       </div>
 
       {plan.checklists.length > 0 ? (
-        <Card className="mb-6">
-          <h2 className="mb-3 text-sm font-semibold">
-            Checklists <span className="font-normal text-text-muted">({plan.checklists.length})</span>
-          </h2>
+        <>
+          <SectionHeader title="Checklists" />
+          <LuxuryCard className="mb-6">
+            <h2 className="mb-3 text-sm font-semibold">
+              Checklists <span className="font-normal text-text-muted">({plan.checklists.length})</span>
+            </h2>
           {plan.checklists.map((c) => {
             const completedCount = c.items.filter((i) => i.completed).length;
             return (
@@ -252,7 +259,8 @@ export function OperationalPlanDetailView({ planId }: { planId: string }) {
               </div>
             );
           })}
-        </Card>
+          </LuxuryCard>
+        </>
       ) : null}
 
       <Link href="/operational-planning" className="mt-2 inline-block text-sm text-accent hover:underline">

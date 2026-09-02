@@ -5,7 +5,8 @@ import Link from "next/link";
 import { listOperationalPlansAction, listPlanTemplatesAction, evaluateOperationalPlanningHealthAction, type EvaluateOperationalPlanningHealthResult } from "@/modules/operationalPlanning/operationalPlanningActions";
 import type { OperationalPlan, PlanTemplate, OperationalFindingSeverity } from "@/types/operationalPlanning";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -26,7 +27,7 @@ import { DocumentTemplatesIcon, CheckIcon, AnalyticsIcon } from "@/components/ui
  */
 const SEVERITY_TONE: Record<OperationalFindingSeverity, BadgeTone> = { high: "danger", medium: "warning", low: "neutral" };
 const SEVERITY_LABEL: Record<OperationalFindingSeverity, string> = { high: "High", medium: "Medium", low: "Low" };
-const PLAN_STATUS_TONE: Record<OperationalPlan["status"], BadgeTone> = { draft: "neutral", active: "accent", approved: "success", completed: "success", archived: "outline" };
+const PLAN_STATUS_TONE: Record<OperationalPlan["status"], BadgeTone> = { draft: "neutral", active: "outline", approved: "success", completed: "success", archived: "neutral" };
 
 function FindingRow({ description, severity }: { description: string; severity: OperationalFindingSeverity }) {
   return (
@@ -142,21 +143,23 @@ export function OperationalDashboardView() {
             <KpiCard label="Average Operational Health" value={averageHealth === null ? "—" : String(averageHealth)} icon={CheckIcon} />
           </div>
 
-          <Card className="mb-6">
+          <SectionHeader title="Findings" />
+          <LuxuryCard tone="tint" className="mb-6">
             <h2 className="mb-3 text-sm font-semibold">
               High-Severity Findings <span className="font-normal text-text-muted">({highFindings.length})</span>
             </h2>
             {highFindings.length === 0 ? <p className="text-sm text-success">No high-severity operational findings.</p> : <ul role="list">{highFindings.map((f) => <FindingRow key={f.id} description={f.description} severity={f.severity} />)}</ul>}
-          </Card>
+          </LuxuryCard>
 
-          <Card className="mb-6">
+          <LuxuryCard className="mb-6">
             <h2 className="mb-3 text-sm font-semibold">
               Other Findings <span className="font-normal text-text-muted">({otherFindings.length})</span>
             </h2>
             {otherFindings.length === 0 ? <p className="text-sm text-text-muted">Nothing else to report.</p> : <ul role="list">{otherFindings.slice(0, 10).map((f) => <FindingRow key={f.id} description={f.description} severity={f.severity} />)}</ul>}
-          </Card>
+          </LuxuryCard>
 
-          <Card>
+          <SectionHeader title="Operational Plans" />
+          <LuxuryCard>
             <h2 className="mb-3 text-sm font-semibold">
               Operational Plans <span className="font-normal text-text-muted">({sortedPlans.length})</span>
             </h2>
@@ -169,7 +172,7 @@ export function OperationalDashboardView() {
                 ))}
               </ul>
             )}
-          </Card>
+          </LuxuryCard>
         </>
       ) : !error ? (
         <p className="text-sm text-text-muted">Loading operational planning health…</p>
