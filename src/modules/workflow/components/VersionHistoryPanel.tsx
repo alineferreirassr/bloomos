@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import type { WorkflowVersion } from "@/types/workflow";
 
 function formatDateTime(iso: string): string {
@@ -14,11 +15,11 @@ export function VersionHistoryPanel({ versions, restoringVersion, onRestore }: {
     <div className="space-y-2 p-3">
       <h3 className="font-serif text-[15px] font-semibold text-text">Version History</h3>
       {versions.length === 0 ? (
-        <p className="text-xs text-text-muted">This Workflow hasn&apos;t been published yet — publish to create version 1.</p>
+        <EmptyState illustration="generic" title="Not published yet" description="Publish this Workflow to create version 1." />
       ) : (
         <ul className="space-y-1.5">
           {versions.map((version) => (
-            <li key={version.id} className="flex items-center justify-between gap-2 rounded-md border border-border px-2.5 py-2">
+            <li key={version.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-2.5 py-2">
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
                   <Badge tone="neutral">v{version.version}</Badge>

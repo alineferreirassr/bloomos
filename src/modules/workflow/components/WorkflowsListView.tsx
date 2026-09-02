@@ -4,11 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { registerCommand, unregisterCommand } from "@/core/commandPalette";
-import { Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Modal } from "@/components/ui/Modal";
 import { Toast } from "@/components/ui/Toast";
 import { getWorkflowsList } from "@/modules/workflow/getWorkflowsList";
@@ -188,30 +190,27 @@ export function WorkflowsListView() {
 
   return (
     <div>
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h2 className="font-serif text-3xl font-semibold text-text">Workflows</h2>
-          <p className="mt-1 max-w-prose text-sm text-text-muted">
-            Design what should happen after a real business event — visually. Publishing compiles a Workflow into real
-            Automations; the Automation Engine remains the only thing that ever executes them.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/workflows/monitoring">
-            <Button type="button" variant="secondary">
-              Monitoring Center
+      <PageHeader
+        title="Workflows"
+        subtitle="Design what should happen after a real business event — visually. Publishing compiles a Workflow into real Automations; the Automation Engine remains the only thing that ever executes them."
+        actions={
+          <>
+            <Link href="/workflows/monitoring">
+              <Button type="button" variant="secondary">
+                Monitoring Center
+              </Button>
+            </Link>
+            <Button type="button" onClick={openCreateModal}>
+              New Workflow
             </Button>
-          </Link>
-          <Button type="button" onClick={openCreateModal}>
-            New Workflow
-          </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <WorkflowDashboardSection />
 
       {suggestions.length > 0 ? (
-        <Card className="mt-4 border-accent/30">
+        <LuxuryCard tone="tint" className="mt-4 sm:mt-6">
           <h3 className="font-serif text-[15px] font-semibold text-text">Suggested Workflows</h3>
           <p className="mt-1 text-xs text-text-muted">
             Bloom AI noticed these Triggers have no Automation responding to them yet — a deterministic read of the
@@ -219,18 +218,21 @@ export function WorkflowsListView() {
           </p>
           <ul className="mt-3 space-y-2">
             {suggestions.map((suggestion) => (
-              <li key={suggestion.triggerType} className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+              <li
+                key={suggestion.triggerType}
+                className="flex flex-col gap-2 rounded-md border border-border px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+              >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-text">{suggestion.name}</p>
                   <p className="truncate text-xs text-text-muted">{suggestion.reason}</p>
                 </div>
-                <Button type="button" variant="secondary" onClick={() => openSuggestion(suggestion)}>
+                <Button type="button" variant="secondary" onClick={() => openSuggestion(suggestion)} className="self-start sm:self-auto">
                   Create from suggestion
                 </Button>
               </li>
             ))}
           </ul>
-        </Card>
+        </LuxuryCard>
       ) : null}
 
       <div className="mt-6">
@@ -245,48 +247,48 @@ export function WorkflowsListView() {
         {state.status === "error" ? <ErrorState message={state.message} onRetry={refresh} /> : null}
 
         {state.status === "ready" && state.workflows.length === 0 ? (
-          <Card>
-            <p className="text-sm text-text/55">No Workflows yet — create one to design your first automated response to a real business event.</p>
-          </Card>
+          <EmptyState
+            illustration="generic"
+            title="No Workflows yet"
+            description="Create one to design your first automated response to a real business event."
+          />
         ) : null}
 
         {state.status === "ready" && state.workflows.length > 0 ? (
-          <ul className="divide-y divide-border">
-            {state.workflows.map((workflow) => (
-              <li key={workflow.id} className="py-3">
-                <Card>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <Link href={`/workflows/${workflow.id}`} className="truncate font-serif text-[15px] font-semibold text-text hover:underline">
-                          {workflow.metadata.name}
-                        </Link>
-                        <Badge tone={STATUS_TONE[workflow.status]}>{STATUS_LABEL[workflow.status]}</Badge>
-                        <Badge tone="neutral">{workflow.metadata.category}</Badge>
-                      </div>
-                      <p className="mt-1 truncate text-xs text-text-muted">
-                        {workflow.metadata.description || "No description."} · Updated {formatDateTime(workflow.updatedAt)}
-                        {workflow.currentVersion > 0 ? ` · v${workflow.currentVersion}` : ""}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Link href={`/workflows/${workflow.id}`}>
-                        <Button type="button" variant="secondary">
-                          Open
-                        </Button>
+          <LuxuryCard className="p-0 overflow-hidden">
+            <ul className="divide-y divide-border">
+              {state.workflows.map((workflow) => (
+                <li key={workflow.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link href={`/workflows/${workflow.id}`} className="truncate font-serif text-[15px] font-semibold text-text hover:underline">
+                        {workflow.metadata.name}
                       </Link>
-                      <Button type="button" variant="ghost" disabled={pendingId === workflow.id} onClick={() => handleClone(workflow.id)}>
-                        Clone
-                      </Button>
-                      <Button type="button" variant="ghost" disabled={pendingId === workflow.id} onClick={() => handleArchiveToggle(workflow)}>
-                        {workflow.status === "archived" ? "Unarchive" : "Archive"}
-                      </Button>
+                      <Badge tone={STATUS_TONE[workflow.status]}>{STATUS_LABEL[workflow.status]}</Badge>
+                      <Badge tone="neutral">{workflow.metadata.category}</Badge>
                     </div>
+                    <p className="mt-1 truncate text-xs text-text-muted">
+                      {workflow.metadata.description || "No description."} · Updated {formatDateTime(workflow.updatedAt)}
+                      {workflow.currentVersion > 0 ? ` · v${workflow.currentVersion}` : ""}
+                    </p>
                   </div>
-                </Card>
-              </li>
-            ))}
-          </ul>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link href={`/workflows/${workflow.id}`}>
+                      <Button type="button" variant="secondary">
+                        Open
+                      </Button>
+                    </Link>
+                    <Button type="button" variant="ghost" disabled={pendingId === workflow.id} onClick={() => handleClone(workflow.id)}>
+                      Clone
+                    </Button>
+                    <Button type="button" variant="ghost" disabled={pendingId === workflow.id} onClick={() => handleArchiveToggle(workflow)}>
+                      {workflow.status === "archived" ? "Unarchive" : "Archive"}
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </LuxuryCard>
         ) : null}
       </div>
 

@@ -32,7 +32,7 @@ export function SimulationPanel({
 }) {
   return (
     <div className="space-y-3 p-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-serif text-[15px] font-semibold text-text">Simulation</h3>
         <Button type="button" variant="secondary" onClick={onRun} disabled={running}>
           {running ? "Simulating…" : "Run Simulation"}

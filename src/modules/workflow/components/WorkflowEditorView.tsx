@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Toast } from "@/components/ui/Toast";
+import { Tabs, TabList, Tab } from "@/components/ui/Tabs";
 import { WorkflowCanvas, type WorkflowCanvasHandle } from "@/modules/workflow/canvas/WorkflowCanvas";
 import { NodeLibraryPanel } from "@/modules/workflow/components/NodeLibraryPanel";
 import { PropertiesPanel } from "@/modules/workflow/components/PropertiesPanel";
@@ -25,7 +26,7 @@ import { restoreWorkflowVersion } from "@/modules/workflow/restoreWorkflowVersio
 import type { WorkflowExecutionPolicy, WorkflowGraph, WorkflowIssue, WorkflowMetadata, WorkflowNodeExecutionStats, WorkflowSimulationResult, WorkflowStatus } from "@/types/workflow";
 
 type LoadState = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; data: WorkflowEditorData };
-type Tab = "properties" | "inspector" | "validation" | "simulation" | "history";
+type PanelId = "properties" | "inspector" | "validation" | "simulation" | "history";
 type MobilePane = "library" | "canvas" | "panel";
 const AUTOSAVE_DELAY_MS = 900;
 const VALIDATE_DELAY_MS = 500;
@@ -55,7 +56,7 @@ export function WorkflowEditorView({ workflowId }: { workflowId: string }) {
   const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
   const [issues, setIssues] = useState<WorkflowIssue[]>([]);
   const [nodeExecutionStats, setNodeExecutionStats] = useState<Record<string, WorkflowNodeExecutionStats>>({});
-  const [tab, setTab] = useState<Tab>("properties");
+  const [tab, setTab] = useState<PanelId>("properties");
   const [mobilePane, setMobilePane] = useState<MobilePane>("canvas");
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -232,18 +233,18 @@ export function WorkflowEditorView({ workflowId }: { workflowId: string }) {
 
   return (
     <div className="flex h-[calc(100vh-140px)] flex-col">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
-        <div className="flex items-center gap-2">
-          <Link href="/workflows" className="text-sm text-text-muted hover:underline">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border pb-4">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <Link href="/workflows" className="text-sm text-text-muted transition-colors duration-150 hover:text-text">
             Workflows
           </Link>
-          <span className="text-text-muted">/</span>
+          <span className="text-text-muted/60">/</span>
           <h2 className="font-serif text-lg font-semibold text-text">{metadata.name}</h2>
           <Badge tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Badge>
           {currentVersion > 0 ? <Badge tone="neutral">v{currentVersion}</Badge> : null}
           <span className="text-[11px] text-text-muted">{saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : ""}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="ghost" onClick={() => canvasRef.current?.undo()} disabled={!historyState.canUndo}>
             Undo
           </Button>
@@ -266,18 +267,13 @@ export function WorkflowEditorView({ workflowId }: { workflowId: string }) {
       </div>
 
       {/* Mobile-only pane switcher — below `lg` the three columns can't fit side by side (a visual workflow canvas is inherently a wide-screen tool), so one pane shows at a time instead of squeezing the canvas to nothing. */}
-      <div className="flex gap-1 border-b border-border pb-2 pt-2 text-xs lg:hidden">
-        {(["library", "canvas", "panel"] as MobilePane[]).map((pane) => (
-          <button
-            key={pane}
-            type="button"
-            onClick={() => setMobilePane(pane)}
-            className={`flex-1 rounded-md border px-2 py-1.5 capitalize ${mobilePane === pane ? "border-accent text-accent" : "border-border text-text-muted"}`}
-          >
-            {pane === "library" ? "Nodes" : pane === "canvas" ? "Canvas" : "Panel"}
-          </button>
-        ))}
-      </div>
+      <Tabs value={mobilePane} onValueChange={(next) => setMobilePane(next as MobilePane)} className="pt-2 lg:hidden">
+        <TabList aria-label="Editor pane">
+          <Tab value="library">Nodes</Tab>
+          <Tab value="canvas">Canvas</Tab>
+          <Tab value="panel">Panel</Tab>
+        </TabList>
+      </Tabs>
 
       <div className="flex min-h-0 flex-1 gap-3 pt-3">
         <div className={`${mobilePane === "library" ? "flex" : "hidden"} w-full shrink-0 overflow-hidden rounded-md border border-border lg:flex lg:w-56`}>
@@ -302,18 +298,15 @@ export function WorkflowEditorView({ workflowId }: { workflowId: string }) {
         </div>
 
         <div className={`${mobilePane === "panel" ? "flex" : "hidden"} w-full shrink-0 flex-col overflow-hidden rounded-md border border-border lg:flex lg:w-72`}>
-          <div className="flex border-b border-border text-xs">
-            {(["properties", "inspector", "validation", "simulation", "history"] as Tab[]).map((tabId) => (
-              <button
-                key={tabId}
-                type="button"
-                onClick={() => setTab(tabId)}
-                className={`flex-1 px-2 py-2 capitalize ${tab === tabId ? "border-b-2 border-accent font-medium text-text" : "text-text-muted"}`}
-              >
-                {tabId === "history" ? "Versions" : tabId}
-              </button>
-            ))}
-          </div>
+          <Tabs value={tab} onValueChange={(next) => setTab(next as PanelId)}>
+            <TabList aria-label="Workflow editor panels" className="px-1">
+              <Tab value="properties">Properties</Tab>
+              <Tab value="inspector">Inspector</Tab>
+              <Tab value="validation">Validation</Tab>
+              <Tab value="simulation">Simulation</Tab>
+              <Tab value="history">Versions</Tab>
+            </TabList>
+          </Tabs>
           <div className="h-full overflow-y-auto">
             {tab === "properties" ? (
               <PropertiesPanel

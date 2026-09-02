@@ -1,19 +1,20 @@
 "use client";
 
 import { Badge } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
 import type { WorkflowIssue } from "@/types/workflow";
 
 /** The Step 5 Validation Panel — every issue `validateWorkflow` finds, live against the Editor's own in-progress graph. Publishing is blocked while this list is non-empty. */
 export function ValidationPanel({ issues, onSelectNode }: { issues: WorkflowIssue[]; onSelectNode?: (nodeId: string) => void }) {
   return (
     <div className="space-y-2 p-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h3 className="font-serif text-[15px] font-semibold text-text">Validation</h3>
         <Badge tone={issues.length === 0 ? "success" : "danger"}>{issues.length === 0 ? "Ready to publish" : `${issues.length} issue${issues.length === 1 ? "" : "s"}`}</Badge>
       </div>
 
       {issues.length === 0 ? (
-        <p className="text-xs text-text-muted">No validation issues — this Workflow is ready to publish.</p>
+        <EmptyState illustration="generic" title="No validation issues" description="This Workflow is ready to publish." />
       ) : (
         <ul className="space-y-1.5">
           {issues.map((issue, index) => (

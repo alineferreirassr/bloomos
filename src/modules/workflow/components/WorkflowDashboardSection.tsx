@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { getWorkflowDashboardData, type WorkflowDashboardData } from "@/modules/workflow/getWorkflowDashboardData";
 
@@ -35,24 +35,24 @@ export function WorkflowDashboardSection() {
   const { data } = state;
 
   return (
-    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <Card>
+    <div className="mt-4 grid grid-cols-1 gap-4 sm:mt-6 sm:grid-cols-2">
+      <LuxuryCard>
         <h3 className="font-serif text-[15px] font-semibold text-text">Workflow Statistics</h3>
         <div className="mt-3 grid grid-cols-3 gap-3">
           <Stat label="Total" value={data.totalWorkflows} />
           <Stat label="Published" value={data.publishedCount} />
           <Stat label="Drafts" value={data.draftCount} />
         </div>
-      </Card>
+      </LuxuryCard>
 
-      <Card>
+      <LuxuryCard>
         <h3 className="font-serif text-[15px] font-semibold text-text">Validation Errors</h3>
         {data.workflowsWithValidationErrors.length === 0 ? (
           <p className="mt-2 text-xs text-text-muted">No draft Workflow currently has a validation issue.</p>
         ) : (
           <ul className="mt-2 space-y-1 text-xs">
             {data.workflowsWithValidationErrors.map((entry) => (
-              <li key={entry.workflowId} className="flex items-center justify-between gap-2">
+              <li key={entry.workflowId} className="flex flex-wrap items-center justify-between gap-2">
                 <Link href={`/workflows/${entry.workflowId}`} className="truncate text-accent hover:underline">
                   {entry.workflowName}
                 </Link>
@@ -63,10 +63,10 @@ export function WorkflowDashboardSection() {
             ))}
           </ul>
         )}
-      </Card>
+      </LuxuryCard>
 
-      <Card className="sm:col-span-2">
-        <div className="flex items-center justify-between">
+      <LuxuryCard className="sm:col-span-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-serif text-[15px] font-semibold text-text">Automation Usage</h3>
           <Link href="/automation" className="text-xs text-accent hover:underline">
             Open Automation Center →
@@ -77,7 +77,7 @@ export function WorkflowDashboardSection() {
         ) : (
           <ul className="mt-2 space-y-1.5 text-sm">
             {data.automationUsage.map((entry) => (
-              <li key={entry.workflowId} className="flex items-center justify-between gap-2">
+              <li key={entry.workflowId} className="flex flex-wrap items-center justify-between gap-2">
                 <Link href={`/workflows/${entry.workflowId}`} className="truncate text-text hover:underline">
                   {entry.workflowName} <span className="text-text-muted">v{entry.version}</span>
                 </Link>
@@ -88,7 +88,7 @@ export function WorkflowDashboardSection() {
             ))}
           </ul>
         )}
-      </Card>
+      </LuxuryCard>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { AUTOMATION_CONDITION_FIELDS, AUTOMATION_CONDITION_OPERATORS } from "@/types/automation";
 import { WORKSPACE_MEMBER_ROLES, WORKSPACE_MEMBER_ROLE_LABELS } from "@/core/enums/workspaceRole";
 import { TIMELINE_ACTIVITY_TYPES } from "@/core/enums/timelineActivityType";
@@ -51,9 +52,9 @@ export function PropertiesPanel({
 }) {
   if (!selectedNode || !nodeDefinition) {
     return (
-      <div className="p-3 text-sm text-text/55">
+      <div className="p-3">
         <h3 className="font-serif text-[15px] font-semibold text-text">Properties</h3>
-        <p className="mt-2">Select a node on the canvas to view or edit its own configuration.</p>
+        <EmptyState illustration="generic" title="No node selected" description="Select a node on the canvas to view or edit its own configuration." />
       </div>
     );
   }
