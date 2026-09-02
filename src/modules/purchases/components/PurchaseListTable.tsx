@@ -50,31 +50,31 @@ export function PurchaseListTable({ rows, onChanged }: PurchaseListTableProps) {
   };
 
   return (
-    <div className="hidden overflow-x-auto rounded-lg border border-border bg-surface shadow-sm md:block">
+    <div className="hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
       <table className="w-full border-collapse text-left text-sm">
         <thead className="sticky top-0 z-[var(--z-index-dropdown)] bg-surface">
-          <tr>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Purchase #</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Vendor</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Status</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Order date</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Expected delivery</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Total</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Receipt</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">
+          <tr className="border-b border-border/70">
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Purchase #</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Vendor</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Status</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Order date</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Expected delivery</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Total</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Receipt</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">
               <span className="sr-only">Actions</span>
             </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-border/60">
           {rows.map(({ purchase, vendor }) => (
-            <tr key={purchase.id} className="transition-colors duration-150 hover:bg-accent-100/40">
-              <td className="border-b border-border px-2.5 py-2">
-                <Link href={`/purchases/${purchase.id}`} className="block max-w-[10rem] truncate font-medium text-text hover:text-accent">
+            <tr key={purchase.id} className="transition-colors duration-150 hover:bg-accent-100/25">
+              <td className="px-5 py-4">
+                <Link href={`/purchases/${purchase.id}`} className="block max-w-[10rem] truncate text-[15px] font-medium text-text hover:text-accent">
                   {purchase.purchase_number}
                 </Link>
               </td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">
+              <td className="px-5 py-4 text-text-muted">
                 {vendor ? (
                   <Link href={`/vendors/${vendor.id}`} className="hover:text-accent">
                     {vendor.company_name}
@@ -83,14 +83,14 @@ export function PurchaseListTable({ rows, onChanged }: PurchaseListTableProps) {
                   "—"
                 )}
               </td>
-              <td className="border-b border-border px-2.5 py-2">
+              <td className="px-5 py-4">
                 <PurchaseStatusBadge status={purchase.status} />
               </td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{formatPurchaseDate(purchase.order_date)}</td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{formatPurchaseDate(purchase.expected_delivery_date)}</td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{formatMoney(purchase.total_minor, purchase.currency)}</td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{receiptProgressLabel(purchase.status)}</td>
-              <td className="border-b border-border px-2.5 py-2">
+              <td className="px-5 py-4 text-text-muted">{formatPurchaseDate(purchase.order_date)}</td>
+              <td className="px-5 py-4 text-text-muted">{formatPurchaseDate(purchase.expected_delivery_date)}</td>
+              <td className="px-5 py-4 text-text-muted">{formatMoney(purchase.total_minor, purchase.currency)}</td>
+              <td className="px-5 py-4 text-text-muted">{receiptProgressLabel(purchase.status)}</td>
+              <td className="px-5 py-4">
                 <ActionMenu actions={actionsFor(purchase)} />
               </td>
             </tr>

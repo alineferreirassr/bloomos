@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { ActionMenu, type ActionMenuAction } from "@/components/ui/ActionMenu";
 import { archivePurchase, restorePurchase } from "@/lib/data";
 import { PurchaseStatusBadge } from "@/modules/purchases/components/PurchaseStatusBadge";
@@ -47,7 +47,7 @@ export function PurchaseListCards({ rows, onChanged }: PurchaseListCardsProps) {
   return (
     <div className="space-y-3 md:hidden">
       {rows.map(({ purchase, vendor }) => (
-        <Card key={purchase.id}>
+        <LuxuryCard key={purchase.id}>
           <div className="flex items-start justify-between gap-3">
             <Link href={`/purchases/${purchase.id}`} className="block min-w-0 flex-1">
               <p className="truncate font-medium tracking-tight text-text">{purchase.purchase_number}</p>
@@ -64,7 +64,7 @@ export function PurchaseListCards({ rows, onChanged }: PurchaseListCardsProps) {
             <span>Receipt: {receiptProgressLabel(purchase.status)}</span>
           </div>
           <p className="mt-2 text-sm font-medium text-text">{formatMoney(purchase.total_minor, purchase.currency)}</p>
-        </Card>
+        </LuxuryCard>
       ))}
     </div>
   );

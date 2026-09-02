@@ -11,7 +11,7 @@ import {
 import type { MediaAsset } from "@/types/mediaAsset";
 import { validateMimeType, validateFileSize, extractFileExtension } from "@/lib/media/mediaFile";
 import { formatBytes } from "@/modules/documents/mappers";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -180,7 +180,7 @@ export function PurchaseDocumentsSection({ purchaseId }: { purchaseId: string })
       ) : (
         <div className="space-y-3">
           {assets.map((asset) => (
-            <Card key={asset.id} className={asset.archived_at ? "opacity-60" : undefined}>
+            <LuxuryCard key={asset.id} className={asset.archived_at ? "opacity-60" : undefined}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-text">{asset.original_filename}</p>
@@ -223,7 +223,7 @@ export function PurchaseDocumentsSection({ purchaseId }: { purchaseId: string })
                   )}
                 </div>
               </div>
-            </Card>
+            </LuxuryCard>
           ))}
         </div>
       )}

@@ -67,7 +67,7 @@ export function EditPurchaseView({ purchaseId }: { purchaseId: string }) {
   if (!canEditPurchase(purchase.status)) {
     return (
       <div>
-        <h2 className="text-3xl font-semibold text-text">Edit {purchase.purchase_number}</h2>
+        <h2 className="font-serif text-3xl font-semibold text-text">Edit {purchase.purchase_number}</h2>
         <p className="mt-4 text-sm text-text-muted">
           This purchase is {PURCHASE_STATUS_LABELS[purchase.status].toLowerCase()} and can&apos;t be edited.
         </p>
@@ -80,7 +80,7 @@ export function EditPurchaseView({ purchaseId }: { purchaseId: string }) {
 
   return (
     <div>
-      <h2 className="text-3xl font-semibold text-text">Edit {purchase.purchase_number}</h2>
+      <h2 className="font-serif text-3xl font-semibold text-text">Edit {purchase.purchase_number}</h2>
       <div className="mt-6 max-w-3xl">
         <PurchaseForm
           mode="edit"

@@ -12,7 +12,7 @@ export function NewPurchaseView() {
 
   return (
     <div>
-      <h2 className="text-3xl font-semibold text-text">New Purchase</h2>
+      <h2 className="font-serif text-3xl font-semibold text-text">New Purchase</h2>
       <p className="mt-1 text-sm text-text-muted">Create a draft purchase order — add line items and submit it once it&rsquo;s ready.</p>
       <div className="mt-6 max-w-3xl">
         <PurchaseForm

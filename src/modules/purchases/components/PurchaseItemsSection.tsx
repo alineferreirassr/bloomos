@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Button } from "@/components/ui/Button";
 import { ActionMenu, type ActionMenuAction } from "@/components/ui/ActionMenu";
 import type { Purchase } from "@/types/purchase";
@@ -50,7 +50,7 @@ export function PurchaseItemsSection({ purchase, items, onChanged }: PurchaseIte
   };
 
   return (
-    <Card>
+    <LuxuryCard>
       <div className="flex items-center justify-between gap-3">
         <h3 className="font-serif text-[17px] font-semibold text-text">Line items</h3>
         {!readOnly ? (
@@ -136,6 +136,6 @@ export function PurchaseItemsSection({ purchase, items, onChanged }: PurchaseIte
       {modal?.kind === "receive" ? (
         <ReceivePurchaseItemModal item={modal.item} open onClose={() => setModal(null)} onReceived={onChanged} />
       ) : null}
-    </Card>
+    </LuxuryCard>
   );
 }
