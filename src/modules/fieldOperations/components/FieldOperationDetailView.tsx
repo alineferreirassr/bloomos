@@ -5,7 +5,7 @@ import Link from "next/link";
 import { getFieldOperationAction, evaluateFieldOperationAction } from "@/modules/fieldOperations/fieldOperationsActions";
 import type { FieldOperation, ExecutionResult, ExecutionLifecycleState } from "@/types/fieldOperations";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -33,16 +33,16 @@ import { VendorsIcon, CheckIcon } from "@/components/ui/icons";
 const LIFECYCLE_TONE: Record<ExecutionLifecycleState, BadgeTone> = {
   created: "neutral",
   waiting: "neutral",
-  started: "accent",
+  started: "outline",
   paused: "warning",
-  resumed: "accent",
+  resumed: "outline",
   completed: "success",
-  cancelled: "outline",
+  cancelled: "danger",
   aborted: "danger",
   failed: "danger",
-  archived: "outline",
+  archived: "neutral",
 };
-const OPERATION_STATUS_TONE: Record<FieldOperation["status"], BadgeTone> = { active: "accent", completed: "success", cancelled: "danger", archived: "outline" };
+const OPERATION_STATUS_TONE: Record<FieldOperation["status"], BadgeTone> = { active: "outline", completed: "success", cancelled: "danger", archived: "neutral" };
 
 function formatSeconds(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
@@ -102,7 +102,7 @@ export function FieldOperationDetailView({ operationId }: { operationId: string 
         <KpiCard label="Transitions" value={String(session.attempts.length)} icon={CheckIcon} />
       </div>
 
-      <Card className="mb-6">
+      <LuxuryCard className="mb-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold">Evaluation</h2>
           <Button variant="secondary" onClick={evaluate} disabled={result === "loading"}>
@@ -223,9 +223,9 @@ export function FieldOperationDetailView({ operationId }: { operationId: string 
         ) : (
           <p className="text-sm text-text-muted">Run an evaluation to see progress, health scores, and an explanation.</p>
         )}
-      </Card>
+      </LuxuryCard>
 
-      <Card className="mb-6">
+      <LuxuryCard className="mb-6">
         <h2 className="mb-3 text-sm font-semibold">Operational Progress</h2>
         {result && result !== "loading" ? (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -249,9 +249,9 @@ export function FieldOperationDetailView({ operationId }: { operationId: string 
         ) : (
           <p className="text-sm text-text-muted">Run an evaluation to see operational progress.</p>
         )}
-      </Card>
+      </LuxuryCard>
 
-      <Card>
+      <LuxuryCard tone="tint">
         <h2 className="mb-3 text-sm font-semibold">
           Timeline <span className="font-normal text-text-muted">({sortedAttempts.length} transition{sortedAttempts.length === 1 ? "" : "s"})</span>
         </h2>
@@ -260,7 +260,7 @@ export function FieldOperationDetailView({ operationId }: { operationId: string 
         ) : (
           <ul role="list">
             {sortedAttempts.map((attempt) => (
-              <li key={attempt.id} role="listitem" className="flex items-center justify-between gap-3 border-b border-border/50 py-2 last:border-b-0">
+              <li key={attempt.id} role="listitem" className="flex flex-col gap-1 border-b border-border/50 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:py-2">
                 <div className="min-w-0 flex-1">
                   <Badge tone={LIFECYCLE_TONE[attempt.lifecycle_state]}>{attempt.lifecycle_state}</Badge>
                   {attempt.reason ? <span className="ml-2 text-xs text-text-muted">{attempt.reason}</span> : null}
@@ -270,7 +270,7 @@ export function FieldOperationDetailView({ operationId }: { operationId: string 
             ))}
           </ul>
         )}
-      </Card>
+      </LuxuryCard>
 
       <Link href="/field-operations" className="mt-2 inline-block text-sm text-accent hover:underline">
         ← Back to Field Operations
