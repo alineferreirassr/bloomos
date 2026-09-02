@@ -1,16 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { Card } from "@/components/ui/Card";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Tabs, TabList, Tab, TabPanel } from "@/components/ui/Tabs";
 import { TableSkeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Toast } from "@/components/ui/Toast";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { AutomationIcon, AnalyticsIcon } from "@/components/ui/icons";
 import {
   getWorkflowLiveMonitorAction,
@@ -37,16 +39,22 @@ import type {
   WorkspaceWorkflowHealthSummary,
 } from "@/types/workflowMonitoring";
 
-type Tab = "live" | "history" | "errors" | "performance" | "dependencies" | "health" | "audit";
+type Tab = "live" | "errors" | "history" | "audit" | "health" | "performance" | "dependencies";
 
+/**
+ * Order matters here: "what failed / what's running / what needs review /
+ * what happened" first (Live, Errors, History, Audit), the more assessive
+ * Health panel next, and the raw technical-noise tabs (Performance,
+ * Dependency Map) last — per the founder's information-priority brief.
+ */
 const TABS: { id: Tab; label: string }[] = [
   { id: "live", label: "Live Monitor" },
-  { id: "history", label: "Execution History" },
   { id: "errors", label: "Error Center" },
+  { id: "history", label: "Execution History" },
+  { id: "audit", label: "Audit" },
+  { id: "health", label: "Health Panel" },
   { id: "performance", label: "Performance" },
   { id: "dependencies", label: "Dependency Map" },
-  { id: "health", label: "Health Panel" },
-  { id: "audit", label: "Audit" },
 ];
 
 const BUCKET_LABEL: Record<WorkflowExecutionBucket, string> = {
@@ -195,6 +203,14 @@ export function WorkflowMonitoringCenterView() {
 
   const { data } = state;
   const bucketCounts = Object.fromEntries(TABS.length ? (Object.keys(data.live.buckets) as WorkflowExecutionBucket[]).map((bucket) => [bucket, data.live.buckets[bucket].length]) : []) as Record<WorkflowExecutionBucket, number>;
+  // Real, already-computed counts surfaced on the tab labels themselves so the page leads with
+  // "what needs review" (open errors, waiting+failed executions) rather than raw technical noise.
+  const openErrorsCount = data.errors.filter((error) => error.acknowledgement === "open").length;
+  const needsAttentionCount = data.live.buckets.waiting.length + data.live.buckets.failed.length;
+  const TAB_BADGE: Partial<Record<Tab, { count: number; tone: BadgeTone }>> = {
+    errors: { count: openErrorsCount, tone: "danger" },
+    live: { count: needsAttentionCount, tone: "warning" },
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -204,68 +220,98 @@ export function WorkflowMonitoringCenterView() {
         breadcrumb={[{ label: "Workflows", href: "/workflows" }, { label: "Monitoring Center" }]}
       />
 
-      <div className="flex gap-1 overflow-x-auto border-b border-border text-sm">
-        {TABS.map((entry) => (
-          <button
-            key={entry.id}
-            type="button"
-            onClick={() => setTab(entry.id)}
-            className={`shrink-0 px-3 py-2 ${tab === entry.id ? "border-b-2 border-accent font-medium text-text" : "text-text-muted"}`}
-          >
-            {entry.label}
-          </button>
-        ))}
-      </div>
+      <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)}>
+        <TabList aria-label="Workflow monitoring views">
+          {TABS.map((entry) => {
+            const badge = TAB_BADGE[entry.id];
+            return (
+              <Tab key={entry.id} value={entry.id}>
+                <span className="inline-flex items-center gap-1.5">
+                  {entry.label}
+                  {badge && badge.count > 0 ? <Badge tone={badge.tone}>{badge.count}</Badge> : null}
+                </span>
+              </Tab>
+            );
+          })}
+        </TabList>
 
-      {tab === "live" ? (
-        <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-            {(Object.keys(BUCKET_LABEL) as WorkflowExecutionBucket[]).map((bucket) => (
-              <Card key={bucket} className="p-3">
-                <p className="text-[11px] uppercase tracking-wide text-text-muted">{BUCKET_LABEL[bucket]}</p>
-                <p className="mt-1 text-2xl font-semibold text-text">{bucketCounts[bucket] ?? 0}</p>
-              </Card>
-            ))}
+        <TabPanel value="live" className="mt-4">
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+              {(Object.keys(BUCKET_LABEL) as WorkflowExecutionBucket[]).map((bucket) => (
+                <Card key={bucket} className="p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-text-muted">{BUCKET_LABEL[bucket]}</p>
+                  <p className="mt-1 text-2xl font-semibold text-text">{bucketCounts[bucket] ?? 0}</p>
+                </Card>
+              ))}
+            </div>
+
+            <Card>
+              <h3 className="font-serif text-lg font-semibold text-text">Scheduled Workflows</h3>
+              <p className="mt-1 text-xs text-text-muted">Configuration, not a live queue — BloomOS has no background scheduler to fire these automatically yet.</p>
+              {data.live.scheduled.length === 0 ? (
+                <p className="mt-3 text-sm text-text-muted">No Workflow has a schedule configured.</p>
+              ) : (
+                <ul className="mt-3 divide-y divide-border">
+                  {data.live.scheduled.map((entry) => (
+                    <li key={entry.workflowId} className="flex items-center justify-between gap-3 py-2 text-sm">
+                      <Link href={`/workflows/${entry.workflowId}`} className="text-text hover:underline">
+                        {entry.workflowName}
+                      </Link>
+                      <span className="text-text-muted">
+                        {entry.frequency} at {entry.time}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+
+            <ExecutionTable executions={[...data.live.buckets.waiting, ...data.live.buckets.failed]} pendingId={pendingId} onRetry={handleRetry} onClone={handleClone} onExport={handleExport} title="Needs attention (Waiting + Failed)" />
           </div>
+        </TabPanel>
 
-          <Card>
-            <h3 className="font-serif text-lg font-semibold text-text">Scheduled Workflows</h3>
-            <p className="mt-1 text-xs text-text-muted">Configuration, not a live queue — BloomOS has no background scheduler to fire these automatically yet.</p>
-            {data.live.scheduled.length === 0 ? (
-              <p className="mt-3 text-sm text-text-muted">No Workflow has a schedule configured.</p>
-            ) : (
-              <ul className="mt-3 divide-y divide-border">
-                {data.live.scheduled.map((entry) => (
-                  <li key={entry.workflowId} className="flex items-center justify-between gap-3 py-2 text-sm">
-                    <Link href={`/workflows/${entry.workflowId}`} className="text-text hover:underline">
-                      {entry.workflowName}
-                    </Link>
-                    <span className="text-text-muted">
-                      {entry.frequency} at {entry.time}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+        <TabPanel value="history" className="mt-4">
+          <ExecutionTable executions={data.history} pendingId={pendingId} onRetry={handleRetry} onClone={handleClone} onExport={handleExport} title="Every execution" showAll />
+        </TabPanel>
 
-          <ExecutionTable executions={[...data.live.buckets.waiting, ...data.live.buckets.failed]} pendingId={pendingId} onRetry={handleRetry} onClone={handleClone} onExport={handleExport} title="Needs attention (Waiting + Failed)" />
-        </div>
-      ) : null}
+        <TabPanel value="errors" className="mt-4">
+          <ErrorCenterTab errors={data.errors} pendingId={pendingId} onRetry={handleRetry} onIgnore={handleIgnore} onArchive={handleArchive} />
+        </TabPanel>
 
-      {tab === "history" ? <ExecutionTable executions={data.history} pendingId={pendingId} onRetry={handleRetry} onClone={handleClone} onExport={handleExport} title="Every execution" showAll /> : null}
+        <TabPanel value="performance" className="mt-4">
+          <PerformanceTab metrics={data.performance} />
+        </TabPanel>
 
-      {tab === "errors" ? <ErrorCenterTab errors={data.errors} pendingId={pendingId} onRetry={handleRetry} onIgnore={handleIgnore} onArchive={handleArchive} /> : null}
+        <TabPanel value="dependencies" className="mt-4">
+          <DependencyTab dependencyMap={data.dependencies} />
+        </TabPanel>
 
-      {tab === "performance" ? <PerformanceTab metrics={data.performance} /> : null}
+        <TabPanel value="health" className="mt-4">
+          <HealthTab health={data.health} />
+        </TabPanel>
 
-      {tab === "dependencies" ? <DependencyTab dependencyMap={data.dependencies} /> : null}
-
-      {tab === "health" ? <HealthTab health={data.health} /> : null}
-
-      {tab === "audit" ? <AuditTab records={data.audit} onExport={handleExport} /> : null}
+        <TabPanel value="audit" className="mt-4">
+          <AuditTab records={data.audit} onExport={handleExport} />
+        </TabPanel>
+      </Tabs>
 
       {toast ? <Toast tone={toast.tone} message={toast.message} onDismiss={() => setToast(null)} /> : null}
+    </div>
+  );
+}
+
+/**
+ * Label/value pair used inside the `sm:hidden` mobile card layouts below —
+ * the same fields the desktop tables show, just stacked instead of packed
+ * into columns that would otherwise get squeezed or horizontally scrolled
+ * on a 375–390px viewport.
+ */
+function MobileField({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <dt className="text-[10px] font-medium uppercase tracking-wide text-text-muted">{label}</dt>
+      <dd className="text-text">{value}</dd>
     </div>
   );
 }
@@ -288,65 +334,100 @@ function ExecutionTable({
   showAll?: boolean;
 }) {
   if (executions.length === 0) return <EmptyState title={title} description="No executions to show." />;
+
+  const actions = (execution: WorkflowExecutionSummary) => (
+    <div className="flex flex-wrap gap-1">
+      <Button type="button" variant="ghost" disabled={pendingId === execution.executionId} onClick={() => onRetry(execution.executionId)}>
+        Retry
+      </Button>
+      <Button type="button" variant="ghost" disabled={pendingId === execution.executionId} onClick={() => onClone(execution.executionId)}>
+        Clone
+      </Button>
+      <Button type="button" variant="ghost" onClick={() => onExport(execution.executionId)}>
+        Export
+      </Button>
+    </div>
+  );
+
   return (
-    <Card className="overflow-x-auto p-0">
-      <h3 className="border-b border-border px-4 py-3 font-serif text-lg font-semibold text-text">{title}</h3>
-      <table className="w-full text-left text-sm">
-        <thead className="text-[11px] uppercase tracking-wide text-text-muted">
-          <tr>
-            <th className="px-4 py-2">Workflow</th>
-            <th className="px-4 py-2">Status</th>
-            <th className="px-4 py-2">Trigger</th>
-            <th className="px-4 py-2">Current node</th>
-            <th className="px-4 py-2">Entity</th>
-            <th className="px-4 py-2">Started by</th>
-            <th className="px-4 py-2">Started</th>
-            <th className="px-4 py-2">Duration</th>
-            {showAll ? <th className="px-4 py-2">Actions</th> : null}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          {executions.map((execution) => (
-            <tr key={execution.executionId}>
-              <td className="px-4 py-2">
+    <div className="flex flex-col gap-3">
+      {/* Desktop / tablet: real table, horizontal-scroll contained. */}
+      <Card className="hidden overflow-x-auto p-0 sm:block">
+        <h3 className="border-b border-border px-4 py-3 font-serif text-lg font-semibold text-text">{title}</h3>
+        <table className="w-full text-left text-sm">
+          <thead className="text-[11px] uppercase tracking-wide text-text-muted">
+            <tr>
+              <th className="px-4 py-2">Workflow</th>
+              <th className="px-4 py-2">Status</th>
+              <th className="px-4 py-2">Trigger</th>
+              <th className="px-4 py-2">Current node</th>
+              <th className="px-4 py-2">Entity</th>
+              <th className="px-4 py-2">Started by</th>
+              <th className="px-4 py-2">Started</th>
+              <th className="px-4 py-2">Duration</th>
+              {showAll ? <th className="px-4 py-2">Actions</th> : null}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {executions.map((execution) => (
+              <tr key={execution.executionId}>
+                <td className="px-4 py-2">
+                  {execution.workflowId ? (
+                    <Link href={`/workflows/${execution.workflowId}`} className="text-text hover:underline">
+                      {execution.workflowName}
+                    </Link>
+                  ) : (
+                    execution.workflowName
+                  )}
+                  <span className="block text-[11px] text-text-muted">v{execution.workflowVersion}</span>
+                </td>
+                <td className="px-4 py-2">
+                  <Badge tone={BUCKET_TONE[execution.bucket]}>{BUCKET_LABEL[execution.bucket]}</Badge>
+                </td>
+                <td className="px-4 py-2 text-text-muted">{execution.trigger}</td>
+                <td className="px-4 py-2 text-text-muted">{execution.currentNodeId ?? "—"}</td>
+                <td className="px-4 py-2 text-text-muted">{execution.entity ? `${execution.entity.type}:${execution.entity.id}` : "—"}</td>
+                <td className="px-4 py-2 text-text-muted">{execution.startedBy ?? "system"}</td>
+                <td className="px-4 py-2 text-text-muted">{formatDateTime(execution.startedAt)}</td>
+                <td className="px-4 py-2 text-text-muted">{formatDuration(execution.durationMs)}</td>
+                {showAll ? <td className="px-4 py-2">{actions(execution)}</td> : null}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+
+      {/* Mobile: same fields, stacked as cards instead of a horizontally-scrolled sliver of the table. */}
+      <div className="flex flex-col gap-3 sm:hidden">
+        <h3 className="px-1 font-serif text-lg font-semibold text-text">{title}</h3>
+        {executions.map((execution) => (
+          <LuxuryCard key={execution.executionId} className="flex flex-col gap-3 text-xs">
+            <div className="flex items-start justify-between gap-2">
+              <div>
                 {execution.workflowId ? (
-                  <Link href={`/workflows/${execution.workflowId}`} className="text-text hover:underline">
+                  <Link href={`/workflows/${execution.workflowId}`} className="text-sm font-medium text-text hover:underline">
                     {execution.workflowName}
                   </Link>
                 ) : (
-                  execution.workflowName
+                  <span className="text-sm font-medium text-text">{execution.workflowName}</span>
                 )}
                 <span className="block text-[11px] text-text-muted">v{execution.workflowVersion}</span>
-              </td>
-              <td className="px-4 py-2">
-                <Badge tone={BUCKET_TONE[execution.bucket]}>{BUCKET_LABEL[execution.bucket]}</Badge>
-              </td>
-              <td className="px-4 py-2 text-text-muted">{execution.trigger}</td>
-              <td className="px-4 py-2 text-text-muted">{execution.currentNodeId ?? "—"}</td>
-              <td className="px-4 py-2 text-text-muted">{execution.entity ? `${execution.entity.type}:${execution.entity.id}` : "—"}</td>
-              <td className="px-4 py-2 text-text-muted">{execution.startedBy ?? "system"}</td>
-              <td className="px-4 py-2 text-text-muted">{formatDateTime(execution.startedAt)}</td>
-              <td className="px-4 py-2 text-text-muted">{formatDuration(execution.durationMs)}</td>
-              {showAll ? (
-                <td className="px-4 py-2">
-                  <div className="flex gap-1">
-                    <Button type="button" variant="ghost" disabled={pendingId === execution.executionId} onClick={() => onRetry(execution.executionId)}>
-                      Retry
-                    </Button>
-                    <Button type="button" variant="ghost" disabled={pendingId === execution.executionId} onClick={() => onClone(execution.executionId)}>
-                      Clone
-                    </Button>
-                    <Button type="button" variant="ghost" onClick={() => onExport(execution.executionId)}>
-                      Export
-                    </Button>
-                  </div>
-                </td>
-              ) : null}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </Card>
+              </div>
+              <Badge tone={BUCKET_TONE[execution.bucket]}>{BUCKET_LABEL[execution.bucket]}</Badge>
+            </div>
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-2">
+              <MobileField label="Trigger" value={execution.trigger} />
+              <MobileField label="Current node" value={execution.currentNodeId ?? "—"} />
+              <MobileField label="Entity" value={execution.entity ? `${execution.entity.type}:${execution.entity.id}` : "—"} />
+              <MobileField label="Started by" value={execution.startedBy ?? "system"} />
+              <MobileField label="Started" value={formatDateTime(execution.startedAt)} />
+              <MobileField label="Duration" value={formatDuration(execution.durationMs)} />
+            </dl>
+            {showAll ? actions(execution) : null}
+          </LuxuryCard>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -365,56 +446,90 @@ function ErrorCenterTab({
 }) {
   const open = errors.filter((error) => error.acknowledgement === "open");
   if (errors.length === 0) return <EmptyState title="No workflow errors" description="Every recorded execution has completed cleanly." />;
+
+  const heading = (
+    <h3 className="font-serif text-lg font-semibold text-text">
+      Workflow Errors <span className="text-sm font-normal text-text-muted">({open.length} open of {errors.length})</span>
+    </h3>
+  );
+
+  const actions = (error: WorkflowErrorRecordWithStatus) => (
+    <div className="flex flex-wrap gap-1">
+      <Button type="button" variant="ghost" disabled={pendingId === error.executionId} onClick={() => onRetry(error.executionId)}>
+        Retry
+      </Button>
+      <Button type="button" variant="ghost" disabled={error.acknowledgement !== "open"} onClick={() => onIgnore(error.executionId, error.actionId)}>
+        Ignore
+      </Button>
+      <Button type="button" variant="ghost" disabled={error.acknowledgement === "archived"} onClick={() => onArchive(error.executionId, error.actionId)}>
+        Archive
+      </Button>
+    </div>
+  );
+
   return (
-    <Card className="overflow-x-auto p-0">
-      <h3 className="border-b border-border px-4 py-3 font-serif text-lg font-semibold text-text">
-        Workflow Errors <span className="text-sm font-normal text-text-muted">({open.length} open of {errors.length})</span>
-      </h3>
-      <table className="w-full text-left text-sm">
-        <thead className="text-[11px] uppercase tracking-wide text-text-muted">
-          <tr>
-            <th className="px-4 py-2">Workflow</th>
-            <th className="px-4 py-2">Action</th>
-            <th className="px-4 py-2">Stack</th>
-            <th className="px-4 py-2">Entity</th>
-            <th className="px-4 py-2">Retries</th>
-            <th className="px-4 py-2">Occurred</th>
-            <th className="px-4 py-2">Status</th>
-            <th className="px-4 py-2">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          {errors.map((error) => (
-            <tr key={`${error.executionId}:${error.actionId}`} className={error.acknowledgement !== "open" ? "opacity-50" : ""}>
-              <td className="px-4 py-2 text-text">{error.workflowName}</td>
-              <td className="px-4 py-2 text-text-muted">{error.actionId}</td>
-              <td className="max-w-xs truncate px-4 py-2 text-text-muted" title={error.stack}>
-                {error.stack}
-              </td>
-              <td className="px-4 py-2 text-text-muted">{error.entity ? `${error.entity.type}:${error.entity.id}` : "—"}</td>
-              <td className="px-4 py-2 text-text-muted">{error.retryCount}</td>
-              <td className="px-4 py-2 text-text-muted">{formatDateTime(error.occurredAt)}</td>
-              <td className="px-4 py-2">
-                <Badge tone={error.acknowledgement === "open" ? "danger" : error.acknowledgement === "ignored" ? "warning" : "neutral"}>{error.acknowledgement}</Badge>
-              </td>
-              <td className="px-4 py-2">
-                <div className="flex gap-1">
-                  <Button type="button" variant="ghost" disabled={pendingId === error.executionId} onClick={() => onRetry(error.executionId)}>
-                    Retry
-                  </Button>
-                  <Button type="button" variant="ghost" disabled={error.acknowledgement !== "open"} onClick={() => onIgnore(error.executionId, error.actionId)}>
-                    Ignore
-                  </Button>
-                  <Button type="button" variant="ghost" disabled={error.acknowledgement === "archived"} onClick={() => onArchive(error.executionId, error.actionId)}>
-                    Archive
-                  </Button>
-                </div>
-              </td>
+    <div className="flex flex-col gap-3">
+      {/* Desktop / tablet: real table, horizontal-scroll contained. */}
+      <Card className="hidden overflow-x-auto p-0 sm:block">
+        <div className="border-b border-border px-4 py-3">{heading}</div>
+        <table className="w-full text-left text-sm">
+          <thead className="text-[11px] uppercase tracking-wide text-text-muted">
+            <tr>
+              <th className="px-4 py-2">Workflow</th>
+              <th className="px-4 py-2">Action</th>
+              <th className="px-4 py-2">Stack</th>
+              <th className="px-4 py-2">Entity</th>
+              <th className="px-4 py-2">Retries</th>
+              <th className="px-4 py-2">Occurred</th>
+              <th className="px-4 py-2">Status</th>
+              <th className="px-4 py-2">Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </Card>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {errors.map((error) => (
+              <tr key={`${error.executionId}:${error.actionId}`} className={error.acknowledgement !== "open" ? "opacity-50" : ""}>
+                <td className="px-4 py-2 text-text">{error.workflowName}</td>
+                <td className="px-4 py-2 text-text-muted">{error.actionId}</td>
+                <td className="max-w-xs truncate px-4 py-2 text-text-muted" title={error.stack}>
+                  {error.stack}
+                </td>
+                <td className="px-4 py-2 text-text-muted">{error.entity ? `${error.entity.type}:${error.entity.id}` : "—"}</td>
+                <td className="px-4 py-2 text-text-muted">{error.retryCount}</td>
+                <td className="px-4 py-2 text-text-muted">{formatDateTime(error.occurredAt)}</td>
+                <td className="px-4 py-2">
+                  <Badge tone={error.acknowledgement === "open" ? "danger" : error.acknowledgement === "ignored" ? "warning" : "neutral"}>{error.acknowledgement}</Badge>
+                </td>
+                <td className="px-4 py-2">{actions(error)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+
+      {/* Mobile: same fields, stacked as cards instead of a horizontally-scrolled sliver of the table. */}
+      <div className="flex flex-col gap-3 sm:hidden">
+        <div className="px-1">{heading}</div>
+        {errors.map((error) => (
+          <LuxuryCard
+            key={`${error.executionId}:${error.actionId}`}
+            className={`flex flex-col gap-3 text-xs ${error.acknowledgement !== "open" ? "opacity-50" : ""}`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <span className="text-sm font-medium text-text">{error.workflowName}</span>
+              <Badge tone={error.acknowledgement === "open" ? "danger" : error.acknowledgement === "ignored" ? "warning" : "neutral"}>{error.acknowledgement}</Badge>
+            </div>
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-2">
+              <MobileField label="Action" value={error.actionId} />
+              <MobileField label="Entity" value={error.entity ? `${error.entity.type}:${error.entity.id}` : "—"} />
+              <MobileField label="Retries" value={error.retryCount} />
+              <MobileField label="Occurred" value={formatDateTime(error.occurredAt)} />
+            </dl>
+            <MobileField label="Stack" value={<span className="line-clamp-3 break-words">{error.stack}</span>} />
+            {actions(error)}
+          </LuxuryCard>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -574,41 +689,70 @@ function HealthTab({ health }: { health: WorkspaceWorkflowHealthSummary }) {
 
 function AuditTab({ records, onExport }: { records: WorkflowAuditRecord[]; onExport: (executionId: string) => void }) {
   if (records.length === 0) return <EmptyState title="No audit records yet" description="Every workflow execution produces an immutable audit record here." />;
+
   return (
-    <Card className="overflow-x-auto p-0">
-      <h3 className="border-b border-border px-4 py-3 font-serif text-lg font-semibold text-text">Workflow Audit Log</h3>
-      <table className="w-full text-left text-sm">
-        <thead className="text-[11px] uppercase tracking-wide text-text-muted">
-          <tr>
-            <th className="px-4 py-2">Workflow</th>
-            <th className="px-4 py-2">Version</th>
-            <th className="px-4 py-2">Node path</th>
-            <th className="px-4 py-2">Duration</th>
-            <th className="px-4 py-2">Actor</th>
-            <th className="px-4 py-2">Timestamp</th>
-            <th className="px-4 py-2">Export</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          {records.map((record) => (
-            <tr key={record.executionId}>
-              <td className="px-4 py-2 text-text">{record.workflowName}</td>
-              <td className="px-4 py-2 text-text-muted">{record.versionExecuted}</td>
-              <td className="max-w-xs truncate px-4 py-2 text-text-muted" title={record.nodePath.join(" → ")}>
-                {record.nodePath.length > 0 ? record.nodePath.join(" → ") : "—"}
-              </td>
-              <td className="px-4 py-2 text-text-muted">{formatDuration(record.durationMs)}</td>
-              <td className="px-4 py-2 text-text-muted">{record.actor}</td>
-              <td className="px-4 py-2 text-text-muted">{formatDateTime(record.timestamp)}</td>
-              <td className="px-4 py-2">
-                <Button type="button" variant="ghost" onClick={() => onExport(record.executionId)}>
-                  Export
-                </Button>
-              </td>
+    <div className="flex flex-col gap-3">
+      {/* Desktop / tablet: real table, horizontal-scroll contained. */}
+      <Card className="hidden overflow-x-auto p-0 sm:block">
+        <h3 className="border-b border-border px-4 py-3 font-serif text-lg font-semibold text-text">Workflow Audit Log</h3>
+        <table className="w-full text-left text-sm">
+          <thead className="text-[11px] uppercase tracking-wide text-text-muted">
+            <tr>
+              <th className="px-4 py-2">Workflow</th>
+              <th className="px-4 py-2">Version</th>
+              <th className="px-4 py-2">Node path</th>
+              <th className="px-4 py-2">Duration</th>
+              <th className="px-4 py-2">Actor</th>
+              <th className="px-4 py-2">Timestamp</th>
+              <th className="px-4 py-2">Export</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </Card>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {records.map((record) => (
+              <tr key={record.executionId}>
+                <td className="px-4 py-2 text-text">{record.workflowName}</td>
+                <td className="px-4 py-2 text-text-muted">{record.versionExecuted}</td>
+                <td className="max-w-xs truncate px-4 py-2 text-text-muted" title={record.nodePath.join(" → ")}>
+                  {record.nodePath.length > 0 ? record.nodePath.join(" → ") : "—"}
+                </td>
+                <td className="px-4 py-2 text-text-muted">{formatDuration(record.durationMs)}</td>
+                <td className="px-4 py-2 text-text-muted">{record.actor}</td>
+                <td className="px-4 py-2 text-text-muted">{formatDateTime(record.timestamp)}</td>
+                <td className="px-4 py-2">
+                  <Button type="button" variant="ghost" onClick={() => onExport(record.executionId)}>
+                    Export
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+
+      {/* Mobile: same fields, stacked as cards instead of a horizontally-scrolled sliver of the table. */}
+      <div className="flex flex-col gap-3 sm:hidden">
+        <h3 className="px-1 font-serif text-lg font-semibold text-text">Workflow Audit Log</h3>
+        {records.map((record) => (
+          <LuxuryCard key={record.executionId} className="flex flex-col gap-3 text-xs">
+            <div className="flex items-start justify-between gap-2">
+              <span className="text-sm font-medium text-text">{record.workflowName}</span>
+              <span className="text-text-muted">v{record.versionExecuted}</span>
+            </div>
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-2">
+              <MobileField label="Duration" value={formatDuration(record.durationMs)} />
+              <MobileField label="Actor" value={record.actor} />
+              <MobileField label="Timestamp" value={formatDateTime(record.timestamp)} />
+            </dl>
+            <MobileField
+              label="Node path"
+              value={<span className="line-clamp-3 break-words">{record.nodePath.length > 0 ? record.nodePath.join(" → ") : "—"}</span>}
+            />
+            <Button type="button" variant="ghost" onClick={() => onExport(record.executionId)}>
+              Export
+            </Button>
+          </LuxuryCard>
+        ))}
+      </div>
+    </div>
   );
 }
