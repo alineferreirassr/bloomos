@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -61,7 +61,7 @@ export function OperationsReportsView() {
   const { data } = state;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader title="Operations Reports" subtitle="Completed Events, Profit, Vendor Performance, Inventory Usage, Purchases, and Expenses." />
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -71,7 +71,7 @@ export function OperationsReportsView() {
         <MetricCard label="Purchase Orders" value={String(data.purchaseCount)} href="/purchases" />
       </div>
 
-      <Card>
+      <LuxuryCard>
         <h3 className="font-serif text-[17px] font-semibold text-text">Completed Events (most recent 25)</h3>
         {data.completedEvents.length === 0 ? (
           <EmptyState title="No completed events yet" description="Completed events will appear here once they're marked complete." />
@@ -86,10 +86,10 @@ export function OperationsReportsView() {
             ))}
           </ul>
         )}
-      </Card>
+      </LuxuryCard>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
+        <LuxuryCard>
           <h3 className="font-serif text-[17px] font-semibold text-text">Vendor Performance</h3>
           {data.vendorPerformance.length === 0 ? (
             <p className="mt-2 text-sm text-text-muted">No vendor purchase history yet.</p>
@@ -105,9 +105,9 @@ export function OperationsReportsView() {
               ))}
             </ul>
           )}
-        </Card>
+        </LuxuryCard>
 
-        <Card>
+        <LuxuryCard>
           <h3 className="font-serif text-[17px] font-semibold text-text">Inventory Usage</h3>
           {data.inventoryUsage.length === 0 ? (
             <p className="mt-2 text-sm text-text-muted">No inventory movement history yet.</p>
@@ -121,10 +121,10 @@ export function OperationsReportsView() {
               ))}
             </ul>
           )}
-        </Card>
+        </LuxuryCard>
       </div>
 
-      <Card>
+      <LuxuryCard>
         <h3 className="font-serif text-[17px] font-semibold text-text">Expenses</h3>
         <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
           <div>
@@ -140,13 +140,13 @@ export function OperationsReportsView() {
             <dd className="text-sm font-medium text-text">{formatMoney(data.financialSummary.net_profit_minor, "USD")}</dd>
           </div>
         </dl>
-      </Card>
+      </LuxuryCard>
 
-      <Card>
+      <LuxuryCard>
         <p className="text-xs text-text-muted">
           Team Performance isn&apos;t shown here — this codebase has no aggregated index of completed checklist items by team member, only free-text assignment on each item.
         </p>
-      </Card>
+      </LuxuryCard>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -83,9 +83,9 @@ export function EventCommandCenter({ eventId }: { eventId: string }) {
 
   if (state.status === "loading") {
     return (
-      <Card>
+      <LuxuryCard>
         <Skeleton className="h-40 w-full" />
-      </Card>
+      </LuxuryCard>
     );
   }
 
@@ -98,7 +98,7 @@ export function EventCommandCenter({ eventId }: { eventId: string }) {
   const isLiveEventDay = ["setup", "execution", "live_event", "breakdown"].includes(data.event.lifecycle_stage);
 
   return (
-    <Card className="border-accent/30">
+    <LuxuryCard tone="tint">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="font-serif text-[19px] font-semibold text-text">Event Command Center</h3>
@@ -288,7 +288,7 @@ export function EventCommandCenter({ eventId }: { eventId: string }) {
         )}
       </div>
 
-      <div className="mt-3 rounded-md bg-surface-tint p-3">
+      <div className="mt-3 rounded-xl bg-surface p-3">
         <p className="text-xs font-medium text-text">Weather</p>
         <p className="mt-1 text-xs text-text-muted">
           {data.event.weather_plan || "No weather plan on file yet — this workspace doesn't have a connected weather source."}
@@ -303,7 +303,7 @@ export function EventCommandCenter({ eventId }: { eventId: string }) {
           onChanged={load}
         />
       ) : null}
-    </Card>
+    </LuxuryCard>
   );
 }
 

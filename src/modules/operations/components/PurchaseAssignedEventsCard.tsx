@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { getPurchaseAssignedEvents } from "@/modules/operations/purchaseOperationsData";
 import type { Event } from "@/types/event";
@@ -30,16 +30,16 @@ export function PurchaseAssignedEventsCard({ purchaseId }: { purchaseId: string 
 
   if (state.status === "loading") {
     return (
-      <Card>
+      <LuxuryCard>
         <Skeleton className="h-16 w-full" />
-      </Card>
+      </LuxuryCard>
     );
   }
 
   if (state.status === "error") return null;
 
   return (
-    <Card>
+    <LuxuryCard>
       <h3 className="font-serif text-[17px] font-semibold text-text">Assigned Event</h3>
       {state.events.length === 0 ? (
         <p className="mt-2 text-sm text-text-muted">Not linked to a specific event&apos;s purchase requirement.</p>
@@ -54,6 +54,6 @@ export function PurchaseAssignedEventsCard({ purchaseId }: { purchaseId: string 
           ))}
         </ul>
       )}
-    </Card>
+    </LuxuryCard>
   );
 }

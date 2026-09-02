@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -71,7 +71,7 @@ export function OperationsDashboardView() {
   const { data } = state;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader title="Operations Dashboard" subtitle="Everything operational across every active event, in one place." />
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
@@ -84,7 +84,7 @@ export function OperationsDashboardView() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
+        <LuxuryCard>
           <h3 className="font-serif text-[17px] font-semibold text-text">Events Today</h3>
           {data.eventsToday.length === 0 ? (
             <EmptyState title="No events today" description="Nothing scheduled for today." />
@@ -92,7 +92,7 @@ export function OperationsDashboardView() {
             <ul className="mt-3 space-y-2">
               {data.eventsToday.map((event) => (
                 <li key={event.id}>
-                  <Link href={`/events/${event.id}`} className="flex items-center justify-between rounded-md border border-border p-2.5 text-sm hover:border-accent/50">
+                  <Link href={`/events/${event.id}`} className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-colors duration-150 hover:bg-accent-100/25">
                     <span className="text-text">{event.title}</span>
                     <span className="text-text-muted">{event.location_name ?? "—"}</span>
                   </Link>
@@ -100,9 +100,9 @@ export function OperationsDashboardView() {
               ))}
             </ul>
           )}
-        </Card>
+        </LuxuryCard>
 
-        <Card>
+        <LuxuryCard>
           <h3 className="font-serif text-[17px] font-semibold text-text">Upcoming Events (next 14 days)</h3>
           {data.upcomingEvents.length === 0 ? (
             <EmptyState title="Nothing upcoming" description="No events in the next 14 days." />
@@ -110,7 +110,7 @@ export function OperationsDashboardView() {
             <ul className="mt-3 space-y-2">
               {data.upcomingEvents.slice(0, 8).map((event) => (
                 <li key={event.id}>
-                  <Link href={`/events/${event.id}`} className="flex items-center justify-between rounded-md border border-border p-2.5 text-sm hover:border-accent/50">
+                  <Link href={`/events/${event.id}`} className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-colors duration-150 hover:bg-accent-100/25">
                     <span className="text-text">{event.title}</span>
                     <span className="text-text-muted">{formatEventDate(event.event_date)}</span>
                   </Link>
@@ -118,18 +118,18 @@ export function OperationsDashboardView() {
               ))}
             </ul>
           )}
-        </Card>
+        </LuxuryCard>
       </div>
 
-      <Card>
+      <LuxuryCard>
         <h3 className="font-serif text-[17px] font-semibold text-text">Health Scores — Upcoming Events</h3>
         {data.eventHealthScores.length === 0 ? (
           <EmptyState title="Nothing to score" description="No upcoming events in the next 14 days." />
         ) : (
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-3 space-y-1">
             {data.eventHealthScores.map(({ event, score }) => (
               <li key={event.id}>
-                <Link href={`/events/${event.id}`} className="flex items-center justify-between rounded-md border border-border p-2.5 text-sm hover:border-accent/50">
+                <Link href={`/events/${event.id}`} className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition-colors duration-150 hover:bg-accent-100/25">
                   <span className="text-text">{event.title}</span>
                   <Badge tone={healthTone(score)}>{score}</Badge>
                 </Link>
@@ -137,10 +137,10 @@ export function OperationsDashboardView() {
             ))}
           </ul>
         )}
-      </Card>
+      </LuxuryCard>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
+        <LuxuryCard>
           <h3 className="font-serif text-[17px] font-semibold text-text">Inventory Alerts</h3>
           {data.lowStockItems.length === 0 && data.damagedItems.length === 0 ? (
             <p className="mt-2 text-sm text-text-muted">No inventory alerts.</p>
@@ -160,9 +160,9 @@ export function OperationsDashboardView() {
               ))}
             </ul>
           )}
-        </Card>
+        </LuxuryCard>
 
-        <Card>
+        <LuxuryCard>
           <h3 className="font-serif text-[17px] font-semibold text-text">Purchase Alerts</h3>
           {data.overduePurchases.length === 0 ? (
             <p className="mt-2 text-sm text-text-muted">No overdue purchase orders.</p>
@@ -176,10 +176,10 @@ export function OperationsDashboardView() {
               ))}
             </ul>
           )}
-        </Card>
+        </LuxuryCard>
       </div>
 
-      <Card>
+      <LuxuryCard>
         <h3 className="font-serif text-[17px] font-semibold text-text">Payments</h3>
         <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div>
@@ -199,7 +199,7 @@ export function OperationsDashboardView() {
             <dd className="text-sm font-medium text-text">{formatMoney(data.financialSummary.collected_this_month_minor, "USD")}</dd>
           </div>
         </dl>
-      </Card>
+      </LuxuryCard>
     </div>
   );
 }

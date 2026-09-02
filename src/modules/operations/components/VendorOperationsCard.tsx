@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { getVendorOperationsSummary, type VendorOperationsSummary } from "@/modules/operations/vendorOperationsData";
 
@@ -29,9 +29,9 @@ export function VendorOperationsCard({ vendorId }: { vendorId: string }) {
 
   if (state.status === "loading") {
     return (
-      <Card>
+      <LuxuryCard>
         <Skeleton className="h-24 w-full" />
-      </Card>
+      </LuxuryCard>
     );
   }
 
@@ -40,7 +40,7 @@ export function VendorOperationsCard({ vendorId }: { vendorId: string }) {
   const { summary } = state;
 
   return (
-    <Card>
+    <LuxuryCard>
       <h3 className="font-serif text-[17px] font-semibold text-text">Operations</h3>
       <div className="mt-3">
         <p className="text-xs font-medium uppercase tracking-wide text-text-muted">Assigned Events</p>
@@ -76,6 +76,6 @@ export function VendorOperationsCard({ vendorId }: { vendorId: string }) {
       <p className="mt-4 text-xs text-text-muted">
         No vendor-linked Payments or Contracts, or a Rating field, exist in this codebase yet — Purchase History is the closest real proxy shown here.
       </p>
-    </Card>
+    </LuxuryCard>
   );
 }
