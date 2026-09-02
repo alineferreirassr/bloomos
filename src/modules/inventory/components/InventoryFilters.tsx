@@ -30,7 +30,7 @@ interface InventoryFiltersProps {
 
 export function InventoryFilters({ value, onChange }: InventoryFiltersProps) {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+    <div className="grid grid-cols-1 gap-3 rounded-2xl bg-surface/70 p-4 sm:grid-cols-2 lg:grid-cols-5">
       <Input
         placeholder="Search name, SKU, category, tags…"
         value={value.search}

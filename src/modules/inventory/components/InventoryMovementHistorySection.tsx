@@ -64,35 +64,35 @@ export function InventoryMovementHistorySection({ inventoryItemId }: { inventory
   }
 
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
+    <div className="overflow-x-auto">
       <table className="w-full border-collapse text-left text-sm">
         <thead>
-          <tr>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">When</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Type</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Qty</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Before → After</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Reason</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">Reference</th>
-            <th className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase">By</th>
+          <tr className="border-b border-border/70">
+            <th className="px-2.5 py-2 text-[11px] font-medium tracking-wide text-text-muted uppercase">When</th>
+            <th className="px-2.5 py-2 text-[11px] font-medium tracking-wide text-text-muted uppercase">Type</th>
+            <th className="px-2.5 py-2 text-[11px] font-medium tracking-wide text-text-muted uppercase">Qty</th>
+            <th className="px-2.5 py-2 text-[11px] font-medium tracking-wide text-text-muted uppercase">Before → After</th>
+            <th className="px-2.5 py-2 text-[11px] font-medium tracking-wide text-text-muted uppercase">Reason</th>
+            <th className="px-2.5 py-2 text-[11px] font-medium tracking-wide text-text-muted uppercase">Reference</th>
+            <th className="px-2.5 py-2 text-[11px] font-medium tracking-wide text-text-muted uppercase">By</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-border/60">
           {movements.map((movement) => (
             <tr key={movement.id}>
-              <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
+              <td className="px-2.5 py-2 whitespace-nowrap text-text-muted">
                 {new Date(movement.occurred_at).toLocaleString()}
               </td>
-              <td className="border-b border-border px-2.5 py-2 text-text">{INVENTORY_MOVEMENT_TYPE_LABELS[movement.movement_type]}</td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{movement.quantity}</td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">
+              <td className="px-2.5 py-2 text-text">{INVENTORY_MOVEMENT_TYPE_LABELS[movement.movement_type]}</td>
+              <td className="px-2.5 py-2 text-text-muted">{movement.quantity}</td>
+              <td className="px-2.5 py-2 text-text-muted">
                 {movement.quantity_before} → {movement.quantity_after}
               </td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{movement.reason ?? "—"}</td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">
+              <td className="px-2.5 py-2 text-text-muted">{movement.reason ?? "—"}</td>
+              <td className="px-2.5 py-2 text-text-muted">
                 {movement.reference_type ? `${movement.reference_type}${movement.reference_id ? ` · ${movement.reference_id}` : ""}` : "—"}
               </td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{movement.performed_by}</td>
+              <td className="px-2.5 py-2 text-text-muted">{movement.performed_by}</td>
             </tr>
           ))}
         </tbody>

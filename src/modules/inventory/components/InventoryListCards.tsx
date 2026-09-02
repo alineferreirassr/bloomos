@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge } from "@/components/ui/Badge";
 import type { InventoryItem } from "@/types/inventoryItem";
 import { ActionMenu, type ActionMenuAction } from "@/components/ui/ActionMenu";
@@ -50,13 +50,13 @@ export function InventoryListCards({ items, onChanged }: InventoryListCardsProps
       {items.map((item) => {
         const lowStock = isInventoryItemLowStock(item);
         return (
-          <Card key={item.id}>
+          <LuxuryCard key={item.id}>
             <div className="flex items-start justify-between gap-3">
               <Link href={`/inventory/${item.id}`} className="block min-w-0 flex-1">
                 <p className="truncate font-medium tracking-tight text-text">{item.name}</p>
                 <p className="mt-0.5 text-xs text-text-muted">
-                  {item.sku ?? "No SKU"}
-                  {item.category ? ` · ${item.category}` : ""}
+                  {item.category ?? "Uncategorized"}
+                  {item.sku ? ` · ${item.sku}` : ""}
                 </p>
               </Link>
               <div className="flex shrink-0 items-start gap-2">
@@ -64,19 +64,34 @@ export function InventoryListCards({ items, onChanged }: InventoryListCardsProps
                 <ActionMenu actions={actionsFor(item)} />
               </div>
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted">
-              <span>On hand: {item.quantity_on_hand}</span>
-              <span className={lowStock ? "font-medium text-amber-700 dark:text-amber-400" : undefined}>
-                Available: {item.quantity_available}
-              </span>
-              <span>Reserved: {item.quantity_reserved}</span>
-              {item.storage_location ? <span>{item.storage_location}</span> : null}
+
+            {/* "Available" is the number a field team member needs fastest —
+                sized like EventHealthCard's primary score figure so it reads
+                before anything else on the card. */}
+            <div className="mt-4 flex items-end justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-medium tracking-wide text-text-muted uppercase">Available</p>
+                <span
+                  className={`font-serif text-[32px] leading-tight font-semibold tabular-nums ${
+                    lowStock ? "text-amber-700 dark:text-amber-400" : "text-text"
+                  }`}
+                >
+                  {item.quantity_available}
+                </span>
+              </div>
+              <div className="flex flex-col items-end gap-0.5 text-right text-xs text-text-muted">
+                <span>
+                  On hand {item.quantity_on_hand} · Reserved {item.quantity_reserved}
+                </span>
+                {item.storage_location ? <span>{item.storage_location}</span> : null}
+              </div>
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
               <InventoryConditionBadge condition={item.condition} />
               {lowStock ? <Badge tone="warning">Low stock</Badge> : null}
             </div>
-          </Card>
+          </LuxuryCard>
         );
       })}
     </div>

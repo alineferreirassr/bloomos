@@ -4,7 +4,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { getInventoryItem } from "@/lib/data";
 import type { InventoryItem } from "@/types/inventoryItem";
 import { NotFoundError } from "@/core/errors";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -77,13 +78,13 @@ export function InventoryItemDetailView({ inventoryItemId }: { inventoryItemId: 
   const currency = "USD";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
         <div className="flex flex-wrap items-center gap-3">
           <BloomAvatar name={item.name} />
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-3xl font-semibold text-text">{item.name}</h2>
+              <h2 className="font-serif text-3xl font-semibold text-text">{item.name}</h2>
               <InventoryStatusBadge status={item.status} />
               <InventoryItemTypeBadge itemType={item.item_type} />
               <InventoryConditionBadge condition={item.condition} />
@@ -99,122 +100,147 @@ export function InventoryItemDetailView({ inventoryItemId }: { inventoryItemId: 
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Identity &amp; classification</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Category" value={item.category} />
-              <Field label="Subcategory" value={item.subcategory} />
-              <Field label="Unit of measure" value={item.unit_of_measure} />
-              <Field label="Description" value={item.description} />
-            </dl>
-          </Card>
+        <div className="space-y-8 lg:col-span-2">
+          <div>
+            <SectionHeader title="Overview" />
+            <div className="space-y-6">
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Identity &amp; classification</h3>
+                <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Category" value={item.category} />
+                  <Field label="Subcategory" value={item.subcategory} />
+                  <Field label="Unit of measure" value={item.unit_of_measure} />
+                  <Field label="Description" value={item.description} />
+                </dl>
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Quantities</h3>
-            <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Field label="On hand" value={String(item.quantity_on_hand)} />
-              <Field label="Available" value={String(item.quantity_available)} />
-              <Field label="Reserved" value={String(item.quantity_reserved)} />
-              <Field label="Reorder level" value={item.reorder_level === null ? null : String(item.reorder_level)} />
-              <Field label="Target stock level" value={item.target_stock_level === null ? null : String(item.target_stock_level)} />
-            </dl>
-            <p className="mt-3 text-xs text-text-muted">
-              Quantities change only through recorded stock movements below — they can&rsquo;t be edited directly.
-            </p>
-          </Card>
-
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Record a movement</h3>
-            <div className="mt-3">
-              <InventoryMovementActionsSection item={item} onChanged={refetch} />
+              <LuxuryCard tone="tint">
+                <h3 className="font-serif text-[17px] font-semibold text-text">Quantities</h3>
+                <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Field label="On hand" value={String(item.quantity_on_hand)} />
+                  <Field label="Available" value={String(item.quantity_available)} />
+                  <Field label="Reserved" value={String(item.quantity_reserved)} />
+                  <Field label="Reorder level" value={item.reorder_level === null ? null : String(item.reorder_level)} />
+                  <Field label="Target stock level" value={item.target_stock_level === null ? null : String(item.target_stock_level)} />
+                </dl>
+                <p className="mt-3 text-xs text-text-muted">
+                  Quantities change only through recorded stock movements below — they can&rsquo;t be edited directly.
+                </p>
+              </LuxuryCard>
             </div>
-          </Card>
+          </div>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Movement history</h3>
-            <div className="mt-3">
-              <InventoryMovementHistorySection key={item.updated_at} inventoryItemId={item.id} />
-            </div>
-          </Card>
+          <div>
+            <SectionHeader title="Movement History" />
+            <div className="space-y-6">
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Record a movement</h3>
+                <div className="mt-3">
+                  <InventoryMovementActionsSection item={item} onChanged={refetch} />
+                </div>
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
-            <div className="mt-3">
-              <InventoryNotesSection workspaceId={item.workspace_id} inventoryItemId={item.id} />
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Movement history</h3>
+                <div className="mt-3">
+                  <InventoryMovementHistorySection key={item.updated_at} inventoryItemId={item.id} />
+                </div>
+              </LuxuryCard>
             </div>
-          </Card>
+          </div>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Documents</h3>
-            <div className="mt-3">
-              <InventoryDocumentsSection inventoryItemId={item.id} />
+          <div>
+            <SectionHeader title="Activity" />
+            <div className="space-y-6">
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
+                <div className="mt-3">
+                  <InventoryNotesSection workspaceId={item.workspace_id} inventoryItemId={item.id} />
+                </div>
+              </LuxuryCard>
+
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Documents</h3>
+                <div className="mt-3">
+                  <InventoryDocumentsSection inventoryItemId={item.id} />
+                </div>
+              </LuxuryCard>
             </div>
-          </Card>
+          </div>
         </div>
 
-        <div className="space-y-6">
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Storage</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3">
-              <Field label="Storage location" value={item.storage_location} />
-              <Field label="Bin location" value={item.bin_location} />
-            </dl>
-          </Card>
+        <div className="space-y-8">
+          <div>
+            <SectionHeader title="Sourcing & Value" />
+            <div className="space-y-6">
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Storage</h3>
+                <dl className="mt-3 grid grid-cols-1 gap-3">
+                  <Field label="Storage location" value={item.storage_location} />
+                  <Field label="Bin location" value={item.bin_location} />
+                </dl>
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Vendor</h3>
-            <div className="mt-3">
-              <InventoryItemVendorSection vendorId={item.primary_vendor_id} />
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Vendor</h3>
+                <div className="mt-3">
+                  <InventoryItemVendorSection vendorId={item.primary_vendor_id} />
+                </div>
+              </LuxuryCard>
+
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Purchase &amp; value</h3>
+                <dl className="mt-3 grid grid-cols-1 gap-3">
+                  <Field label="Unit cost" value={item.unit_cost === null ? null : formatMoney(item.unit_cost, currency)} />
+                  <Field label="Replacement cost" value={item.replacement_cost === null ? null : formatMoney(item.replacement_cost, currency)} />
+                  <Field label="Rental value" value={item.rental_value === null ? null : formatMoney(item.rental_value, currency)} />
+                  <Field label="Purchase date" value={item.purchase_date === null ? null : formatInventoryDate(item.purchase_date)} />
+                </dl>
+              </LuxuryCard>
             </div>
-          </Card>
+          </div>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Purchase &amp; value</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3">
-              <Field label="Unit cost" value={item.unit_cost === null ? null : formatMoney(item.unit_cost, currency)} />
-              <Field label="Replacement cost" value={item.replacement_cost === null ? null : formatMoney(item.replacement_cost, currency)} />
-              <Field label="Rental value" value={item.rental_value === null ? null : formatMoney(item.rental_value, currency)} />
-              <Field label="Purchase date" value={item.purchase_date === null ? null : formatInventoryDate(item.purchase_date)} />
-            </dl>
-          </Card>
+          <div>
+            <SectionHeader title="Details" />
+            <div className="space-y-6">
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Internal</h3>
+                <dl className="mt-3 grid grid-cols-1 gap-3">
+                  <div>
+                    <dt className="text-xs text-text-muted">Tags</dt>
+                    <dd className="mt-1.5">
+                      {item.tags.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {item.tags.map((tag) => (
+                            <Badge key={tag} tone="neutral">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-text">—</span>
+                      )}
+                    </dd>
+                  </div>
+                  <Field label="Notes" value={item.notes} />
+                  <Field label="Created" value={new Date(item.created_at).toLocaleDateString()} />
+                  <Field label="Updated" value={new Date(item.updated_at).toLocaleDateString()} />
+                  {item.archived_at ? <Field label="Archived" value={new Date(item.archived_at).toLocaleDateString()} /> : null}
+                </dl>
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Internal</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3">
-              <div>
-                <dt className="text-xs text-text-muted">Tags</dt>
-                <dd className="mt-1.5">
-                  {item.tags.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {item.tags.map((tag) => (
-                        <Badge key={tag} tone="neutral">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-sm text-text">—</span>
-                  )}
-                </dd>
-              </div>
-              <Field label="Notes" value={item.notes} />
-              <Field label="Created" value={new Date(item.created_at).toLocaleDateString()} />
-              <Field label="Updated" value={new Date(item.updated_at).toLocaleDateString()} />
-              {item.archived_at ? <Field label="Archived" value={new Date(item.archived_at).toLocaleDateString()} /> : null}
-            </dl>
-          </Card>
-
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
-            <div className="mt-3">
-              {/* Keyed on updated_at (not just inventoryItemId, which never
-                  changes) so editing/archiving/restoring/recording a
-                  movement remounts the section and it re-fetches — every one
-                  of those mutations bumps updated_at. */}
-              <InventoryTimelineSection key={item.updated_at} inventoryItemId={item.id} />
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
+                <div className="mt-3">
+                  {/* Keyed on updated_at (not just inventoryItemId, which
+                      never changes) so editing/archiving/restoring/recording
+                      a movement remounts the section and it re-fetches —
+                      every one of those mutations bumps updated_at. */}
+                  <InventoryTimelineSection key={item.updated_at} inventoryItemId={item.id} />
+                </div>
+              </LuxuryCard>
             </div>
-          </Card>
+          </div>
         </div>
       </div>
     </div>

@@ -45,46 +45,46 @@ export function InventoryListTable({ items, onChanged }: InventoryListTableProps
   };
 
   return (
-    <div className="hidden overflow-x-auto rounded-lg border border-border bg-surface shadow-sm md:block">
+    <div className="hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
       <table className="w-full border-collapse text-left text-sm">
-        <thead>
-          <tr>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Name</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">SKU</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Category</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Type</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Status</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Condition</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">On hand</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Available</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Reserved</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">Location</th>
-            <th className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase">
+        <thead className="sticky top-0 z-[var(--z-index-dropdown)] bg-surface">
+          <tr className="border-b border-border/70">
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Name</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">SKU</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Category</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Type</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Status</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Condition</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">On hand</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Available</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Reserved</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Location</th>
+            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">
               <span className="sr-only">Actions</span>
             </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-border/60">
           {items.map((item) => {
             const lowStock = isInventoryItemLowStock(item);
             return (
-              <tr key={item.id} className="transition-colors duration-150 hover:bg-accent-100/40">
-                <td className="border-b border-border px-2.5 py-2">
-                  <Link href={`/inventory/${item.id}`} className="block max-w-[16rem] truncate font-medium text-text hover:text-accent">
+              <tr key={item.id} className="transition-colors duration-150 hover:bg-accent-100/25">
+                <td className="px-5 py-4">
+                  <Link href={`/inventory/${item.id}`} className="block max-w-[16rem] truncate text-[15px] font-medium text-text hover:text-accent">
                     {item.name}
                   </Link>
                 </td>
-                <td className="border-b border-border px-2.5 py-2 text-text-muted">{item.sku ?? "—"}</td>
-                <td className="border-b border-border px-2.5 py-2 text-text-muted">{item.category ?? "—"}</td>
-                <td className="border-b border-border px-2.5 py-2 text-text-muted">{item.item_type === "consumable" ? "Consumable" : "Reusable"}</td>
-                <td className="border-b border-border px-2.5 py-2">
+                <td className="px-5 py-4 text-text-muted">{item.sku ?? "—"}</td>
+                <td className="px-5 py-4 text-text-muted">{item.category ?? "—"}</td>
+                <td className="px-5 py-4 text-text-muted">{item.item_type === "consumable" ? "Consumable" : "Reusable"}</td>
+                <td className="px-5 py-4">
                   <InventoryStatusBadge status={item.status} />
                 </td>
-                <td className="border-b border-border px-2.5 py-2">
+                <td className="px-5 py-4">
                   <InventoryConditionBadge condition={item.condition} />
                 </td>
-                <td className="border-b border-border px-2.5 py-2 text-text-muted">{item.quantity_on_hand}</td>
-                <td className="border-b border-border px-2.5 py-2">
+                <td className="px-5 py-4 text-text-muted">{item.quantity_on_hand}</td>
+                <td className="px-5 py-4">
                   <span className={lowStock ? "font-medium text-amber-700 dark:text-amber-400" : "text-text-muted"}>
                     {item.quantity_available}
                     {lowStock ? (
@@ -94,9 +94,9 @@ export function InventoryListTable({ items, onChanged }: InventoryListTableProps
                     ) : null}
                   </span>
                 </td>
-                <td className="border-b border-border px-2.5 py-2 text-text-muted">{item.quantity_reserved}</td>
-                <td className="border-b border-border px-2.5 py-2 text-text-muted">{item.storage_location ?? "—"}</td>
-                <td className="border-b border-border px-2.5 py-2">
+                <td className="px-5 py-4 text-text-muted">{item.quantity_reserved}</td>
+                <td className="px-5 py-4 text-text-muted">{item.storage_location ?? "—"}</td>
+                <td className="px-5 py-4">
                   <ActionMenu actions={actionsFor(item)} />
                 </td>
               </tr>

@@ -98,8 +98,9 @@ export function InventoryListView() {
         }
       />
 
+      <div className="space-y-8">
       {kpis ? (
-        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           <KpiCard icon={InventoryIcon} label="Total Items" value={kpis.total.toLocaleString()} />
           <KpiCard icon={PurchasesIcon} label="Low Stock" value={kpis.lowStock.toLocaleString()} />
           <KpiCard icon={CloseIcon} label="Out of Stock" value={kpis.outOfStock.toLocaleString()} />
@@ -107,31 +108,23 @@ export function InventoryListView() {
       ) : null}
 
       {kpis && (kpis.lowStock > 0 || kpis.outOfStock > 0) ? (
-        <div className="mb-6">
-          <ModuleInsightCard
-            tone={kpis.outOfStock > 0 ? "warning" : "info"}
-            insight={
-              kpis.outOfStock > 0
-                ? `${kpis.outOfStock} item${kpis.outOfStock === 1 ? " is" : "s are"} out of stock — ${kpis.lowStock} more running low.`
-                : `${kpis.lowStock} item${kpis.lowStock === 1 ? " is" : "s are"} running low on stock.`
-            }
-          />
-        </div>
+        <ModuleInsightCard
+          tone={kpis.outOfStock > 0 ? "warning" : "info"}
+          insight={
+            kpis.outOfStock > 0
+              ? `${kpis.outOfStock} item${kpis.outOfStock === 1 ? " is" : "s are"} out of stock — ${kpis.lowStock} more running low.`
+              : `${kpis.lowStock} item${kpis.lowStock === 1 ? " is" : "s are"} running low on stock.`
+          }
+        />
       ) : null}
 
-      <div className="mt-6">
-        <InventorySummarySection />
-      </div>
+      <InventorySummarySection />
 
-      <div className="mt-6">
-        <InventoryAssistantCard />
-      </div>
+      <InventoryAssistantCard />
 
-      <div className="mt-6">
-        <InventoryFilters value={filters} onChange={handleFiltersChange} />
-      </div>
+      <InventoryFilters value={filters} onChange={handleFiltersChange} />
 
-      <div className="mt-6">
+      <div>
         {state.status === "loading" ? (
           <div className="space-y-3" aria-live="polite" aria-busy="true">
             {Array.from({ length: 4 }).map((_, index) => (
@@ -159,6 +152,7 @@ export function InventoryListView() {
             <InventoryListCards items={state.items} onChanged={refetch} />
           </>
         )}
+      </div>
       </div>
     </div>
   );

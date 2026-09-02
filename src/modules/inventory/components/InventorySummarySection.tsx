@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { listInventoryItems, getLowStockInventoryItems, getDamagedOrUnderRepairInventoryItems } from "@/lib/data";
 import { computeInventorySummary, type InventorySummary } from "@/modules/inventory/inventoryStats";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 
@@ -70,10 +70,10 @@ export function InventorySummarySection() {
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {cards.map((card) => (
-        <Card key={card.label}>
+        <LuxuryCard key={card.label}>
           <p className="text-xs text-text-muted">{card.label}</p>
           <p className="mt-1 text-2xl font-semibold text-text">{card.value}</p>
-        </Card>
+        </LuxuryCard>
       ))}
     </div>
   );
