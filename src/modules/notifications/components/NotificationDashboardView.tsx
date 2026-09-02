@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { KpiCard } from "@/components/ui/KpiCard";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Tabs, TabList, Tab, TabPanel } from "@/components/ui/Tabs";
 import { TableSkeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -165,7 +166,7 @@ export function NotificationDashboardView() {
         </TabPanel>
 
         <TabPanel value="templates" className="pt-3">
-          <Card>
+          <LuxuryCard>
             <div className="flex items-center justify-between gap-2">
               <h3 className="font-serif text-base font-semibold text-text">Templates</h3>
               <Link href="/notifications/templates" className="text-xs text-accent hover:underline">
@@ -180,11 +181,11 @@ export function NotificationDashboardView() {
                 </li>
               ))}
             </ul>
-          </Card>
+          </LuxuryCard>
         </TabPanel>
 
         <TabPanel value="preferences" className="pt-3">
-          <Card>
+          <LuxuryCard>
             <div className="flex items-center justify-between gap-2">
               <h3 className="font-serif text-base font-semibold text-text">Preferences</h3>
               <Link href="/notifications/preferences" className="text-xs text-accent hover:underline">
@@ -192,11 +193,11 @@ export function NotificationDashboardView() {
               </Link>
             </div>
             <p className="mt-2 text-sm text-text-muted">Channels, categories, digest frequency, and quiet hours — manage your own notification preferences.</p>
-          </Card>
+          </LuxuryCard>
         </TabPanel>
 
         <TabPanel value="activity" className="pt-3">
-          <Card>
+          <LuxuryCard>
             <h3 className="font-serif text-base font-semibold text-text">Recent Activity</h3>
             {data.recentActivity.length === 0 ? (
               <p className="mt-2 text-sm text-text-muted">No notification activity recorded yet.</p>
@@ -210,7 +211,7 @@ export function NotificationDashboardView() {
                 ))}
               </ul>
             )}
-          </Card>
+          </LuxuryCard>
         </TabPanel>
       </Tabs>
     </div>
@@ -232,12 +233,12 @@ function NotificationListPanel({
 }) {
   useEffect(onEnter, [onEnter]);
 
-  if (notifications.length === 0) return <EmptyState title="Nothing here" description="Notifications matching this view will appear here." />;
+  if (notifications.length === 0) return <EmptyState illustration="messages" title="Nothing here" description="Notifications matching this view will appear here." />;
 
   return (
     <ul className="space-y-2">
       {notifications.map((n) => (
-        <li key={n.id} className="flex items-start gap-3 rounded-md border border-border/60 p-3">
+        <li key={n.id} className="flex flex-col gap-3 rounded-md border border-border/60 p-3 sm:flex-row sm:items-start">
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={PRIORITY_TONE[n.priority]}>{n.priority}</Badge>
@@ -249,17 +250,17 @@ function NotificationListPanel({
             <p className="text-sm text-text-muted">{n.body}</p>
             <p className="text-xs text-text-muted">{formatTimestamp(n.created_at)}</p>
           </div>
-          <div className="flex shrink-0 gap-2">
-            <button type="button" className="text-xs text-accent hover:underline" onClick={() => onToggleRead(n)}>
+          <div className="flex flex-wrap gap-2 sm:shrink-0">
+            <Button type="button" variant="ghost" onClick={() => onToggleRead(n)}>
               {n.read_at === null ? "Mark read" : "Mark unread"}
-            </button>
-            <button type="button" className="text-xs text-accent hover:underline" onClick={() => onTogglePin(n)}>
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => onTogglePin(n)}>
               {n.pinned_at ? "Unpin" : "Pin"}
-            </button>
+            </Button>
             {n.archived_at === null ? (
-              <button type="button" className="text-xs text-danger hover:underline" onClick={() => onDismiss(n.id)}>
+              <Button type="button" variant="ghost" onClick={() => onDismiss(n.id)}>
                 Dismiss
-              </button>
+              </Button>
             ) : null}
           </div>
         </li>
@@ -282,7 +283,7 @@ function NotificationAnalyticsPanel({ analytics }: { analytics: NotificationAnal
         <KpiCard label="Engagement" value={`${Math.round(analytics.engagementRate * 100)}%`} icon={NotificationsIcon} />
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Card>
+        <LuxuryCard>
           <div className="flex items-center justify-between gap-2">
             <h3 className="font-serif text-base font-semibold text-text">By category</h3>
             <Badge tone={analytics.trend === "improving" ? "success" : analytics.trend === "declining" ? "danger" : "neutral"}>{analytics.trend}</Badge>
@@ -295,8 +296,8 @@ function NotificationAnalyticsPanel({ analytics }: { analytics: NotificationAnal
               </li>
             ))}
           </ul>
-        </Card>
-        <Card>
+        </LuxuryCard>
+        <LuxuryCard>
           <h3 className="font-serif text-base font-semibold text-text">By kind</h3>
           <ul className="mt-2 divide-y divide-border text-sm">
             {Object.entries(analytics.byKind).map(([kind, count]) => (
@@ -306,7 +307,7 @@ function NotificationAnalyticsPanel({ analytics }: { analytics: NotificationAnal
               </li>
             ))}
           </ul>
-        </Card>
+        </LuxuryCard>
       </div>
     </div>
   );
@@ -314,7 +315,7 @@ function NotificationAnalyticsPanel({ analytics }: { analytics: NotificationAnal
 
 function NotificationHealthPanel({ health }: { health: NotificationHealthReport }) {
   return (
-    <Card>
+    <LuxuryCard>
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-serif text-base font-semibold text-text">Notification Health</h3>
         <Badge tone={healthTone(health.overallScore)}>{health.overallScore}/100</Badge>
@@ -334,6 +335,6 @@ function NotificationHealthPanel({ health }: { health: NotificationHealthReport 
           ))}
         </ul>
       ) : null}
-    </Card>
+    </LuxuryCard>
   );
 }

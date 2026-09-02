@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { TableSkeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -51,59 +51,59 @@ export function NotificationDetailView({ id }: { id: string }) {
     <div className="flex flex-col gap-4">
       <PageHeader title={notification.title} subtitle={notification.body} breadcrumb={[{ label: "Notifications", href: "/notifications" }, { label: "Detail" }]} />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <LuxuryCard>
           <h3 className="font-serif text-base font-semibold text-text">Metadata</h3>
-          <dl className="mt-2 space-y-1.5 text-sm">
-            <div className="flex items-center justify-between gap-2">
+          <dl className="mt-2 space-y-2 text-sm sm:space-y-1.5">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <dt className="text-text-muted">Priority</dt>
               <dd>
                 <Badge tone={PRIORITY_TONE[notification.priority]}>{notification.priority}</Badge>
               </dd>
             </div>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <dt className="text-text-muted">Category</dt>
               <dd className="text-text capitalize">{routing.category}</dd>
             </div>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <dt className="text-text-muted">Kind</dt>
               <dd className="text-text">{notification.kind ?? "—"}</dd>
             </div>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <dt className="text-text-muted">Created</dt>
               <dd className="text-text">{formatDateTime(notification.created_at)}</dd>
             </div>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <dt className="text-text-muted">Read</dt>
               <dd className="text-text">{notification.read_at ? formatDateTime(notification.read_at) : "Unread"}</dd>
             </div>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <dt className="text-text-muted">Pinned</dt>
               <dd className="text-text">{notification.pinned_at ? formatDateTime(notification.pinned_at) : "No"}</dd>
             </div>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <dt className="text-text-muted">Archived</dt>
               <dd className="text-text">{notification.archived_at ? formatDateTime(notification.archived_at) : "No"}</dd>
             </div>
           </dl>
-        </Card>
+        </LuxuryCard>
 
-        <Card>
+        <LuxuryCard>
           <h3 className="font-serif text-base font-semibold text-text">Routing & future delivery</h3>
-          <dl className="mt-2 space-y-1.5 text-sm">
-            <div className="flex items-center justify-between gap-2">
+          <dl className="mt-2 space-y-2 text-sm sm:space-y-1.5">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <dt className="text-text-muted">Visible</dt>
               <dd className="text-text">{routing.visible ? "Yes" : routing.suppressedReason}</dd>
             </div>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <dt className="text-text-muted">Expires</dt>
               <dd className="text-text">{routing.expiresAt ? formatDateTime(routing.expiresAt) : "Never"}</dd>
             </div>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <dt className="text-text-muted">Quiet hours</dt>
               <dd className="text-text">{preferenceDecision.withinQuietHours ? "Currently active" : "Not active"}</dd>
             </div>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <dt className="text-text-muted">Effective digest</dt>
               <dd className="text-text capitalize">{preferenceDecision.effectiveDigestFrequency}</dd>
             </div>
@@ -111,15 +111,15 @@ export function NotificationDetailView({ id }: { id: string }) {
           <h4 className="mt-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Channel readiness</h4>
           <ul className="mt-1 space-y-1 text-sm">
             {routing.deliveryReadiness.map((r) => (
-              <li key={r.channel} className="flex items-center justify-between gap-2">
+              <li key={r.channel} className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                 <span className="text-text capitalize">{r.channel.replace(/_/g, " ")}</span>
                 <Badge tone={r.configured ? "success" : "neutral"}>{r.configured ? "Ready" : "Not configured"}</Badge>
               </li>
             ))}
           </ul>
-        </Card>
+        </LuxuryCard>
 
-        <Card>
+        <LuxuryCard>
           <h3 className="font-serif text-base font-semibold text-text">Template</h3>
           {template ? (
             <div className="mt-2 space-y-1 text-sm">
@@ -132,18 +132,18 @@ export function NotificationDetailView({ id }: { id: string }) {
           ) : (
             <p className="mt-2 text-sm text-text-muted">No template is associated with this notification.</p>
           )}
-        </Card>
+        </LuxuryCard>
 
-        <Card>
+        <LuxuryCard>
           <h3 className="font-serif text-base font-semibold text-text">Knowledge Graph</h3>
           <p className="mt-2 text-sm text-text-muted">{knowledgeGraphSummary}</p>
-        </Card>
+        </LuxuryCard>
       </div>
 
-      <Card>
-        <div className="flex items-center justify-between gap-2">
+      <LuxuryCard>
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-serif text-base font-semibold text-text">Timeline & history</h3>
-          <div className="flex gap-3 text-xs">
+          <div className="flex flex-wrap gap-3 text-xs">
             <Link href="/notifications" className="text-accent hover:underline">
               Dashboard Analytics →
             </Link>
@@ -157,14 +157,14 @@ export function NotificationDetailView({ id }: { id: string }) {
         ) : (
           <ul className="mt-2 divide-y divide-border text-sm">
             {timeline.map((event) => (
-              <li key={event.id} className="flex items-center justify-between gap-2 py-1.5">
+              <li key={event.id} className="flex flex-col gap-0.5 py-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                 <span className="text-text">{event.description}</span>
                 <span className="shrink-0 text-xs text-text-muted">{formatDateTime(event.timestamp)}</span>
               </li>
             ))}
           </ul>
         )}
-      </Card>
+      </LuxuryCard>
     </div>
   );
 }

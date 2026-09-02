@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
+import { Tabs, TabList, Tab } from "@/components/ui/Tabs";
 import { TableSkeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { listNotificationTemplatesAction, getNotificationTemplateDetailAction, type NotificationTemplateDetail } from "@/modules/notifications/notificationPlatformActions";
 import type { NotificationTemplate } from "@/types/notificationPlatform";
 import type { NotificationPriority } from "@/core/notifications/types";
@@ -61,44 +63,39 @@ export function NotificationTemplatesView() {
     <div className="flex flex-col gap-4">
       <PageHeader title="Notification Templates" subtitle="The system template every notification kind is built from — read-only." breadcrumb={[{ label: "Notifications", href: "/notifications" }, { label: "Templates" }]} />
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setCategoryFilter(null)}
-          className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${categoryFilter === null ? "bg-accent text-accent-foreground" : "bg-surface-hover text-text-muted"}`}
-        >
-          All
-        </button>
-        {categories.map((c) => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => setCategoryFilter(c)}
-            className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${categoryFilter === c ? "bg-accent text-accent-foreground" : "bg-surface-hover text-text-muted"}`}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
+      <Tabs value={categoryFilter ?? "all"} onValueChange={(value) => setCategoryFilter(value === "all" ? null : value)}>
+        <TabList aria-label="Template categories">
+          <Tab value="all">All</Tab>
+          {categories.map((c) => (
+            <Tab key={c} value={c} className="capitalize">
+              {c}
+            </Tab>
+          ))}
+        </TabList>
+      </Tabs>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <ul className="divide-y divide-border text-sm">
-            {visible.map((t) => (
-              <li key={t.id}>
-                <button type="button" onClick={() => selectTemplate(t.id)} className="flex w-full items-center justify-between gap-2 py-2 text-left hover:text-accent">
-                  <span className="text-text">{t.name}</span>
-                  <span className="flex shrink-0 items-center gap-2">
-                    <Badge tone={PRIORITY_TONE[t.defaultPriority]}>{t.defaultPriority}</Badge>
-                    <span className="text-xs text-text-muted capitalize">{t.category}</span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Card>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <LuxuryCard className="p-0 md:col-span-2">
+          {visible.length === 0 ? (
+            <EmptyState illustration="messages" title="No templates in this category" description="Choose a different category, or select All to browse every template." />
+          ) : (
+            <ul className="divide-y divide-border text-sm">
+              {visible.map((t) => (
+                <li key={t.id}>
+                  <button type="button" onClick={() => selectTemplate(t.id)} className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left hover:text-accent">
+                    <span className="min-w-0 truncate text-text">{t.name}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <Badge tone={PRIORITY_TONE[t.defaultPriority]}>{t.defaultPriority}</Badge>
+                      <span className="text-xs text-text-muted capitalize">{t.category}</span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </LuxuryCard>
 
-        <Card>
+        <LuxuryCard>
           {selected ? (
             <div className="space-y-3">
               <div>
@@ -125,7 +122,7 @@ export function NotificationTemplatesView() {
           ) : (
             <p className="text-sm text-text-muted">Select a template to preview it.</p>
           )}
-        </Card>
+        </LuxuryCard>
       </div>
     </div>
   );

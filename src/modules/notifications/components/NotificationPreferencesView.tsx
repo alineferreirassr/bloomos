@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -106,8 +106,8 @@ export function NotificationPreferencesView() {
     <div className="flex flex-col gap-4">
       <PageHeader title="Notification Preferences" subtitle="Your own delivery rules, plus this workspace's defaults." breadcrumb={[{ label: "Notifications", href: "/notifications" }, { label: "Preferences" }]} />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <LuxuryCard>
           <h3 className="font-serif text-base font-semibold text-text">Channels</h3>
           <div className="mt-2 space-y-2">
             <label className="flex items-center gap-2 text-sm text-text">
@@ -131,9 +131,9 @@ export function NotificationPreferencesView() {
               Push (coming soon)
             </label>
           </div>
-        </Card>
+        </LuxuryCard>
 
-        <Card>
+        <LuxuryCard>
           <h3 className="font-serif text-base font-semibold text-text">Quiet hours</h3>
           <label className="mt-2 flex items-center gap-2 text-sm text-text">
             <input type="checkbox" checked={preferences.quiet_hours.enabled} onChange={(e) => setQuietHoursEnabled(e.target.checked)} />
@@ -165,42 +165,54 @@ export function NotificationPreferencesView() {
               </option>
             ))}
           </select>
-        </Card>
+        </LuxuryCard>
 
-        <Card>
+        <LuxuryCard>
           <h3 className="font-serif text-base font-semibold text-text">Categories</h3>
           <p className="mt-1 text-xs text-text-muted">Muted categories still appear in the Notification Center — they just skip desktop alerts.</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {COMMUNICATION_CATEGORIES.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => toggleCategory(c)}
-                className={`rounded-full px-3 py-1 text-xs font-medium ${preferences.muted_categories.includes(c) ? "bg-surface-hover text-text-muted line-through" : "bg-accent text-accent-foreground"}`}
-              >
-                {CATEGORY_LABEL[c]}
-              </button>
-            ))}
+          {/*
+            Each chip below is an independent mute/unmute toggle (any subset of categories can be
+            muted at once) rather than a single-select switch, so this stays a plain toggle-button
+            group rather than the shared `Tabs` primitive — Tabs is single-select by design. Styled
+            to visually match `Tab`'s own selected/unselected treatment for consistency instead.
+          */}
+          <div className="mt-2 flex flex-wrap gap-2 border-b border-border pb-px">
+            {COMMUNICATION_CATEGORIES.map((c) => {
+              const muted = preferences.muted_categories.includes(c);
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  aria-pressed={muted}
+                  onClick={() => toggleCategory(c)}
+                  className={`shrink-0 border-b-2 px-3 py-2 font-serif text-[13px] font-semibold whitespace-nowrap transition-colors duration-150 ${
+                    muted ? "border-accent text-accent" : "border-transparent text-text-muted hover:text-text"
+                  }`}
+                >
+                  {CATEGORY_LABEL[c]}
+                </button>
+              );
+            })}
           </div>
-        </Card>
+        </LuxuryCard>
 
-        <Card>
+        <LuxuryCard>
           <h3 className="font-serif text-base font-semibold text-text">Workspace defaults</h3>
           <p className="mt-1 text-xs text-text-muted">Set by an admin on Settings → Notifications. Your own toggles above narrow these, never widen them.</p>
-          <dl className="mt-2 space-y-1.5 text-sm">
-            <div className="flex items-center justify-between gap-2">
+          <dl className="mt-2 space-y-2 text-sm sm:space-y-1.5">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <dt className="text-text-muted">Email enabled workspace-wide</dt>
               <dd className="text-text">{workspace.workspaceDefaults.emailEnabled ? "Yes" : "No"}</dd>
             </div>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <dt className="text-text-muted">Push enabled workspace-wide</dt>
               <dd className="text-text">{workspace.workspaceDefaults.pushEnabled ? "Yes" : "No"}</dd>
             </div>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <dt className="text-text-muted">Default digest frequency</dt>
               <dd className="text-text capitalize">{workspace.workspaceDefaults.digestFrequency}</dd>
             </div>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <dt className="text-text-muted">Critical alerts bypass digest</dt>
               <dd className="text-text">{workspace.workspaceDefaults.criticalAlertsBypassDigest ? "Yes" : "No"}</dd>
             </div>
@@ -209,13 +221,13 @@ export function NotificationPreferencesView() {
           <h4 className="mt-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Future integrations status</h4>
           <ul className="mt-1 space-y-1 text-sm">
             {workspace.channelReadiness.map((r) => (
-              <li key={r.channel} className="flex items-center justify-between gap-2">
+              <li key={r.channel} className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                 <span className="text-text capitalize">{r.channel.replace(/_/g, " ")}</span>
                 <Badge tone={r.configured ? "success" : "neutral"}>{r.configured ? "Ready" : "Not configured"}</Badge>
               </li>
             ))}
           </ul>
-        </Card>
+        </LuxuryCard>
       </div>
     </div>
   );
