@@ -9,7 +9,7 @@ import type { ChecklistItem } from "@/types/checklistItem";
 import type { ChecklistCategory } from "@/core/enums/checklistCategory";
 import { CHECKLIST_CATEGORIES } from "@/core/enums/checklistCategory";
 import { NotFoundError } from "@/core/errors";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -149,7 +149,7 @@ export function EventChecklistView({ eventId }: { eventId: string }) {
     : [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
         <Link href={`/events/${event.id}`} className="text-sm text-accent hover:underline">
           ← Back to {event.title}
@@ -178,7 +178,7 @@ export function EventChecklistView({ eventId }: { eventId: string }) {
         )}
       </div>
 
-      <Card>
+      <LuxuryCard>
         <h3 className="font-serif text-[17px] font-semibold text-text">Progress Summary</h3>
         <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label="Total" value={stats.total} />
@@ -190,12 +190,12 @@ export function EventChecklistView({ eventId }: { eventId: string }) {
           <Stat label="Overdue" value={stats.overdue} />
           <Stat label="Complete" value={`${stats.percentComplete}%`} />
         </dl>
-      </Card>
+      </LuxuryCard>
 
       {checklist.length > 0 ? (
-        <Card>
+        <div className="rounded-2xl bg-surface/70 p-4">
           <ChecklistFilters value={filters} onChange={setFilters} />
-        </Card>
+        </div>
       ) : null}
 
       {reorderError ? (

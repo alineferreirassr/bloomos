@@ -1,10 +1,10 @@
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import type { EventHealthDetails } from "@/core/workflows/eventHealth";
 
 function severityTone(score: number): BadgeTone {
-  if (score >= 80) return "accent";
-  if (score >= 50) return "outline";
+  if (score >= 80) return "success";
+  if (score >= 50) return "warning";
   return "danger";
 }
 
@@ -19,7 +19,7 @@ export function EventHealthCard({ health }: { health: EventHealthDetails }) {
   const topRisks = health.factors.slice(0, 3);
 
   return (
-    <Card>
+    <LuxuryCard>
       <h3 className="font-serif text-[17px] font-semibold text-text">Event Health</h3>
       <div className="mt-3 flex items-center gap-3">
         <span className="font-serif text-[32px] leading-tight font-semibold tabular-nums text-text">
@@ -42,6 +42,6 @@ export function EventHealthCard({ health }: { health: EventHealthDetails }) {
           ))}
         </ul>
       ) : null}
-    </Card>
+    </LuxuryCard>
   );
 }

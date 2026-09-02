@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Button } from "@/components/ui/Button";
 import type { ScheduleStats } from "@/modules/events/scheduleStats";
 
@@ -17,7 +17,7 @@ function itemLabel(item: ScheduleStats["first"]): string {
 /** Read-only summary — full schedule management lives at /events/[id]/schedule (Phase 4). */
 export function ScheduleSummaryCard({ eventId, stats }: { eventId: string; stats: ScheduleStats }) {
   return (
-    <Card>
+    <LuxuryCard>
       <h3 className="font-serif text-[17px] font-semibold text-text">Schedule Summary</h3>
       {stats.total === 0 ? (
         <p className="mt-2 text-sm text-text-muted">No schedule items yet.</p>
@@ -50,6 +50,6 @@ export function ScheduleSummaryCard({ eventId, stats }: { eventId: string; stats
           Manage Schedule
         </Button>
       </Link>
-    </Card>
+    </LuxuryCard>
   );
 }

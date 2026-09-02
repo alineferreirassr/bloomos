@@ -1,13 +1,14 @@
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { CHECKLIST_STATUS_LABELS, type ChecklistStatus } from "@/core/enums/checklistStatus";
 
-/* Same 3-tone convention as EventStatusBadge: completed -> tag-accent,
-   cancelled -> tag-neutral, every other in-progress status -> tag-outline. */
+/* Same restrained system as EventStatusBadge: completed -> success,
+   cancelled -> neutral, blocked is a genuine attention state -> warning,
+   everything else still moving -> outline. */
 const STATUS_TONES: Record<ChecklistStatus, BadgeTone> = {
   pending: "outline",
   in_progress: "outline",
-  blocked: "outline",
-  completed: "accent",
+  blocked: "warning",
+  completed: "success",
   cancelled: "neutral",
 };
 

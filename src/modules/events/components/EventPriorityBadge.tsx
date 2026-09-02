@@ -1,16 +1,16 @@
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { EVENT_PRIORITY_LABELS, type EventPriority } from "@/core/enums/eventPriority";
 
-/* No separate warning/danger palette exists in the approved system (see
-   docs/design-system.md), so priority is expressed within the same 3-tone
-   scale: low/normal recede (tag-neutral), high/urgent draw attention without
-   a fill (tag-outline), critical stands out most (tag-accent). */
+/* Relationships/CRM visual pass's restrained semantic system: low/normal
+   recede (neutral), high draws attention without alarm (outline), urgent is
+   a genuine warning state (warning), critical is the most severe (danger).
+   Rose (accent) is reserved for brand moments, never priority. */
 const PRIORITY_TONES: Record<EventPriority, BadgeTone> = {
   low: "neutral",
   normal: "neutral",
   high: "outline",
-  urgent: "outline",
-  critical: "accent",
+  urgent: "warning",
+  critical: "danger",
 };
 
 export function EventPriorityBadge({ priority }: { priority: EventPriority }) {

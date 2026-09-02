@@ -1,9 +1,10 @@
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { EVENT_STATUS_LABELS, type EventStatus } from "@/core/enums/eventStatus";
 
-/* Same 3-tone convention as LeadStatusBadge/ClientStatusBadge: completed (won) ->
-   tag-accent, cancelled/archived (terminal/inactive) -> tag-neutral, every other
-   in-progress status -> tag-outline. */
+/* Relationships/CRM visual pass's restrained semantic system, carried into
+   Events: completed (a won outcome) -> success (a real distinct hue, not the
+   rose brand accent), cancelled/archived (terminal/inactive) -> neutral,
+   every other in-progress status -> outline. */
 const STATUS_TONES: Record<EventStatus, BadgeTone> = {
   draft: "outline",
   inquiry: "outline",
@@ -13,7 +14,7 @@ const STATUS_TONES: Record<EventStatus, BadgeTone> = {
   planning: "outline",
   ready: "outline",
   in_progress: "outline",
-  completed: "accent",
+  completed: "success",
   cancelled: "neutral",
   archived: "neutral",
 };

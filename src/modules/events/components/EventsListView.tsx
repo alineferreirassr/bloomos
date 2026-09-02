@@ -162,7 +162,7 @@ export function EventsListView() {
   const insight = state.status === "ready" ? buildEventsInsight(state.rows) : null;
 
   return (
-    <div>
+    <div className="space-y-8">
       <PageHeader
         title="Events"
         subtitle={`The operational center for every engagement Amoré Bloom is planning. ${getDataPersistenceMessage()}`}
@@ -176,7 +176,7 @@ export function EventsListView() {
       />
 
       {kpis ? (
-        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <KpiCard icon={EventsIcon} label="Total Events" value={kpis.total.toLocaleString()} />
           <KpiCard icon={PipelineIcon} label="Upcoming" value={kpis.upcoming.toLocaleString()} />
           <KpiCard icon={AutomationIcon} label="In Progress" value={kpis.inProgress.toLocaleString()} />
@@ -184,15 +184,9 @@ export function EventsListView() {
         </div>
       ) : null}
 
-      {insight ? (
-        <div className="mb-6">
-          <ModuleInsightCard tone="warning" insight={insight} />
-        </div>
-      ) : null}
+      {insight ? <ModuleInsightCard tone="warning" insight={insight} /> : null}
 
-      <div className="mb-6">
-        <EventFilters value={filters} onChange={handleFiltersChange} />
-      </div>
+      <EventFilters value={filters} onChange={handleFiltersChange} />
 
       <div>
         {state.status === "loading" ? (

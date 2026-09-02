@@ -33,7 +33,7 @@ interface EventFiltersProps {
 
 export function EventFilters({ value, onChange }: EventFiltersProps) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 rounded-2xl bg-surface/70 p-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Input
           placeholder="Search title, client, location…"

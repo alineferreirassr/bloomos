@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge } from "@/components/ui/Badge";
 import { ChecklistStatusBadge } from "@/modules/events/components/ChecklistStatusBadge";
 import { ChecklistCategoryBadge } from "@/modules/events/components/ChecklistCategoryBadge";
@@ -110,7 +110,7 @@ export function ChecklistItemRow({
   }
 
   return (
-    <Card data-testid={`checklist-item-${item.id}`} className={overdue ? "border-danger/50" : undefined}>
+    <LuxuryCard data-testid={`checklist-item-${item.id}`} className={overdue ? "ring-1 ring-danger/40 ring-inset" : undefined}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -177,6 +177,6 @@ export function ChecklistItemRow({
           {actionError}
         </p>
       ) : null}
-    </Card>
+    </LuxuryCard>
   );
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Button } from "@/components/ui/Button";
 import { formatEventDate } from "@/modules/events/dateFormat";
 import type { ChecklistStats } from "@/modules/events/checklistStats";
@@ -7,7 +7,7 @@ import type { ChecklistStats } from "@/modules/events/checklistStats";
 /** Read-only summary — full checklist management lives at /events/[id]/checklist (Phase 3). */
 export function ChecklistSummaryCard({ eventId, stats }: { eventId: string; stats: ChecklistStats }) {
   return (
-    <Card>
+    <LuxuryCard>
       <h3 className="font-serif text-[17px] font-semibold text-text">Checklist Summary</h3>
       {stats.total === 0 ? (
         <p className="mt-2 text-sm text-text-muted">No checklist items yet.</p>
@@ -36,7 +36,7 @@ export function ChecklistSummaryCard({ eventId, stats }: { eventId: string; stat
           Manage Checklist
         </Button>
       </Link>
-    </Card>
+    </LuxuryCard>
   );
 }
 
