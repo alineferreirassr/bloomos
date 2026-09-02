@@ -7,6 +7,7 @@ import { ExportMenu } from "@/modules/analytics/export/components/ExportMenu";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Tabs, TabList, Tab } from "@/components/ui/Tabs";
 import { COMMUNICATION_CATEGORIES } from "@/types/communication";
 import type { ActivityEntry, CommunicationCategory } from "@/types/communication";
 
@@ -46,41 +47,34 @@ export function ActivityFeedPanel() {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
-        <ExportMenu
-          filenameBase="activity-feed"
-          sheetName="Activity Feed"
-          headers={["Category", "Title", "Description", "Actor", "Occurred At"]}
-          rows={state.entries.map((e) => [e.category, e.title, e.description ?? "", e.actorLabel, e.occurredAt])}
-        />
-      </div>
-      <div className="flex flex-wrap gap-1">
-        <button
-          type="button"
-          onClick={() => setCategory("all")}
-          className={`rounded-full px-3 py-1 text-xs font-medium ${category === "all" ? "bg-accent text-accent-foreground" : "bg-surface-hover text-text-muted"}`}
-        >
-          All
-        </button>
-        {COMMUNICATION_CATEGORIES.map((c) => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => setCategory(c)}
-            className={`rounded-full px-3 py-1 text-xs font-medium ${category === c ? "bg-accent text-accent-foreground" : "bg-surface-hover text-text-muted"}`}
-          >
-            {CATEGORY_LABEL[c]}
-          </button>
-        ))}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Tabs value={category} onValueChange={(value) => setCategory(value as CommunicationCategory | "all")} className="min-w-0 flex-1">
+          <TabList aria-label="Filter activity by category">
+            <Tab value="all">All</Tab>
+            {COMMUNICATION_CATEGORIES.map((c) => (
+              <Tab key={c} value={c}>
+                {CATEGORY_LABEL[c]}
+              </Tab>
+            ))}
+          </TabList>
+        </Tabs>
+        <div className="flex justify-end sm:shrink-0">
+          <ExportMenu
+            filenameBase="activity-feed"
+            sheetName="Activity Feed"
+            headers={["Category", "Title", "Description", "Actor", "Occurred At"]}
+            rows={state.entries.map((e) => [e.category, e.title, e.description ?? "", e.actorLabel, e.occurredAt])}
+          />
+        </div>
       </div>
       {filtered.length === 0 ? (
-        <EmptyState title="No activity yet" description="Workspace-wide activity across every module will appear here." />
+        <EmptyState illustration="generic" title="No activity yet" description="Workspace-wide activity across every module will appear here." />
       ) : (
-        <ul className="space-y-2">
+        <div className="space-y-3">
           {filtered.map((entry) => (
             <ActivityCard key={entry.id} entry={entry} />
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

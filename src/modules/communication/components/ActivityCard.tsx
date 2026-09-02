@@ -1,7 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ComponentType, type SVGProps } from "react";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import {
+  ClientsIcon,
+  FinanceIcon,
+  TaskIcon,
+  InventoryIcon,
+  AutomationIcon,
+  BloomAiIcon,
+  DocumentsIcon,
+  CommunicationsIcon,
+} from "@/components/ui/icons";
 import type { ActivityEntry, CommunicationCategory } from "@/types/communication";
 
 const CATEGORY_LABELS: Record<CommunicationCategory, string> = {
@@ -15,16 +27,20 @@ const CATEGORY_LABELS: Record<CommunicationCategory, string> = {
   communication: "Communication",
 };
 
-const CATEGORY_ICON: Record<CommunicationCategory, string> = {
-  crm: "👤",
-  finance: "💵",
-  operations: "📋",
-  inventory: "📦",
-  automation: "⚙️",
-  ai: "✨",
-  documents: "📄",
-  communication: "💬",
+/** Closest semantic match per category from the shared icon set (`@/components/ui/icons`) — no new SVGs, matching the icon-per-category precedent `PinnedEventsPanel`/`calendarEventVisuals` already established for this codebase. */
+const CATEGORY_ICON: Record<CommunicationCategory, ComponentType<SVGProps<SVGSVGElement>>> = {
+  crm: ClientsIcon,
+  finance: FinanceIcon,
+  operations: TaskIcon,
+  inventory: InventoryIcon,
+  automation: AutomationIcon,
+  ai: BloomAiIcon,
+  documents: DocumentsIcon,
+  communication: CommunicationsIcon,
 };
+
+/** Compact ghost-button treatment for inline row actions — same hover/active states as `Button variant="ghost"`, sized down for a single row (the `!` overrides match the precedent already used for compact ghost buttons elsewhere, e.g. `WidgetCard`/`FavoritesWidget`'s `!px-1.5 text-xs`). */
+const ROW_ACTION_CLASS = "!px-2 !py-1 text-xs";
 
 function formatTimestamp(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -43,11 +59,12 @@ export function ActivityCard({ entry, onQuickReply }: { entry: ActivityEntry; on
   const [expanded, setExpanded] = useState(false);
   const isLong = (entry.description?.length ?? 0) > 160;
   const description = expanded || !isLong ? entry.description : `${entry.description?.slice(0, 160)}…`;
+  const Icon = CATEGORY_ICON[entry.category];
 
   return (
-    <li className="flex gap-3 rounded-md border border-border/60 p-3">
-      <span className="mt-0.5 shrink-0 text-lg" aria-hidden="true">
-        {CATEGORY_ICON[entry.category]}
+    <LuxuryCard className="flex gap-3 p-4 sm:p-5">
+      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-100 text-accent" aria-hidden="true">
+        <Icon className="h-4 w-4" aria-hidden="true" />
       </span>
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -69,20 +86,23 @@ export function ActivityCard({ entry, onQuickReply }: { entry: ActivityEntry; on
           {entry.actorLabel} · <time dateTime={entry.occurredAt}>{formatTimestamp(entry.occurredAt)}</time>
         </p>
         {entry.deepLink || onQuickReply ? (
-          <div className="flex gap-3 pt-0.5">
+          <div className="flex flex-wrap gap-1 pt-0.5">
             {entry.deepLink ? (
-              <a href={entry.deepLink} className="text-xs text-accent hover:underline">
+              <a
+                href={entry.deepLink}
+                className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-accent transition-colors duration-150 hover:bg-accent/10 active:bg-accent/18"
+              >
                 Jump to entity
               </a>
             ) : null}
             {onQuickReply ? (
-              <button type="button" className="text-xs text-accent hover:underline" onClick={() => onQuickReply(entry)}>
+              <Button type="button" variant="ghost" className={ROW_ACTION_CLASS} onClick={() => onQuickReply(entry)}>
                 Quick reply
-              </button>
+              </Button>
             ) : null}
           </div>
         ) : null}
       </div>
-    </li>
+    </LuxuryCard>
   );
 }

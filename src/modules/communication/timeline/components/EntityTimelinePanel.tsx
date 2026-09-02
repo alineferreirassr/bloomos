@@ -59,7 +59,7 @@ export function EntityTimelinePanel({ ownerType, ownerId }: { ownerType: EntityT
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -71,7 +71,7 @@ export function EntityTimelinePanel({ ownerType, ownerId }: { ownerType: EntityT
           value={category}
           onChange={(e) => setCategory(e.target.value as CommunicationCategory | "all")}
           aria-label="Filter by category"
-          className="rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text"
+          className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text sm:w-auto sm:shrink-0"
         >
           <option value="all">All categories</option>
           {COMMUNICATION_CATEGORIES.map((c) => (
@@ -82,13 +82,13 @@ export function EntityTimelinePanel({ ownerType, ownerId }: { ownerType: EntityT
         </select>
       </div>
       {filtered.length === 0 ? (
-        <EmptyState title="Nothing here yet" description="Comments, notifications, and other activity for this record will appear here." />
+        <EmptyState illustration="generic" title="Nothing here yet" description="Comments, notifications, and other activity for this record will appear here." />
       ) : (
-        <ul className="space-y-2">
+        <div className="space-y-3">
           {filtered.map((entry) => (
             <ActivityCard key={entry.id} entry={entry} />
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

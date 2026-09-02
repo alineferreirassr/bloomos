@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { listMyRemindersAction, createReminderAction, completeReminderAction, dismissReminderAction, snoozeReminderAction } from "@/modules/communication/reminders/reminderActions";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -12,6 +13,10 @@ import type { Reminder, ReminderPriority } from "@/types/communication";
 type LoadState = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; reminders: Reminder[] };
 
 const PRIORITY_TONE: Record<ReminderPriority, BadgeTone> = { low: "outline", normal: "outline", high: "warning", critical: "danger" };
+
+/** Compact ghost-button treatment for inline row actions — same hover/active states as `Button variant="ghost"`, sized down for a single row (matching the `!px-1.5 text-xs`/`!px-2 text-xs` precedent already used elsewhere for compact ghost buttons). Complete is the row's single most useful action; Snooze is secondary; Dismiss is the rare/destructive one and gets the danger hue instead. */
+const ROW_ACTION_CLASS = "!px-2 !py-1 text-xs";
+const ROW_ACTION_DANGER_CLASS = "!px-2 !py-1 text-xs !text-danger hover:!bg-danger/10 active:!bg-danger/18";
 
 function toDatetimeLocal(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -47,7 +52,7 @@ export function RemindersPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-2 rounded-md border border-border p-3">
+      <div className="flex flex-col gap-2 rounded-md border border-border p-3 sm:flex-row sm:flex-wrap sm:items-end">
         <div className="min-w-0 flex-1 space-y-1">
           <label htmlFor="reminder-title" className="text-xs text-text-muted">
             New reminder
@@ -64,19 +69,25 @@ export function RemindersPanel() {
           <label htmlFor="reminder-due" className="text-xs text-text-muted">
             Due
           </label>
-          <input id="reminder-due" type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} className="rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text" />
+          <input
+            id="reminder-due"
+            type="datetime-local"
+            value={dueAt}
+            onChange={(e) => setDueAt(e.target.value)}
+            className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text sm:w-auto"
+          />
         </div>
-        <Button onClick={handleCreate} disabled={title.trim().length === 0}>
+        <Button onClick={handleCreate} disabled={title.trim().length === 0} className="w-full sm:w-auto">
           Add
         </Button>
       </div>
 
       {state.reminders.length === 0 ? (
-        <EmptyState title="No reminders" description="Create a reminder above to see it here." />
+        <EmptyState illustration="messages" title="No reminders" description="Create a reminder above to see it here." />
       ) : (
-        <ul className="space-y-2">
+        <div className="space-y-3">
           {state.reminders.map((r) => (
-            <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 p-3">
+            <LuxuryCard key={r.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-5">
               <div>
                 <div className="flex items-center gap-2">
                   <Badge tone={PRIORITY_TONE[r.priority]}>{r.priority}</Badge>
@@ -85,41 +96,44 @@ export function RemindersPanel() {
                 </div>
                 <p className="text-xs text-text-muted">Due {new Date(r.status === "snoozed" && r.snoozed_until ? r.snoozed_until : r.due_at).toLocaleString()}</p>
               </div>
-              <div className="flex gap-3">
-                <button
+              <div className="flex flex-wrap gap-1">
+                <Button
                   type="button"
-                  className="text-xs text-accent hover:underline"
+                  variant="ghost"
+                  className={ROW_ACTION_CLASS}
                   onClick={async () => {
                     await snoozeReminderAction(r.id, new Date(Date.now() + 24 * 3_600_000).toISOString());
                     fetchData();
                   }}
                 >
                   Snooze 1 day
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className="text-xs text-accent hover:underline"
+                  variant="ghost"
+                  className={ROW_ACTION_CLASS}
                   onClick={async () => {
                     await completeReminderAction(r.id);
                     fetchData();
                   }}
                 >
                   Complete
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className="text-xs text-danger hover:underline"
+                  variant="ghost"
+                  className={ROW_ACTION_DANGER_CLASS}
                   onClick={async () => {
                     await dismissReminderAction(r.id);
                     fetchData();
                   }}
                 >
                   Dismiss
-                </button>
+                </Button>
               </div>
-            </li>
+            </LuxuryCard>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

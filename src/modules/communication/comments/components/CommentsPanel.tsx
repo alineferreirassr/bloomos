@@ -6,10 +6,14 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import type { Comment } from "@/types/comment";
 import type { EntityType } from "@/core/enums/entityType";
 
 type LoadState = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; comments: Comment[] };
+
+/** Delete is this row's one, rare/destructive action — the compact ghost treatment in the danger hue, matching the `!px-2 text-xs` precedent used for compact ghost buttons elsewhere in this module. */
+const ROW_ACTION_DANGER_CLASS = "!px-2 !py-1 text-xs !text-danger hover:!bg-danger/10 active:!bg-danger/18";
 
 function formatTimestamp(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -78,25 +82,25 @@ export function CommentsPanel({ ownerType, ownerId }: { ownerType: EntityType; o
       </div>
 
       {state.comments.length === 0 ? (
-        <EmptyState title="No comments yet" description="Be the first to leave a comment on this record." />
+        <EmptyState illustration="messages" title="No comments yet" description="Be the first to leave a comment on this record." />
       ) : (
-        <ul className="space-y-2">
+        <div className="space-y-3">
           {state.comments.map((comment) => (
-            <li key={comment.id} className={`rounded-md border border-border/60 p-3 ${comment.parent_comment_id ? "ml-6" : ""}`}>
+            <LuxuryCard key={comment.id} className={`p-4 sm:p-5 ${comment.parent_comment_id ? "ml-4 sm:ml-6" : ""}`}>
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-medium text-text">{comment.author}</p>
-                <button type="button" className="text-xs text-danger hover:underline" onClick={() => handleDelete(comment.id)}>
+                <Button type="button" variant="ghost" className={ROW_ACTION_DANGER_CLASS} onClick={() => handleDelete(comment.id)}>
                   Delete
-                </button>
+                </Button>
               </div>
               <p className="mt-1 text-sm text-text">{comment.body}</p>
               <p className="mt-1 text-xs text-text-muted">
                 {formatTimestamp(comment.created_at)}
                 {comment.edited_at ? " · edited" : ""}
               </p>
-            </li>
+            </LuxuryCard>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

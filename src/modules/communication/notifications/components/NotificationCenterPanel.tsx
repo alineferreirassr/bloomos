@@ -12,13 +12,20 @@ import {
 } from "@/modules/communication/notifications/notificationActions";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Tabs, TabList, Tab } from "@/components/ui/Tabs";
 import type { Notification, NotificationPriority } from "@/core/notifications/types";
 
 type LoadState = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; notifications: Notification[] };
 type ViewFilter = "unread" | "read" | "archived" | "pinned";
+
+/** Compact ghost-button treatment for inline row actions — same hover/active states as `Button variant="ghost"`, sized down for a single row (matching the `!px-1.5 text-xs`/`!px-2 text-xs` precedent already used elsewhere for compact ghost buttons, e.g. `WidgetCard`/`FavoritesWidget`). */
+const ROW_ACTION_CLASS = "!px-2 !py-1 text-xs";
+/** The rarer/destructive row action (Archive) gets the same compact ghost treatment but in the danger hue, so it reads as available without competing with the row's primary action (Mark read). */
+const ROW_ACTION_DANGER_CLASS = "!px-2 !py-1 text-xs !text-danger hover:!bg-danger/10 active:!bg-danger/18";
 
 const PRIORITY_TONE: Record<NotificationPriority, BadgeTone> = { low: "outline", normal: "outline", high: "warning", critical: "danger" };
 
@@ -96,26 +103,21 @@ export function NotificationCenterPanel() {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap gap-1" role="tablist" aria-label="Notification filter">
-          {(["unread", "read", "pinned", "archived"] as ViewFilter[]).map((f) => (
-            <button
-              key={f}
-              type="button"
-              role="tab"
-              aria-selected={filter === f}
-              onClick={() => setFilter(f)}
-              className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${filter === f ? "bg-accent text-accent-foreground" : "bg-surface-hover text-text-muted"}`}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Tabs value={filter} onValueChange={(value) => setFilter(value as ViewFilter)} className="min-w-0 flex-1">
+          <TabList aria-label="Notification filter">
+            {(["unread", "read", "pinned", "archived"] as ViewFilter[]).map((f) => (
+              <Tab key={f} value={f} className="capitalize">
+                {f}
+              </Tab>
+            ))}
+          </TabList>
+        </Tabs>
+        <div className="flex shrink-0 items-center gap-2">
           {lastArchivedId ? (
-            <button type="button" className="text-xs text-accent hover:underline" onClick={handleUndo}>
+            <Button type="button" variant="ghost" className={ROW_ACTION_CLASS} onClick={handleUndo}>
               Undo dismiss
-            </button>
+            </Button>
           ) : null}
           <Button onClick={handleMarkAllRead} className="text-xs">
             Mark all read
@@ -132,11 +134,11 @@ export function NotificationCenterPanel() {
       />
 
       {filtered.length === 0 ? (
-        <EmptyState title="Nothing here" description="Notifications matching this filter will appear here." />
+        <EmptyState illustration="messages" title="Nothing here" description="Notifications matching this filter will appear here." />
       ) : (
-        <ul className="space-y-2">
+        <div className="space-y-3">
           {filtered.map((n) => (
-            <li key={n.id} className="flex items-start gap-3 rounded-md border border-border/60 p-3">
+            <LuxuryCard key={n.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:p-5">
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone={PRIORITY_TONE[n.priority]}>{n.priority}</Badge>
@@ -146,24 +148,24 @@ export function NotificationCenterPanel() {
                 <p className="text-sm text-text-muted">{n.body}</p>
                 <p className="text-xs text-text-muted">{formatTimestamp(n.created_at)}</p>
               </div>
-              <div className="flex shrink-0 gap-2">
+              <div className="flex shrink-0 flex-wrap gap-1">
                 {n.read_at === null ? (
-                  <button type="button" className="text-xs text-accent hover:underline" onClick={() => handleMarkRead(n.id)}>
+                  <Button type="button" variant="ghost" className={ROW_ACTION_CLASS} onClick={() => handleMarkRead(n.id)}>
                     Mark read
-                  </button>
+                  </Button>
                 ) : null}
-                <button type="button" className="text-xs text-accent hover:underline" onClick={() => handleTogglePin(n)}>
+                <Button type="button" variant="ghost" className={ROW_ACTION_CLASS} onClick={() => handleTogglePin(n)}>
                   {n.pinned_at ? "Unpin" : "Pin"}
-                </button>
+                </Button>
                 {n.archived_at === null ? (
-                  <button type="button" className="text-xs text-danger hover:underline" onClick={() => handleArchive(n.id)}>
+                  <Button type="button" variant="ghost" className={ROW_ACTION_DANGER_CLASS} onClick={() => handleArchive(n.id)}>
                     Archive
-                  </button>
+                  </Button>
                 ) : null}
               </div>
-            </li>
+            </LuxuryCard>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

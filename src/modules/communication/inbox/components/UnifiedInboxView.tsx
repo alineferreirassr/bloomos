@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getUnifiedInboxData } from "@/modules/communication/inbox/getUnifiedInboxData";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -44,9 +44,13 @@ export function UnifiedInboxView() {
       ) : state.status === "error" ? (
         <ErrorState message={state.message} onRetry={fetchData} />
       ) : state.items.length === 0 ? (
-        <EmptyState title="Your inbox is empty" description="Start a conversation with a teammate to see it here." />
+        <EmptyState
+          illustration="messages"
+          title="Your inbox is empty"
+          description="Start a conversation with a teammate to see it here."
+        />
       ) : (
-        <Card>
+        <LuxuryCard className="p-0">
           <ul className="divide-y divide-border">
             {state.items.map((item) => (
               <li
@@ -55,21 +59,29 @@ export function UnifiedInboxView() {
                 tabIndex={0}
                 onClick={() => router.push(item.href)}
                 onKeyDown={(e) => (e.key === "Enter" ? router.push(item.href) : undefined)}
-                className="flex cursor-pointer items-center justify-between gap-3 py-3 first:pt-0 last:pb-0 hover:bg-surface-hover"
+                className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 first:rounded-t-luxury-lg last:rounded-b-luxury-lg hover:bg-surface-hover sm:px-5 sm:py-3.5"
               >
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {item.pinned ? <Badge tone="accent">Pinned</Badge> : null}
-                    <p className="truncate text-sm font-medium text-text">{item.participantLabel}</p>
+                    <p
+                      className={`truncate text-sm sm:text-[15px] ${
+                        item.unreadCount > 0 ? "font-semibold text-text" : "font-medium text-text"
+                      }`}
+                    >
+                      {item.participantLabel}
+                    </p>
                     {item.unreadCount > 0 ? <Badge tone="danger">{item.unreadCount}</Badge> : null}
                   </div>
-                  {item.previewBody ? <p className="truncate text-sm text-text-muted">{item.previewBody}</p> : null}
+                  {item.previewBody ? (
+                    <p className="truncate text-sm text-text-muted">{item.previewBody}</p>
+                  ) : null}
                 </div>
                 <span className="shrink-0 text-xs text-text-muted">{formatTimestamp(item.lastMessageAt)}</span>
               </li>
             ))}
           </ul>
-        </Card>
+        </LuxuryCard>
       )}
     </div>
   );

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { listActiveAnnouncementsAction, acknowledgeAnnouncementAction, publishAnnouncementAction } from "@/modules/communication/announcements/announcementActions";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -12,6 +13,9 @@ import type { Announcement, AnnouncementPriority } from "@/types/communication";
 type LoadState = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; announcements: Announcement[] };
 
 const PRIORITY_TONE: Record<AnnouncementPriority, BadgeTone> = { normal: "outline", important: "warning", critical: "danger" };
+
+/** Compact ghost-button treatment for the row's action (Acknowledge) — same hover/active states as `Button variant="ghost"`, sized down for a single row. */
+const ROW_ACTION_CLASS = "!px-2 !py-1 text-xs";
 
 /** v2.0 Checkpoint 24, Step 8 — Announcements. `canPublish` gates the composer on `communications.manage` — resolved by whether `publishAnnouncementAction` itself succeeds/fails on first use, avoiding a second permissions round-trip just to decide whether to render a form. */
 export function AnnouncementsPanel({ currentMemberId, canManage }: { currentMemberId: string; canManage: boolean }) {
@@ -66,13 +70,17 @@ export function AnnouncementsPanel({ currentMemberId, canManage }: { currentMemb
             rows={2}
             className="w-full resize-none rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text placeholder:text-text-muted focus-visible:border-accent focus-visible:outline-none"
           />
-          <div className="flex items-center gap-2">
-            <select value={priority} onChange={(e) => setPriority(e.target.value as AnnouncementPriority)} className="rounded-md border border-border bg-surface px-2 py-1 text-sm text-text">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as AnnouncementPriority)}
+              className="w-full rounded-md border border-border bg-surface px-2 py-1 text-sm text-text sm:w-auto"
+            >
               <option value="normal">Normal</option>
               <option value="important">Important</option>
               <option value="critical">Critical</option>
             </select>
-            <Button onClick={handlePublish} disabled={title.trim().length === 0 || body.trim().length === 0}>
+            <Button onClick={handlePublish} disabled={title.trim().length === 0 || body.trim().length === 0} className="w-full sm:w-auto">
               Publish
             </Button>
           </div>
@@ -80,11 +88,11 @@ export function AnnouncementsPanel({ currentMemberId, canManage }: { currentMemb
       ) : null}
 
       {state.announcements.length === 0 ? (
-        <EmptyState title="No announcements" description="Workspace-wide announcements will appear here." />
+        <EmptyState illustration="messages" title="No announcements" description="Workspace-wide announcements will appear here." />
       ) : (
-        <ul className="space-y-2">
+        <div className="space-y-3">
           {state.announcements.map((a) => (
-            <li key={a.id} className="rounded-md border border-border/60 p-3">
+            <LuxuryCard key={a.id} className="p-4 sm:p-5">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone={PRIORITY_TONE[a.priority]}>{a.priority}</Badge>
                 <p className="text-sm font-semibold text-text">{a.title}</p>
@@ -97,14 +105,14 @@ export function AnnouncementsPanel({ currentMemberId, canManage }: { currentMemb
                     Acknowledged
                   </Badge>
                 ) : (
-                  <button type="button" className="mt-2 text-xs text-accent hover:underline" onClick={() => handleAcknowledge(a.id)}>
+                  <Button type="button" variant="ghost" className={`mt-1 ${ROW_ACTION_CLASS}`} onClick={() => handleAcknowledge(a.id)}>
                     Acknowledge
-                  </button>
+                  </Button>
                 )
               ) : null}
-            </li>
+            </LuxuryCard>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

@@ -78,79 +78,99 @@ export function NotificationPreferencesPanel() {
 
   return (
     <div className="space-y-5">
-      <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-text">Channels</h3>
-        <label className="flex items-center gap-2 text-sm text-text">
-          <input type="checkbox" checked={preferences.desktop_enabled} onChange={(e) => toggleChannel("desktopEnabled", e.target.checked)} />
-          Desktop
-        </label>
-        <label className="flex items-center gap-2 text-sm text-text">
-          <input type="checkbox" checked={preferences.in_app_enabled} onChange={(e) => toggleChannel("inAppEnabled", e.target.checked)} />
-          In-App
-        </label>
-        <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input type="checkbox" checked={preferences.email_enabled} onChange={(e) => toggleChannel("emailEnabled", e.target.checked)} />
-          Email (coming soon)
-        </label>
-        <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input type="checkbox" checked={preferences.sms_enabled} onChange={(e) => toggleChannel("smsEnabled", e.target.checked)} />
-          SMS (coming soon)
-        </label>
-        <label className="flex items-center gap-2 text-sm text-text-muted">
-          <input type="checkbox" checked={preferences.push_enabled} onChange={(e) => toggleChannel("pushEnabled", e.target.checked)} />
-          Push (coming soon)
-        </label>
-      </section>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <section className="space-y-2">
+          <h3 className="text-sm font-semibold text-text">Channels</h3>
+          <label className="flex items-center gap-2 text-sm text-text">
+            <input type="checkbox" checked={preferences.desktop_enabled} onChange={(e) => toggleChannel("desktopEnabled", e.target.checked)} />
+            Desktop
+          </label>
+          <label className="flex items-center gap-2 text-sm text-text">
+            <input type="checkbox" checked={preferences.in_app_enabled} onChange={(e) => toggleChannel("inAppEnabled", e.target.checked)} />
+            In-App
+          </label>
+          <label className="flex items-center gap-2 text-sm text-text-muted">
+            <input type="checkbox" checked={preferences.email_enabled} onChange={(e) => toggleChannel("emailEnabled", e.target.checked)} />
+            Email (coming soon)
+          </label>
+          <label className="flex items-center gap-2 text-sm text-text-muted">
+            <input type="checkbox" checked={preferences.sms_enabled} onChange={(e) => toggleChannel("smsEnabled", e.target.checked)} />
+            SMS (coming soon)
+          </label>
+          <label className="flex items-center gap-2 text-sm text-text-muted">
+            <input type="checkbox" checked={preferences.push_enabled} onChange={(e) => toggleChannel("pushEnabled", e.target.checked)} />
+            Push (coming soon)
+          </label>
+        </section>
 
-      <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-text">Quiet hours</h3>
-        <label className="flex items-center gap-2 text-sm text-text">
-          <input type="checkbox" checked={preferences.quiet_hours.enabled} onChange={(e) => setQuietHoursEnabled(e.target.checked)} />
-          Enabled ({preferences.quiet_hours.startHour}:00–{preferences.quiet_hours.endHour}:00)
-        </label>
-      </section>
+        <section className="space-y-2">
+          <h3 className="text-sm font-semibold text-text">Quiet hours</h3>
+          <label className="flex items-center gap-2 text-sm text-text">
+            <input type="checkbox" checked={preferences.quiet_hours.enabled} onChange={(e) => setQuietHoursEnabled(e.target.checked)} />
+            Enabled ({preferences.quiet_hours.startHour}:00–{preferences.quiet_hours.endHour}:00)
+          </label>
+        </section>
+      </div>
 
       <section className="space-y-2">
         <h3 className="text-sm font-semibold text-text">Categories</h3>
         <p className="text-xs text-text-muted">Muted categories still appear in the Notification Center — they just skip desktop alerts.</p>
-        <div className="flex flex-wrap gap-2">
-          {COMMUNICATION_CATEGORIES.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => toggleCategory(c)}
-              className={`rounded-full px-3 py-1 text-xs font-medium ${preferences.muted_categories.includes(c) ? "bg-surface-hover text-text-muted line-through" : "bg-accent text-accent-foreground"}`}
-            >
-              {CATEGORY_LABEL[c]}
-            </button>
-          ))}
+        {/* Not a single-select view switch — every category can be toggled independently — so this stays a set of toggle buttons rather than the shared `Tabs` primitive. Restyled to match the Tab's own selected/unselected visual language (border-accent + text-accent when on) instead of the old filled-pill treatment. */}
+        <div className="flex flex-wrap gap-x-1 gap-y-2 overflow-x-auto sm:gap-x-2">
+          {COMMUNICATION_CATEGORIES.map((c) => {
+            const muted = preferences.muted_categories.includes(c);
+            return (
+              <button
+                key={c}
+                type="button"
+                aria-pressed={!muted}
+                onClick={() => toggleCategory(c)}
+                className={`shrink-0 rounded-md border-b-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors duration-150 ${
+                  muted ? "border-transparent text-text-muted line-through hover:text-text" : "border-accent text-accent"
+                }`}
+              >
+                {CATEGORY_LABEL[c]}
+              </button>
+            );
+          })}
         </div>
       </section>
 
-      <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-text">Priority rules</h3>
-        <label htmlFor="min-priority" className="text-xs text-text-muted">
-          Minimum priority to notify on
-        </label>
-        <select id="min-priority" value={preferences.minimum_priority} onChange={(e) => setMinimumPriority(e.target.value as NotificationPriority)} className="block rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text">
-          {NOTIFICATION_PRIORITIES.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
-      </section>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <section className="space-y-2">
+          <h3 className="text-sm font-semibold text-text">Priority rules</h3>
+          <label htmlFor="min-priority" className="text-xs text-text-muted">
+            Minimum priority to notify on
+          </label>
+          <select
+            id="min-priority"
+            value={preferences.minimum_priority}
+            onChange={(e) => setMinimumPriority(e.target.value as NotificationPriority)}
+            className="block w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text sm:max-w-xs"
+          >
+            {NOTIFICATION_PRIORITIES.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        </section>
 
-      <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-text">Digest frequency</h3>
-        <select value={preferences.digest_frequency} onChange={(e) => setDigestFrequency(e.target.value as DigestFrequency)} className="block rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text">
-          {DIGEST_FREQUENCIES.map((f) => (
-            <option key={f} value={f}>
-              {f}
-            </option>
-          ))}
-        </select>
-      </section>
+        <section className="space-y-2">
+          <h3 className="text-sm font-semibold text-text">Digest frequency</h3>
+          <select
+            value={preferences.digest_frequency}
+            onChange={(e) => setDigestFrequency(e.target.value as DigestFrequency)}
+            className="block w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text sm:max-w-xs"
+          >
+            {DIGEST_FREQUENCIES.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </select>
+        </section>
+      </div>
     </div>
   );
 }

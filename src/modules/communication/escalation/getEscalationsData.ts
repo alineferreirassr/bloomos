@@ -53,6 +53,19 @@ export async function getEscalationsData(): Promise<{ success: true; data: Escal
     highRiskEvents: operationsData.eventHealthScores.map((entry) => ({ eventId: entry.event.id, eventName: entry.event.title, healthScore: entry.score })),
   });
 
+  // Phase 09D looked at adding a dedup guard here (repeated evaluation of a still-open condition
+  // re-notifying every read) but found it can't be done correctly with what `EscalationCandidate`
+  // carries today: the two kinds with a real, stable `ownerId` (`late_approval`, `high_risk_event`)
+  // always report `relatedMemberId: null` in `escalationEngine.ts`'s own detectors, so they never
+  // reach the notification-creation filter below in the first place; the three kinds that *do*
+  // create notifications (`unread_critical_notification`, `overdue_reminder`, `pending_response`)
+  // all report `ownerType: null, ownerId: null` — their source notification/reminder/thread id is
+  // discarded by the detector before it ever reaches this function. A dedup key built from what's
+  // actually available here would either be dead code or key on recipient+kind alone, which would
+  // wrongly suppress a second, genuinely distinct overdue reminder for the same member. Fixing this
+  // for real means extending the Escalation Engine's own candidate/detector contract to carry a
+  // stable source id through — out of scope for a consolidation-only phase; recorded as a deferred
+  // finding rather than shipped as a guard that doesn't guard anything real.
   await Promise.all(
     candidates
       .filter((c) => c.relatedMemberId)
