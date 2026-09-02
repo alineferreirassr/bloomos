@@ -1,9 +1,11 @@
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { LEAD_STATUS_LABELS, type LeadStatus } from "@/core/enums/leadStatus";
 
-/* Matches the approved Leads.dc.html mapping exactly: converted -> tag-accent
-   (won), lost -> tag-neutral, every other in-progress stage -> tag-outline.
-   archived groups with lost as a terminal/inactive tone. */
+/* Relationships/CRM visual pass — restrained semantic system: every
+   in-progress stage stays "outline" (a single calm in-progress tone, not
+   one color per stage), converted uses "success" (a won outcome is a
+   semantic success state, not the rose brand accent — rose stays reserved
+   for brand moments, not status), lost/archived stay "neutral". */
 const STATUS_TONES: Record<LeadStatus, BadgeTone> = {
   new: "outline",
   contacted: "outline",
@@ -12,7 +14,7 @@ const STATUS_TONES: Record<LeadStatus, BadgeTone> = {
   qualified: "outline",
   proposal_sent: "outline",
   waiting_decision: "outline",
-  converted: "accent",
+  converted: "success",
   lost: "neutral",
   archived: "neutral",
 };

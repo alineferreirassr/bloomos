@@ -130,13 +130,14 @@ export function LeadsListView() {
         }
       />
 
+      <div className="space-y-8">
       {insight ? (
-        <div className="animate-fade-up mb-6">
+        <div className="animate-fade-up">
           <ModuleInsightCard insight={insight} />
         </div>
       ) : null}
 
-      <div className="mb-6">
+      <div>
         {kpis ? (
           <div className="animate-fade-up stagger-1 grid grid-cols-2 gap-3 md:grid-cols-4">
             <KpiCard icon={LeadsIcon} label="Total Leads" value={kpis.total.toLocaleString()} />
@@ -149,9 +150,7 @@ export function LeadsListView() {
         ) : null}
       </div>
 
-      <div className="mb-6">
-        <LeadFilters value={filters} onChange={handleFiltersChange} />
-      </div>
+      <LeadFilters value={filters} onChange={handleFiltersChange} />
 
       <div>
         {state.status === "loading" ? (
@@ -182,6 +181,7 @@ export function LeadsListView() {
             <LeadListCards leads={state.leads} />
           </div>
         )}
+      </div>
       </div>
     </div>
   );

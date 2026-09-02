@@ -19,9 +19,12 @@ interface LeadFiltersProps {
   onChange: (value: LeadFiltersValue) => void;
 }
 
+/* Relationships/CRM visual pass — a quiet tinted surface (no border) so the
+   search/filter row reads as integrated page furniture rather than a
+   separate admin toolbar, per the approved brief. */
 export function LeadFilters({ value, onChange }: LeadFiltersProps) {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+    <div className="grid grid-cols-1 gap-3 rounded-2xl bg-surface/70 p-4 sm:grid-cols-2 lg:grid-cols-5">
       <Input
         placeholder="Search name or email…"
         value={value.search}
