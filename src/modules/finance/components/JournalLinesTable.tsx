@@ -1,4 +1,4 @@
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { formatMoney } from "@/lib/money";
 import type { JournalLine } from "@/types/journalEntry";
 
@@ -9,31 +9,31 @@ export function JournalLinesTable({ lines, currency }: { lines: JournalLine[]; c
 
   return (
     <>
-      <div className="hidden overflow-x-auto rounded-md border border-border md:block">
+      <div className="hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
         <table className="w-full border-collapse text-left text-sm">
           <thead>
-            <tr>
+            <tr className="border-b border-border/70">
               {["Account", "Description", "Debit", "Credit"].map((heading) => (
                 <th
                   key={heading}
-                  className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
+                  className="px-5 py-4 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
                 >
                   {heading}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-border/60">
             {lines.map((line) => (
               <tr key={line.id} className="hover:bg-text/4">
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text">
+                <td className="px-5 py-4 whitespace-nowrap text-text">
                   {line.account ? `${line.account.account_number} — ${line.account.name}` : "—"}
                 </td>
-                <td className="border-b border-border px-2.5 py-2 text-text-muted">{line.line_memo ?? "—"}</td>
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text">
+                <td className="px-5 py-4 text-text-muted">{line.line_memo ?? "—"}</td>
+                <td className="px-5 py-4 whitespace-nowrap text-text">
                   {line.debit_minor > 0 ? formatMoney(line.debit_minor, currency) : "—"}
                 </td>
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text">
+                <td className="px-5 py-4 whitespace-nowrap text-text">
                   {line.credit_minor > 0 ? formatMoney(line.credit_minor, currency) : "—"}
                 </td>
               </tr>
@@ -41,13 +41,13 @@ export function JournalLinesTable({ lines, currency }: { lines: JournalLine[]; c
           </tbody>
           <tfoot>
             <tr>
-              <td className="px-2.5 py-2 text-xs font-semibold tracking-wide text-text-muted uppercase" colSpan={2}>
+              <td className="px-5 py-4 text-xs font-semibold tracking-wide text-text-muted uppercase" colSpan={2}>
                 Total
               </td>
-              <td className="px-2.5 py-2 font-semibold whitespace-nowrap text-text">
+              <td className="px-5 py-4 font-semibold whitespace-nowrap text-text">
                 {formatMoney(totalDebitMinor, currency)}
               </td>
-              <td className="px-2.5 py-2 font-semibold whitespace-nowrap text-text">
+              <td className="px-5 py-4 font-semibold whitespace-nowrap text-text">
                 {formatMoney(totalCreditMinor, currency)}
               </td>
             </tr>
@@ -57,7 +57,7 @@ export function JournalLinesTable({ lines, currency }: { lines: JournalLine[]; c
 
       <div className="space-y-3 md:hidden">
         {lines.map((line) => (
-          <Card key={line.id}>
+          <LuxuryCard key={line.id}>
             <p className="text-sm font-medium text-text">
               {line.account ? `${line.account.account_number} — ${line.account.name}` : "—"}
             </p>
@@ -70,14 +70,14 @@ export function JournalLinesTable({ lines, currency }: { lines: JournalLine[]; c
                 Credit: <span className="text-text">{line.credit_minor > 0 ? formatMoney(line.credit_minor, currency) : "—"}</span>
               </span>
             </div>
-          </Card>
+          </LuxuryCard>
         ))}
-        <Card className="flex items-center justify-between text-sm font-semibold">
+        <LuxuryCard className="flex items-center justify-between text-sm font-semibold">
           <span>Total</span>
           <span>
             {formatMoney(totalDebitMinor, currency)} / {formatMoney(totalCreditMinor, currency)}
           </span>
-        </Card>
+        </LuxuryCard>
       </div>
     </>
   );

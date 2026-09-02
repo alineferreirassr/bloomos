@@ -7,10 +7,10 @@ import type { ExpenseListRow } from "@/modules/finance/components/ExpensesListVi
 
 export function ExpenseListTable({ rows }: { rows: ExpenseListRow[] }) {
   return (
-    <div className="hidden overflow-x-auto rounded-md border border-border md:block">
+    <div className="hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
       <table className="w-full border-collapse text-left text-sm">
-        <thead>
-          <tr>
+        <thead className="sticky top-0 z-[var(--z-index-dropdown)] bg-surface">
+          <tr className="border-b border-border/70">
             {[
               "Date",
               "Description",
@@ -25,44 +25,44 @@ export function ExpenseListTable({ rows }: { rows: ExpenseListRow[] }) {
             ].map((heading) => (
               <th
                 key={heading}
-                className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
+                className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase whitespace-nowrap"
               >
                 {heading}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-border/60">
           {rows.map(({ expense, event, nextAction }) => (
-            <tr key={expense.id} className="hover:bg-text/4">
-              <td className="border-b border-border px-2.5 py-2 whitespace-nowrap">
+            <tr key={expense.id} className="transition-colors duration-150 hover:bg-accent-100/25">
+              <td className="px-5 py-4 whitespace-nowrap">
                 <Link href={`/finance/expenses/${expense.id}`} className="font-medium text-text hover:text-accent">
                   {formatEventDate(expense.transaction_date)}
                 </Link>
               </td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{expense.description}</td>
-              <td className="border-b border-border px-2.5 py-2">
+              <td className="px-5 py-4 text-text-muted">{expense.description}</td>
+              <td className="px-5 py-4">
                 <ExpenseCategoryBadge category={expense.category} />
               </td>
-              <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
+              <td className="px-5 py-4 whitespace-nowrap text-text-muted">
                 {event ? event.title : "—"}
               </td>
-              <td className="border-b border-border px-2.5 py-2">
+              <td className="px-5 py-4">
                 <ExpenseStatusBadge status={expense.status} />
               </td>
-              <td className="border-b border-border px-2.5 py-2 whitespace-nowrap font-medium text-text">
+              <td className="px-5 py-4 whitespace-nowrap font-medium text-text">
                 {formatMoney(expense.amount_minor, expense.currency)}
               </td>
-              <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
+              <td className="px-5 py-4 whitespace-nowrap text-text-muted">
                 {formatEventDate(expense.due_date)}
               </td>
-              <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
+              <td className="px-5 py-4 whitespace-nowrap text-text-muted">
                 {expense.reimbursable ? "Yes" : "No"}
               </td>
-              <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
+              <td className="px-5 py-4 whitespace-nowrap text-text-muted">
                 {expense.reference ?? "—"}
               </td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{nextAction ?? "—"}</td>
+              <td className="px-5 py-4 text-text-muted">{nextAction ?? "—"}</td>
             </tr>
           ))}
         </tbody>

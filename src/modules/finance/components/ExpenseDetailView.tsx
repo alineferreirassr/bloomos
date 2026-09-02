@@ -20,7 +20,8 @@ import type { Contract } from "@/types/contract";
 import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
 import { NotFoundError } from "@/core/errors";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { NotesSection } from "@/modules/notes/components/NotesSection";
@@ -105,17 +106,19 @@ export function ExpenseDetailView({ expenseId }: { expenseId: string }) {
   const notesReadOnly = isExpenseTerminal(expense.status);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
         <Link href="/finance/expenses" className="text-sm text-accent hover:underline">
           ← Back to Expenses
         </Link>
+        <h2 className="mt-2 font-serif text-3xl font-semibold text-text">{expense.description}</h2>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <h2 className="font-serif text-3xl font-semibold text-text">{expense.description}</h2>
           <ExpenseStatusBadge status={expense.status} />
           <ExpenseCategoryBadge category={expense.category} />
         </div>
-        <p className="mt-1 text-sm text-text-muted">
+        <p className="mt-3 text-sm text-text-muted">
+          {formatMoney(expense.amount_minor, expense.currency)}
+          {" · "}
           {formatEventDate(expense.transaction_date)}
           {client ? (
             <>
@@ -141,10 +144,7 @@ export function ExpenseDetailView({ expenseId }: { expenseId: string }) {
               </Link>
             </>
           ) : null}
-        </p>
-        <p className="mt-1 text-sm text-text">
-          {formatMoney(expense.amount_minor, expense.currency)}
-          {expense.reimbursable ? <span className="text-text-muted"> · Reimbursable</span> : null}
+          {expense.reimbursable ? " · Reimbursable" : null}
         </p>
 
         <div className="mt-4">
@@ -153,144 +153,163 @@ export function ExpenseDetailView({ expenseId }: { expenseId: string }) {
       </div>
 
       {nextAction ? (
-        <Card className="border-accent/40 bg-accent/5">
+        <LuxuryCard>
           <p className="text-xs font-medium uppercase tracking-wide text-accent">Next recommended action</p>
           <p className="mt-1 text-sm text-text">{nextAction}</p>
-        </Card>
+        </LuxuryCard>
       ) : null}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Expense Summary</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Status" value={<ExpenseStatusBadge status={expense.status} />} />
-              <Field label="Category" value={<ExpenseCategoryBadge category={expense.category} />} />
-              <Field label="Amount" value={formatMoney(expense.amount_minor, expense.currency)} />
-              <Field label="Currency" value={expense.currency} />
-              <Field label="Reference" value={expense.reference} />
-              <Field label="Reimbursable" value={expense.reimbursable ? "Yes" : "No"} />
-              <Field label="Supplier" value={expense.supplier_id} />
-              <Field label="Team member" value={expense.team_member_id} />
-              <Field label="Created" value={new Date(expense.created_at).toLocaleDateString()} />
-              <Field label="Updated" value={new Date(expense.updated_at).toLocaleDateString()} />
-            </dl>
-          </Card>
-
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Client</h3>
-            {client ? (
+        <div className="space-y-8 lg:col-span-2">
+          <div>
+            <SectionHeader title="Overview" />
+            <LuxuryCard tone="tint">
+              <h3 className="font-serif text-[17px] font-semibold text-text">Expense Summary</h3>
               <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field
-                  label="Name"
-                  value={
-                    <Link href={`/clients/${client.id}`} className="text-accent hover:underline">
-                      {client.first_name} {client.last_name}
-                    </Link>
-                  }
-                />
-                <Field label="Email" value={client.email} />
-                <Field label="Phone" value={client.phone} />
+                <Field label="Status" value={<ExpenseStatusBadge status={expense.status} />} />
+                <Field label="Category" value={<ExpenseCategoryBadge category={expense.category} />} />
+                <Field label="Amount" value={formatMoney(expense.amount_minor, expense.currency)} />
+                <Field label="Currency" value={expense.currency} />
+                <Field label="Reference" value={expense.reference} />
+                <Field label="Reimbursable" value={expense.reimbursable ? "Yes" : "No"} />
+                <Field label="Supplier" value={expense.supplier_id} />
+                <Field label="Team member" value={expense.team_member_id} />
+                <Field label="Created" value={new Date(expense.created_at).toLocaleDateString()} />
+                <Field label="Updated" value={new Date(expense.updated_at).toLocaleDateString()} />
               </dl>
-            ) : (
-              <p className="mt-2 text-sm text-text-muted">No linked client — this is a general business expense.</p>
-            )}
-          </Card>
+            </LuxuryCard>
+          </div>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Event</h3>
-            {event ? (
-              <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field
-                  label="Title"
-                  value={
-                    <Link href={`/events/${event.id}`} className="text-accent hover:underline">
-                      {event.title}
-                    </Link>
-                  }
-                />
-                <Field label="Event date" value={formatEventDate(event.event_date)} />
-              </dl>
-            ) : (
-              <p className="mt-2 text-sm text-text-muted">No linked event — this expense stands on its own.</p>
-            )}
-          </Card>
+          <div>
+            <SectionHeader title="Related Records" />
+            <div className="space-y-6">
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Client</h3>
+                {client ? (
+                  <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field
+                      label="Name"
+                      value={
+                        <Link href={`/clients/${client.id}`} className="text-accent hover:underline">
+                          {client.first_name} {client.last_name}
+                        </Link>
+                      }
+                    />
+                    <Field label="Email" value={client.email} />
+                    <Field label="Phone" value={client.phone} />
+                  </dl>
+                ) : (
+                  <p className="mt-2 text-sm text-text-muted">No linked client — this is a general business expense.</p>
+                )}
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Contract</h3>
-            {contract ? (
-              <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field
-                  label="Contract number"
-                  value={
-                    <Link href={`/contracts/${contract.id}`} className="text-accent hover:underline">
-                      {contract.contract_number}
-                    </Link>
-                  }
-                />
-                <Field label="Title" value={contract.title} />
-              </dl>
-            ) : (
-              <p className="mt-2 text-sm text-text-muted">No linked contract — this expense stands on its own.</p>
-            )}
-          </Card>
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Event</h3>
+                {event ? (
+                  <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field
+                      label="Title"
+                      value={
+                        <Link href={`/events/${event.id}`} className="text-accent hover:underline">
+                          {event.title}
+                        </Link>
+                      }
+                    />
+                    <Field label="Event date" value={formatEventDate(event.event_date)} />
+                  </dl>
+                ) : (
+                  <p className="mt-2 text-sm text-text-muted">No linked event — this expense stands on its own.</p>
+                )}
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Dates</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Transaction date" value={formatEventDate(expense.transaction_date)} />
-              <Field label="Due date" value={formatEventDate(expense.due_date)} />
-              <Field label="Paid" value={expense.paid_at ? new Date(expense.paid_at).toLocaleString() : null} />
-              <Field
-                label="Reimbursed"
-                value={expense.reimbursed_at ? new Date(expense.reimbursed_at).toLocaleString() : null}
-              />
-              <Field
-                label="Archived"
-                value={expense.archived_at ? new Date(expense.archived_at).toLocaleString() : null}
-              />
-            </dl>
-          </Card>
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Contract</h3>
+                {contract ? (
+                  <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field
+                      label="Contract number"
+                      value={
+                        <Link href={`/contracts/${contract.id}`} className="text-accent hover:underline">
+                          {contract.contract_number}
+                        </Link>
+                      }
+                    />
+                    <Field label="Title" value={contract.title} />
+                  </dl>
+                ) : (
+                  <p className="mt-2 text-sm text-text-muted">No linked contract — this expense stands on its own.</p>
+                )}
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
-            <div className="mt-3">
-              <NotesSection
-                workspaceId={expense.workspace_id}
-                ownerType="expense"
-                ownerId={expense.id}
-                notes={notes}
-                onCreateNote={(input) => createExpenseNote(expense.id, input)}
-                onTogglePin={togglePinNote}
-                readOnly={notesReadOnly}
-                onNotesChanged={refetch}
-              />
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Dates</h3>
+                <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Transaction date" value={formatEventDate(expense.transaction_date)} />
+                  <Field label="Due date" value={formatEventDate(expense.due_date)} />
+                  <Field label="Paid" value={expense.paid_at ? new Date(expense.paid_at).toLocaleString() : null} />
+                  <Field
+                    label="Reimbursed"
+                    value={expense.reimbursed_at ? new Date(expense.reimbursed_at).toLocaleString() : null}
+                  />
+                  <Field
+                    label="Archived"
+                    value={expense.archived_at ? new Date(expense.archived_at).toLocaleString() : null}
+                  />
+                </dl>
+              </LuxuryCard>
             </div>
-          </Card>
+          </div>
+
+          <div>
+            <SectionHeader title="Notes & Documents" />
+            <LuxuryCard>
+              <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
+              <div className="mt-3">
+                <NotesSection
+                  workspaceId={expense.workspace_id}
+                  ownerType="expense"
+                  ownerId={expense.id}
+                  notes={notes}
+                  onCreateNote={(input) => createExpenseNote(expense.id, input)}
+                  onTogglePin={togglePinNote}
+                  readOnly={notesReadOnly}
+                  onNotesChanged={refetch}
+                />
+              </div>
+            </LuxuryCard>
+          </div>
         </div>
 
-        <div className="space-y-6">
-          <DocumentsSummarySection
-            ownerType="expense"
-            ownerId={expense.id}
-            newDocumentParams={{ expenseId: expense.id }}
-          />
+        <div className="space-y-8">
+          <div>
+            <SectionHeader title="Documents" />
+            <DocumentsSummarySection
+              ownerType="expense"
+              ownerId={expense.id}
+              newDocumentParams={{ expenseId: expense.id }}
+            />
+          </div>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
-            <div className="mt-3">
-              <Timeline activities={timeline} />
+          <div>
+            <SectionHeader title="Activity" />
+            <div className="space-y-6">
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
+                <div className="mt-3">
+                  <Timeline activities={timeline} />
+                </div>
+              </LuxuryCard>
+
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Future Integrations</h3>
+                <p className="mt-2 text-xs text-text-muted">Not built yet — reserved for upcoming modules.</p>
+                <ul className="mt-3 space-y-1.5 text-sm text-text-muted">
+                  <li>Receipt upload</li>
+                  <li>Reimbursement proof</li>
+                </ul>
+              </LuxuryCard>
             </div>
-          </Card>
-
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Future Integrations</h3>
-            <p className="mt-2 text-xs text-text-muted">Not built yet — reserved for upcoming modules.</p>
-            <ul className="mt-3 space-y-1.5 text-sm text-text-muted">
-              <li>Receipt upload</li>
-              <li>Reimbursement proof</li>
-            </ul>
-          </Card>
+          </div>
         </div>
       </div>
     </div>

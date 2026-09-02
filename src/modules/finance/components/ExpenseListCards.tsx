@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { ExpenseStatusBadge } from "@/modules/finance/components/ExpenseStatusBadge";
 import { ExpenseCategoryBadge } from "@/modules/finance/components/ExpenseCategoryBadge";
 import { formatMoney } from "@/lib/money";
@@ -11,7 +11,7 @@ export function ExpenseListCards({ rows }: { rows: ExpenseListRow[] }) {
     <div className="space-y-3 md:hidden">
       {rows.map(({ expense, event, nextAction }) => (
         <Link key={expense.id} href={`/finance/expenses/${expense.id}`} className="block">
-          <Card className="transition-colors duration-150 hover:border-accent/50">
+          <LuxuryCard>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-medium tracking-tight text-text">{expense.description}</p>
@@ -29,7 +29,7 @@ export function ExpenseListCards({ rows }: { rows: ExpenseListRow[] }) {
               {expense.reimbursable ? <span>Reimbursable</span> : null}
             </div>
             {nextAction ? <p className="mt-2 text-xs text-accent">{nextAction}</p> : null}
-          </Card>
+          </LuxuryCard>
         </Link>
       ))}
     </div>

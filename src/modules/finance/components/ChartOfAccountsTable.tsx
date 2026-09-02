@@ -1,4 +1,4 @@
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge } from "@/components/ui/Badge";
 import { AccountTypeBadge } from "@/modules/finance/components/AccountTypeBadge";
 import type { ChartOfAccount } from "@/types/chartOfAccount";
@@ -12,37 +12,37 @@ interface ChartOfAccountsTableProps {
 export function ChartOfAccountsTable({ accounts, accountsById }: ChartOfAccountsTableProps) {
   return (
     <>
-      <div className="hidden overflow-x-auto rounded-md border border-border md:block">
+      <div className="hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
         <table className="w-full border-collapse text-left text-sm">
           <thead>
-            <tr>
+            <tr className="border-b border-border/70">
               {["Number", "Name", "Type", "Normal Balance", "Parent Account", "Status"].map((heading) => (
                 <th
                   key={heading}
-                  className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
+                  className="px-5 py-4 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
                 >
                   {heading}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-border/60">
             {accounts.map((account) => (
               <tr key={account.id} className="hover:bg-text/4">
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap font-medium text-text">
+                <td className="px-5 py-4 whitespace-nowrap font-medium text-text">
                   {account.account_number}
                 </td>
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text">{account.name}</td>
-                <td className="border-b border-border px-2.5 py-2">
+                <td className="px-5 py-4 whitespace-nowrap text-text">{account.name}</td>
+                <td className="px-5 py-4">
                   <AccountTypeBadge accountType={account.account_type} />
                 </td>
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted capitalize">
+                <td className="px-5 py-4 whitespace-nowrap text-text-muted capitalize">
                   {account.normal_balance}
                 </td>
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
+                <td className="px-5 py-4 whitespace-nowrap text-text-muted">
                   {account.parent_account_id ? (accountsById.get(account.parent_account_id)?.name ?? "—") : "—"}
                 </td>
-                <td className="border-b border-border px-2.5 py-2">
+                <td className="px-5 py-4">
                   <Badge tone={account.archived_at ? "neutral" : "accent"}>
                     {account.archived_at ? "Inactive" : "Active"}
                   </Badge>
@@ -55,7 +55,7 @@ export function ChartOfAccountsTable({ accounts, accountsById }: ChartOfAccounts
 
       <div className="space-y-3 md:hidden">
         {accounts.map((account) => (
-          <Card key={account.id}>
+          <LuxuryCard key={account.id}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-medium tracking-tight text-text">
@@ -75,7 +75,7 @@ export function ChartOfAccountsTable({ accounts, accountsById }: ChartOfAccounts
                 </Badge>
               </div>
             </div>
-          </Card>
+          </LuxuryCard>
         ))}
       </div>
     </>

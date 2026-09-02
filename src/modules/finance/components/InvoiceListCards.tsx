@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { InvoiceStatusBadge } from "@/modules/finance/components/InvoiceStatusBadge";
 import { formatMoney } from "@/lib/money";
 import { formatEventDate } from "@/modules/events/dateFormat";
@@ -11,7 +11,7 @@ export function InvoiceListCards({ rows }: { rows: InvoiceListRow[] }) {
     <div className="space-y-3 md:hidden">
       {rows.map(({ invoice, client, event, nextAction }) => (
         <Link key={invoice.id} href={`/finance/invoices/${invoice.id}`} className="block">
-          <Card className="transition-colors duration-150 hover:border-accent/50">
+          <LuxuryCard className="transition-transform duration-150 hover:-translate-y-0.5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-medium tracking-tight text-text">{invoice.title}</p>
@@ -29,7 +29,7 @@ export function InvoiceListCards({ rows }: { rows: InvoiceListRow[] }) {
               {invoice.due_date ? <span>Due {formatEventDate(invoice.due_date)}</span> : null}
             </div>
             {nextAction ? <p className="mt-2 text-xs text-accent">{nextAction}</p> : null}
-          </Card>
+          </LuxuryCard>
         </Link>
       ))}
     </div>

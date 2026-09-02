@@ -25,7 +25,8 @@ import type { Invoice } from "@/types/invoice";
 import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
 import { NotFoundError } from "@/core/errors";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { NotesSection } from "@/modules/notes/components/NotesSection";
@@ -146,19 +147,19 @@ export function PaymentDetailView({ paymentId }: { paymentId: string }) {
   const refundedSoFarMinor = subtractMinor(payment.amount_minor, refundableMinor);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
         <Link href="/finance/payments" className="text-sm text-accent hover:underline">
           ← Back to Payments
         </Link>
+        <h2 className="mt-2 font-serif text-3xl font-semibold text-text">
+          {formatMoney(payment.amount_minor, payment.currency)}
+        </h2>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <h2 className="font-serif text-3xl font-semibold text-text">
-            {formatMoney(payment.amount_minor, payment.currency)}
-          </h2>
           <PaymentTypeBadge type={payment.payment_type} reference={payment.reference} />
           <PaymentStatusBadge status={payment.status} />
         </div>
-        <p className="mt-1 text-sm text-text-muted">
+        <p className="mt-3 text-sm text-text-muted">
           {client ? (
             <Link href={`/clients/${client.id}`} className="text-accent hover:underline">
               {client.first_name} {client.last_name}
@@ -202,115 +203,134 @@ export function PaymentDetailView({ paymentId }: { paymentId: string }) {
       </div>
 
       {nextAction ? (
-        <Card className="border-accent/40 bg-accent/5">
+        <LuxuryCard>
           <p className="text-xs font-medium uppercase tracking-wide text-accent">Next recommended action</p>
           <p className="mt-1 text-sm text-text">{nextAction}</p>
-        </Card>
+        </LuxuryCard>
       ) : null}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Payment Details</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Amount" value={formatMoney(payment.amount_minor, payment.currency)} />
-              <Field label="Type" value={<PaymentTypeBadge type={payment.payment_type} reference={payment.reference} />} />
-              <Field label="Method" value={<PaymentMethodBadge method={payment.payment_method} />} />
-              <Field label="Status" value={<PaymentStatusBadge status={payment.status} />} />
-              <Field label="Transaction date" value={formatEventDate(payment.transaction_date)} />
-              <Field label="Reference" value={payment.reference} />
-              <Field label="Received" value={payment.received_at ? new Date(payment.received_at).toLocaleString() : null} />
-              <Field label="Failed" value={payment.failed_at ? new Date(payment.failed_at).toLocaleString() : null} />
-              <Field label="Refunded" value={payment.refunded_at ? new Date(payment.refunded_at).toLocaleString() : null} />
-            </dl>
-            {payment.status === "partially_refunded" || payment.status === "refunded" ? (
-              <div className="mt-3 rounded-md border border-border px-3 py-2">
-                <p className="text-xs text-text-muted">
-                  {payment.status === "refunded" ? "Fully refunded" : "Partially refunded"} —{" "}
-                  {formatMoney(refundedSoFarMinor, payment.currency)} refunded of{" "}
-                  {formatMoney(payment.amount_minor, payment.currency)}
-                  {refundableMinor > 0 ? `, ${formatMoney(refundableMinor, payment.currency)} still refundable` : ""}
-                </p>
-              </div>
-            ) : null}
-          </Card>
-
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Client</h3>
-            {client ? (
+        <div className="space-y-8 lg:col-span-2">
+          <div>
+            <SectionHeader title="Overview" />
+            <LuxuryCard tone="tint">
+              <h3 className="font-serif text-[17px] font-semibold text-text">Payment Details</h3>
               <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field
-                  label="Name"
-                  value={
-                    <Link href={`/clients/${client.id}`} className="text-accent hover:underline">
-                      {client.first_name} {client.last_name}
-                    </Link>
-                  }
-                />
-                <Field label="Email" value={client.email} />
+                <Field label="Amount" value={formatMoney(payment.amount_minor, payment.currency)} />
+                <Field label="Type" value={<PaymentTypeBadge type={payment.payment_type} reference={payment.reference} />} />
+                <Field label="Method" value={<PaymentMethodBadge method={payment.payment_method} />} />
+                <Field label="Status" value={<PaymentStatusBadge status={payment.status} />} />
+                <Field label="Transaction date" value={formatEventDate(payment.transaction_date)} />
+                <Field label="Reference" value={payment.reference} />
+                <Field label="Received" value={payment.received_at ? new Date(payment.received_at).toLocaleString() : null} />
+                <Field label="Failed" value={payment.failed_at ? new Date(payment.failed_at).toLocaleString() : null} />
+                <Field label="Refunded" value={payment.refunded_at ? new Date(payment.refunded_at).toLocaleString() : null} />
               </dl>
-            ) : (
-              <p className="mt-2 text-sm text-text-muted">Client not found.</p>
-            )}
-          </Card>
+              {payment.status === "partially_refunded" || payment.status === "refunded" ? (
+                <div className="mt-3 rounded-md border border-border px-3 py-2">
+                  <p className="text-xs text-text-muted">
+                    {payment.status === "refunded" ? "Fully refunded" : "Partially refunded"} —{" "}
+                    {formatMoney(refundedSoFarMinor, payment.currency)} refunded of{" "}
+                    {formatMoney(payment.amount_minor, payment.currency)}
+                    {refundableMinor > 0 ? `, ${formatMoney(refundableMinor, payment.currency)} still refundable` : ""}
+                  </p>
+                </div>
+              ) : null}
+            </LuxuryCard>
+          </div>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Invoice</h3>
-            {invoice ? (
-              <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field
-                  label="Invoice number"
-                  value={
-                    <Link href={`/finance/invoices/${invoice.id}`} className="text-accent hover:underline">
-                      {invoice.invoice_number}
-                    </Link>
-                  }
-                />
-                <Field label="Balance" value={formatMoney(invoice.balance_minor, invoice.currency)} />
-              </dl>
-            ) : (
-              <p className="mt-2 text-sm text-text-muted">No linked invoice — this payment stands on its own.</p>
-            )}
-          </Card>
+          <div>
+            <SectionHeader title="Related Records" />
+            <div className="space-y-6">
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Client</h3>
+                {client ? (
+                  <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field
+                      label="Name"
+                      value={
+                        <Link href={`/clients/${client.id}`} className="text-accent hover:underline">
+                          {client.first_name} {client.last_name}
+                        </Link>
+                      }
+                    />
+                    <Field label="Email" value={client.email} />
+                  </dl>
+                ) : (
+                  <p className="mt-2 text-sm text-text-muted">Client not found.</p>
+                )}
+              </LuxuryCard>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
-            <div className="mt-3">
-              <NotesSection
-                workspaceId={payment.workspace_id}
-                ownerType="payment"
-                ownerId={payment.id}
-                notes={notes}
-                onCreateNote={(input) => createPaymentNote(payment.id, input)}
-                onTogglePin={togglePinNote}
-                readOnly={notesReadOnly}
-                onNotesChanged={refetch}
-              />
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Invoice</h3>
+                {invoice ? (
+                  <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field
+                      label="Invoice number"
+                      value={
+                        <Link href={`/finance/invoices/${invoice.id}`} className="text-accent hover:underline">
+                          {invoice.invoice_number}
+                        </Link>
+                      }
+                    />
+                    <Field label="Balance" value={formatMoney(invoice.balance_minor, invoice.currency)} />
+                  </dl>
+                ) : (
+                  <p className="mt-2 text-sm text-text-muted">No linked invoice — this payment stands on its own.</p>
+                )}
+              </LuxuryCard>
             </div>
-          </Card>
+          </div>
+
+          <div>
+            <SectionHeader title="Notes & Documents" />
+            <LuxuryCard>
+              <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
+              <div className="mt-3">
+                <NotesSection
+                  workspaceId={payment.workspace_id}
+                  ownerType="payment"
+                  ownerId={payment.id}
+                  notes={notes}
+                  onCreateNote={(input) => createPaymentNote(payment.id, input)}
+                  onTogglePin={togglePinNote}
+                  readOnly={notesReadOnly}
+                  onNotesChanged={refetch}
+                />
+              </div>
+            </LuxuryCard>
+          </div>
         </div>
 
-        <div className="space-y-6">
-          <DocumentsSummarySection
-            ownerType="payment"
-            ownerId={payment.id}
-            newDocumentParams={{ paymentId: payment.id, clientId: payment.client_id }}
-          />
+        <div className="space-y-8">
+          <div>
+            <SectionHeader title="Documents" />
+            <DocumentsSummarySection
+              ownerType="payment"
+              ownerId={payment.id}
+              newDocumentParams={{ paymentId: payment.id, clientId: payment.client_id }}
+            />
+          </div>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
-            <div className="mt-3">
-              <Timeline activities={timeline} />
+          <div>
+            <SectionHeader title="Activity" />
+            <div className="space-y-6">
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
+                <div className="mt-3">
+                  <Timeline activities={timeline} />
+                </div>
+              </LuxuryCard>
+
+              <LuxuryCard>
+                <h3 className="font-serif text-[17px] font-semibold text-text">Future Integrations</h3>
+                <p className="mt-2 text-xs text-text-muted">Not built yet — reserved for upcoming modules.</p>
+                <ul className="mt-3 space-y-1.5 text-sm text-text-muted">
+                  <li>Receipt upload &amp; payment confirmation</li>
+                </ul>
+              </LuxuryCard>
             </div>
-          </Card>
-
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Future Integrations</h3>
-            <p className="mt-2 text-xs text-text-muted">Not built yet — reserved for upcoming modules.</p>
-            <ul className="mt-3 space-y-1.5 text-sm text-text-muted">
-              <li>Receipt upload &amp; payment confirmation</li>
-            </ul>
-          </Card>
+          </div>
         </div>
       </div>
     </div>

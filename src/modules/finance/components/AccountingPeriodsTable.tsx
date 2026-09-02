@@ -1,4 +1,4 @@
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Button } from "@/components/ui/Button";
 import { AccountingPeriodStatusBadge } from "@/modules/finance/components/AccountingPeriodStatusBadge";
 import { formatEventDate } from "@/modules/events/dateFormat";
@@ -15,36 +15,36 @@ interface AccountingPeriodsTableProps {
 export function AccountingPeriodsTable({ periods, canUpdate, onClose, onLock }: AccountingPeriodsTableProps) {
   return (
     <>
-      <div className="hidden overflow-x-auto rounded-md border border-border md:block">
+      <div className="hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
         <table className="w-full border-collapse text-left text-sm">
           <thead>
-            <tr>
+            <tr className="border-b border-border/70">
               {["Period", "Status", "Closed", "Locked", "Actions"].map((heading) => (
                 <th
                   key={heading}
-                  className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
+                  className="px-5 py-4 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
                 >
                   {heading}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-border/60">
             {periods.map((period) => (
               <tr key={period.id} className="hover:bg-text/4">
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap font-medium text-text">
+                <td className="px-5 py-4 whitespace-nowrap font-medium text-text">
                   {formatEventDate(period.period_start)} – {formatEventDate(period.period_end)}
                 </td>
-                <td className="border-b border-border px-2.5 py-2">
+                <td className="px-5 py-4">
                   <AccountingPeriodStatusBadge status={period.status} />
                 </td>
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
+                <td className="px-5 py-4 whitespace-nowrap text-text-muted">
                   {period.closed_at ? `${formatEventDate(period.closed_at)} · ${period.closed_by ?? "—"}` : "—"}
                 </td>
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
+                <td className="px-5 py-4 whitespace-nowrap text-text-muted">
                   {period.locked_at ? `${formatEventDate(period.locked_at)} · ${period.locked_by ?? "—"}` : "—"}
                 </td>
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap">
+                <td className="px-5 py-4 whitespace-nowrap">
                   <div className="flex gap-2">
                     {canUpdate && period.status === "open" ? (
                       <Button variant="secondary" onClick={() => onClose(period)}>
@@ -66,7 +66,7 @@ export function AccountingPeriodsTable({ periods, canUpdate, onClose, onLock }: 
 
       <div className="space-y-3 md:hidden">
         {periods.map((period) => (
-          <Card key={period.id}>
+          <LuxuryCard key={period.id}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-medium tracking-tight text-text">
@@ -95,7 +95,7 @@ export function AccountingPeriodsTable({ periods, canUpdate, onClose, onLock }: 
                 ) : null}
               </div>
             ) : null}
-          </Card>
+          </LuxuryCard>
         ))}
       </div>
     </>

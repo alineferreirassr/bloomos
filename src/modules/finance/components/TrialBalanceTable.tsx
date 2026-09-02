@@ -1,4 +1,4 @@
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge } from "@/components/ui/Badge";
 import { AccountTypeBadge } from "@/modules/finance/components/AccountTypeBadge";
 import { MoneyCell } from "@/modules/finance/components/MoneyCell";
@@ -14,15 +14,15 @@ interface TrialBalanceTableProps {
 export function TrialBalanceTable({ rows, totalEndingDebitMinor, totalEndingCreditMinor }: TrialBalanceTableProps) {
   return (
     <>
-      <div className="hidden overflow-x-auto rounded-md border border-border md:block">
+      <div className="hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
         <table className="w-full border-collapse text-left text-sm">
           <thead>
-            <tr>
+            <tr className="border-b border-border/70">
               {["Number", "Name", "Type", "Debit Activity", "Credit Activity", "Ending Debit", "Ending Credit"].map(
                 (heading) => (
                   <th
                     key={heading}
-                    className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
+                    className="px-5 py-4 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
                   >
                     {heading}
                   </th>
@@ -30,13 +30,13 @@ export function TrialBalanceTable({ rows, totalEndingDebitMinor, totalEndingCred
               )}
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-border/60">
             {rows.map((row) => (
               <tr key={row.accountId} className="hover:bg-text/4">
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap font-medium text-text">
+                <td className="px-5 py-4 whitespace-nowrap font-medium text-text">
                   {row.accountNumber}
                 </td>
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text">
+                <td className="px-5 py-4 whitespace-nowrap text-text">
                   {row.accountName}
                   {row.isArchived ? (
                     <Badge tone="neutral" className="ml-2">
@@ -44,19 +44,19 @@ export function TrialBalanceTable({ rows, totalEndingDebitMinor, totalEndingCred
                     </Badge>
                   ) : null}
                 </td>
-                <td className="border-b border-border px-2.5 py-2">
+                <td className="px-5 py-4">
                   <AccountTypeBadge accountType={row.accountType} />
                 </td>
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap">
+                <td className="px-5 py-4 whitespace-nowrap">
                   <MoneyCell amountMinor={row.debitMinor} hideZero />
                 </td>
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap">
+                <td className="px-5 py-4 whitespace-nowrap">
                   <MoneyCell amountMinor={row.creditMinor} hideZero />
                 </td>
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap font-medium">
+                <td className="px-5 py-4 whitespace-nowrap font-medium">
                   <MoneyCell amountMinor={row.endingDebitMinor} hideZero />
                 </td>
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap font-medium">
+                <td className="px-5 py-4 whitespace-nowrap font-medium">
                   <MoneyCell amountMinor={row.endingCreditMinor} hideZero />
                 </td>
               </tr>
@@ -64,13 +64,13 @@ export function TrialBalanceTable({ rows, totalEndingDebitMinor, totalEndingCred
           </tbody>
           <tfoot>
             <tr>
-              <td className="px-2.5 py-2 text-xs font-semibold tracking-wide text-text-muted uppercase" colSpan={5}>
+              <td className="px-5 py-4 text-xs font-semibold tracking-wide text-text-muted uppercase" colSpan={5}>
                 Total
               </td>
-              <td className="px-2.5 py-2 font-semibold whitespace-nowrap">
+              <td className="px-5 py-4 font-semibold whitespace-nowrap">
                 <MoneyCell amountMinor={totalEndingDebitMinor} />
               </td>
-              <td className="px-2.5 py-2 font-semibold whitespace-nowrap">
+              <td className="px-5 py-4 font-semibold whitespace-nowrap">
                 <MoneyCell amountMinor={totalEndingCreditMinor} />
               </td>
             </tr>
@@ -80,7 +80,7 @@ export function TrialBalanceTable({ rows, totalEndingDebitMinor, totalEndingCred
 
       <div className="space-y-3 md:hidden">
         {rows.map((row) => (
-          <Card key={row.accountId}>
+          <LuxuryCard key={row.accountId}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-medium tracking-tight text-text">
@@ -104,14 +104,14 @@ export function TrialBalanceTable({ rows, totalEndingDebitMinor, totalEndingCred
                 Ending credit: <span className="font-medium text-text"><MoneyCell amountMinor={row.endingCreditMinor} hideZero /></span>
               </span>
             </div>
-          </Card>
+          </LuxuryCard>
         ))}
-        <Card className="flex items-center justify-between text-sm font-semibold">
+        <LuxuryCard className="flex items-center justify-between text-sm font-semibold">
           <span>Total</span>
           <span>
             <MoneyCell amountMinor={totalEndingDebitMinor} /> / <MoneyCell amountMinor={totalEndingCreditMinor} />
           </span>
-        </Card>
+        </LuxuryCard>
       </div>
     </>
   );

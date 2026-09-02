@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Button } from "@/components/ui/Button";
 import { FinanceReportsNav } from "@/modules/finance/components/FinanceReportsNav";
 
@@ -51,7 +51,7 @@ export function ReportsOverviewView() {
 
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
         {REPORT_CARDS.map((report) => (
-          <Card key={report.href}>
+          <LuxuryCard key={report.href}>
             <h3 className="font-serif text-[17px] font-semibold text-text">{report.name}</h3>
             <p className="mt-1.5 text-sm text-text-muted">{report.purpose}</p>
             <p className="mt-2 text-xs text-text-muted uppercase tracking-wide">{report.dateModel}</p>
@@ -60,7 +60,7 @@ export function ReportsOverviewView() {
                 <Button variant="secondary">Open {report.name}</Button>
               </Link>
             </div>
-          </Card>
+          </LuxuryCard>
         ))}
       </div>
 

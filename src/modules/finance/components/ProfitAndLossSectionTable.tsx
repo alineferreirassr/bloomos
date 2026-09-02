@@ -38,15 +38,15 @@ export function ProfitAndLossSectionTable({ section, hasComparison, emphasized =
   return (
     <div>
       <h4 className="font-serif text-sm font-semibold text-text">{section.label}</h4>
-      <div className="mt-2 hidden overflow-x-auto rounded-md border border-border md:block">
+      <div className="mt-2 hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
         <table className="w-full border-collapse text-left text-sm">
           <thead>
-            <tr>
+            <tr className="border-b border-border/70">
               {["Number", "Name", "Current Period", ...(hasComparison ? ["Comparison Period", "Variance"] : [])].map(
                 (heading) => (
                   <th
                     key={heading}
-                    className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
+                    className="px-5 py-4 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
                   >
                     {heading}
                   </th>
@@ -54,20 +54,20 @@ export function ProfitAndLossSectionTable({ section, hasComparison, emphasized =
               )}
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-border/60">
             {section.rows.map((row) => (
               <tr key={row.accountId} className="hover:bg-text/4">
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap font-medium text-text">{row.accountNumber}</td>
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text">{row.accountName}</td>
-                <td className="border-b border-border px-2.5 py-2 whitespace-nowrap">
+                <td className="px-5 py-4 whitespace-nowrap font-medium text-text">{row.accountNumber}</td>
+                <td className="px-5 py-4 whitespace-nowrap text-text">{row.accountName}</td>
+                <td className="px-5 py-4 whitespace-nowrap">
                   <MoneyCell amountMinor={row.currentPeriodMinor} />
                 </td>
                 {hasComparison ? (
                   <>
-                    <td className="border-b border-border px-2.5 py-2 whitespace-nowrap">
+                    <td className="px-5 py-4 whitespace-nowrap">
                       {row.comparisonPeriodMinor !== null ? <MoneyCell amountMinor={row.comparisonPeriodMinor} /> : "—"}
                     </td>
-                    <td className="border-b border-border px-2.5 py-2 whitespace-nowrap">
+                    <td className="px-5 py-4 whitespace-nowrap">
                       <VarianceCell varianceMinor={row.varianceMinor} />
                     </td>
                   </>
@@ -77,18 +77,18 @@ export function ProfitAndLossSectionTable({ section, hasComparison, emphasized =
           </tbody>
           <tfoot>
             <tr>
-              <td className="px-2.5 py-2 text-xs font-semibold tracking-wide text-text-muted uppercase" colSpan={2}>
+              <td className="px-5 py-4 text-xs font-semibold tracking-wide text-text-muted uppercase" colSpan={2}>
                 Total {section.label}
               </td>
-              <td className="px-2.5 py-2 font-semibold whitespace-nowrap">
+              <td className="px-5 py-4 font-semibold whitespace-nowrap">
                 <MoneyCell amountMinor={section.totalCurrentPeriodMinor} />
               </td>
               {hasComparison ? (
                 <>
-                  <td className="px-2.5 py-2 font-semibold whitespace-nowrap">
+                  <td className="px-5 py-4 font-semibold whitespace-nowrap">
                     {section.totalComparisonPeriodMinor !== null ? <MoneyCell amountMinor={section.totalComparisonPeriodMinor} /> : "—"}
                   </td>
-                  <td className="px-2.5 py-2 font-semibold whitespace-nowrap">
+                  <td className="px-5 py-4 font-semibold whitespace-nowrap">
                     <VarianceCell varianceMinor={section.totalVarianceMinor} />
                   </td>
                 </>

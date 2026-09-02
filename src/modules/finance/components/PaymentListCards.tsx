@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { PaymentStatusBadge } from "@/modules/finance/components/PaymentStatusBadge";
 import { PaymentTypeBadge } from "@/modules/finance/components/PaymentTypeBadge";
 import { formatMoney } from "@/lib/money";
@@ -12,7 +12,7 @@ export function PaymentListCards({ rows }: { rows: PaymentListRow[] }) {
     <div className="space-y-3 md:hidden">
       {rows.map(({ payment, client, event, invoice }) => (
         <Link key={payment.id} href={`/finance/payments/${payment.id}`} className="block">
-          <Card className="transition-colors duration-150 hover:border-accent/50">
+          <LuxuryCard>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-medium tracking-tight text-text">
@@ -30,7 +30,7 @@ export function PaymentListCards({ rows }: { rows: PaymentListRow[] }) {
                 <PaymentStatusBadge status={payment.status} />
               </div>
             </div>
-          </Card>
+          </LuxuryCard>
         </Link>
       ))}
     </div>

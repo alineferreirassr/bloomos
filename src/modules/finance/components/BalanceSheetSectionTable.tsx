@@ -12,29 +12,29 @@ export function BalanceSheetSectionTable({ section }: BalanceSheetSectionTablePr
   return (
     <div>
       <h4 className="font-serif text-sm font-semibold text-text">{section.label}</h4>
-      <div className="mt-2 hidden overflow-x-auto rounded-md border border-border md:block">
+      <div className="mt-2 hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
         <table className="w-full border-collapse text-left text-sm">
           <thead>
-            <tr>
+            <tr className="border-b border-border/70">
               {["Number", "Name", "Amount"].map((heading) => (
                 <th
                   key={heading}
-                  className="border-b border-border px-2.5 py-2 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
+                  className="px-5 py-4 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
                 >
                   {heading}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-border/60">
             {section.rows.map((row) => {
               const isSynthetic = row.accountId === CURRENT_PERIOD_EARNINGS_ACCOUNT_ID;
               return (
                 <tr key={row.accountId} className={isSynthetic ? "bg-text/4 hover:bg-text/7" : "hover:bg-text/4"}>
-                  <td className="border-b border-border px-2.5 py-2 whitespace-nowrap font-medium text-text">
+                  <td className="px-5 py-4 whitespace-nowrap font-medium text-text">
                     {isSynthetic ? "—" : row.accountNumber}
                   </td>
-                  <td className="border-b border-border px-2.5 py-2 text-text">
+                  <td className="px-5 py-4 text-text">
                     <span className="whitespace-nowrap">
                       {row.accountName}
                       {isSynthetic ? <span className="ml-1.5 text-xs text-text-muted">(report-only)</span> : null}
@@ -45,7 +45,7 @@ export function BalanceSheetSectionTable({ section }: BalanceSheetSectionTablePr
                       </p>
                     ) : null}
                   </td>
-                  <td className="border-b border-border px-2.5 py-2 whitespace-nowrap font-medium">
+                  <td className="px-5 py-4 whitespace-nowrap font-medium">
                     <MoneyCell amountMinor={row.closingBalanceMinor} />
                   </td>
                 </tr>
@@ -54,10 +54,10 @@ export function BalanceSheetSectionTable({ section }: BalanceSheetSectionTablePr
           </tbody>
           <tfoot>
             <tr>
-              <td className="px-2.5 py-2 text-xs font-semibold tracking-wide text-text-muted uppercase" colSpan={2}>
+              <td className="px-5 py-4 text-xs font-semibold tracking-wide text-text-muted uppercase" colSpan={2}>
                 Total {section.label}
               </td>
-              <td className="px-2.5 py-2 font-semibold whitespace-nowrap">
+              <td className="px-5 py-4 font-semibold whitespace-nowrap">
                 <MoneyCell amountMinor={section.totalMinor} />
               </td>
             </tr>
