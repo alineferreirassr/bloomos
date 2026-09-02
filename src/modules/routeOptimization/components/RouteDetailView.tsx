@@ -5,7 +5,8 @@ import Link from "next/link";
 import { getRoutePlanAction, evaluateRoutePlanAction } from "@/modules/routeOptimization/routeOptimizationActions";
 import type { RoutePlan, RoutePlanStatus, Route } from "@/types/routeOptimization";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -31,7 +32,7 @@ import { VendorsIcon, CheckIcon } from "@/components/ui/icons";
  * transitions are emitted from, rather than duplicating the global
  * Timeline feed those events are already recorded into.
  */
-const STATUS_TONE: Record<RoutePlanStatus, BadgeTone> = { draft: "neutral", validated: "accent", approved: "success", archived: "outline" };
+const STATUS_TONE: Record<RoutePlanStatus, BadgeTone> = { draft: "neutral", validated: "outline", approved: "success", archived: "neutral" };
 
 export function RouteDetailView({ routePlanId }: { routePlanId: string }) {
   const [routePlan, setRoutePlan] = useState<RoutePlan | null>(null);
@@ -80,7 +81,9 @@ export function RouteDetailView({ routePlanId }: { routePlanId: string }) {
         <KpiCard label="Versions" value={String(routePlan.versions.length)} icon={CheckIcon} />
       </div>
 
-      <Card className="mb-6">
+      <SectionHeader title="Evaluation" />
+
+      <LuxuryCard tone="tint" className="mb-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold">Evaluation</h2>
           <Button variant="secondary" onClick={evaluate} disabled={result === "loading"}>
@@ -189,9 +192,11 @@ export function RouteDetailView({ routePlanId }: { routePlanId: string }) {
         ) : (
           <p className="text-sm text-text-muted">Run an evaluation to see travel estimates, health scores, and an explanation.</p>
         )}
-      </Card>
+      </LuxuryCard>
 
-      <Card className="mb-6">
+      <SectionHeader title="Route Structure" />
+
+      <LuxuryCard className="mb-6">
         <h2 className="mb-3 text-sm font-semibold">
           Waypoints <span className="font-normal text-text-muted">({snapshot.waypoints.length})</span>
         </h2>
@@ -212,9 +217,9 @@ export function RouteDetailView({ routePlanId }: { routePlanId: string }) {
               ))}
           </ul>
         )}
-      </Card>
+      </LuxuryCard>
 
-      <Card className="mb-6">
+      <LuxuryCard className="mb-6">
         <h2 className="mb-3 text-sm font-semibold">
           Constraints <span className="font-normal text-text-muted">({snapshot.constraints.length})</span>
         </h2>
@@ -233,9 +238,11 @@ export function RouteDetailView({ routePlanId }: { routePlanId: string }) {
             ))}
           </ul>
         )}
-      </Card>
+      </LuxuryCard>
 
-      <Card>
+      <SectionHeader title="Version Timeline" />
+
+      <LuxuryCard>
         <h2 className="mb-3 text-sm font-semibold">
           Timeline <span className="font-normal text-text-muted">({sortedVersions.length} version{sortedVersions.length === 1 ? "" : "s"})</span>
         </h2>
@@ -250,7 +257,7 @@ export function RouteDetailView({ routePlanId }: { routePlanId: string }) {
             </li>
           ))}
         </ul>
-      </Card>
+      </LuxuryCard>
 
       <Link href="/route-optimization" className="mt-2 inline-block text-sm text-accent hover:underline">
         ← Back to Route Optimization

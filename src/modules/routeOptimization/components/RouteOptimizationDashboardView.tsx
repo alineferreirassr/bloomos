@@ -5,7 +5,8 @@ import Link from "next/link";
 import { listRoutePlansAction, evaluateRouteOptimizationPlatformHealthAction, type EvaluateRouteOptimizationPlatformHealthResult } from "@/modules/routeOptimization/routeOptimizationActions";
 import type { RoutePlan, RoutePlanStatus, RouteFindingSeverity } from "@/types/routeOptimization";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -26,7 +27,7 @@ import { VendorsIcon, CheckIcon, AnalyticsIcon } from "@/components/ui/icons";
  */
 const SEVERITY_TONE: Record<RouteFindingSeverity, BadgeTone> = { high: "danger", medium: "warning", low: "neutral" };
 const SEVERITY_LABEL: Record<RouteFindingSeverity, string> = { high: "High", medium: "Medium", low: "Low" };
-const STATUS_TONE: Record<RoutePlanStatus, BadgeTone> = { draft: "neutral", validated: "accent", approved: "success", archived: "outline" };
+const STATUS_TONE: Record<RoutePlanStatus, BadgeTone> = { draft: "neutral", validated: "outline", approved: "success", archived: "neutral" };
 
 function FindingRow({ description, severity }: { description: string; severity: RouteFindingSeverity }) {
   return (
@@ -150,7 +151,9 @@ export function RouteOptimizationDashboardView() {
             <KpiCard label="Average Route Health" value={averageRouteHealth === null ? "—" : String(averageRouteHealth)} icon={CheckIcon} />
           </div>
 
-          <Card className="mb-6">
+          <SectionHeader title="Health & Findings" />
+
+          <LuxuryCard className="mb-6">
             <h2 className="mb-3 text-sm font-semibold">
               Constraint Violations <span className="font-normal text-text-muted">({constraintViolations.length})</span>
             </h2>
@@ -169,9 +172,9 @@ export function RouteOptimizationDashboardView() {
                 ))}
               </ul>
             )}
-          </Card>
+          </LuxuryCard>
 
-          <Card className="mb-6">
+          <LuxuryCard className="mb-6">
             <h2 className="mb-3 text-sm font-semibold">Status Distribution</h2>
             {statusDistribution.length === 0 ? (
               <p className="text-sm text-text-muted">No route plans yet.</p>
@@ -186,23 +189,25 @@ export function RouteOptimizationDashboardView() {
                 ))}
               </ul>
             )}
-          </Card>
+          </LuxuryCard>
 
-          <Card className="mb-6">
+          <LuxuryCard tone="tint" className="mb-6">
             <h2 className="mb-3 text-sm font-semibold">
               High-Severity Findings <span className="font-normal text-text-muted">({highFindings.length})</span>
             </h2>
             {highFindings.length === 0 ? <p className="text-sm text-success">No high-severity findings.</p> : <ul role="list">{highFindings.map((f) => <FindingRow key={f.id} description={f.description} severity={f.severity} />)}</ul>}
-          </Card>
+          </LuxuryCard>
 
-          <Card className="mb-6">
+          <LuxuryCard className="mb-6">
             <h2 className="mb-3 text-sm font-semibold">
               Other Findings <span className="font-normal text-text-muted">({otherFindings.length})</span>
             </h2>
             {otherFindings.length === 0 ? <p className="text-sm text-text-muted">Nothing else to report.</p> : <ul role="list">{otherFindings.slice(0, 10).map((f) => <FindingRow key={f.id} description={f.description} severity={f.severity} />)}</ul>}
-          </Card>
+          </LuxuryCard>
 
-          <Card>
+          <SectionHeader title="Route Plans" />
+
+          <LuxuryCard>
             <h2 className="mb-3 text-sm font-semibold">
               Route Plans <span className="font-normal text-text-muted">({sortedRoutePlans.length})</span>
             </h2>
@@ -215,7 +220,7 @@ export function RouteOptimizationDashboardView() {
                 ))}
               </ul>
             )}
-          </Card>
+          </LuxuryCard>
         </>
       ) : !error ? (
         <p className="text-sm text-text-muted">Loading route optimization health…</p>
