@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Toast } from "@/components/ui/Toast";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { KpiCard } from "@/components/ui/KpiCard";
+import { AutomationIcon, CheckIcon, TaskIcon, NotificationsIcon } from "@/components/ui/icons";
 import { registerCommand, unregisterCommand } from "@/core/commandPalette";
 import { getAutomationDashboardData, type AutomationDashboardData } from "@/modules/automation/getAutomationDashboardData";
 import { approveAutomationExecution } from "@/modules/automation/approveAutomationExecution";
@@ -69,6 +72,13 @@ async function loadDashboard(): Promise<LoadState> {
  * themselves only ever call `executeAutomation()`/the Automation Manager,
  * keeping this component a pure "no UI may execute actions directly"
  * consumer (Step 7's own rule).
+ *
+ * Phase 09C — visual-only pass: the four Automation Health figures that
+ * used to live in their own bespoke card now sit in the top KpiCard row
+ * (a calm "is the Engine healthy" read), and the remaining sections are
+ * grouped by what a human actually needs to do with them — what's waiting
+ * on a decision first, what's active in the Engine next, then the quieter
+ * activity log last. No data shape, handler, or computed value changed.
  */
 export function AutomationDashboardView() {
   const [state, setState] = useState<LoadState>({ status: "loading" });
@@ -161,6 +171,7 @@ export function AutomationDashboardView() {
         <PageHeader
           title="Automation Center"
           subtitle="The single execution path for every deterministic business action in BloomOS. Automations run only after an explicit trigger and, when required, a human's own approval — Bloom AI may suggest an automation, but it never executes one."
+          icon={AutomationIcon}
           actions={
             <Button type="button" variant="secondary" onClick={refresh} disabled={state.status === "loading"}>
               Refresh
@@ -181,38 +192,77 @@ export function AutomationDashboardView() {
         {state.status === "error" ? <ErrorState message={state.message} onRetry={refresh} /> : null}
 
         {state.status === "ready" ? (
-          <div className="space-y-6">
-            <div ref={approvalsRef}>
-              <PendingApprovalsCard
-                data={state.data}
-                pendingActionId={pendingActionId}
-                onApprove={handleApprove}
-                onReject={handleReject}
-              />
-            </div>
+          <div className="space-y-8">
+            <EngineHealthKpiRow data={state.data} />
 
-            <div ref={executionsRef}>
-              <RecentExecutionsCard executions={state.data.recentExecutions} />
-            </div>
+            <section aria-labelledby="automation-attention-heading">
+              <h2 id="automation-attention-heading" className="mb-3 text-xs font-semibold tracking-wide text-text-muted uppercase">
+                Needs Attention
+              </h2>
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div ref={approvalsRef}>
+                  <PendingApprovalsCard
+                    data={state.data}
+                    pendingActionId={pendingActionId}
+                    onApprove={handleApprove}
+                    onReject={handleReject}
+                  />
+                </div>
+                <FailureSummaryCard data={state.data} />
+              </div>
+            </section>
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <AutomationHealthCard data={state.data} />
-              <ExecutionStatisticsCard data={state.data} />
-            </div>
+            <section aria-labelledby="automation-active-heading">
+              <h2 id="automation-active-heading" className="mb-3 text-xs font-semibold tracking-wide text-text-muted uppercase">
+                Active in the Engine
+              </h2>
+              <div className="space-y-4">
+                <RegisteredAutomationsCard data={state.data} />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <RegisteredTriggersCard data={state.data} />
+                  <RegisteredActionsCard data={state.data} />
+                </div>
+              </div>
+            </section>
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <RegisteredTriggersCard data={state.data} />
-              <RegisteredActionsCard data={state.data} />
-            </div>
-
-            <FailureSummaryCard data={state.data} />
-
-            <RegisteredAutomationsCard data={state.data} />
+            <section aria-labelledby="automation-activity-heading">
+              <h2 id="automation-activity-heading" className="mb-3 text-xs font-semibold tracking-wide text-text-muted uppercase">
+                Activity Log
+              </h2>
+              <div className="space-y-4">
+                <div ref={executionsRef}>
+                  <RecentExecutionsCard executions={state.data.recentExecutions} />
+                </div>
+                <ExecutionStatisticsCard data={state.data} />
+              </div>
+            </section>
           </div>
         ) : null}
       </div>
 
       {toast ? <Toast tone={toast.tone} message={toast.message} onDismiss={() => setToast(null)} /> : null}
+    </div>
+  );
+}
+
+function EngineHealthKpiRow({ data }: { data: AutomationDashboardData }) {
+  const { stats } = data;
+  const unlisteneredTriggers = data.triggerSummary.filter((trigger) => trigger.listenerCount === 0).length;
+  return (
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <KpiCard
+        icon={CheckIcon}
+        label="Success Rate"
+        value={stats.successRatePercent === null ? "—" : `${stats.successRatePercent}%`}
+        helper="Over the recent executions shown below"
+      />
+      <KpiCard icon={AutomationIcon} label="Registered Automations" value={String(data.registeredAutomations.length)} />
+      <KpiCard icon={TaskIcon} label="Registered Actions" value={String(data.registeredActions.length)} />
+      <KpiCard
+        icon={NotificationsIcon}
+        label="Triggers With No Listener"
+        value={String(unlisteneredTriggers)}
+      />
     </div>
   );
 }
@@ -229,7 +279,7 @@ function PendingApprovalsCard({
   onReject: (id: string) => void;
 }) {
   return (
-    <Card>
+    <LuxuryCard tone={data.pendingApprovals.length > 0 ? "tint" : "surface"} className="h-full">
       <h3 id="automation-approvals-heading" className="font-serif text-[17px] font-semibold text-text">
         Pending Approvals
       </h3>
@@ -238,14 +288,18 @@ function PendingApprovalsCard({
         through the Execution Engine; rejecting stops it here.
       </p>
       {data.pendingApprovals.length === 0 ? (
-        <p className="mt-3 text-sm text-text/55">Nothing is waiting on approval right now.</p>
+        <EmptyState
+          illustration="generic"
+          title="Nothing is waiting on approval"
+          description="Every Automation that needed a human decision has already been resolved."
+        />
       ) : (
         <ul className="mt-3 divide-y divide-border" aria-labelledby="automation-approvals-heading">
           {data.pendingApprovals.map((execution) => {
             const canAct = data.approvableExecutionIds.includes(execution.id);
             const busy = pendingActionId === execution.id;
             return (
-              <li key={execution.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+              <li key={execution.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-medium text-text">{execution.automationName}</p>
                   <p className="text-xs text-text-muted">
@@ -254,10 +308,22 @@ function PendingApprovalsCard({
                   {!canAct ? <p className="mt-0.5 text-xs text-text-muted">Your role can&apos;t grant this approval.</p> : null}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button type="button" variant="secondary" disabled={!canAct || busy} onClick={() => onApprove(execution.id)}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="border-success/40 text-success hover:bg-success/10 active:bg-success/20"
+                    disabled={!canAct || busy}
+                    onClick={() => onApprove(execution.id)}
+                  >
                     {busy ? "Approving…" : "Approve"}
                   </Button>
-                  <Button type="button" variant="ghost" disabled={!canAct || busy} onClick={() => onReject(execution.id)}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="text-danger hover:bg-danger/10 active:bg-danger/20"
+                    disabled={!canAct || busy}
+                    onClick={() => onReject(execution.id)}
+                  >
                     {busy ? "…" : "Reject"}
                   </Button>
                 </div>
@@ -266,23 +332,23 @@ function PendingApprovalsCard({
           })}
         </ul>
       )}
-    </Card>
+    </LuxuryCard>
   );
 }
 
 function RecentExecutionsCard({ executions }: { executions: AutomationExecution[] }) {
   return (
-    <Card>
+    <LuxuryCard>
       <h3 id="automation-executions-heading" className="font-serif text-[17px] font-semibold text-text">
         Recent Executions
       </h3>
       <p className="mt-1 text-sm text-text-muted">Every Automation attempt, in order — including skipped and still-pending ones, never just the successes.</p>
       {executions.length === 0 ? (
-        <p className="mt-3 text-sm text-text/55">No Automation has run in this Workspace yet.</p>
+        <EmptyState illustration="generic" title="No Automation has run yet" description="Once a trigger fires in this Workspace, its attempts will appear here in order." />
       ) : (
         <ul className="mt-3 divide-y divide-border" aria-labelledby="automation-executions-heading">
           {executions.map((execution) => (
-            <li key={execution.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5 text-sm">
+            <li key={execution.id} className="flex flex-col gap-2 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3">
               <div>
                 <span className="font-medium text-text">{execution.automationName}</span>
                 <p className="text-xs text-text-muted">
@@ -295,34 +361,17 @@ function RecentExecutionsCard({ executions }: { executions: AutomationExecution[
           ))}
         </ul>
       )}
-    </Card>
-  );
-}
-
-function AutomationHealthCard({ data }: { data: AutomationDashboardData }) {
-  const { stats } = data;
-  const unlisteneredTriggers = data.triggerSummary.filter((trigger) => trigger.listenerCount === 0).length;
-  return (
-    <Card>
-      <h3 className="font-serif text-[17px] font-semibold text-text">Automation Health</h3>
-      <p className="mt-1 text-sm text-text-muted">A quick read on whether the Engine is running cleanly, over the most recent executions shown above.</p>
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        <Stat label="Success Rate" value={stats.successRatePercent === null ? "—" : `${stats.successRatePercent}%`} />
-        <Stat label="Registered Automations" value={String(data.registeredAutomations.length)} />
-        <Stat label="Registered Actions" value={String(data.registeredActions.length)} />
-        <Stat label="Triggers With No Listener" value={String(unlisteneredTriggers)} />
-      </div>
-    </Card>
+    </LuxuryCard>
   );
 }
 
 function ExecutionStatisticsCard({ data }: { data: AutomationDashboardData }) {
   const { stats } = data;
   return (
-    <Card>
+    <LuxuryCard>
       <h3 className="font-serif text-[17px] font-semibold text-text">Execution Statistics</h3>
       <p className="mt-1 text-sm text-text-muted">{stats.totalExecutions} execution{stats.totalExecutions === 1 ? "" : "s"} · {stats.averageDurationMs}ms average duration</p>
-      <ul className="mt-3 space-y-1.5 text-sm">
+      <ul className="mt-3 grid grid-cols-1 gap-x-4 gap-y-1.5 text-sm sm:grid-cols-2">
         {(Object.keys(stats.byStatus) as AutomationExecutionStatus[]).map((status) => (
           <li key={status} className="flex items-center justify-between gap-2">
             <span className="text-text-muted">{STATUS_LABEL[status]}</span>
@@ -330,13 +379,13 @@ function ExecutionStatisticsCard({ data }: { data: AutomationDashboardData }) {
           </li>
         ))}
       </ul>
-    </Card>
+    </LuxuryCard>
   );
 }
 
 function RegisteredTriggersCard({ data }: { data: AutomationDashboardData }) {
   return (
-    <Card>
+    <LuxuryCard>
       <h3 className="font-serif text-[17px] font-semibold text-text">Registered Triggers</h3>
       <p className="mt-1 text-sm text-text-muted">Every trigger type the Engine knows about, and how many active Automations listen for it.</p>
       <ul className="mt-3 space-y-1.5 text-sm">
@@ -349,13 +398,13 @@ function RegisteredTriggersCard({ data }: { data: AutomationDashboardData }) {
           </li>
         ))}
       </ul>
-    </Card>
+    </LuxuryCard>
   );
 }
 
 function RegisteredActionsCard({ data }: { data: AutomationDashboardData }) {
   return (
-    <Card>
+    <LuxuryCard>
       <h3 className="font-serif text-[17px] font-semibold text-text">Registered Actions</h3>
       <p className="mt-1 text-sm text-text-muted">Every typed Action available to an Automation Definition, from the Action Registry.</p>
       <ul className="mt-3 space-y-2">
@@ -369,23 +418,23 @@ function RegisteredActionsCard({ data }: { data: AutomationDashboardData }) {
           </li>
         ))}
       </ul>
-    </Card>
+    </LuxuryCard>
   );
 }
 
 function FailureSummaryCard({ data }: { data: AutomationDashboardData }) {
   return (
-    <Card>
+    <LuxuryCard tone={data.failureSummary.length > 0 ? "tint" : "surface"} className="h-full">
       <h3 id="automation-failures-heading" className="font-serif text-[17px] font-semibold text-text">
         Failure Summary
       </h3>
       <p className="mt-1 text-sm text-text-muted">Automations with at least one failed or partially-failed run in the recent window shown above.</p>
       {data.failureSummary.length === 0 ? (
-        <p className="mt-3 text-sm text-text/55">No failures in the recent execution window.</p>
+        <EmptyState illustration="generic" title="No failures" description="No Automation has failed in the recent execution window." />
       ) : (
         <ul className="mt-3 space-y-2" aria-labelledby="automation-failures-heading">
           {data.failureSummary.map((entry) => (
-            <li key={entry.automationId} className="flex items-center justify-between gap-2 text-sm">
+            <li key={entry.automationId} className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <span className="text-text">{entry.automationName}</span>
               <span className="text-xs text-text-muted">
                 {entry.failureCount} failure{entry.failureCount === 1 ? "" : "s"}
@@ -395,22 +444,22 @@ function FailureSummaryCard({ data }: { data: AutomationDashboardData }) {
           ))}
         </ul>
       )}
-    </Card>
+    </LuxuryCard>
   );
 }
 
 function RegisteredAutomationsCard({ data }: { data: AutomationDashboardData }) {
   return (
-    <Card>
+    <LuxuryCard>
       <h3 className="font-serif text-[17px] font-semibold text-text">Registered Automations</h3>
       <p className="mt-1 text-sm text-text-muted">Every Automation Definition visible to you in this Workspace.</p>
       {data.registeredAutomations.length === 0 ? (
-        <p className="mt-3 text-sm text-text/55">No Automation is visible to your role yet.</p>
+        <EmptyState illustration="generic" title="No Automation is visible yet" description="Automations gated behind a permission, role, or feature flag you don't have won't appear here." />
       ) : (
         <ul className="mt-3 divide-y divide-border">
           {data.registeredAutomations.map((automation) => (
             <li key={automation.id} className="py-2.5 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                 <span className="font-medium text-text">{automation.name}</span>
                 <div className="flex items-center gap-1.5">
                   <Badge tone="neutral">{TRIGGER_LABEL[automation.trigger] ?? automation.trigger}</Badge>
@@ -422,15 +471,6 @@ function RegisteredAutomationsCard({ data }: { data: AutomationDashboardData }) 
           ))}
         </ul>
       )}
-    </Card>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-lg font-semibold tabular-nums text-text">{value}</div>
-      <div className="text-xs text-text-muted uppercase tracking-wide">{label}</div>
-    </div>
+    </LuxuryCard>
   );
 }
