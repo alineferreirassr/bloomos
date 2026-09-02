@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { ContractStatusBadge } from "@/modules/contracts/components/ContractStatusBadge";
 import { SignatureStatusBadge } from "@/modules/contracts/components/SignatureStatusBadge";
 import { formatContractValue } from "@/modules/contracts/mappers";
@@ -12,7 +12,7 @@ export function ContractListCards({ rows }: { rows: ContractListRow[] }) {
     <div className="space-y-3 md:hidden">
       {rows.map(({ contract, client, event, nextAction }) => (
         <Link key={contract.id} href={`/contracts/${contract.id}`} className="block">
-          <Card className="transition-colors duration-150 hover:border-accent/50">
+          <LuxuryCard className="transition-transform duration-150 hover:-translate-y-0.5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-medium tracking-tight text-text">{contract.title}</p>
@@ -35,7 +35,7 @@ export function ContractListCards({ rows }: { rows: ContractListRow[] }) {
               {contract.effective_date ? <span>{formatEventDate(contract.effective_date)}</span> : null}
             </div>
             {nextAction ? <p className="mt-2 text-xs text-accent">{nextAction}</p> : null}
-          </Card>
+          </LuxuryCard>
         </Link>
       ))}
     </div>

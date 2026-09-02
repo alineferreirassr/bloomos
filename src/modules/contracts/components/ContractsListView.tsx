@@ -198,23 +198,22 @@ export function ContractsListView() {
         }
       />
 
+      <div className="space-y-8">
       {insight ? (
-        <div className="animate-fade-up mb-6">
+        <div className="animate-fade-up">
           <ModuleInsightCard insight={insight} tone="warning" />
         </div>
       ) : null}
 
       {kpis ? (
-        <div className="animate-fade-up stagger-1 mb-6 grid grid-cols-2 gap-3 md:grid-cols-3">
+        <div className="animate-fade-up stagger-1 grid grid-cols-2 gap-3 md:grid-cols-3">
           <KpiCard icon={ContractsIcon} label="Total Contracts" value={kpis.total.toLocaleString()} />
           <KpiCard icon={CheckIcon} label="Signed" value={kpis.signed.toLocaleString()} />
           <KpiCard icon={FinanceIcon} label="Signed Value" value={kpis.totalValue} />
         </div>
       ) : null}
 
-      <div className="mb-6">
-        <ContractFilters value={filters} onChange={handleFiltersChange} />
-      </div>
+      <ContractFilters value={filters} onChange={handleFiltersChange} />
 
       <div>
         {state.status === "loading" ? (
@@ -248,6 +247,7 @@ export function ContractsListView() {
             <ContractListCards rows={state.rows} />
           </div>
         )}
+      </div>
       </div>
     </div>
   );

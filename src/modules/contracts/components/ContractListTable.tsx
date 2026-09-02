@@ -6,76 +6,58 @@ import { formatEventDate } from "@/modules/events/dateFormat";
 import type { ContractListRow } from "@/modules/contracts/components/ContractsListView";
 import { getFullName } from "@/lib/personName";
 
+/* Relationships/CRM visual pass — trimmed from 13 columns to 7 so the list
+   reads at a glance ("client, associated work, contract state, important
+   date, next action" per the approved brief) instead of decoding a dense
+   admin table. Contract number folds under the title as secondary text;
+   Signature status sits as a second small badge under Status instead of
+   its own column; Version/Deposit/Updated move to the detail page only —
+   no field is removed from the data model or the detail view, only from
+   this scanning list. Effective→Expiration renders as one compact range. */
 export function ContractListTable({ rows }: { rows: ContractListRow[] }) {
   return (
-    <div className="hidden overflow-x-auto rounded-lg border border-border bg-surface shadow-sm md:block">
+    <div className="hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
       <table className="w-full border-collapse text-left text-sm">
         <thead className="sticky top-0 z-[var(--z-index-dropdown)] bg-surface">
-          <tr>
-            {[
-              "Contract number",
-              "Title",
-              "Client",
-              "Event",
-              "Status",
-              "Signature status",
-              "Version",
-              "Effective date",
-              "Expiration date",
-              "Total value",
-              "Deposit",
-              "Updated",
-              "Next action",
-            ].map((heading) => (
+          <tr className="border-b border-border/70">
+            {["Contract", "Client", "Event", "Status", "Dates", "Value", "Next action"].map((heading) => (
               <th
                 key={heading}
-                className="border-b border-border px-4 py-3 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
+                className={`px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase whitespace-nowrap ${heading === "Value" ? "text-right" : ""}`}
               >
                 {heading}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-border/60">
           {rows.map(({ contract, client, event, nextAction }) => (
-            <tr key={contract.id} className="transition-colors duration-150 hover:bg-accent-100/40">
-              <td className="border-b border-border px-2.5 py-2 whitespace-nowrap">
-                <Link href={`/contracts/${contract.id}`} className="font-medium text-text hover:text-accent">
-                  {contract.contract_number}
+            <tr key={contract.id} className="transition-colors duration-150 hover:bg-accent-100/25">
+              <td className="px-5 py-4 whitespace-nowrap">
+                <Link href={`/contracts/${contract.id}`} className="text-[15px] font-medium text-text hover:text-accent">
+                  {contract.title}
                 </Link>
+                <p className="mt-0.5 text-xs text-text-muted">{contract.contract_number}</p>
               </td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{contract.title}</td>
-              <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
+              <td className="px-5 py-4 whitespace-nowrap text-text-muted">
                 {client ? getFullName(client) : "—"}
               </td>
-              <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
+              <td className="px-5 py-4 whitespace-nowrap text-text-muted">
                 {event ? event.title : "—"}
               </td>
-              <td className="border-b border-border px-2.5 py-2">
-                <ContractStatusBadge status={contract.status} />
+              <td className="px-5 py-4">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <ContractStatusBadge status={contract.status} />
+                  <SignatureStatusBadge status={contract.signature_status} />
+                </div>
               </td>
-              <td className="border-b border-border px-2.5 py-2">
-                <SignatureStatusBadge status={contract.signature_status} />
+              <td className="px-5 py-4 whitespace-nowrap text-text-muted">
+                {formatEventDate(contract.effective_date)} → {formatEventDate(contract.expiration_date)}
               </td>
-              <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
-                v{contract.version}
-              </td>
-              <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
-                {formatEventDate(contract.effective_date)}
-              </td>
-              <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
-                {formatEventDate(contract.expiration_date)}
-              </td>
-              <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
+              <td className="px-5 py-4 whitespace-nowrap text-right text-text-muted tabular-nums">
                 {formatContractValue(contract.total_value, contract.currency)}
               </td>
-              <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
-                {contract.deposit_required ? formatContractValue(contract.deposit_amount, contract.currency) : "—"}
-              </td>
-              <td className="border-b border-border px-2.5 py-2 whitespace-nowrap text-text-muted">
-                {new Date(contract.updated_at).toLocaleDateString()}
-              </td>
-              <td className="border-b border-border px-2.5 py-2 text-text-muted">{nextAction ?? "—"}</td>
+              <td className="px-5 py-4 text-text-muted">{nextAction ?? "—"}</td>
             </tr>
           ))}
         </tbody>

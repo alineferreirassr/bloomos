@@ -57,7 +57,8 @@ describe("ContractListTable (desktop)", () => {
     expect(screen.getByText("Malibu Sunset Proposal")).toBeInTheDocument();
     // "Signed" appears twice for contract_a: the status badge and the signature-status badge.
     expect(screen.getAllByText("Signed")).toHaveLength(2);
-    expect(screen.getByText("v2")).toBeInTheDocument();
+    // Version now lives on the detail view only (Relationships/CRM visual pass trimmed
+    // the list to 7 columns), so the list no longer renders "v2".
     expect(screen.getByText("$8,500.00")).toBeInTheDocument();
 
     expect(screen.getByText("CT-2026-0002")).toBeInTheDocument();

@@ -1,15 +1,15 @@
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { SIGNATURE_STATUS_LABELS, type SignatureStatus } from "@/core/enums/signatureStatus";
 
-/* Same 3-tone convention as ContractStatusBadge: signed -> tag-accent,
-   declined/expired/cancelled -> tag-neutral, everything still in progress
-   (including partially_signed) -> tag-outline. */
+/* Same restrained semantic system as ContractStatusBadge: signed ->
+   success, declined/expired/cancelled -> neutral, everything still in
+   progress (including partially_signed) -> outline. */
 const SIGNATURE_TONES: Record<SignatureStatus, BadgeTone> = {
   unsigned: "outline",
   sent: "outline",
   viewed: "outline",
   partially_signed: "outline",
-  signed: "accent",
+  signed: "success",
   declined: "neutral",
   expired: "neutral",
   cancelled: "neutral",
