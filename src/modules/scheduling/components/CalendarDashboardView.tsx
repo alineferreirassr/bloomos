@@ -5,12 +5,13 @@ import Link from "next/link";
 import { listCalendarsAction, listAppointmentsAction, listReservationsAction, listCalendarWindowsAction, listHolidaysAction, evaluateWorkspaceSchedulingAction, type EvaluateWorkspaceSchedulingResult } from "@/modules/scheduling/schedulingActions";
 import type { Calendar, Appointment, Reservation, CalendarWindow, Holiday, SchedulingFindingSeverity } from "@/types/scheduling";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { EventsIcon, CheckIcon, AnalyticsIcon } from "@/components/ui/icons";
+import { SchedulingIcon, CheckIcon, AnalyticsIcon } from "@/components/ui/icons";
 
 /**
  * v2.0 Checkpoint 27, Step 17 — Calendar Dashboard. Every figure is read
@@ -159,10 +160,10 @@ export function CalendarDashboardView() {
   return (
     <div>
       <PageHeader
-        title="Calendar & Scheduling"
+        title="Scheduling"
         subtitle="When work can happen — availability windows, reservations, buffers, capacity, and scheduling conflicts. Scheduling never selects or assigns a worker."
-        icon={EventsIcon}
-        breadcrumb={[{ label: "Calendar" }]}
+        icon={SchedulingIcon}
+        breadcrumb={[{ label: "Scheduling" }]}
         actions={
           <Button variant="secondary" onClick={refresh} disabled={loading}>
             {loading ? "Refreshing…" : "Refresh"}
@@ -174,37 +175,39 @@ export function CalendarDashboardView() {
         {announcement}
       </p>
 
-      {error ? <EmptyState title="Scheduling isn't available" description={error} icon={EventsIcon} /> : null}
+      {error ? <EmptyState title="Scheduling isn't available" description={error} icon={SchedulingIcon} /> : null}
 
       {calendars ? (
         <>
           <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <KpiCard label="Calendars" value={String(calendars.length)} icon={EventsIcon} />
-            <KpiCard label="Today's Appointments" value={String(todaysAppointments.length)} icon={EventsIcon} />
+            <KpiCard label="Calendars" value={String(calendars.length)} icon={SchedulingIcon} />
+            <KpiCard label="Today's Appointments" value={String(todaysAppointments.length)} icon={SchedulingIcon} />
             <KpiCard label="Findings" value={String(evaluation?.findings.length ?? 0)} icon={AnalyticsIcon} />
             <KpiCard label="Average Calendar Health" value={averageHealth === null ? "—" : String(Math.round(averageHealth))} icon={CheckIcon} />
           </div>
 
-          <Card className="mb-6">
+          <SectionHeader title="Overview" />
+          <LuxuryCard tone="tint" className="mb-6">
             <h2 className="mb-3 text-sm font-semibold">
               High-Severity Findings <span className="font-normal text-text-muted">({highFindings.length})</span>
             </h2>
             {highFindings.length === 0 ? <p className="text-sm text-success">No high-severity scheduling findings.</p> : <ul role="list">{highFindings.map((f) => <FindingRow key={f.id} description={f.description} severity={f.severity} />)}</ul>}
-          </Card>
+          </LuxuryCard>
 
-          <Card className="mb-6">
+          <LuxuryCard className="mb-6">
             <h2 className="mb-3 text-sm font-semibold">
               Other Findings <span className="font-normal text-text-muted">({otherFindings.length})</span>
             </h2>
             {otherFindings.length === 0 ? <p className="text-sm text-text-muted">Nothing else to report.</p> : <ul role="list">{otherFindings.slice(0, 10).map((f) => <FindingRow key={f.id} description={f.description} severity={f.severity} />)}</ul>}
-          </Card>
+          </LuxuryCard>
 
-          <Card className="mb-6">
+          <SectionHeader title="Calendars" />
+          <LuxuryCard className="mb-6">
             <h2 className="mb-3 text-sm font-semibold">
               Calendars <span className="font-normal text-text-muted">({calendars.length})</span>
             </h2>
             {calendars.length === 0 ? (
-              <EmptyState title="No calendars yet" description="Calendars are created through the Calendar Registry." icon={EventsIcon} />
+              <EmptyState title="No calendars yet" description="Calendars are created through the Calendar Registry." icon={SchedulingIcon} />
             ) : (
               <ul role="list">
                 {calendars.map((c) => (
@@ -212,10 +215,11 @@ export function CalendarDashboardView() {
                 ))}
               </ul>
             )}
-          </Card>
+          </LuxuryCard>
 
+          <SectionHeader title="Reservations & Blocked Periods" />
           <div className="mb-6 grid gap-6 md:grid-cols-2">
-            <Card>
+            <LuxuryCard>
               <h2 className="mb-3 text-sm font-semibold">
                 Upcoming Reservations <span className="font-normal text-text-muted">({upcomingReservations.length})</span>
               </h2>
@@ -233,9 +237,9 @@ export function CalendarDashboardView() {
                   ))}
                 </ul>
               )}
-            </Card>
+            </LuxuryCard>
 
-            <Card>
+            <LuxuryCard>
               <h2 className="mb-3 text-sm font-semibold">
                 Blocked Periods <span className="font-normal text-text-muted">({blockedWindows.length})</span>
               </h2>
@@ -251,15 +255,16 @@ export function CalendarDashboardView() {
                   ))}
                 </ul>
               )}
-            </Card>
+            </LuxuryCard>
           </div>
 
-          <Card>
+          <SectionHeader title="Holidays" />
+          <LuxuryCard>
             <h2 className="mb-3 text-sm font-semibold">
               Holiday Calendar <span className="font-normal text-text-muted">({upcomingHolidays.length})</span>
             </h2>
             {upcomingHolidays.length === 0 ? <p className="text-sm text-text-muted">No holidays configured.</p> : <ul role="list">{upcomingHolidays.map((h) => <HolidayRow key={h.id} holiday={h} />)}</ul>}
-          </Card>
+          </LuxuryCard>
         </>
       ) : !error ? (
         <p className="text-sm text-text-muted">Loading the schedule…</p>

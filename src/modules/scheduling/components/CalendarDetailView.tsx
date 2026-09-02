@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { getCalendarAction, getCalendarViewAction, listReservationsAction, listWorkingHoursRulesAction, listCalendarWindowsAction, evaluateWorkspaceSchedulingAction, type EvaluateWorkspaceSchedulingResult } from "@/modules/scheduling/schedulingActions";
 import { detectAppointmentConflicts } from "@/core/scheduling/conflictEngine";
-import type { Calendar, CalendarView, Reservation, WorkingHoursRule, CalendarWindow, SchedulingConflict } from "@/types/scheduling";
+import type { Calendar, CalendarView, Reservation, WorkingHoursRule, CalendarWindow, SchedulingConflict, AppointmentStatus } from "@/types/scheduling";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { EventsIcon, AnalyticsIcon, CheckIcon } from "@/components/ui/icons";
+import { SchedulingIcon, AnalyticsIcon, CheckIcon } from "@/components/ui/icons";
 
 /**
  * v2.0 Checkpoint 27, Step 18 — Calendar Detail View. One calendar's full
@@ -20,6 +21,7 @@ import { EventsIcon, AnalyticsIcon, CheckIcon } from "@/components/ui/icons";
  */
 const DETAIL_LOOKAHEAD_DAYS = 14;
 const CONFLICT_SEVERITY_TONE: Record<SchedulingConflict["severity"], BadgeTone> = { high: "danger", medium: "warning", low: "neutral" };
+const APPOINTMENT_STATUS_TONE: Record<AppointmentStatus, BadgeTone> = { tentative: "outline", confirmed: "success", cancelled: "danger", completed: "success" };
 const WORKING_HOURS_DAY_LABEL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export function CalendarDetailView({ calendarId }: { calendarId: string }) {
@@ -91,36 +93,39 @@ export function CalendarDetailView({ calendarId }: { calendarId: string }) {
   const sortedWorkingHours = useMemo(() => (workingHours ?? []).slice().sort((a, b) => (a.day_of_week ?? 7) - (b.day_of_week ?? 7)), [workingHours]);
   const blockedWindows = useMemo(() => (windows ?? []).filter((w) => w.type !== "available"), [windows]);
 
-  if (error) return <EmptyState title="This calendar isn't available" description={error} icon={EventsIcon} />;
+  if (error) return <EmptyState title="This calendar isn't available" description={error} icon={SchedulingIcon} />;
   if (!calendar) return <p className="text-sm text-text-muted">Loading calendar…</p>;
 
   return (
     <div>
-      <PageHeader title={calendar.name} subtitle={calendar.description ?? `${calendar.context_type.replace(/_/g, " ")} calendar in ${calendar.time_zone}.`} icon={EventsIcon} breadcrumb={[{ label: "Scheduling", href: "/scheduling" }, { label: calendar.name }]} />
+      <PageHeader title={calendar.name} subtitle={calendar.description ?? `${calendar.context_type.replace(/_/g, " ")} calendar in ${calendar.time_zone}.`} icon={SchedulingIcon} breadcrumb={[{ label: "Scheduling", href: "/scheduling" }, { label: calendar.name }]} />
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <KpiCard label="Upcoming Appointments" value={String(view?.entries.length ?? 0)} icon={EventsIcon} />
-        <KpiCard label="Reservations" value={String(reservations?.length ?? 0)} icon={EventsIcon} />
+        <KpiCard label="Upcoming Appointments" value={String(view?.entries.length ?? 0)} icon={SchedulingIcon} />
+        <KpiCard label="Reservations" value={String(reservations?.length ?? 0)} icon={SchedulingIcon} />
         <KpiCard label="Conflicts" value={String(totalConflictCount)} icon={AnalyticsIcon} />
         <KpiCard label="Calendar Health" value={scores === null ? "—" : String(Math.round(scores.calendarHealthScore))} icon={CheckIcon} />
       </div>
 
       {scores ? (
-        <Card className="mb-6">
-          <h2 className="mb-3 text-sm font-semibold">Schedule Quality</h2>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-            <ScoreItem label="Window Quality" value={scores.windowQualityScore} />
-            <ScoreItem label="Buffer Quality" value={scores.bufferQualityScore} />
-            <ScoreItem label="Capacity Utilization" value={scores.capacityUtilizationScore} />
-            <ScoreItem label="Conflict Severity" value={scores.conflictSeverityScore} />
-            <ScoreItem label="Schedule Density" value={scores.scheduleDensityScore} />
-            <ScoreItem label="Calendar Health" value={scores.calendarHealthScore} />
-          </div>
-        </Card>
+        <>
+          <SectionHeader title="Overview" />
+          <LuxuryCard tone="tint" className="mb-6">
+            <h2 className="mb-3 text-sm font-semibold">Schedule Quality</h2>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+              <ScoreItem label="Window Quality" value={scores.windowQualityScore} />
+              <ScoreItem label="Buffer Quality" value={scores.bufferQualityScore} />
+              <ScoreItem label="Capacity Utilization" value={scores.capacityUtilizationScore} />
+              <ScoreItem label="Conflict Severity" value={scores.conflictSeverityScore} />
+              <ScoreItem label="Schedule Density" value={scores.scheduleDensityScore} />
+              <ScoreItem label="Calendar Health" value={scores.calendarHealthScore} />
+            </div>
+          </LuxuryCard>
+        </>
       ) : null}
 
       {relatedFindings.length > 0 ? (
-        <Card className="mb-6">
+        <LuxuryCard className="mb-6">
           <h2 className="mb-3 text-sm font-semibold">
             Findings <span className="font-normal text-text-muted">({relatedFindings.length})</span>
           </h2>
@@ -132,15 +137,16 @@ export function CalendarDetailView({ calendarId }: { calendarId: string }) {
               </li>
             ))}
           </ul>
-        </Card>
+        </LuxuryCard>
       ) : null}
 
-      <Card className="mb-6">
+      <SectionHeader title="Appointments" />
+      <LuxuryCard className="mb-6">
         <h2 className="mb-3 text-sm font-semibold">
           Appointments <span className="font-normal text-text-muted">(next {DETAIL_LOOKAHEAD_DAYS} days)</span>
         </h2>
         {!view || view.entries.length === 0 ? (
-          <EmptyState title="No upcoming appointments" description="Appointments are created through the Appointment Model." icon={EventsIcon} />
+          <EmptyState title="No upcoming appointments" description="Appointments are created through the Appointment Model." icon={SchedulingIcon} />
         ) : (
           <ul role="list">
             {view.entries.map((entry) => {
@@ -156,7 +162,7 @@ export function CalendarDetailView({ calendarId }: { calendarId: string }) {
                         {entry.isRecurringInstance ? " · recurring" : ""}
                       </p>
                     </div>
-                    <Badge tone={entry.appointment.status === "confirmed" ? "success" : entry.appointment.status === "tentative" ? "warning" : "neutral"}>{entry.appointment.status}</Badge>
+                    <Badge tone={APPOINTMENT_STATUS_TONE[entry.appointment.status]}>{entry.appointment.status}</Badge>
                   </div>
                   {conflicts.length > 0 ? (
                     <ul role="list" className="mt-1 pl-2">
@@ -173,10 +179,11 @@ export function CalendarDetailView({ calendarId }: { calendarId: string }) {
             })}
           </ul>
         )}
-      </Card>
+      </LuxuryCard>
 
+      <SectionHeader title="Reservations & Working Hours" />
       <div className="mb-6 grid gap-6 md:grid-cols-2">
-        <Card>
+        <LuxuryCard>
           <h2 className="mb-3 text-sm font-semibold">
             Reservations <span className="font-normal text-text-muted">({reservations?.length ?? 0})</span>
           </h2>
@@ -194,9 +201,9 @@ export function CalendarDetailView({ calendarId }: { calendarId: string }) {
               ))}
             </ul>
           )}
-        </Card>
+        </LuxuryCard>
 
-        <Card>
+        <LuxuryCard>
           <h2 className="mb-3 text-sm font-semibold">
             Working Hours <span className="font-normal text-text-muted">({sortedWorkingHours.length})</span>
           </h2>
@@ -212,10 +219,11 @@ export function CalendarDetailView({ calendarId }: { calendarId: string }) {
               ))}
             </ul>
           )}
-        </Card>
+        </LuxuryCard>
       </div>
 
-      <Card>
+      <SectionHeader title="Blocked Periods" />
+      <LuxuryCard>
         <h2 className="mb-3 text-sm font-semibold">
           Blocked Periods <span className="font-normal text-text-muted">({blockedWindows.length})</span>
         </h2>
@@ -233,7 +241,7 @@ export function CalendarDetailView({ calendarId }: { calendarId: string }) {
             ))}
           </ul>
         )}
-      </Card>
+      </LuxuryCard>
     </div>
   );
 }
