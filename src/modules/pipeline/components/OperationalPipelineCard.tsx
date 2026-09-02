@@ -2,7 +2,7 @@
 
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge } from "@/components/ui/Badge";
 import { ActionMenu, type ActionMenuAction } from "@/components/ui/ActionMenu";
 import { EventPriorityBadge } from "@/modules/events/components/EventPriorityBadge";
@@ -47,7 +47,7 @@ export function OperationalPipelineCard({ data, actions, draggable = true, canUp
       style={transform ? { transform: CSS.Translate.toString(transform) } : undefined}
       className={isDragging ? "opacity-50" : undefined}
     >
-      <Card className="transition-colors duration-150 hover:border-accent/50">
+      <LuxuryCard className="transition-transform duration-150 hover:-translate-y-0.5">
         <div className="flex items-start justify-between gap-2">
           <div
             {...(canDrag ? { ...attributes, ...listeners } : {})}
@@ -82,9 +82,9 @@ export function OperationalPipelineCard({ data, actions, draggable = true, canUp
         </div>
 
         {nextAction ? (
-          <p className="mt-3 border-t border-border pt-2 text-xs font-medium text-accent">{nextAction}</p>
+          <p className="mt-3 border-t border-border/60 pt-2 text-xs font-medium text-accent">{nextAction}</p>
         ) : null}
-      </Card>
+      </LuxuryCard>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { Card } from "@/components/ui/Card";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { ActionMenu } from "@/components/ui/ActionMenu";
 import type { ActionMenuAction } from "@/components/ui/ActionMenu";
 import { LeadStatusBadge } from "@/modules/leads/components/LeadStatusBadge";
@@ -38,7 +38,7 @@ export function CommercialPipelineCard({ lead, actions, draggable = true }: Comm
       style={transform ? { transform: CSS.Translate.toString(transform) } : undefined}
       className={isDragging ? "opacity-50" : undefined}
     >
-      <Card className="transition-colors duration-150 hover:border-accent/50">
+      <LuxuryCard className="transition-transform duration-150 hover:-translate-y-0.5">
         <div className="flex items-start justify-between gap-2">
           <div
             {...(draggable ? { ...attributes, ...listeners } : {})}
@@ -66,13 +66,13 @@ export function CommercialPipelineCard({ lead, actions, draggable = true }: Comm
         </div>
 
         {nextAction ? (
-          <p className="mt-3 border-t border-border pt-2 text-xs font-medium text-accent">{nextAction}</p>
+          <p className="mt-3 border-t border-border/60 pt-2 text-xs font-medium text-accent">{nextAction}</p>
         ) : null}
 
         <p className="mt-2 text-[11px] text-text-muted/70">
           Created {new Date(lead.created_at).toLocaleDateString()}
         </p>
-      </Card>
+      </LuxuryCard>
     </div>
   );
 }

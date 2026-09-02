@@ -19,19 +19,17 @@ export function OperationalPipelineColumn({ column, cards, buildActions, canUpda
   return (
     <div
       ref={setNodeRef}
-      className={`flex w-72 shrink-0 flex-col rounded-md border ${
-        isOver ? "border-accent bg-accent/5" : "border-border"
+      className={`flex w-72 shrink-0 flex-col rounded-2xl bg-surface shadow-luxury-sm transition-shadow duration-150 ${
+        isOver ? "ring-2 ring-accent/40 ring-inset" : ""
       }`}
     >
-      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5">
-        <div>
-          <p className="font-serif text-sm font-semibold text-text">{column.label}</p>
-          <p className="text-xs text-text-muted">
-            {cards.length} {cards.length === 1 ? "event" : "events"}
-          </p>
-        </div>
+      <div className="px-4 py-3.5">
+        <p className="font-serif text-sm font-semibold text-text">{column.label}</p>
+        <p className="text-xs text-text-muted">
+          {cards.length} {cards.length === 1 ? "event" : "events"}
+        </p>
       </div>
-      <div className="flex-1 space-y-2.5 overflow-y-auto p-2.5">
+      <div className="flex-1 space-y-2.5 overflow-y-auto px-3 pb-3">
         {cards.length === 0 ? (
           <p className="px-1 py-6 text-center text-xs text-text/45">No events in this stage</p>
         ) : (

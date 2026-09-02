@@ -190,12 +190,12 @@ export function CommercialPipelineBoard() {
         <PendingRecoveryAlert notice={pendingRecovery} onDismiss={() => setPendingRecovery(null)} />
       ) : null}
       {successMessage ? (
-        <div role="status" className="rounded-md border border-accent bg-accent/8 px-4 py-2 text-sm text-text">
+        <div role="status" className="rounded-2xl bg-accent/8 px-4 py-3 text-sm text-text">
           {successMessage}
         </div>
       ) : null}
       {dragError ? (
-        <p role="alert" className="rounded-md border border-danger/60 bg-danger/10 px-4 py-2 text-sm text-danger">
+        <p role="alert" className="rounded-2xl bg-danger/10 px-4 py-3 text-sm text-danger">
           {dragError}
         </p>
       ) : null}
