@@ -90,7 +90,11 @@ export function InventoryItemDetailView({ inventoryItemId }: { inventoryItemId: 
               <InventoryConditionBadge condition={item.condition} />
               {lowStock ? <Badge tone="warning">Low stock</Badge> : null}
             </div>
-            <p className="mt-1 text-sm text-text-muted">{item.sku ? `SKU: ${item.sku}` : "No SKU"}</p>
+            <p className="mt-1 text-sm text-text-muted">
+              {item.sku ? `SKU: ${item.sku}` : "No SKU"}
+              {item.category ? ` · ${item.category}` : ""}
+              {item.storage_location ? ` · ${item.storage_location}` : ""}
+            </p>
           </div>
         </div>
 
