@@ -66,7 +66,9 @@ export function VendorOperationsCard({ vendorId }: { vendorId: string }) {
           <ul className="mt-1.5 space-y-1">
             {summary.purchaseHistory.slice(0, 5).map((purchase) => (
               <li key={purchase.id} className="flex items-center justify-between text-sm">
-                <span className="text-text">{purchase.purchase_number}</span>
+                <Link href={`/purchases/${purchase.id}`} className="text-accent hover:underline">
+                  {purchase.purchase_number}
+                </Link>
                 <span className="text-text-muted">{purchase.status}</span>
               </li>
             ))}
