@@ -96,6 +96,7 @@ beforeEach(() => {
 
 afterEach(() => {
   resetAll();
+  vi.useRealTimers();
 });
 
 describe("createCalendarAction / listCalendarsAction / getCalendarAction", () => {
@@ -254,6 +255,8 @@ describe("createReservationAction / confirmReservationAction / sweepExpiredReser
   });
 
   it("rejects a conflicting reservation for the same resource and overlapping time", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-03T10:15:00.000Z")); // mid-window — after starts_at, before hold_expires_at
     const first = await createReservationAction(baseReservationInput);
     expect(first.success).toBe(true);
     const conflicting = await createReservationAction({ ...baseReservationInput, starts_at: "2026-08-03T10:15:00.000Z", ends_at: "2026-08-03T10:45:00.000Z" });
@@ -261,6 +264,8 @@ describe("createReservationAction / confirmReservationAction / sweepExpiredReser
   });
 
   it("confirmReservationAction confirms a still-valid hold and records reservation_confirmed", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-03T10:15:00.000Z")); // mid-window — after starts_at, before hold_expires_at
     const created = await createReservationAction(baseReservationInput);
     if (!created.success) return;
     const confirmed = await confirmReservationAction(created.data.id);
