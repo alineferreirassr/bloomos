@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import type { WorkflowSimulationResult } from "@/types/workflow";
 
 const KIND_TONE: Record<string, "neutral" | "accent" | "warning" | "danger" | "success"> = {
@@ -40,7 +41,9 @@ export function SimulationPanel({
       </div>
       <p className="text-xs text-text-muted">Previews every path this Workflow would compile into — nothing here is ever actually executed.</p>
 
-      {result === null ? null : !result.valid ? (
+      {result === null ? (
+        <EmptyState illustration="generic" title="No simulation run yet" description="Run a simulation to preview every path this Workflow would compile into." />
+      ) : !result.valid ? (
         <p className="text-xs text-danger">This graph has structural issues — fix Validation first, then simulate again.</p>
       ) : (
         <div className="space-y-3">
@@ -58,7 +61,7 @@ export function SimulationPanel({
           ) : null}
 
           {result.paths.length === 0 ? (
-            <p className="text-xs text-text-muted">No Trigger reaches a real path yet — add a Trigger and connect it to at least one step.</p>
+            <EmptyState illustration="generic" title="No path reaches a real step yet" description="Add a Trigger and connect it to at least one step." />
           ) : (
             <ul className="space-y-3">
               {result.paths.map((path, pathIndex) => (
