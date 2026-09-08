@@ -2,6 +2,7 @@
 
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 import type { WorkflowIssue } from "@/types/workflow";
 
 export function PublishDialog({
@@ -24,6 +25,12 @@ export function PublishDialog({
   return (
     <Modal open={open} onClose={onClose} title="Publish Workflow">
       <div className="space-y-3">
+        {!canPublish ? (
+          <div className="flex items-center gap-2">
+            <Badge tone="danger">{issues.length} issue{issues.length === 1 ? "" : "s"}</Badge>
+          </div>
+        ) : null}
+
         <p className="text-sm text-text">
           {canPublish
             ? `This will compile the current graph into real Automation Definitions and register them — version ${currentVersion + 1}. Every previously published Automation from this Workflow is superseded immediately.`
