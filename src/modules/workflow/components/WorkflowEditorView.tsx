@@ -215,6 +215,10 @@ export function WorkflowEditorView({ workflowId }: { workflowId: string }) {
     setToast({ tone: "success", message: `Restored version ${version} onto the current draft.` });
   }
 
+  if (state.status === "error") {
+    return <ErrorState message={state.message} />;
+  }
+
   if (state.status === "loading" || !graph || !metadata || !executionPolicy) {
     return (
       <div className="space-y-3">
@@ -222,10 +226,6 @@ export function WorkflowEditorView({ workflowId }: { workflowId: string }) {
         <Skeleton className="h-[520px] w-full" />
       </div>
     );
-  }
-
-  if (state.status === "error") {
-    return <ErrorState message={state.message} />;
   }
 
   const selectedNode = selectedNodeIds.length === 1 ? graph.nodes.find((node) => node.id === selectedNodeIds[0]) ?? null : null;
