@@ -38,6 +38,8 @@ import {
   getWorkspaceWorkflowHealthAction,
   getWorkflowAuditLogAction,
   retryWorkflowExecutionAction,
+  ignoreWorkflowErrorAction,
+  archiveWorkflowErrorAction,
 } from "@/modules/workflowMonitoring/monitoringCenterActions";
 
 function makeExecutionSummary(overrides: Partial<WorkflowExecutionSummary> = {}): WorkflowExecutionSummary {
@@ -458,5 +460,140 @@ describe("WorkflowMonitoringCenterView", () => {
 
     const panel = await screen.findByRole("tabpanel");
     expect(within(panel).getByText("No workflows yet")).toBeInTheDocument();
+  });
+
+  it("renders Error Center's populated table, open/total heading, and duplicated mobile card", async () => {
+    vi.mocked(getWorkflowErrorsAction).mockResolvedValue({
+      success: true,
+      data: [makeErrorRecord({ executionId: "err_pop_1", actionId: "action_pop", workflowName: "Overdue Invoice Reminder Workflow", acknowledgement: "open" })],
+    });
+
+    render(<WorkflowMonitoringCenterView />);
+    await userEvent.click(await screen.findByRole("tab", { name: /Error Center/ }));
+    await screen.findByRole("tabpanel");
+
+    // The heading (with its "(N open of M)" count) is rendered once for desktop and once for mobile.
+    expect(screen.getAllByText(/1 open of 1/).length).toBe(2);
+
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("open")).toBeInTheDocument();
+    expect(within(table).getByText("Overdue Invoice Reminder Workflow")).toBeInTheDocument();
+
+    expect(screen.getAllByText("Overdue Invoice Reminder Workflow").length).toBe(2);
+    expect(screen.getAllByText("open").length).toBe(2);
+  });
+
+  it("wires Error Center's own Retry button to retryWorkflowExecutionAction with a success toast", async () => {
+    vi.mocked(getWorkflowErrorsAction).mockResolvedValue({
+      success: true,
+      data: [makeErrorRecord({ executionId: "err_retry_own", actionId: "action_retry", workflowName: "Error Center Retry Workflow", acknowledgement: "open" })],
+    });
+    vi.mocked(retryWorkflowExecutionAction).mockResolvedValue({
+      success: true,
+      data: {
+        id: "err_retry_own",
+        workspaceId: "ws_1",
+        automationId: "automation_1",
+        automationName: "Error Center Retry Workflow",
+        automationVersion: "v1",
+        trigger: "invoice.overdue",
+        triggerFacts: {},
+        conditionsPassed: true,
+        approvalStatus: "not_required",
+        approvedBy: null,
+        approvedAt: null,
+        actionResults: [],
+        status: "success",
+        durationMs: 100,
+        startedAt: "2026-01-01T00:00:00.000Z",
+        completedAt: "2026-01-01T00:00:01.000Z",
+      },
+    });
+
+    render(<WorkflowMonitoringCenterView />);
+    await userEvent.click(await screen.findByRole("tab", { name: /Error Center/ }));
+    // "Error Center Retry Workflow" renders twice — once desktop, once mobile.
+    await screen.findAllByText("Error Center Retry Workflow");
+
+    const retryButtons = screen.getAllByRole("button", { name: "Retry" });
+    await userEvent.click(retryButtons[0]);
+
+    await waitFor(() => {
+      expect(retryWorkflowExecutionAction).toHaveBeenCalledWith("err_retry_own");
+    });
+    expect(await screen.findByText("Execution re-run — new status: success.")).toBeInTheDocument();
+  });
+
+  it("wires Ignore and Archive to their actions and reflects the refreshed acknowledgement", async () => {
+    const errorA = makeErrorRecord({ executionId: "err_A", actionId: "action_A", workflowName: "Ignore Target Workflow", acknowledgement: "open" });
+    const errorB = makeErrorRecord({ executionId: "err_B", actionId: "action_B", workflowName: "Archive Target Workflow", acknowledgement: "ignored" });
+
+    vi.mocked(getWorkflowErrorsAction)
+      .mockResolvedValueOnce({ success: true, data: [errorA, errorB] })
+      .mockResolvedValueOnce({ success: true, data: [{ ...errorA, acknowledgement: "ignored" }, errorB] })
+      .mockResolvedValueOnce({ success: true, data: [{ ...errorA, acknowledgement: "ignored" }, { ...errorB, acknowledgement: "archived" }] });
+    vi.mocked(ignoreWorkflowErrorAction).mockResolvedValue({ success: true });
+    vi.mocked(archiveWorkflowErrorAction).mockResolvedValue({ success: true });
+
+    render(<WorkflowMonitoringCenterView />);
+    await userEvent.click(await screen.findByRole("tab", { name: /Error Center/ }));
+    // "Ignore Target Workflow" renders twice — once desktop, once mobile.
+    await screen.findAllByText("Ignore Target Workflow");
+
+    // Ignore is only enabled while acknowledgement === "open" — Error A qualifies, Error B does not.
+    expect(within(screen.getByRole("table")).getByText("open")).toBeInTheDocument();
+    const ignoreButtons = screen.getAllByRole("button", { name: "Ignore" });
+    await userEvent.click(ignoreButtons[0]);
+
+    await waitFor(() => {
+      expect(ignoreWorkflowErrorAction).toHaveBeenCalledWith("err_A", "action_A");
+    });
+    // No success Toast exists for Ignore — the only proof of success is the refetched acknowledgement.
+    await waitFor(() => {
+      expect(within(screen.getByRole("table")).queryByText("open")).not.toBeInTheDocument();
+    });
+
+    // Both rows are now "ignored" (not yet "archived"), so Archive is enabled on both.
+    const archiveButtons = screen.getAllByRole("button", { name: "Archive" });
+    await userEvent.click(archiveButtons[1]);
+
+    await waitFor(() => {
+      expect(archiveWorkflowErrorAction).toHaveBeenCalledWith("err_B", "action_B");
+    });
+    await waitFor(() => {
+      expect(within(screen.getByRole("table")).getByText("archived")).toBeInTheDocument();
+    });
+  });
+
+  it("shows a danger toast with the exact error message when Error Center Retry fails", async () => {
+    vi.mocked(getWorkflowErrorsAction).mockResolvedValue({
+      success: true,
+      data: [makeErrorRecord({ executionId: "err_fail", actionId: "action_fail", workflowName: "Failing Retry Workflow", acknowledgement: "open" })],
+    });
+    vi.mocked(retryWorkflowExecutionAction).mockResolvedValue({ success: false, error: "The Automation Engine is temporarily unavailable." });
+
+    render(<WorkflowMonitoringCenterView />);
+    await userEvent.click(await screen.findByRole("tab", { name: /Error Center/ }));
+    // "Failing Retry Workflow" renders twice — once desktop, once mobile.
+    await screen.findAllByText("Failing Retry Workflow");
+
+    const retryButtons = screen.getAllByRole("button", { name: "Retry" });
+    await userEvent.click(retryButtons[0]);
+
+    await waitFor(() => {
+      expect(retryWorkflowExecutionAction).toHaveBeenCalledWith("err_fail");
+    });
+    expect(await screen.findByText("The Automation Engine is temporarily unavailable.")).toBeInTheDocument();
+  });
+
+  it("shows the Error Center's empty state when there are no workflow errors", async () => {
+    vi.mocked(getWorkflowErrorsAction).mockResolvedValue({ success: true, data: [] });
+
+    render(<WorkflowMonitoringCenterView />);
+    const errorsTab = await screen.findByRole("tab", { name: /Error Center/ });
+    await userEvent.click(errorsTab);
+    expect(errorsTab).toHaveAttribute("aria-selected", "true");
+
+    expect(await screen.findByText("No workflow errors")).toBeInTheDocument();
   });
 });
