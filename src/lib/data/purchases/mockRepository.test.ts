@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockPurchasesRepository } from "@/lib/data/purchases/mockRepository";
 import { resetPurchasesStore, readPurchases, writePurchases } from "@/lib/data/mock/purchasesStore";
 import { resetPurchaseItemsStore } from "@/lib/data/mock/purchaseItemsStore";
@@ -45,6 +45,7 @@ afterEach(() => {
   resetTimelineStore();
   resetNotesStore();
   resetAuditLogStore();
+  vi.useRealTimers();
 });
 
 const BASE_PURCHASE_INPUT: CreatePurchaseInput = {
@@ -585,6 +586,8 @@ describe("getOverduePurchases", () => {
   });
 
   it("excludes a purchase with a future expected_delivery_date", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-25T12:00:00.000Z")); // before expected_delivery_date
     const { purchase } = await createDraftWithItem();
     await submitPurchase(purchase.id);
     const results = await getOverduePurchases();
