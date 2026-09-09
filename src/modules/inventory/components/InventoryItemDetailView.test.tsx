@@ -158,4 +158,28 @@ describe("InventoryItemDetailView", () => {
     expect(await screen.findByText(/could not load the linked vendor/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
   });
+
+  it("composes the header subtitle from SKU, category, and storage location", async () => {
+    vi.mocked(dataLayer.getInventoryItem).mockResolvedValue(makeInventoryItem());
+
+    render(<InventoryItemDetailView inventoryItemId="item-1" />);
+
+    expect(await screen.findByText("SKU: CANDLE-IVORY-01 · Candles · Warehouse A")).toBeInTheDocument();
+  });
+
+  it("omits the storage location segment from the subtitle when it is absent", async () => {
+    vi.mocked(dataLayer.getInventoryItem).mockResolvedValue(makeInventoryItem({ storage_location: null }));
+
+    render(<InventoryItemDetailView inventoryItemId="item-1" />);
+
+    expect(await screen.findByText("SKU: CANDLE-IVORY-01 · Candles")).toBeInTheDocument();
+  });
+
+  it('falls back to "No SKU" with no trailing segments when SKU, category, and storage location are all absent', async () => {
+    vi.mocked(dataLayer.getInventoryItem).mockResolvedValue(makeInventoryItem({ sku: null, category: null, storage_location: null }));
+
+    render(<InventoryItemDetailView inventoryItemId="item-1" />);
+
+    expect(await screen.findByText("No SKU")).toBeInTheDocument();
+  });
 });
