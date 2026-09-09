@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CommercialPipelineBoard } from "@/modules/pipeline/components/CommercialPipelineBoard";
 import { makeLead } from "@/modules/leads/testUtils";
@@ -7,6 +7,8 @@ import { makeClient } from "@/modules/clients/testUtils";
 import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
 import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 import type { Permission } from "@/core/enums/permission";
+import type { DragEndEvent } from "@dnd-kit/core";
+import type { ReactNode } from "react";
 
 function snapshotWith(permissions: Permission[]): MemberSessionSnapshot {
   return {
@@ -42,6 +44,25 @@ vi.mock("@/lib/data", () => ({
   bookLead: vi.fn(),
   getClientsWithPendingRecovery: vi.fn(),
 }));
+
+// Test-only DnD boundary mock (POST-VM D4A): jsdom can't reliably simulate
+// @dnd-kit's real pointer-sensor activation, so DndContext is replaced with
+// a pass-through that captures the real, unexported `handleDragEnd` closure
+// CommercialPipelineBoard supplies as `onDragEnd` — tests below invoke that
+// captured closure directly with a minimal DragEndEvent-shaped object, which
+// exercises the board's actual production DnD wiring, not dnd-kit itself.
+let capturedOnDragEnd: ((event: DragEndEvent) => void) | undefined;
+
+vi.mock("@dnd-kit/core", async () => {
+  const actual = await vi.importActual<typeof import("@dnd-kit/core")>("@dnd-kit/core");
+  return {
+    ...actual,
+    DndContext: ({ children, onDragEnd }: { children: ReactNode; onDragEnd: (event: DragEndEvent) => void }) => {
+      capturedOnDragEnd = onDragEnd;
+      return children;
+    },
+  };
+});
 
 import * as dataLayer from "@/lib/data";
 
@@ -220,5 +241,58 @@ describe("CommercialPipelineBoard", () => {
     expect(within(alert).getByText(/booking incomplete for priya nair/i)).toBeInTheDocument();
     // The board is empty now — the Lead really did convert, it's not lingering as a broken card.
     expect(screen.queryByText("Priya Nair", { selector: "p" })).not.toBeInTheDocument();
+  });
+
+  it("maps a drag drop onto another column to the correct lead-status update (real handleDragEnd)", async () => {
+    const lead = makeLead({ id: "l1", first_name: "Priya", last_name: "Nair", status: "qualified" });
+    vi.mocked(dataLayer.getLeads).mockResolvedValue([lead]);
+    vi.mocked(dataLayer.updateLeadStatus).mockResolvedValue({
+      success: true,
+      data: { ...lead, status: "proposal_sent" },
+    });
+    const desktop = renderBoard();
+    await screen.findByText("Priya Nair");
+
+    await act(async () => {
+      capturedOnDragEnd?.({ active: { id: "l1" }, over: { id: "proposal_sent" } } as DragEndEvent);
+    });
+
+    await waitFor(() => {
+      expect(dataLayer.updateLeadStatus).toHaveBeenCalledWith("l1", "proposal_sent");
+    });
+    await waitFor(() => {
+      expect(desktop().getByText("Proposal Sent", { selector: "span" })).toBeInTheDocument();
+    });
+  });
+
+  it("does not update status on an invalid drop with no drop target", async () => {
+    const lead = makeLead({ id: "l1", first_name: "Priya", last_name: "Nair", status: "qualified" });
+    vi.mocked(dataLayer.getLeads).mockResolvedValue([lead]);
+    const desktop = renderBoard();
+    await screen.findByText("Priya Nair");
+    const callsBefore = vi.mocked(dataLayer.updateLeadStatus).mock.calls.length;
+
+    await act(async () => {
+      capturedOnDragEnd?.({ active: { id: "l1" }, over: null } as DragEndEvent);
+    });
+
+    expect(vi.mocked(dataLayer.updateLeadStatus).mock.calls.length).toBe(callsBefore);
+    expect(screen.queryByLabelText(/event type/i)).not.toBeInTheDocument();
+    expect(desktop().getByText("Qualified", { selector: "span" })).toBeInTheDocument();
+  });
+
+  it("opens the Book Lead flow instead of writing a status when dropped on the booked column", async () => {
+    const lead = makeLead({ id: "l1", first_name: "Priya", last_name: "Nair", status: "qualified" });
+    vi.mocked(dataLayer.getLeads).mockResolvedValue([lead]);
+    renderBoard();
+    await screen.findByText("Priya Nair");
+    const callsBefore = vi.mocked(dataLayer.updateLeadStatus).mock.calls.length;
+
+    await act(async () => {
+      capturedOnDragEnd?.({ active: { id: "l1" }, over: { id: "booked" } } as DragEndEvent);
+    });
+
+    expect(vi.mocked(dataLayer.updateLeadStatus).mock.calls.length).toBe(callsBefore);
+    expect(await screen.findByLabelText(/event type/i)).toBeInTheDocument();
   });
 });
