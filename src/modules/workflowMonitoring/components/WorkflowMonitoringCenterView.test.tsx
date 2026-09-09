@@ -12,6 +12,7 @@ import type {
   WorkflowDurationRanking,
   WorkflowTriggerEdge,
   WorkflowHealthReport,
+  WorkflowAuditRecord,
 } from "@/types/workflowMonitoring";
 
 vi.mock("@/modules/workflowMonitoring/monitoringCenterActions", () => ({
@@ -40,6 +41,8 @@ import {
   retryWorkflowExecutionAction,
   ignoreWorkflowErrorAction,
   archiveWorkflowErrorAction,
+  cloneWorkflowExecutionAction,
+  exportWorkflowExecutionLogAction,
 } from "@/modules/workflowMonitoring/monitoringCenterActions";
 
 function makeExecutionSummary(overrides: Partial<WorkflowExecutionSummary> = {}): WorkflowExecutionSummary {
@@ -128,6 +131,22 @@ function makeHealthReport(overrides: Partial<WorkflowHealthReport> = {}): Workfl
     findings: [],
     score: 90,
     evaluatedAt: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function makeAuditRecord(overrides: Partial<WorkflowAuditRecord> = {}): WorkflowAuditRecord {
+  return {
+    executionId: "audit_exec_1",
+    workflowId: "wf_audit_1",
+    workflowName: "Audited Workflow",
+    versionExecuted: "1",
+    inputs: {},
+    outputs: [],
+    durationMs: 250,
+    nodePath: ["trigger_node", "action_node"],
+    actor: "Amoré Bloom Owner",
+    timestamp: "2026-01-03T00:00:00.000Z",
     ...overrides,
   };
 }
@@ -595,5 +614,154 @@ describe("WorkflowMonitoringCenterView", () => {
     expect(errorsTab).toHaveAttribute("aria-selected", "true");
 
     expect(await screen.findByText("No workflow errors")).toBeInTheDocument();
+  });
+
+  it("wires Execution History Clone to cloneWorkflowExecutionAction with a success toast and refresh", async () => {
+    vi.mocked(getWorkflowExecutionHistoryAction).mockResolvedValue({
+      success: true,
+      data: [makeExecutionSummary({ executionId: "exec_clone_1", workflowName: "Clonable Workflow" })],
+    });
+    vi.mocked(cloneWorkflowExecutionAction).mockResolvedValue({
+      success: true,
+      data: {
+        id: "exec_clone_1",
+        workspaceId: "ws_1",
+        automationId: "automation_1",
+        automationName: "Clonable Workflow",
+        automationVersion: "v1",
+        trigger: "invoice.overdue",
+        triggerFacts: {},
+        conditionsPassed: true,
+        approvalStatus: "not_required",
+        approvedBy: null,
+        approvedAt: null,
+        actionResults: [],
+        status: "success",
+        durationMs: 100,
+        startedAt: "2026-01-01T00:00:00.000Z",
+        completedAt: "2026-01-01T00:00:01.000Z",
+      },
+    });
+
+    render(<WorkflowMonitoringCenterView />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Execution History" }));
+    // "Clonable Workflow" renders twice — once desktop, once mobile.
+    await screen.findAllByText("Clonable Workflow");
+
+    const callsBefore = vi.mocked(getWorkflowExecutionHistoryAction).mock.calls.length;
+    const cloneButtons = screen.getAllByRole("button", { name: "Clone" });
+    await userEvent.click(cloneButtons[0]);
+
+    await waitFor(() => {
+      expect(cloneWorkflowExecutionAction).toHaveBeenCalledWith("exec_clone_1");
+    });
+    expect(await screen.findByText("Execution cloned — new status: success.")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(vi.mocked(getWorkflowExecutionHistoryAction).mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+  });
+
+  it("wires Execution History Export through the full browser download path", async () => {
+    vi.mocked(getWorkflowExecutionHistoryAction).mockResolvedValue({
+      success: true,
+      data: [makeExecutionSummary({ executionId: "exec_export_1", workflowName: "Exportable Workflow" })],
+    });
+    vi.mocked(exportWorkflowExecutionLogAction).mockResolvedValue({ success: true, data: '{"distinctive":"export-payload"}' });
+
+    const fakeObjectUrl = "blob:fake-object-url";
+    const createObjectURLSpy = vi.fn().mockReturnValue(fakeObjectUrl);
+    const revokeObjectURLSpy = vi.fn();
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    URL.createObjectURL = createObjectURLSpy;
+    URL.revokeObjectURL = revokeObjectURLSpy;
+
+    const createdAnchors: HTMLAnchorElement[] = [];
+    const realCreateElement = document.createElement.bind(document);
+    const createElementSpy = vi.spyOn(document, "createElement").mockImplementation((tagName: string) => {
+      const el = realCreateElement(tagName);
+      if (tagName === "a") createdAnchors.push(el as HTMLAnchorElement);
+      return el;
+    });
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    try {
+      render(<WorkflowMonitoringCenterView />);
+      await userEvent.click(await screen.findByRole("tab", { name: "Execution History" }));
+      // "Exportable Workflow" renders twice — once desktop, once mobile.
+      await screen.findAllByText("Exportable Workflow");
+
+      const exportButtons = screen.getAllByRole("button", { name: "Export" });
+      await userEvent.click(exportButtons[0]);
+
+      await waitFor(() => {
+        expect(exportWorkflowExecutionLogAction).toHaveBeenCalledWith("exec_export_1");
+      });
+      await waitFor(() => {
+        expect(createObjectURLSpy).toHaveBeenCalled();
+      });
+
+      expect(createdAnchors.length).toBeGreaterThan(0);
+      const anchor = createdAnchors[createdAnchors.length - 1];
+      expect(anchor.getAttribute("href")).toBe(fakeObjectUrl);
+      expect(anchor.getAttribute("download")).toBe("exec_export_1.json");
+      expect(clickSpy).toHaveBeenCalled();
+      expect(revokeObjectURLSpy).toHaveBeenCalledWith(fakeObjectUrl);
+    } finally {
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
+      createElementSpy.mockRestore();
+      clickSpy.mockRestore();
+    }
+  });
+
+  it("renders the Audit tab's populated table, mobile duplication, version-format distinction, and its own Export call site", async () => {
+    vi.mocked(getWorkflowAuditLogAction).mockResolvedValue({
+      success: true,
+      data: [
+        makeAuditRecord({
+          executionId: "audit_exec_pop",
+          workflowName: "Audit Trail Workflow",
+          versionExecuted: "3",
+          actor: "Amoré Bloom Owner",
+          nodePath: ["trigger_node", "action_node"],
+          durationMs: 250,
+        }),
+      ],
+    });
+    vi.mocked(exportWorkflowExecutionLogAction).mockResolvedValue({ success: true, data: "{}" });
+
+    render(<WorkflowMonitoringCenterView />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Audit" }));
+
+    const table = await screen.findByRole("table");
+    expect(within(table).getByText("Audit Trail Workflow")).toBeInTheDocument();
+    // Desktop renders the bare version string; mobile renders a "v"-prefixed version —
+    // a real, current desktop/mobile formatting inconsistency this test protects exactly.
+    expect(within(table).getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("v3")).toBeInTheDocument();
+    expect(within(table).getByText("trigger_node → action_node")).toBeInTheDocument();
+    expect(within(table).getByText("Amoré Bloom Owner")).toBeInTheDocument();
+    expect(within(table).getByText("250ms")).toBeInTheDocument();
+
+    expect(screen.getAllByText("Audit Trail Workflow").length).toBe(2);
+    expect(screen.getAllByText("Amoré Bloom Owner").length).toBe(2);
+
+    const exportButtons = screen.getAllByRole("button", { name: "Export" });
+    await userEvent.click(exportButtons[0]);
+
+    await waitFor(() => {
+      expect(exportWorkflowExecutionLogAction).toHaveBeenCalledWith("audit_exec_pop");
+    });
+  });
+
+  it("shows the Audit tab's empty state when there are no audit records", async () => {
+    vi.mocked(getWorkflowAuditLogAction).mockResolvedValue({ success: true, data: [] });
+
+    render(<WorkflowMonitoringCenterView />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Audit" }));
+
+    expect(await screen.findByText("No audit records yet")).toBeInTheDocument();
+    expect(screen.getByText("Every workflow execution produces an immutable audit record here.")).toBeInTheDocument();
   });
 });
