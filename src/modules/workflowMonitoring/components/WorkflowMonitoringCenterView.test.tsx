@@ -9,6 +9,9 @@ import type {
   WorkflowPerformanceMetrics,
   WorkflowDependencyMap,
   WorkspaceWorkflowHealthSummary,
+  WorkflowDurationRanking,
+  WorkflowTriggerEdge,
+  WorkflowHealthReport,
 } from "@/types/workflowMonitoring";
 
 vi.mock("@/modules/workflowMonitoring/monitoringCenterActions", () => ({
@@ -104,6 +107,27 @@ function makeDependencies(): WorkflowDependencyMap {
 
 function makeHealth(): WorkspaceWorkflowHealthSummary {
   return { reports: [], averageScore: null, totalFindings: 0, evaluatedAt: "2026-01-01T00:00:00.000Z" };
+}
+
+function makeDurationRanking(overrides: Partial<WorkflowDurationRanking> = {}): WorkflowDurationRanking {
+  return { workflowId: "wf_rank_1", workflowName: "Ranked Workflow", averageDurationMs: 500, ...overrides };
+}
+
+function makeTriggerEdge(overrides: Partial<WorkflowTriggerEdge> = {}): WorkflowTriggerEdge {
+  return { sourceWorkflowId: "wf_src_1", sourceWorkflowName: "Source Workflow", producedTrigger: "invoice.paid", targetWorkflowIds: ["wf_target_1", "wf_target_2"], ...overrides };
+}
+
+function makeHealthReport(overrides: Partial<WorkflowHealthReport> = {}): WorkflowHealthReport {
+  return {
+    workflowId: "wf_health_1",
+    workflowName: "Healthy Workflow",
+    status: "published",
+    structuralIssues: [],
+    findings: [],
+    score: 90,
+    evaluatedAt: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  };
 }
 
 beforeEach(() => {
@@ -313,5 +337,126 @@ describe("WorkflowMonitoringCenterView", () => {
       expect(retryWorkflowExecutionAction).toHaveBeenCalledWith("e_retry");
     });
     expect(await screen.findByText("Execution re-run — new status: success.")).toBeInTheDocument();
+  });
+
+  it("renders the Performance tab's KPI values, populated rankings, empty rankings, and populated frequency", async () => {
+    vi.mocked(getWorkflowPerformanceMetricsAction).mockResolvedValue({
+      success: true,
+      data: {
+        averageExecutionDurationMs: 2500,
+        slowestWorkflows: [makeDurationRanking({ workflowId: "wf_slow", workflowName: "Slow Workflow", averageDurationMs: 9000 })],
+        fastestWorkflows: [makeDurationRanking({ workflowId: "wf_fast", workflowName: "Fast Workflow", averageDurationMs: 50 })],
+        mostExecutedWorkflows: [],
+        failedExecutionCount: 3,
+        successRate: 92,
+        averageWaitTimeMs: 1500,
+        nodeExecutionFrequency: {},
+        actionExecutionFrequency: {},
+        triggerFrequency: { "invoice.paid": 12 },
+        evaluatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+
+    render(<WorkflowMonitoringCenterView />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Performance" }));
+    const panel = await screen.findByRole("tabpanel");
+
+    expect(within(panel).getByText("2.5s")).toBeInTheDocument();
+    expect(within(panel).getByText("92%")).toBeInTheDocument();
+    expect(within(panel).getByText("1.5s")).toBeInTheDocument();
+    expect(within(panel).getByText("3 failed executions")).toBeInTheDocument();
+    expect(within(panel).getByText("Slow Workflow")).toBeInTheDocument();
+    expect(within(panel).getByText("Fast Workflow")).toBeInTheDocument();
+    // "No data yet." covers exactly 3 empty cards: Most Executed, Action frequency, Node frequency.
+    expect(within(panel).getAllByText("No data yet.").length).toBe(3);
+    expect(within(panel).getByText("invoice.paid")).toBeInTheDocument();
+  });
+
+  it("renders the Dependency Map's circular warning, triggering-workflow edge, and trigger graph entry", async () => {
+    vi.mocked(getWorkflowDependencyMapAction).mockResolvedValue({
+      success: true,
+      data: {
+        triggerGraph: { "contract.signed": ["wf_a", "wf_b"] },
+        actionGraph: {},
+        workflowsTriggeringWorkflows: [makeTriggerEdge({ sourceWorkflowName: "Source Workflow", producedTrigger: "invoice.paid", targetWorkflowIds: ["wf_a", "wf_b"] })],
+        circularChains: [["wf_x", "wf_y", "wf_z"]],
+        evaluatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+
+    render(<WorkflowMonitoringCenterView />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Dependency Map" }));
+    const panel = await screen.findByRole("tabpanel");
+
+    expect(within(panel).getByText("Circular references detected")).toBeInTheDocument();
+    expect(within(panel).getByText("wf_x → wf_y → wf_z → wf_x")).toBeInTheDocument();
+    expect(within(panel).getByText("Source Workflow")).toBeInTheDocument();
+    expect(within(panel).getByText("invoice.paid")).toBeInTheDocument();
+    expect(within(panel).getByText("contract.signed")).toBeInTheDocument();
+    expect(within(panel).getByText("2 workflow(s)")).toBeInTheDocument();
+  });
+
+  it("shows the Dependency Map's empty fallback with no circular warning", async () => {
+    vi.mocked(getWorkflowDependencyMapAction).mockResolvedValue({
+      success: true,
+      data: { triggerGraph: {}, actionGraph: {}, workflowsTriggeringWorkflows: [], circularChains: [], evaluatedAt: "2026-01-01T00:00:00.000Z" },
+    });
+
+    render(<WorkflowMonitoringCenterView />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Dependency Map" }));
+    const panel = await screen.findByRole("tabpanel");
+
+    expect(within(panel).queryByText("Circular references detected")).not.toBeInTheDocument();
+    expect(within(panel).getByText("No workflow-to-workflow trigger chains detected yet.")).toBeInTheDocument();
+    expect(within(panel).getByRole("heading", { name: "Trigger graph" })).toBeInTheDocument();
+  });
+
+  it("renders the Health Panel's KPIs, both workflow reports, an issue message, and the no-issues fallback", async () => {
+    vi.mocked(getWorkspaceWorkflowHealthAction).mockResolvedValue({
+      success: true,
+      data: {
+        reports: [
+          makeHealthReport({
+            workflowId: "wf_issue",
+            workflowName: "Issue Workflow",
+            score: 40,
+            structuralIssues: [{ code: "cycle_detected", message: "This Workflow has a circular reference.", nodeId: null, edgeId: null }],
+            findings: [],
+          }),
+          makeHealthReport({ workflowId: "wf_clean", workflowName: "Clean Workflow", score: 95, structuralIssues: [], findings: [] }),
+        ],
+        averageScore: 68,
+        totalFindings: 1,
+        evaluatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+
+    render(<WorkflowMonitoringCenterView />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Health Panel" }));
+    const panel = await screen.findByRole("tabpanel");
+
+    expect(within(panel).getByText("68/100")).toBeInTheDocument();
+    expect(within(panel).getByText("1")).toBeInTheDocument();
+    expect(within(panel).getByRole("link", { name: "Issue Workflow" })).toBeInTheDocument();
+    expect(within(panel).getByRole("link", { name: "Clean Workflow" })).toBeInTheDocument();
+    expect(within(panel).getByText("40/100")).toBeInTheDocument();
+    expect(within(panel).getByText("95/100")).toBeInTheDocument();
+    expect(within(panel).getByText("This Workflow has a circular reference.")).toBeInTheDocument();
+    expect(within(panel).getByText("No issues detected.")).toBeInTheDocument();
+  });
+
+  it("shows the Health Panel's empty state when there are no workflows", async () => {
+    vi.mocked(getWorkspaceWorkflowHealthAction).mockResolvedValue({
+      success: true,
+      data: { reports: [], averageScore: null, totalFindings: 0, evaluatedAt: "2026-01-01T00:00:00.000Z" },
+    });
+
+    render(<WorkflowMonitoringCenterView />);
+    const healthTab = await screen.findByRole("tab", { name: "Health Panel" });
+    await userEvent.click(healthTab);
+    expect(healthTab).toHaveAttribute("aria-selected", "true");
+
+    const panel = await screen.findByRole("tabpanel");
+    expect(within(panel).getByText("No workflows yet")).toBeInTheDocument();
   });
 });
