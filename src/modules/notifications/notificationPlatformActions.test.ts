@@ -126,6 +126,26 @@ describe("state transitions", () => {
     expect((await pinNotificationAction(created.data.id)).success).toBe(false);
     expect((await unpinNotificationAction(created.data.id)).success).toBe(false);
   });
+
+  it("rejects a member from a different workspace from reading/archiving/pinning another workspace's notification", async () => {
+    const created = await mockNotificationsRepository.createInAppNotification("ws_1", { recipientMemberId: "member_1", title: "Test", body: "Body" });
+    if (!created.success) throw new Error("setup failed");
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(makeSession({ workspace: { id: "ws_2", name: "Other Workspace" } }));
+
+    expect((await markNotificationReadAction(created.data.id)).success).toBe(false);
+    expect((await markNotificationUnreadAction(created.data.id)).success).toBe(false);
+    expect((await archiveNotificationAction(created.data.id)).success).toBe(false);
+    expect((await pinNotificationAction(created.data.id)).success).toBe(false);
+    expect((await unpinNotificationAction(created.data.id)).success).toBe(false);
+
+    const owned = await mockNotificationsRepository.getNotificationsForMember("ws_1", "member_1");
+    const unchanged = owned.find((n) => n.id === created.data.id);
+    expect(unchanged?.read_at).toBeNull();
+    expect(unchanged?.archived_at).toBeNull();
+    expect(unchanged?.pinned_at).toBeNull();
+    expect(readActivities().some((a) => a.owner_type === "notification" && a.owner_id === created.data.id)).toBe(false);
+  });
 });
 
 describe("templates", () => {
