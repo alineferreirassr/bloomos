@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   archiveExpense,
   archiveInvoice,
@@ -101,6 +101,12 @@ const validExpenseInput: ExpenseInput = {
 
 beforeEach(() => {
   resetAllMockData();
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-08-15T12:00:00.000Z"));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("mock data", () => {

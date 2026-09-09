@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockFinanceRepository } from "@/lib/data/finance/mockRepository";
 import { resetInvoicesStore, readInvoices } from "@/lib/data/mock/invoicesStore";
 import { resetPaymentsStore } from "@/lib/data/mock/paymentsStore";
@@ -20,6 +20,11 @@ import type {
   PaymentSettlementInput,
 } from "@/modules/finance/schema";
 
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-08-15T12:00:00.000Z"));
+});
+
 afterEach(() => {
   resetInvoicesStore();
   resetPaymentsStore();
@@ -31,6 +36,7 @@ afterEach(() => {
   resetJournalLinesStore();
   resetAccountingPeriodsStore();
   resetAuditLogStore();
+  vi.useRealTimers();
 });
 
 // event_1 -> client_2, event_2 -> client_3, event_3/event_4 -> client_1, event_5 -> client_4
