@@ -14,7 +14,7 @@ afterEach(() => {
 });
 
 import { ClientInvitationsAdminView } from "@/modules/clientAccess/components/ClientInvitationsAdminView";
-import { getClientInvitations, getClients, expireClientInvitations, revokeClientInvitation } from "@/lib/data";
+import { getClientInvitations, getClients, expireClientInvitations, resendClientInvitation, revokeClientInvitation } from "@/lib/data";
 import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
 import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 
@@ -118,6 +118,51 @@ describe("ClientInvitationsAdminView", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
     await waitFor(() => expect(revokeClientInvitation).toHaveBeenCalledWith("inv_1"));
+  });
+
+  it("resends a pending invitation, showing the invitation link and reloading the list", async () => {
+    vi.mocked(expireClientInvitations).mockResolvedValue(undefined);
+    vi.mocked(getClientInvitations).mockResolvedValue(INVITATIONS);
+    vi.mocked(getClients).mockResolvedValue(CLIENTS);
+    vi.mocked(resendClientInvitation).mockResolvedValue({
+      success: true,
+      data: {
+        invitation: { id: "inv_1", client_id: "client_1", email: "naomi@example.com", status: "pending", expires_at: "2026-08-01T00:00:00.000Z" },
+        token: "tok_123",
+      },
+    } as never);
+
+    renderView(["clients.portal_view", "clients.portal_invite"]);
+    await waitFor(() => expect(screen.getByText("Naomi Whitfield")).toBeInTheDocument());
+    const callsBeforeResend = vi.mocked(getClientInvitations).mock.calls.length;
+
+    fireEvent.click(screen.getByRole("button", { name: "Resend" }));
+    await waitFor(() => expect(resendClientInvitation).toHaveBeenCalledWith("inv_1"));
+
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("naomi@example.com");
+    expect(status).toHaveTextContent("/client-invitations/tok_123");
+    await waitFor(() => expect(vi.mocked(getClientInvitations).mock.calls.length).toBeGreaterThan(callsBeforeResend));
+  });
+
+  it("shows the failure message and does not reload when resend fails", async () => {
+    vi.mocked(expireClientInvitations).mockResolvedValue(undefined);
+    vi.mocked(getClientInvitations).mockResolvedValue(INVITATIONS);
+    vi.mocked(getClients).mockResolvedValue(CLIENTS);
+    vi.mocked(resendClientInvitation).mockResolvedValue({
+      success: false,
+      error: "Cannot resend an invitation that is already accepted.",
+    } as never);
+
+    renderView(["clients.portal_view", "clients.portal_invite"]);
+    await waitFor(() => expect(screen.getByText("Naomi Whitfield")).toBeInTheDocument());
+    const callsBeforeResend = vi.mocked(getClientInvitations).mock.calls.length;
+
+    fireEvent.click(screen.getByRole("button", { name: "Resend" }));
+    await waitFor(() => expect(resendClientInvitation).toHaveBeenCalledWith("inv_1"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Cannot resend an invitation that is already accepted.");
+    expect(vi.mocked(getClientInvitations).mock.calls.length).toBe(callsBeforeResend);
   });
 
   it("shows an empty state when no invitations match the filters", async () => {

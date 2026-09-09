@@ -331,6 +331,21 @@ describe("supabaseClientAccessRepository resend/revoke invitation", () => {
     expect(result.success).toBe(false);
   });
 
+  it("resend regenerates the token and extends expiry for a pending invitation", async () => {
+    const { client, calls } = createMockSupabase([
+      { data: invitationRow(), error: null },
+      { data: invitationRow({ token_hash: "new_hash_xyz", expires_at: "2026-09-08T00:00:00Z" }), error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseClientAccessRepository.resendClientInvitation("client_invitation_1");
+    expect(result.success).toBe(true);
+    const updateCall = calls.find((c) => c.table === "client_invitations" && c.method === "update");
+    const payload = updateCall?.args[0] as Record<string, unknown>;
+    expect(payload).toHaveProperty("token_hash");
+    expect(payload).toHaveProperty("expires_at");
+  });
+
   it("revoke sets status=revoked for a pending invitation", async () => {
     const { client, calls } = createMockSupabase([
       { data: invitationRow(), error: null },
