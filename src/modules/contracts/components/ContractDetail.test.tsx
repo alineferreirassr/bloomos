@@ -145,6 +145,8 @@ describe("ContractDetailView", () => {
     expect(screen.getByText("Financial Terms")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Template" })).toBeInTheDocument();
     expect(screen.getByText("Version History")).toBeInTheDocument();
+    expect(screen.getByText("Version")).toBeInTheDocument();
+    expect(screen.getByText("v2")).toBeInTheDocument();
     expect(screen.getByText("Exhibits")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Notes" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Timeline" })).toBeInTheDocument();
