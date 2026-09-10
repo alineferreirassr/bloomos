@@ -16,6 +16,7 @@ import {
   listActiveCalendarEventsForCaller,
   listCalendarsForCaller,
   listEventsForCalendar,
+  updateCalendarSelection,
   updateCalendarSyncToken,
   upsertAccount,
   upsertCalendar,
@@ -310,6 +311,60 @@ describe("updateCalendarSyncToken (GCAL-05)", () => {
 
   it("GCAL05-AL:50. rejects an unknown/foreign calendar id — no client-supplied id can bypass ownership", async () => {
     await expect(updateCalendarSyncToken("calendar_missing", "sync_abc123", { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 })).rejects.toThrow(/No Google Calendar found/);
+  });
+});
+
+describe("updateCalendarSelection (GC02-02)", () => {
+  async function seedCalendar(memberId: string = MEMBER_1, isSelected = false): Promise<string> {
+    const connectionId = await installGoogleCalendarReadonlyConnection(WORKSPACE_ID, memberId);
+    const account = await upsertAccount({ workspaceId: WORKSPACE_ID, memberId, integrationConnectionId: connectionId });
+    const calendar = await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId, accountId: account.id, providerCalendarId: "cal_1", isSelected });
+    return calendar.id;
+  }
+
+  it("selects the caller's own calendar", async () => {
+    const calendarId = await seedCalendar(MEMBER_1, false);
+    const updated = await updateCalendarSelection(calendarId, true, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(updated.is_selected).toBe(true);
+  });
+
+  it("deselects the caller's own calendar", async () => {
+    const calendarId = await seedCalendar(MEMBER_1, true);
+    const updated = await updateCalendarSelection(calendarId, false, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(updated.is_selected).toBe(false);
+  });
+
+  it("changes only is_selected — sync_token, provider ids, and every other field are preserved", async () => {
+    const calendarId = await seedCalendar(MEMBER_1, false);
+    await updateCalendarSyncToken(calendarId, "sync_abc123", { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    const updated = await updateCalendarSelection(calendarId, true, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(updated.is_selected).toBe(true);
+    expect(updated.sync_token).toBe("sync_abc123");
+    expect(updated.provider_calendar_id).toBe("cal_1");
+    expect(updated.is_primary).toBe(false);
+  });
+
+  it("does not create, update, or remove any event row", async () => {
+    const calendarId = await seedCalendar(MEMBER_1, true);
+    await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_1", allDay: false });
+    await updateCalendarSelection(calendarId, false, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    const events = await listEventsForCalendar(calendarId, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(events).toHaveLength(1);
+    expect(events[0].provider_event_id).toBe("evt_1");
+  });
+
+  it("denies a same-workspace, different member from selecting another member's calendar", async () => {
+    const calendarId = await seedCalendar(MEMBER_1);
+    await expect(updateCalendarSelection(calendarId, true, { workspaceId: WORKSPACE_ID, memberId: MEMBER_2 })).rejects.toThrow(/not owned by the caller/);
+  });
+
+  it("denies a cross-workspace caller from selecting a calendar", async () => {
+    const calendarId = await seedCalendar(MEMBER_1);
+    await expect(updateCalendarSelection(calendarId, true, { workspaceId: OTHER_WORKSPACE_ID, memberId: MEMBER_1 })).rejects.toThrow(/not owned by the caller/);
+  });
+
+  it("rejects an unknown/foreign calendar id — no client-supplied id can bypass ownership", async () => {
+    await expect(updateCalendarSelection("calendar_missing", true, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 })).rejects.toThrow(/No Google Calendar found/);
   });
 });
 

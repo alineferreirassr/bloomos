@@ -47,6 +47,14 @@ describe("getRouteAccessRequirement", () => {
     expect(getRouteAccessRequirement("/settings")).toEqual({ kind: "permission", permission: "workspace.manage" });
   });
 
+  it("GC02-02 — requires integrations.calendar (not workspace.manage) for the Google Calendar settings subpage, via longest-prefix override", () => {
+    expect(getRouteAccessRequirement("/settings/integrations/google-calendar")).toEqual({ kind: "permission", permission: "integrations.calendar" });
+  });
+
+  it("GC02-02 — a sibling settings subpage without its own entry still falls back to /settings's own workspace.manage gate", () => {
+    expect(getRouteAccessRequirement("/settings/branding")).toEqual({ kind: "permission", permission: "workspace.manage" });
+  });
+
   it("matches nested sub-routes under a module prefix", () => {
     expect(getRouteAccessRequirement("/leads/lead_1/edit")).toEqual({ kind: "permission", permission: "leads.view" });
     expect(getRouteAccessRequirement("/finance/invoices/new")).toEqual({ kind: "permission", permission: "finance.view" });

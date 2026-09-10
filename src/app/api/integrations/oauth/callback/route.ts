@@ -9,6 +9,22 @@ export const dynamic = "force-dynamic";
 const INTEGRATIONS_RETURN_PATH = "/developer";
 
 /**
+ * GC02-02 — every provider's OAuth completion returns to
+ * `INTEGRATIONS_RETURN_PATH` (`/developer`'s Integrations Config Tab) by
+ * default, unchanged. `google-calendar-readonly` is the one exception:
+ * its own management surface lives at `/settings/integrations/google-
+ * calendar`, not `/developer` (member-owned personal connections don't
+ * belong in the workspace-admin console the way Gmail/Stripe's do — see
+ * GC02-01's own audit). This is a fixed, internal, allowlisted mapping —
+ * never influenced by any request/query input — so it can't become an
+ * open redirect.
+ */
+function getIntegrationReturnPath(providerId: string): string {
+  if (providerId === "google-calendar-readonly") return "/settings/integrations/google-calendar";
+  return INTEGRATIONS_RETURN_PATH;
+}
+
+/**
  * GMAIL-03R2 — the one generic OAuth provider callback route every
  * OAuth-capable provider (gmail today; google-calendar/google-drive/
  * docusign/dropbox whenever their own product flow needs one) redirects
@@ -34,8 +50,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const state = searchParams.get("state");
   const providerError = searchParams.get("error");
 
-  const returnUrl = (status: string, detail?: string): NextResponse => {
-    const url = new URL(INTEGRATIONS_RETURN_PATH, origin);
+  const returnUrl = (status: string, detail?: string, returnPath: string = INTEGRATIONS_RETURN_PATH): NextResponse => {
+    const url = new URL(returnPath, origin);
     url.searchParams.set("integration_status", status);
     if (detail) url.searchParams.set("integration_detail", detail);
     return NextResponse.redirect(url);
@@ -59,8 +75,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   redirectUri.search = "";
 
   const result = await completeProviderOAuthConnectionAction(pending.provider_id, code, state, redirectUri.toString());
-  if (!result.success) return returnUrl("error", "completion_failed");
-  if ("pendingConfiguration" in result.data) return returnUrl("pending_configuration");
+  const returnPath = getIntegrationReturnPath(pending.provider_id);
+  if (!result.success) return returnUrl("error", "completion_failed", returnPath);
+  if ("pendingConfiguration" in result.data) return returnUrl("pending_configuration", undefined, returnPath);
 
-  return returnUrl("connected", pending.provider_id);
+  return returnUrl("connected", pending.provider_id, returnPath);
 }

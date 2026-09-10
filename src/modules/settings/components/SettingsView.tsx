@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -167,6 +168,31 @@ export function SettingsView() {
       ) : null}
 
       <SettingsSearchBox onNavigate={setActiveSectionId} />
+
+      {/*
+        GC02-02 — a deliberate, narrow exception to this file's own "every
+        Section renders generically, no hardcoded module-specific logic"
+        guarantee (see the doc comment above): Google Calendar's own
+        management surface (connect/disconnect, calendar selection, manual
+        sync) can't be expressed as `SettingField`'s closed 5-value type
+        enum — a "Connect" button isn't a settable value, and a live,
+        per-member calendar checklist isn't a `SettingDefinition` array.
+        Rather than extend that closed, explicitly-guaranteed field model
+        (real architecture risk to the 14 other Sections that depend on it
+        staying simple), it lives on its own dedicated subpage; this is
+        plain navigation only, not a Section registration.
+      */}
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Google Calendar</h3>
+            <p className="mt-0.5 text-xs text-text/55">Connect your personal Google Calendar and choose which calendars BloomOS displays.</p>
+          </div>
+          <Link href="/settings/integrations/google-calendar" className="text-sm text-accent underline">
+            Manage
+          </Link>
+        </div>
+      </Card>
 
       {data.sections.length === 0 ? (
         <ErrorState message="No settings are visible to your role yet." />

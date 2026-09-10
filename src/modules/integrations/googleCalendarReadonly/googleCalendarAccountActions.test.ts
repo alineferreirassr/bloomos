@@ -38,6 +38,7 @@ import {
   getOwnGoogleCalendarAccountSummaryAction,
   identifyMyGoogleCalendarAccountAction,
   listMyGoogleCalendarsAction,
+  setMyGoogleCalendarSelectedAction,
   syncMyGoogleCalendarEventsAction,
 } from "@/modules/integrations/googleCalendarReadonly/googleCalendarAccountActions";
 
@@ -252,6 +253,89 @@ describe("listMyGoogleCalendarsAction / getMyGoogleCalendarsAction (GCAL-03)", (
     vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(sessionFor(WORKSPACE_ID, OTHER_MEMBER_ID));
     const result = await getMyGoogleCalendarsAction();
     expect(result).toEqual({ success: true, data: [] });
+  });
+});
+
+describe("setMyGoogleCalendarSelectedAction (GC02-02)", () => {
+  async function identifyThenListWith(items: Array<Partial<{ id: string; summary: string; primary: boolean }>>) {
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(sessionFor(WORKSPACE_ID, MEMBER_ID));
+    await seedConnectedAccount(WORKSPACE_ID, MEMBER_ID);
+    await identifyMyGoogleCalendarAccountAction();
+    mockListGoogleCalendars.mockResolvedValue({ items: items.map((item) => ({ id: "cal_1", summary: "Calendar", ...item })) });
+    const listed = await listMyGoogleCalendarsAction();
+    if (!listed.success || listed.data.status !== "success") throw new Error("expected a successful listing to seed a calendar");
+    return listed.data.calendars[0].id;
+  }
+
+  it("33. requires an active session", async () => {
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue({ kind: "unauthenticated" } as MemberSessionSnapshot);
+    const result = await setMyGoogleCalendarSelectedAction("calendar_missing", true);
+    expect(result.success).toBe(false);
+  });
+
+  it("33. requires integrations.calendar permission — server-side, not merely a UI check", async () => {
+    const calendarId = await identifyThenListWith([{ id: "cal_1", primary: false }]);
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(sessionFor(WORKSPACE_ID, MEMBER_ID, ["integrations.connect"]));
+    const result = await setMyGoogleCalendarSelectedAction(calendarId, true);
+    expect(result.success).toBe(false);
+  });
+
+  it("selects the caller's own calendar and returns the safe summary shape", async () => {
+    const calendarId = await identifyThenListWith([{ id: "cal_1", primary: false }]);
+    const result = await setMyGoogleCalendarSelectedAction(calendarId, true);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error("expected success");
+    expect(result.data).toEqual({ id: calendarId, summary: "Calendar", description: null, timeZone: null, accessRole: null, isPrimary: false, isSelected: true });
+  });
+
+  it("deselects the caller's own calendar", async () => {
+    const calendarId = await identifyThenListWith([{ id: "ana@amorebloom.com", primary: true }]); // primary defaults to selected
+    const result = await setMyGoogleCalendarSelectedAction(calendarId, false);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error("expected success");
+    expect(result.data.isSelected).toBe(false);
+  });
+
+  it("persists the selection — a later read reflects it", async () => {
+    const calendarId = await identifyThenListWith([{ id: "cal_1", primary: false }]);
+    await setMyGoogleCalendarSelectedAction(calendarId, true);
+
+    const result = await getMyGoogleCalendarsAction();
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error("expected success");
+    expect(result.data.find((c) => c.id === calendarId)?.isSelected).toBe(true);
+  });
+
+  it("13. a same-workspace, different member cannot select another member's calendar — same generic error as any other denial", async () => {
+    const calendarId = await identifyThenListWith([{ id: "cal_1", primary: false }]);
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(sessionFor(WORKSPACE_ID, OTHER_MEMBER_ID));
+    const result = await setMyGoogleCalendarSelectedAction(calendarId, true);
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error("expected denial");
+    expect(result.error).toBe("That integration connection isn't available. You may not have access to it.");
+  });
+
+  it("14. a cross-workspace caller cannot select a calendar", async () => {
+    const calendarId = await identifyThenListWith([{ id: "cal_1", primary: false }]);
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(sessionFor(OTHER_WORKSPACE_ID, MEMBER_ID));
+    const result = await setMyGoogleCalendarSelectedAction(calendarId, true);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an unknown/foreign calendar id with the same generic error — no ownership detail leaked", async () => {
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(sessionFor(WORKSPACE_ID, MEMBER_ID));
+    const result = await setMyGoogleCalendarSelectedAction("calendar_missing", true);
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error("expected denial");
+    expect(result.error).toBe("That integration connection isn't available. You may not have access to it.");
+  });
+
+  it("never includes a token in the returned result", async () => {
+    const calendarId = await identifyThenListWith([{ id: "cal_1", primary: false }]);
+    const result = await setMyGoogleCalendarSelectedAction(calendarId, true);
+    expect(JSON.stringify(result)).not.toContain("real-access-token");
   });
 });
 

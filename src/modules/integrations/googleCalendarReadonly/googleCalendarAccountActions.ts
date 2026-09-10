@@ -2,7 +2,7 @@
 
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 import { identifyOwnGoogleCalendarAccount, listAndPersistOwnGoogleCalendars, syncOwnGoogleCalendarEvents } from "@/core/integrations/googleCalendarReadonly/googleCalendarAccountService";
-import { getOwnAccount, listCalendarsForCaller } from "@/core/integrations/googleCalendarReadonly/googleCalendarAccountManager";
+import { getOwnAccount, listCalendarsForCaller, updateCalendarSelection } from "@/core/integrations/googleCalendarReadonly/googleCalendarAccountManager";
 import type { IdentifyGoogleCalendarAccountResult, ListGoogleCalendarsResult, SyncGoogleCalendarEventsResult } from "@/core/integrations/googleCalendarReadonly/googleCalendarAccountService";
 
 const GENERIC_ACCESS_ERROR = "That integration connection isn't available. You may not have access to it.";
@@ -137,4 +137,31 @@ export async function syncMyGoogleCalendarEventsAction(): Promise<SyncMyGoogleCa
   const result = await syncOwnGoogleCalendarEvents({ workspaceId: session.workspace.id, memberId: session.user.id });
   if (result.status === "error") return { success: false, error: result.reason };
   return { success: true, data: result };
+}
+
+export type SetMyGoogleCalendarSelectedResult = { success: true; data: GoogleCalendarSummary } | { success: false; error: string };
+
+/**
+ * GC02-02 — the one member-facing mutation this checkpoint adds: toggling
+ * whether one of the caller's own already-listed calendars is selected
+ * (displayed on `/calendar`, eligible for event sync). Accepts only the
+ * calendar's internal BloomOS id and a boolean — never a workspace/member
+ * id, provider calendar id, or arbitrary patch object — and derives the
+ * caller exclusively from the authenticated session, exactly like every
+ * other action in this file. Any failure (the calendar doesn't exist, or
+ * exists but isn't the caller's own) collapses to the same generic error
+ * as every other action here, deliberately not distinguishing the two —
+ * an ownership probe against an arbitrary calendar id learns nothing.
+ */
+export async function setMyGoogleCalendarSelectedAction(calendarId: string, selected: boolean): Promise<SetMyGoogleCalendarSelectedResult> {
+  const session = await resolveMemberSessionSnapshot();
+  if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
+  if (!session.permissions.includes("integrations.calendar")) return { success: false, error: GENERIC_ACCESS_ERROR };
+
+  try {
+    const calendar = await updateCalendarSelection(calendarId, selected, { workspaceId: session.workspace.id, memberId: session.user.id });
+    return { success: true, data: toCalendarSummary(calendar) };
+  } catch {
+    return { success: false, error: GENERIC_ACCESS_ERROR };
+  }
 }

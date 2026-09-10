@@ -223,6 +223,25 @@ export async function updateCalendarSyncToken(calendarId: string, syncToken: str
   return updated;
 }
 
+/**
+ * GC02-02 — the member-facing counterpart to `updateCalendarSyncToken`:
+ * the smallest ownership-checked capability needed for the new Google
+ * Calendar Settings UI to let a member choose which of their own
+ * calendars display/sync in BloomOS. Mirrors that function's shape
+ * exactly — same ownership assertion, same store call, same single-field
+ * patch — never routed through `upsertCalendar` (GCAL-03's own
+ * listing-refresh identity key is `(accountId, providerCalendarId)`, not
+ * this function's internal `calendarId`, and reusing it here would risk
+ * silently overwriting other calendar fields this mutation has no reason
+ * to touch).
+ */
+export async function updateCalendarSelection(calendarId: string, isSelected: boolean, caller: GoogleCalendarCallerScope): Promise<GoogleCalendar> {
+  await assertCalendarOwnership(calendarId, caller);
+  const updated = await updateCalendar(calendarId, { is_selected: isSelected });
+  if (!updated) throw new Error("Could not update this calendar's selection.");
+  return updated;
+}
+
 /** GCAL-04 — the DB-level FK on `google_calendar_events.calendar_id` can't itself enforce "this calendar belongs to this exact workspace/member" — this is that check, done here instead (mirrors `assertAccountOwnership` above, one level down). */
 async function assertCalendarOwnership(calendarId: string, caller: GoogleCalendarCallerScope): Promise<GoogleCalendar> {
   const calendar = await getCalendarById(calendarId);

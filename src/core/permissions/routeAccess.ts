@@ -88,6 +88,19 @@ export const ROUTE_ACCESS_MAP: RouteAccessEntry[] = [
   { prefix: "/team", requirement: { kind: "permission", permission: "team.view" } },
   { prefix: "/client-portal", requirement: { kind: "permission", permission: "clients.portal_view" } },
   { prefix: "/settings", requirement: { kind: "permission", permission: "workspace.manage" } },
+  // GC02-02 — the member-owned Google Calendar connection/selection
+  // surface. Longest-prefix matching (see this file's own header comment)
+  // makes this override the broader `/settings` entry above for exactly
+  // this one subpath — the caller must satisfy BOTH (`/settings`'s own
+  // `workspace.manage` gate still applies first, since this route nests
+  // under `(app)/settings/layout.tsx`), plus this route's own
+  // `integrations.calendar` check, matching every other Google Calendar
+  // Readonly Server Action's own required permission exactly. Today the
+  // same two roles (owner/admin) hold both, so this changes no one's
+  // actual reachability — it only names the correct, narrower permission
+  // for this specific page rather than silently relying on `/settings`'s
+  // own broader one.
+  { prefix: "/settings/integrations/google-calendar", requirement: { kind: "permission", permission: "integrations.calendar" } },
   { prefix: "/analytics", requirement: { kind: "permission", permission: "analytics.view" } },
   { prefix: "/developer", requirement: { kind: "permission", permission: "workspace.manage" } },
   { prefix: "/marketplace", requirement: { kind: "permission", permission: "workspace.manage" } },
