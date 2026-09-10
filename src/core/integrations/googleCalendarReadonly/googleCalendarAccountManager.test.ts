@@ -13,6 +13,7 @@ import {
   getAccountForCaller,
   getEventForCaller,
   getOwnAccount,
+  listActiveCalendarEventsForCaller,
   listCalendarsForCaller,
   listEventsForCalendar,
   updateCalendarSyncToken,
@@ -536,5 +537,94 @@ describe("getEventForCaller / listEventsForCalendar — ownership isolation (30,
 
     expect(await getEventForCaller(event.id, { workspaceId: OTHER_WORKSPACE_ID, memberId: MEMBER_1 })).toBeNull();
     await expect(listEventsForCalendar(calendarId, { workspaceId: OTHER_WORKSPACE_ID, memberId: MEMBER_1 })).rejects.toThrow();
+  });
+});
+
+describe("listActiveCalendarEventsForCaller (GCAL-06)", () => {
+  const RANGE = { from: "2026-08-01T00:00:00.000Z", to: "2026-08-31T00:00:00.000Z" };
+
+  async function seedSelectedCalendar(memberId: string = MEMBER_1, isSelected = true): Promise<{ accountId: string; calendarId: string }> {
+    const connectionId = await installGoogleCalendarReadonlyConnection(WORKSPACE_ID, memberId);
+    const account = await upsertAccount({ workspaceId: WORKSPACE_ID, memberId, integrationConnectionId: connectionId });
+    const calendar = await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId, accountId: account.id, providerCalendarId: "primary_cal", isPrimary: true, isSelected });
+    return { accountId: account.id, calendarId: calendar.id };
+  }
+
+  it("returns an empty array when the caller has no account at all", async () => {
+    const result = await listActiveCalendarEventsForCaller(RANGE, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(result).toEqual([]);
+  });
+
+  it("returns an empty array when the caller has an account but no selected calendars", async () => {
+    await seedSelectedCalendar(MEMBER_1, false);
+    const result = await listActiveCalendarEventsForCaller(RANGE, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(result).toEqual([]);
+  });
+
+  it("only returns events from is_selected=true calendars, never an unselected one", async () => {
+    const { accountId } = await seedSelectedCalendar(MEMBER_1, true);
+    const unselected = await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId, providerCalendarId: "secondary_cal", isSelected: false });
+    await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId: unselected.id, providerEventId: "evt_unselected", allDay: false, startDateTime: "2026-08-15T10:00:00.000Z", endDateTime: "2026-08-15T11:00:00.000Z" });
+
+    const result = await listActiveCalendarEventsForCaller(RANGE, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(result).toEqual([]);
+  });
+
+  it("excludes a cancelled event", async () => {
+    const { calendarId } = await seedSelectedCalendar();
+    await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_cancelled", allDay: false, status: "cancelled", startDateTime: "2026-08-15T10:00:00.000Z", endDateTime: "2026-08-15T11:00:00.000Z" });
+
+    const result = await listActiveCalendarEventsForCaller(RANGE, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(result).toEqual([]);
+  });
+
+  it("includes a timed event fully inside the range, and one spanning the range's start/end boundaries", async () => {
+    const { calendarId } = await seedSelectedCalendar();
+    await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_inside", allDay: false, startDateTime: "2026-08-15T10:00:00.000Z", endDateTime: "2026-08-15T11:00:00.000Z" });
+    await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_spans_start", allDay: false, startDateTime: "2026-07-31T23:00:00.000Z", endDateTime: "2026-08-01T01:00:00.000Z" });
+    await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_spans_end", allDay: false, startDateTime: "2026-08-30T23:00:00.000Z", endDateTime: "2026-08-31T01:00:00.000Z" });
+
+    const result = await listActiveCalendarEventsForCaller(RANGE, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(result.map((e) => e.provider_event_id).sort()).toEqual(["evt_inside", "evt_spans_end", "evt_spans_start"]);
+  });
+
+  it("excludes a timed event fully outside the range", async () => {
+    const { calendarId } = await seedSelectedCalendar();
+    await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_before", allDay: false, startDateTime: "2026-07-01T10:00:00.000Z", endDateTime: "2026-07-01T11:00:00.000Z" });
+    await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_after", allDay: false, startDateTime: "2026-09-15T10:00:00.000Z", endDateTime: "2026-09-15T11:00:00.000Z" });
+
+    const result = await listActiveCalendarEventsForCaller(RANGE, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(result).toEqual([]);
+  });
+
+  it("includes a multi-day all-day event overlapping the range, using exclusive-end overlap semantics", async () => {
+    const { calendarId } = await seedSelectedCalendar();
+    // Exclusive end_date of 2026-08-01 means the event's last real day is 2026-07-31 — this still overlaps a range starting 2026-08-01T00:00:00.000Z? No: [2026-07-30, 2026-08-01) does NOT overlap [2026-08-01, 2026-08-31) since the exclusive end date equals the range's own inclusive start instant exactly — use a genuinely overlapping span instead.
+    await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_multiday", allDay: true, startDate: "2026-07-30", endDate: "2026-08-02" });
+    const result = await listActiveCalendarEventsForCaller(RANGE, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(result.map((e) => e.provider_event_id)).toEqual(["evt_multiday"]);
+  });
+
+  it("excludes an all-day event whose exclusive end_date lands exactly on the range's own start (no real overlap)", async () => {
+    const { calendarId } = await seedSelectedCalendar();
+    await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_adjacent", allDay: true, startDate: "2026-07-29", endDate: "2026-08-01" });
+    const result = await listActiveCalendarEventsForCaller(RANGE, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(result).toEqual([]);
+  });
+
+  it("a same-workspace, different member never sees another member's events — isolation, not merely denial", async () => {
+    const { calendarId } = await seedSelectedCalendar(MEMBER_1);
+    await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_member1", allDay: false, startDateTime: "2026-08-15T10:00:00.000Z", endDateTime: "2026-08-15T11:00:00.000Z" });
+
+    const result = await listActiveCalendarEventsForCaller(RANGE, { workspaceId: WORKSPACE_ID, memberId: MEMBER_2 });
+    expect(result).toEqual([]);
+  });
+
+  it("a cross-workspace caller never sees another workspace's events", async () => {
+    const { calendarId } = await seedSelectedCalendar(MEMBER_1);
+    await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_member1", allDay: false, startDateTime: "2026-08-15T10:00:00.000Z", endDateTime: "2026-08-15T11:00:00.000Z" });
+
+    const result = await listActiveCalendarEventsForCaller(RANGE, { workspaceId: OTHER_WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(result).toEqual([]);
   });
 });

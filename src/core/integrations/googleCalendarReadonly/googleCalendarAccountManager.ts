@@ -21,6 +21,7 @@ import {
   getEventByProviderId,
   getEventById as getCalendarEventById,
   insertEvent,
+  listActiveEventsForCalendarInRange as listActiveEventsForCalendarInRangeStore,
   listEventsForCalendar as listEventsForCalendarStore,
   updateEvent,
 } from "@/lib/data/core/integrations/googleCalendarReadonly/calendarEventStore";
@@ -316,4 +317,39 @@ export async function getEventForCaller(eventId: string, caller: GoogleCalendarC
 export async function listEventsForCalendar(calendarId: string, caller: GoogleCalendarCallerScope): Promise<GoogleCalendarEvent[]> {
   await assertCalendarOwnership(calendarId, caller);
   return listEventsForCalendarStore(calendarId);
+}
+
+export interface ListActiveCalendarEventsForCallerParams {
+  /** ISO instant, inclusive lower bound. */
+  from: string;
+  /** ISO instant, exclusive upper bound — matches `CalendarRange`'s own `[start, end)` convention. */
+  to: string;
+}
+
+/**
+ * GCAL-06 — the one bounded, active-only, member-owned read the Calendar
+ * display source needs: every non-cancelled event from every one of the
+ * caller's own `is_selected = true` calendars whose span overlaps
+ * `[from, to)`. Never touches an unselected calendar's events — matches
+ * `google_calendars.is_selected`'s own "persisted display/sync intent"
+ * meaning (GCAL-05's own sync-eligibility use of the same flag is a
+ * separate, independent concern this function doesn't share, though
+ * both happen to filter on it). Ownership is enforced exactly like
+ * every other read in this file — via `getOwnAccount`/
+ * `listCalendarsForCaller`, never a client-supplied calendar id — and a
+ * caller with no account, or no selected calendars, safely resolves to
+ * an empty array rather than an error, matching this function's role as
+ * a read the Calendar page calls on every render (see
+ * `googleCalendarEventCalendarSource.ts`).
+ */
+export async function listActiveCalendarEventsForCaller(params: ListActiveCalendarEventsForCallerParams, caller: GoogleCalendarCallerScope): Promise<GoogleCalendarEvent[]> {
+  const account = await getOwnAccount(caller);
+  if (!account) return [];
+
+  const calendars = await listCalendarsForCaller(account.id, caller);
+  const selectedCalendars = calendars.filter((calendar) => calendar.is_selected);
+  if (selectedCalendars.length === 0) return [];
+
+  const perCalendarEvents = await Promise.all(selectedCalendars.map((calendar) => listActiveEventsForCalendarInRangeStore(calendar.id, params.from, params.to)));
+  return perCalendarEvents.flat();
 }

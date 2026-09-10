@@ -92,6 +92,38 @@ export async function listEventsForCalendar(calendarId: string): Promise<GoogleC
   return (data ?? []).map(mapRow);
 }
 
+/**
+ * GCAL-06 — bounded, active-only, range-overlap read for the Calendar
+ * display source. `start_date`/`end_date` are plain `date` columns (no
+ * time/zone component — a lexicographic `YYYY-MM-DD` comparison is
+ * exact), while `start_date_time`/`end_date_time` are `timestamptz`
+ * columns — Postgres compares those by true absolute instant regardless
+ * of what UTC offset the original Google value carried, so a plain
+ * `.lt`/`.gt` against an ISO instant string is correct here too. All-day
+ * and timed rows are queried separately (two straightforward, fully
+ * type-safe chained filters) rather than one combined `.or()` string —
+ * this avoids embedding date/timestamp values inside a raw PostgREST
+ * filter expression, which is unnecessary and needlessly fragile here.
+ * Overlap semantics: `event.start < to AND event.end > from` — matches
+ * `CalendarRange`'s own `[start, end)` exclusive-end convention exactly,
+ * so a Google all-day event's already-exclusive `end_date` needs no
+ * adjustment for this comparison (only the *display* mapping layer
+ * converts it to the calendar UI's own inclusive convention).
+ */
+export async function listActiveEventsForCalendarInRange(calendarId: string, fromIso: string, toIso: string): Promise<GoogleCalendarEvent[]> {
+  const supabase = await createSupabaseClient();
+  const fromDate = fromIso.slice(0, 10);
+  const toDate = toIso.slice(0, 10);
+
+  const [allDayResult, timedResult] = await Promise.all([
+    supabase.from("google_calendar_events").select("*").eq("calendar_id", calendarId).is("cancelled_at", null).eq("all_day", true).lt("start_date", toDate).gt("end_date", fromDate),
+    supabase.from("google_calendar_events").select("*").eq("calendar_id", calendarId).is("cancelled_at", null).eq("all_day", false).lt("start_date_time", toIso).gt("end_date_time", fromIso),
+  ]);
+  if (allDayResult.error) throw normalizeSupabaseError(allDayResult.error);
+  if (timedResult.error) throw normalizeSupabaseError(timedResult.error);
+  return [...(allDayResult.data ?? []), ...(timedResult.data ?? [])].map(mapRow);
+}
+
 export async function updateEvent(id: string, patch: Partial<GoogleCalendarEvent>): Promise<GoogleCalendarEvent | null> {
   const supabase = await createSupabaseClient();
   const { data, error } = await supabase
