@@ -50,6 +50,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // Independently-tracked, not-yet-released, unrelated to the Finance
   // release this exact-count assertion describes.
   "20260911100000_google_calendars_list_foundation.sql",
+  // GCAL-04 — Bounded Initial Google Calendar Event Sync (Read-Only Event
+  // Persistence Foundation). Independently-tracked, not-yet-released,
+  // unrelated to the Finance release this exact-count assertion describes.
+  "20260912100000_google_calendar_events_foundation.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {

@@ -1,9 +1,9 @@
 "use server";
 
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
-import { identifyOwnGoogleCalendarAccount, listAndPersistOwnGoogleCalendars } from "@/core/integrations/googleCalendarReadonly/googleCalendarAccountService";
+import { identifyOwnGoogleCalendarAccount, listAndPersistOwnGoogleCalendars, syncOwnGoogleCalendarEvents } from "@/core/integrations/googleCalendarReadonly/googleCalendarAccountService";
 import { getOwnAccount, listCalendarsForCaller } from "@/core/integrations/googleCalendarReadonly/googleCalendarAccountManager";
-import type { IdentifyGoogleCalendarAccountResult, ListGoogleCalendarsResult } from "@/core/integrations/googleCalendarReadonly/googleCalendarAccountService";
+import type { IdentifyGoogleCalendarAccountResult, ListGoogleCalendarsResult, SyncGoogleCalendarEventsResult } from "@/core/integrations/googleCalendarReadonly/googleCalendarAccountService";
 
 const GENERIC_ACCESS_ERROR = "That integration connection isn't available. You may not have access to it.";
 
@@ -114,4 +114,27 @@ export async function getMyGoogleCalendarsAction(): Promise<GetMyGoogleCalendars
 
   const calendars = await listCalendarsForCaller(account.id, caller);
   return { success: true, data: calendars.map(toCalendarSummary) };
+}
+
+export type SyncMyGoogleCalendarEventsResult = { success: true; data: SyncGoogleCalendarEventsResult } | { success: false; error: string };
+
+/**
+ * GCAL-04 — the canonical "sync my Google Calendar events" manual
+ * trigger. `workspaceId`/`memberId` derive from the authenticated
+ * server session only. Deliberately the *only* event-related action
+ * this checkpoint adds — no create/update/delete/RSVP action exists,
+ * and no Calendar UI calls this yet (GCAL-06's own scope). The result
+ * shape already carries no token/secret (see
+ * `syncOwnGoogleCalendarEvents`'s own return type) — passed through
+ * unmodified, matching the safe-summary discipline this file's other
+ * actions already establish.
+ */
+export async function syncMyGoogleCalendarEventsAction(): Promise<SyncMyGoogleCalendarEventsResult> {
+  const session = await resolveMemberSessionSnapshot();
+  if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
+  if (!session.permissions.includes("integrations.calendar")) return { success: false, error: GENERIC_ACCESS_ERROR };
+
+  const result = await syncOwnGoogleCalendarEvents({ workspaceId: session.workspace.id, memberId: session.user.id });
+  if (result.status === "error") return { success: false, error: result.reason };
+  return { success: true, data: result };
 }

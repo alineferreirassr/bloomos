@@ -92,3 +92,83 @@ export interface UpsertGoogleCalendarParams {
   /** Omit to leave an existing row's selection untouched (the normal refresh case) — only ever explicitly set for a newly-created row's own initial default. See `upsertCalendar`'s own doc comment. */
   isSelected?: boolean;
 }
+
+/** GCAL-04 — deliberately minimized: never Google's full attendee/organizer object (no `comment`, `additionalGuests`, or arbitrary provider extensions). */
+export interface GoogleCalendarEventOrganizer {
+  email: string;
+  displayName: string | null;
+  self: boolean;
+}
+
+export interface GoogleCalendarEventAttendee {
+  email: string;
+  displayName: string | null;
+  responseStatus: string | null;
+  self: boolean;
+  optional: boolean;
+}
+
+/**
+ * GCAL-04 — one row per event instance already expanded from any
+ * recurring series (Google's own `events.list?singleEvents=true`
+ * entries) — never a recurring series master. All-day and timed events
+ * keep mutually exclusive column pairs (`start_date`/`end_date` vs
+ * `start_date_time`/`end_date_time`) rather than coercing one
+ * representation into the other — see the migration's own header
+ * comment for why. `end_date` is Google's own exclusive end date,
+ * preserved faithfully.
+ */
+export interface GoogleCalendarEvent {
+  id: string;
+  workspace_id: string;
+  member_id: string;
+  calendar_id: string;
+  provider_event_id: string;
+  i_cal_uid: string | null;
+  recurring_event_id: string | null;
+  original_start_time: string | null;
+  summary: string | null;
+  description: string | null;
+  location: string | null;
+  /** Google's own raw status string — `cancelled_at` below is this table's canonical tombstone signal, not this column. */
+  status: string | null;
+  all_day: boolean;
+  start_date: string | null;
+  end_date: string | null;
+  start_date_time: string | null;
+  end_date_time: string | null;
+  time_zone: string | null;
+  organizer: GoogleCalendarEventOrganizer | null;
+  attendees: GoogleCalendarEventAttendee[];
+  html_link: string | null;
+  hangout_link: string | null;
+  /** GCAL-04 — null = active. Set once, on the first sync that observes `status === "cancelled"` — never overwritten on a later replay of the same cancellation ("first tombstone wins", mirroring `gmail_messages.deleted_at`'s own established idempotency precedent exactly). Cleared back to null if the event legitimately becomes active again (resurrection). */
+  cancelled_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UpsertGoogleCalendarEventParams {
+  workspaceId: string;
+  memberId: string;
+  calendarId: string;
+  providerEventId: string;
+  iCalUid?: string | null;
+  recurringEventId?: string | null;
+  originalStartTime?: string | null;
+  summary?: string | null;
+  description?: string | null;
+  location?: string | null;
+  /** Google's own raw status string for this sync — used only to derive `cancelled_at`; never persisted as a second, redundant deletion signal. */
+  status?: string | null;
+  allDay: boolean;
+  startDate?: string | null;
+  endDate?: string | null;
+  startDateTime?: string | null;
+  endDateTime?: string | null;
+  timeZone?: string | null;
+  organizer?: GoogleCalendarEventOrganizer | null;
+  attendees?: GoogleCalendarEventAttendee[];
+  htmlLink?: string | null;
+  hangoutLink?: string | null;
+}

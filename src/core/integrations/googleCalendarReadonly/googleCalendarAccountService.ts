@@ -5,9 +5,18 @@ import { getCredential, resolveAccessToken } from "@/core/integrations/credentia
 import { refreshProviderOAuthConnectionAction } from "@/modules/integrations/manageOAuthConnectionActions";
 import { GoogleCalendarApiError, getPrimaryCalendarAccountIdentity } from "@/core/integrations/googleCalendarReadonly/googleCalendarIdentity";
 import { listGoogleCalendars, type GoogleCalendarListApiItem } from "@/core/integrations/googleCalendarReadonly/googleCalendarListApi";
-import { calendarExistsForAccount, getOwnAccount, upsertAccount, upsertCalendar, type GoogleCalendarCallerScope } from "@/core/integrations/googleCalendarReadonly/googleCalendarAccountManager";
+import { listGoogleCalendarEvents, type GoogleCalendarEventApiItem } from "@/core/integrations/googleCalendarReadonly/googleCalendarEventApi";
+import {
+  calendarExistsForAccount,
+  getOwnAccount,
+  listCalendarsForCaller,
+  upsertAccount,
+  upsertCalendar,
+  upsertCalendarEvent,
+  type GoogleCalendarCallerScope,
+} from "@/core/integrations/googleCalendarReadonly/googleCalendarAccountManager";
 import type { IntegrationConnection } from "@/core/integrations/types";
-import type { GoogleCalendar, GoogleCalendarAccount } from "@/core/integrations/googleCalendarReadonly/types";
+import type { GoogleCalendar, GoogleCalendarAccount, GoogleCalendarEventAttendee, GoogleCalendarEventOrganizer, UpsertGoogleCalendarEventParams } from "@/core/integrations/googleCalendarReadonly/types";
 
 /**
  * GCAL-02 — the Google Calendar (read-only) Account Service. Orchestrates
@@ -43,6 +52,34 @@ const TOKEN_EXPIRY_REFRESH_MARGIN_MS = 2 * 60 * 1000;
 export const CALENDAR_LIST_PAGE_SIZE = 50;
 export const CALENDAR_LIST_MAX_PAGES = 5;
 export const CALENDAR_LIST_MAX_CALENDARS = 200;
+
+/**
+ * GCAL-04 — conservative, explicit, server-side bounds for a bounded
+ * initial event sync, same philosophy as the calendar-list bounds
+ * above. `EVENTS_PAGE_SIZE` stays at Google's own documented default
+ * for `events.list` (250, also comfortably under its max of 2500);
+ * `EVENTS_MAX_PAGES`/`EVENTS_MAX_EVENTS` are hard safety ceilings
+ * (independent of each other, exactly like `GMAIL_SYNC_MAX_PAGES`
+ * guarantees Gmail's own full-listing loop terminates even against a
+ * pathological always-more-pages response) — these bounds apply
+ * per-calendar (GCAL-04 syncs each selected calendar as its own
+ * independent bounded unit, see `syncOwnGoogleCalendarEvents`'s own
+ * doc comment), not in aggregate across every selected calendar.
+ */
+export const EVENTS_PAGE_SIZE = 250;
+export const EVENTS_MAX_PAGES = 10;
+export const EVENTS_MAX_EVENTS = 1000;
+
+/**
+ * GCAL-04 — the bounded initial sync window: no repository precedent
+ * exists for a time-windowed sync (Gmail's own bounds are thread-count-
+ * based, not date-range-based), so these are fresh, explicit,
+ * documented defaults rather than an inherited convention — 30 days of
+ * past history plus 90 days of upcoming events, matching this
+ * checkpoint's own recommended starting values.
+ */
+export const GCAL_INITIAL_PAST_DAYS = 30;
+export const GCAL_INITIAL_FUTURE_DAYS = 90;
 
 export type IdentifyGoogleCalendarAccountResult =
   | { status: "success"; account: GoogleCalendarAccount }
@@ -271,4 +308,195 @@ export async function listAndPersistOwnGoogleCalendars(caller: GoogleCalendarAcc
   });
 
   return { status: "success", calendars: persisted };
+}
+
+/**
+ * GCAL-04 — maps one raw `events.list` item to the manager's own
+ * upsert shape (everything except `workspaceId`/`memberId`/
+ * `calendarId`, which the caller supplies). All-day vs timed is
+ * determined solely by which of `start.date`/`start.dateTime` Google
+ * actually returned — never inferred from any other field, and never
+ * coerced into a UTC timestamp: an all-day event's `date` strings are
+ * persisted exactly as received (including `end.date`'s own exclusive-
+ * end convention, untouched — see the migration's own header comment).
+ * A malformed/minimal event body (e.g. some cancellation payloads carry
+ * no `start`/`end` at all) safely falls through to `all_day: false`
+ * with every date/time field left `null`, rather than throwing.
+ *
+ * `timeZone` prefers the event's own `start.timeZone`, falling back to
+ * `end.timeZone` — Google does not otherwise expose the owning
+ * calendar's own default timeZone on the event resource itself, so no
+ * further fallback is attempted here.
+ *
+ * Attendee/organizer objects are deliberately narrowed to exactly the
+ * fields `GoogleCalendarEventOrganizer`/`GoogleCalendarEventAttendee`
+ * declare — see those types' own doc comments for why the rest of
+ * Google's object is never read or persisted.
+ */
+function mapGoogleCalendarEventItem(item: GoogleCalendarEventApiItem): Omit<UpsertGoogleCalendarEventParams, "workspaceId" | "memberId" | "calendarId"> {
+  const start = item.start;
+  const end = item.end;
+  const allDay = Boolean(start?.date);
+
+  const organizer: GoogleCalendarEventOrganizer | null = item.organizer?.email
+    ? { email: item.organizer.email, displayName: item.organizer.displayName ?? null, self: item.organizer.self === true }
+    : null;
+  const attendees: GoogleCalendarEventAttendee[] = (item.attendees ?? [])
+    .filter((attendee) => attendee.email)
+    .map((attendee) => ({
+      email: attendee.email as string,
+      displayName: attendee.displayName ?? null,
+      responseStatus: attendee.responseStatus ?? null,
+      self: attendee.self === true,
+      optional: attendee.optional === true,
+    }));
+
+  return {
+    providerEventId: item.id,
+    iCalUid: item.iCalUID ?? null,
+    recurringEventId: item.recurringEventId ?? null,
+    originalStartTime: item.originalStartTime ? (item.originalStartTime.date ?? item.originalStartTime.dateTime ?? null) : null,
+    summary: item.summary ?? null,
+    description: item.description ?? null,
+    location: item.location ?? null,
+    status: item.status ?? null,
+    allDay,
+    startDate: allDay ? (start?.date ?? null) : null,
+    endDate: allDay ? (end?.date ?? null) : null,
+    startDateTime: !allDay ? (start?.dateTime ?? null) : null,
+    endDateTime: !allDay ? (end?.dateTime ?? null) : null,
+    timeZone: start?.timeZone ?? end?.timeZone ?? null,
+    organizer,
+    attendees,
+    htmlLink: item.htmlLink ?? null,
+    hangoutLink: item.hangoutLink ?? null,
+  };
+}
+
+export interface CalendarEventSyncOutcome {
+  calendarId: string;
+  status: "success" | "reconnect_required" | "error";
+  eventsProcessed?: number;
+  reason?: string;
+}
+
+export type SyncGoogleCalendarEventsResult =
+  | { status: "success"; results: CalendarEventSyncOutcome[] }
+  | { status: "no_connection" }
+  | { status: "no_selected_calendars" }
+  | { status: "reconnect_required"; reason: string }
+  | { status: "error"; reason: string };
+
+/**
+ * GCAL-04 — syncs one calendar's events as its own independent bounded
+ * unit: fetches the *entire* bounded page set into memory first, then
+ * persists — a mid-pagination failure therefore returns an error
+ * outcome for exactly this calendar without touching any of its
+ * existing rows (matching `listAndPersistOwnGoogleCalendars`'s own
+ * "atomic logical completion" choice), and never affects any other
+ * selected calendar's own outcome.
+ */
+async function syncOneCalendarEvents(params: {
+  workspaceId: string;
+  memberId: string;
+  calendarId: string;
+  providerCalendarId: string;
+  accessToken: string;
+  timeMin: string;
+  timeMax: string;
+}): Promise<CalendarEventSyncOutcome> {
+  const items: GoogleCalendarEventApiItem[] = [];
+  let pageToken: string | undefined;
+  let pagesFetched = 0;
+  try {
+    do {
+      const page = await listGoogleCalendarEvents(params.accessToken, params.providerCalendarId, { timeMin: params.timeMin, timeMax: params.timeMax, maxResults: EVENTS_PAGE_SIZE, pageToken });
+      pagesFetched++;
+      for (const item of page.items) {
+        if (items.length >= EVENTS_MAX_EVENTS) break;
+        items.push(item);
+      }
+      pageToken = page.nextPageToken;
+    } while (pageToken && items.length < EVENTS_MAX_EVENTS && pagesFetched < EVENTS_MAX_PAGES);
+  } catch (error) {
+    const { code, reconnectRequired } = classifyGoogleCalendarApiError(error);
+    getLogger().error("Google Calendar event sync failed for one calendar", { calendarId: params.calendarId, code });
+    return { calendarId: params.calendarId, status: reconnectRequired ? "reconnect_required" : "error", reason: code };
+  }
+
+  let eventsProcessed = 0;
+  for (const item of items) {
+    try {
+      const mapped = mapGoogleCalendarEventItem(item);
+      await upsertCalendarEvent({ workspaceId: params.workspaceId, memberId: params.memberId, calendarId: params.calendarId, ...mapped });
+      eventsProcessed++;
+    } catch (error) {
+      getLogger().error("Google Calendar event sync: could not persist one event", { calendarId: params.calendarId, providerEventId: item.id, error: error instanceof Error ? error.message : "unknown" });
+    }
+  }
+
+  return { calendarId: params.calendarId, status: "success", eventsProcessed };
+}
+
+/**
+ * GCAL-04 — the bounded initial event sync entry point. Applies only to
+ * the caller's own `is_selected = true` calendars (GCAL-03's own
+ * persisted selection state) — never every persisted calendar, and
+ * never an arbitrary fallback when nothing is selected
+ * (`no_selected_calendars` is returned instead). Each selected calendar
+ * is synced as its own independent unit (`syncOneCalendarEvents`) — one
+ * calendar's failure is reported in that calendar's own outcome only
+ * and never marks a different, successfully-synced calendar's own
+ * outcome as failed.
+ *
+ * `sync_token` is never read or written here — GCAL-04 is a bounded,
+ * time-windowed listing only; GCAL-05 owns incremental sync and cursor
+ * activation. `now` is injectable (defaults to the real current time)
+ * so tests can exercise the bounded window deterministically without
+ * depending on wall-clock time.
+ */
+export async function syncOwnGoogleCalendarEvents(caller: GoogleCalendarAccountCaller, now: Date = new Date()): Promise<SyncGoogleCalendarEventsResult> {
+  const connection = await findOwnGoogleCalendarConnection(caller);
+  if (!connection) return { status: "no_connection" };
+  if (connection.workspace_id !== caller.workspaceId || connection.member_id !== caller.memberId) return { status: "no_connection" };
+
+  if (!connection.credential_id) return { status: "reconnect_required", reason: "no_credential" };
+  const credential = await getCredential(connection.credential_id);
+  if (!credential || credential.kind !== "oauth_token") return { status: "reconnect_required", reason: "no_credential" };
+
+  if (!credential.scopes.includes(GOOGLE_CALENDAR_READONLY_SCOPE)) return { status: "reconnect_required", reason: "missing_readonly_scope" };
+
+  if (connection.state !== "connected" && connection.state !== "expired") {
+    return { status: "error", reason: `Google Calendar connection is currently "${connection.state}" — cannot sync events.` };
+  }
+
+  const scopeCaller: GoogleCalendarCallerScope = { workspaceId: caller.workspaceId, memberId: caller.memberId };
+  const account = await getOwnAccount(scopeCaller);
+  if (!account) return { status: "error", reason: "account_not_identified" };
+
+  const calendars = await listCalendarsForCaller(account.id, scopeCaller);
+  const selectedCalendars = calendars.filter((calendar) => calendar.is_selected);
+  if (selectedCalendars.length === 0) return { status: "no_selected_calendars" };
+
+  const accessToken = await ensureFreshAccessToken(connection, connection.credential_id);
+  if (!accessToken) return { status: "reconnect_required", reason: "refresh_failed" };
+
+  const timeMin = new Date(now.getTime() - GCAL_INITIAL_PAST_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const timeMax = new Date(now.getTime() + GCAL_INITIAL_FUTURE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+  const results: CalendarEventSyncOutcome[] = [];
+  for (const calendar of selectedCalendars) {
+    const outcome = await syncOneCalendarEvents({
+      workspaceId: caller.workspaceId,
+      memberId: caller.memberId,
+      calendarId: calendar.id,
+      providerCalendarId: calendar.provider_calendar_id,
+      accessToken,
+      timeMin,
+      timeMax,
+    });
+    results.push(outcome);
+  }
+
+  return { status: "success", results };
 }

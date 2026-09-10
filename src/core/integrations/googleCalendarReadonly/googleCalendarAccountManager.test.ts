@@ -7,7 +7,18 @@ import { resetConnectionStore } from "@/lib/data/core/integrations/connectionSto
 import { installProvider } from "@/core/integrations/integrationManager";
 import { resetGoogleCalendarAccountStore } from "@/lib/data/core/integrations/googleCalendarReadonly/accountStore";
 import { resetGoogleCalendarStore } from "@/lib/data/core/integrations/googleCalendarReadonly/calendarStore";
-import { calendarExistsForAccount, getAccountForCaller, getOwnAccount, listCalendarsForCaller, upsertAccount, upsertCalendar } from "@/core/integrations/googleCalendarReadonly/googleCalendarAccountManager";
+import { resetGoogleCalendarEventStore } from "@/lib/data/core/integrations/googleCalendarReadonly/calendarEventStore";
+import {
+  calendarExistsForAccount,
+  getAccountForCaller,
+  getEventForCaller,
+  getOwnAccount,
+  listCalendarsForCaller,
+  listEventsForCalendar,
+  upsertAccount,
+  upsertCalendar,
+  upsertCalendarEvent,
+} from "@/core/integrations/googleCalendarReadonly/googleCalendarAccountManager";
 
 registerBuiltinProviders();
 
@@ -25,6 +36,7 @@ beforeEach(() => {
   resetConnectionStore();
   resetGoogleCalendarAccountStore();
   resetGoogleCalendarStore();
+  resetGoogleCalendarEventStore();
 });
 
 describe("google-calendar-readonly provider registration (GCAL-02)", () => {
@@ -291,5 +303,193 @@ describe("listCalendarsForCaller / calendarExistsForAccount — ownership isolat
     expect(await calendarExistsForAccount(accountId, "cal_1", { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 })).toBe(false);
     await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId, providerCalendarId: "cal_1" });
     expect(await calendarExistsForAccount(accountId, "cal_1", { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 })).toBe(true);
+  });
+});
+
+describe("upsertCalendarEvent (GCAL-04)", () => {
+  async function seedCalendar(): Promise<string> {
+    const connectionId = await installGoogleCalendarReadonlyConnection(WORKSPACE_ID, MEMBER_1);
+    const account = await upsertAccount({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, integrationConnectionId: connectionId });
+    const calendar = await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId: account.id, providerCalendarId: "primary_cal", isPrimary: true, isSelected: true });
+    return calendar.id;
+  }
+
+  it("24. inserts a new active timed event", async () => {
+    const calendarId = await seedCalendar();
+    const event = await upsertCalendarEvent({
+      workspaceId: WORKSPACE_ID,
+      memberId: MEMBER_1,
+      calendarId,
+      providerEventId: "evt_1",
+      summary: "Consult",
+      status: "confirmed",
+      allDay: false,
+      startDateTime: "2026-01-05T10:00:00-08:00",
+      endDateTime: "2026-01-05T11:00:00-08:00",
+      timeZone: "America/Los_Angeles",
+    });
+
+    expect(event.calendar_id).toBe(calendarId);
+    expect(event.provider_event_id).toBe("evt_1");
+    expect(event.summary).toBe("Consult");
+    expect(event.all_day).toBe(false);
+    expect(event.start_date_time).toBe("2026-01-05T10:00:00-08:00");
+    expect(event.cancelled_at).toBeNull();
+  });
+
+  it("25. updates metadata on an existing event (same calendar/provider id)", async () => {
+    const calendarId = await seedCalendar();
+    const first = await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_1", summary: "Consult", allDay: false });
+    const second = await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_1", summary: "Consult (moved)", allDay: false });
+
+    expect(second.id).toBe(first.id);
+    expect(second.summary).toBe("Consult (moved)");
+  });
+
+  it("26. is unique per (calendar_id, provider_event_id) — a second upsert with the same provider id updates in place, never duplicates", async () => {
+    const calendarId = await seedCalendar();
+    await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_1", allDay: false });
+    await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_1", allDay: false });
+
+    const events = await listEventsForCalendar(calendarId, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(events).toHaveLength(1);
+  });
+
+  it("provider_event_id stays a distinct field from the internal uuid id", async () => {
+    const calendarId = await seedCalendar();
+    const event = await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_1", allDay: false });
+    expect(event.id).not.toBe("evt_1");
+    expect(event.provider_event_id).toBe("evt_1");
+  });
+
+  it("16. all-day event: date fields populated, timestamp fields null", async () => {
+    const calendarId = await seedCalendar();
+    const event = await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_1", allDay: true, startDate: "2026-03-01", endDate: "2026-03-02" });
+    expect(event.all_day).toBe(true);
+    expect(event.start_date).toBe("2026-03-01");
+    expect(event.end_date).toBe("2026-03-02");
+    expect(event.start_date_time).toBeNull();
+    expect(event.end_date_time).toBeNull();
+  });
+
+  it("18. multi-day all-day event preserves Google's own exclusive end date, unadjusted", async () => {
+    const calendarId = await seedCalendar();
+    // A 3-day all-day event (Mar 1, 2, 3) — Google's own end.date is exclusive, so it reports "2026-03-04", not "2026-03-03".
+    const event = await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_multi_day", allDay: true, startDate: "2026-03-01", endDate: "2026-03-04" });
+    expect(event.end_date).toBe("2026-03-04");
+  });
+
+  it("17 & 19. timed event: timestamp fields populated, date fields null, timezone preserved", async () => {
+    const calendarId = await seedCalendar();
+    const event = await upsertCalendarEvent({
+      workspaceId: WORKSPACE_ID,
+      memberId: MEMBER_1,
+      calendarId,
+      providerEventId: "evt_1",
+      allDay: false,
+      startDateTime: "2026-01-05T10:00:00-08:00",
+      endDateTime: "2026-01-05T11:00:00-08:00",
+      timeZone: "America/Los_Angeles",
+    });
+    expect(event.start_date).toBeNull();
+    expect(event.end_date).toBeNull();
+    expect(event.start_date_time).toBe("2026-01-05T10:00:00-08:00");
+    expect(event.end_date_time).toBe("2026-01-05T11:00:00-08:00");
+    expect(event.time_zone).toBe("America/Los_Angeles");
+  });
+
+  it("20, 21, 22, 23. persists provider_event_id, iCalUid, recurringEventId, originalStartTime", async () => {
+    const calendarId = await seedCalendar();
+    const event = await upsertCalendarEvent({
+      workspaceId: WORKSPACE_ID,
+      memberId: MEMBER_1,
+      calendarId,
+      providerEventId: "evt_occurrence_1",
+      iCalUid: "series_1@google.com",
+      recurringEventId: "series_1",
+      originalStartTime: "2026-01-05T10:00:00-08:00",
+      allDay: false,
+    });
+    expect(event.provider_event_id).toBe("evt_occurrence_1");
+    expect(event.i_cal_uid).toBe("series_1@google.com");
+    expect(event.recurring_event_id).toBe("series_1");
+    expect(event.original_start_time).toBe("2026-01-05T10:00:00-08:00");
+  });
+
+  it("27. a cancelled event sets cancelled_at", async () => {
+    const calendarId = await seedCalendar();
+    const event = await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_1", status: "cancelled", allDay: false });
+    expect(event.status).toBe("cancelled");
+    expect(event.cancelled_at).not.toBeNull();
+  });
+
+  it("28. repeated cancellation is idempotent — cancelled_at is never overwritten on replay (first tombstone wins)", async () => {
+    const calendarId = await seedCalendar();
+    const first = await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_1", status: "cancelled", allDay: false });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_1", status: "cancelled", allDay: false });
+
+    expect(second.cancelled_at).toBe(first.cancelled_at);
+  });
+
+  it("29. resurrection — an event that becomes active again clears cancelled_at, without creating a duplicate row", async () => {
+    const calendarId = await seedCalendar();
+    const cancelled = await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_1", status: "cancelled", allDay: false });
+    expect(cancelled.cancelled_at).not.toBeNull();
+
+    const resurrected = await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_1", status: "confirmed", allDay: false });
+    expect(resurrected.id).toBe(cancelled.id);
+    expect(resurrected.cancelled_at).toBeNull();
+
+    const events = await listEventsForCalendar(calendarId, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(events).toHaveLength(1);
+  });
+
+  it("does not persist a redundant is_deleted boolean — cancelled_at is the sole tombstone signal", async () => {
+    const calendarId = await seedCalendar();
+    const event = await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_1", allDay: false });
+    expect(Object.keys(event)).not.toContain("is_deleted");
+  });
+
+  it("rejects (forged calendar ownership) when the caller's workspaceId/memberId don't match the calendar's own ownership", async () => {
+    const calendarId = await seedCalendar();
+    await expect(upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_2, calendarId, providerEventId: "evt_1", allDay: false })).rejects.toThrow(/not owned by the caller/);
+  });
+
+  it("33. rejects an unknown calendar id (foreign calendar denial)", async () => {
+    await expect(upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId: "calendar_missing", providerEventId: "evt_1", allDay: false })).rejects.toThrow(/No Google Calendar found/);
+  });
+});
+
+describe("getEventForCaller / listEventsForCalendar — ownership isolation (30, 31, 32)", () => {
+  async function seedCalendar(memberId: string = MEMBER_1): Promise<string> {
+    const connectionId = await installGoogleCalendarReadonlyConnection(WORKSPACE_ID, memberId);
+    const account = await upsertAccount({ workspaceId: WORKSPACE_ID, memberId, integrationConnectionId: connectionId });
+    const calendar = await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId, accountId: account.id, providerCalendarId: "primary_cal", isPrimary: true, isSelected: true });
+    return calendar.id;
+  }
+
+  it("30. the owning member can read their own event", async () => {
+    const calendarId = await seedCalendar();
+    const event = await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_1", allDay: false });
+
+    const own = await getEventForCaller(event.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(own?.id).toBe(event.id);
+  });
+
+  it("31. denies a same-workspace, different member from reading the event", async () => {
+    const calendarId = await seedCalendar();
+    const event = await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_1", allDay: false });
+
+    expect(await getEventForCaller(event.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_2 })).toBeNull();
+    await expect(listEventsForCalendar(calendarId, { workspaceId: WORKSPACE_ID, memberId: MEMBER_2 })).rejects.toThrow();
+  });
+
+  it("32. denies a cross-workspace caller from reading the event", async () => {
+    const calendarId = await seedCalendar();
+    const event = await upsertCalendarEvent({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, calendarId, providerEventId: "evt_1", allDay: false });
+
+    expect(await getEventForCaller(event.id, { workspaceId: OTHER_WORKSPACE_ID, memberId: MEMBER_1 })).toBeNull();
+    await expect(listEventsForCalendar(calendarId, { workspaceId: OTHER_WORKSPACE_ID, memberId: MEMBER_1 })).rejects.toThrow();
   });
 });

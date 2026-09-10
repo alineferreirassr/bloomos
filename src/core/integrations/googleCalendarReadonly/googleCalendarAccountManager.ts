@@ -16,7 +16,22 @@ import {
   listCalendarsForAccount,
   updateCalendar,
 } from "@/lib/data/core/integrations/googleCalendarReadonly/calendarStore";
-import type { GoogleCalendar, GoogleCalendarAccount, UpsertGoogleCalendarAccountParams, UpsertGoogleCalendarParams } from "@/core/integrations/googleCalendarReadonly/types";
+import {
+  generateGoogleCalendarEventId,
+  getEventByProviderId,
+  getEventById as getCalendarEventById,
+  insertEvent,
+  listEventsForCalendar as listEventsForCalendarStore,
+  updateEvent,
+} from "@/lib/data/core/integrations/googleCalendarReadonly/calendarEventStore";
+import type {
+  GoogleCalendar,
+  GoogleCalendarAccount,
+  GoogleCalendarEvent,
+  UpsertGoogleCalendarAccountParams,
+  UpsertGoogleCalendarEventParams,
+  UpsertGoogleCalendarParams,
+} from "@/core/integrations/googleCalendarReadonly/types";
 
 /**
  * GCAL-02 — the Google Calendar (read-only) Account Manager, mirroring
@@ -181,4 +196,100 @@ export async function calendarExistsForAccount(accountId: string, providerCalend
 export async function listCalendarsForCaller(accountId: string, caller: GoogleCalendarCallerScope): Promise<GoogleCalendar[]> {
   await assertAccountOwnership(accountId, caller);
   return listCalendarsForAccount(accountId);
+}
+
+/** GCAL-04 — the DB-level FK on `google_calendar_events.calendar_id` can't itself enforce "this calendar belongs to this exact workspace/member" — this is that check, done here instead (mirrors `assertAccountOwnership` above, one level down). */
+async function assertCalendarOwnership(calendarId: string, caller: GoogleCalendarCallerScope): Promise<GoogleCalendar> {
+  const calendar = await getCalendarById(calendarId);
+  if (!calendar) throw new Error("No Google Calendar found for this event.");
+  if (!isOwnedByCaller(calendar, caller)) throw new Error("This calendar is not owned by the caller.");
+  return calendar;
+}
+
+/**
+ * GCAL-04 — insert-or-update by `(calendarId, providerEventId)`. Unlike
+ * `upsertCalendar`'s `isSelected` (a BloomOS-side user preference that
+ * must survive a refresh untouched), every field here is purely
+ * provider-derived truth with no local user-editable state — so every
+ * field is safely overwritten on every call, with one deliberate
+ * exception: `cancelled_at`. That field follows "first tombstone wins"
+ * exactly like `gmail_messages.deleted_at`/`markMessageDeleted` already
+ * established in this codebase: once set, a later sync that still
+ * reports `status: "cancelled"` never overwrites it with a new
+ * timestamp (idempotent replay); a sync that reports any other status
+ * clears it back to `null` (resurrection).
+ */
+export async function upsertCalendarEvent(params: UpsertGoogleCalendarEventParams): Promise<GoogleCalendarEvent> {
+  const caller: GoogleCalendarCallerScope = { workspaceId: params.workspaceId, memberId: params.memberId };
+  await assertCalendarOwnership(params.calendarId, caller);
+
+  const isCancelled = params.status === "cancelled";
+  const existing = await getEventByProviderId(params.calendarId, params.providerEventId);
+  if (existing) {
+    if (!isOwnedByCaller(existing, caller)) throw new Error("This event is not owned by the caller.");
+    const cancelledAt = isCancelled ? (existing.cancelled_at ?? nowIso()) : null;
+    const updated = await updateEvent(existing.id, {
+      i_cal_uid: params.iCalUid ?? existing.i_cal_uid,
+      recurring_event_id: params.recurringEventId ?? existing.recurring_event_id,
+      original_start_time: params.originalStartTime ?? existing.original_start_time,
+      summary: params.summary ?? existing.summary,
+      description: params.description ?? existing.description,
+      location: params.location ?? existing.location,
+      status: params.status ?? existing.status,
+      all_day: params.allDay,
+      start_date: params.startDate ?? null,
+      end_date: params.endDate ?? null,
+      start_date_time: params.startDateTime ?? null,
+      end_date_time: params.endDateTime ?? null,
+      time_zone: params.timeZone ?? existing.time_zone,
+      organizer: params.organizer ?? existing.organizer,
+      attendees: params.attendees ?? existing.attendees,
+      html_link: params.htmlLink ?? existing.html_link,
+      hangout_link: params.hangoutLink ?? existing.hangout_link,
+      cancelled_at: cancelledAt,
+    });
+    if (!updated) throw new Error("Could not update this event.");
+    return updated;
+  }
+
+  const now = nowIso();
+  const event: GoogleCalendarEvent = {
+    id: generateGoogleCalendarEventId(),
+    workspace_id: params.workspaceId,
+    member_id: params.memberId,
+    calendar_id: params.calendarId,
+    provider_event_id: params.providerEventId,
+    i_cal_uid: params.iCalUid ?? null,
+    recurring_event_id: params.recurringEventId ?? null,
+    original_start_time: params.originalStartTime ?? null,
+    summary: params.summary ?? null,
+    description: params.description ?? null,
+    location: params.location ?? null,
+    status: params.status ?? null,
+    all_day: params.allDay,
+    start_date: params.startDate ?? null,
+    end_date: params.endDate ?? null,
+    start_date_time: params.startDateTime ?? null,
+    end_date_time: params.endDateTime ?? null,
+    time_zone: params.timeZone ?? null,
+    organizer: params.organizer ?? null,
+    attendees: params.attendees ?? [],
+    html_link: params.htmlLink ?? null,
+    hangout_link: params.hangoutLink ?? null,
+    cancelled_at: isCancelled ? now : null,
+    created_at: now,
+    updated_at: now,
+  };
+  return insertEvent(event);
+}
+
+export async function getEventForCaller(eventId: string, caller: GoogleCalendarCallerScope): Promise<GoogleCalendarEvent | null> {
+  const event = await getCalendarEventById(eventId);
+  if (!event || !isOwnedByCaller(event, caller)) return null;
+  return event;
+}
+
+export async function listEventsForCalendar(calendarId: string, caller: GoogleCalendarCallerScope): Promise<GoogleCalendarEvent[]> {
+  await assertCalendarOwnership(calendarId, caller);
+  return listEventsForCalendarStore(calendarId);
 }
