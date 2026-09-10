@@ -2515,6 +2515,12 @@ export interface Database {
         Update: { id?: string; workspace_id?: string; member_id?: string; integration_connection_id?: string; provider_account_id?: string | null; provider_account_email?: string | null; sync_status?: string; last_synced_at?: string | null; last_successful_sync_at?: string | null; sync_error_code?: string | null; created_at?: string; updated_at?: string };
         Relationships: [];
       };
+      google_calendars: {
+        Row: { id: string; workspace_id: string; member_id: string; account_id: string; provider_calendar_id: string; summary: string | null; description: string | null; time_zone: string | null; access_role: string | null; is_primary: boolean; is_selected: boolean; sync_token: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; member_id: string; account_id: string; provider_calendar_id: string; summary?: string | null; description?: string | null; time_zone?: string | null; access_role?: string | null; is_primary?: boolean; is_selected?: boolean; sync_token?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; member_id?: string; account_id?: string; provider_calendar_id?: string; summary?: string | null; description?: string | null; time_zone?: string | null; access_role?: string | null; is_primary?: boolean; is_selected?: boolean; sync_token?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

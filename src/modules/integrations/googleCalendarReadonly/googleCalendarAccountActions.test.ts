@@ -3,10 +3,14 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 
 vi.mock("@/lib/auth/memberSessionSnapshot", () => ({ resolveMemberSessionSnapshot: vi.fn() }));
 
-const { mockGetPrimaryCalendarAccountIdentity } = vi.hoisted(() => ({ mockGetPrimaryCalendarAccountIdentity: vi.fn() }));
+const { mockGetPrimaryCalendarAccountIdentity, mockListGoogleCalendars } = vi.hoisted(() => ({ mockGetPrimaryCalendarAccountIdentity: vi.fn(), mockListGoogleCalendars: vi.fn() }));
 vi.mock("@/core/integrations/googleCalendarReadonly/googleCalendarIdentity", async () => {
   const actual = await vi.importActual<typeof import("@/core/integrations/googleCalendarReadonly/googleCalendarIdentity")>("@/core/integrations/googleCalendarReadonly/googleCalendarIdentity");
   return { ...actual, getPrimaryCalendarAccountIdentity: mockGetPrimaryCalendarAccountIdentity };
+});
+vi.mock("@/core/integrations/googleCalendarReadonly/googleCalendarListApi", async () => {
+  const actual = await vi.importActual<typeof import("@/core/integrations/googleCalendarReadonly/googleCalendarListApi")>("@/core/integrations/googleCalendarReadonly/googleCalendarListApi");
+  return { ...actual, listGoogleCalendars: mockListGoogleCalendars };
 });
 
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
@@ -18,8 +22,14 @@ import { resetCredentialStore } from "@/lib/data/core/integrations/credentialSto
 import { resetEncryptionProvider, issueOAuthCredential } from "@/core/integrations/credentialManager";
 import { installProvider, attachCredential, applyConnectionEvent } from "@/core/integrations/integrationManager";
 import { resetGoogleCalendarAccountStore } from "@/lib/data/core/integrations/googleCalendarReadonly/accountStore";
+import { resetGoogleCalendarStore } from "@/lib/data/core/integrations/googleCalendarReadonly/calendarStore";
 import { GOOGLE_CALENDAR_READONLY_SCOPE } from "@/core/integrations/googleCalendarReadonly/googleCalendarAccountService";
-import { getOwnGoogleCalendarAccountSummaryAction, identifyMyGoogleCalendarAccountAction } from "@/modules/integrations/googleCalendarReadonly/googleCalendarAccountActions";
+import {
+  getMyGoogleCalendarsAction,
+  getOwnGoogleCalendarAccountSummaryAction,
+  identifyMyGoogleCalendarAccountAction,
+  listMyGoogleCalendarsAction,
+} from "@/modules/integrations/googleCalendarReadonly/googleCalendarAccountActions";
 
 registerBuiltinProviders();
 
@@ -62,8 +72,10 @@ beforeEach(() => {
   resetCredentialStore();
   resetEncryptionProvider();
   resetGoogleCalendarAccountStore();
+  resetGoogleCalendarStore();
   vi.clearAllMocks();
   mockGetPrimaryCalendarAccountIdentity.mockResolvedValue({ providerAccountId: "ana@amorebloom.com", providerAccountEmail: "ana@amorebloom.com" });
+  mockListGoogleCalendars.mockResolvedValue({ items: [] });
 });
 
 describe("identifyMyGoogleCalendarAccountAction", () => {
@@ -150,5 +162,83 @@ describe("getOwnGoogleCalendarAccountSummaryAction", () => {
     vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(sessionFor(WORKSPACE_ID, OTHER_MEMBER_ID));
     const result = await getOwnGoogleCalendarAccountSummaryAction();
     expect(result).toEqual({ success: true, data: null });
+  });
+});
+
+describe("listMyGoogleCalendarsAction / getMyGoogleCalendarsAction (GCAL-03)", () => {
+  async function identifyThenListWith(items: Array<Partial<{ id: string; summary: string; primary: boolean }>>) {
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(sessionFor(WORKSPACE_ID, MEMBER_ID));
+    await seedConnectedAccount(WORKSPACE_ID, MEMBER_ID);
+    await identifyMyGoogleCalendarAccountAction();
+    mockListGoogleCalendars.mockResolvedValue({ items: items.map((item) => ({ id: "cal_1", summary: "Calendar", ...item })) });
+    return listMyGoogleCalendarsAction();
+  }
+
+  it("33. requires an active session", async () => {
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue({ kind: "unauthenticated" } as MemberSessionSnapshot);
+    const result = await listMyGoogleCalendarsAction();
+    expect(result.success).toBe(false);
+  });
+
+  it("33. requires integrations.calendar permission — server-side, not merely a UI check", async () => {
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(sessionFor(WORKSPACE_ID, MEMBER_ID, ["integrations.connect"]));
+    const result = await listMyGoogleCalendarsAction();
+    expect(result.success).toBe(false);
+    expect(mockListGoogleCalendars).not.toHaveBeenCalled();
+  });
+
+  it("lists and persists the caller's own calendars, mapped to the safe summary shape", async () => {
+    const result = await identifyThenListWith([{ id: "ana@amorebloom.com", summary: "Ana", primary: true }]);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error("expected success");
+    if (result.data.status !== "success") throw new Error("expected a success status");
+    expect(result.data.calendars).toEqual([{ id: expect.any(String), summary: "Ana", description: null, timeZone: null, accessRole: null, isPrimary: true, isSelected: true }]);
+  });
+
+  it("29 & 39. never includes a token, and never exposes internal workspace_id/member_id/account_id fields", async () => {
+    const result = await identifyThenListWith([{ id: "cal_1", primary: true }]);
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("real-access-token");
+    expect(serialized).not.toContain("workspace_id");
+    expect(serialized).not.toContain("member_id");
+    expect(serialized).not.toContain("account_id");
+  });
+
+  it("13. a same-workspace, different member has no connection of their own to list", async () => {
+    await seedConnectedAccount(WORKSPACE_ID, MEMBER_ID);
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(sessionFor(WORKSPACE_ID, MEMBER_ID));
+    await identifyMyGoogleCalendarAccountAction();
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(sessionFor(WORKSPACE_ID, OTHER_MEMBER_ID));
+    const result = await listMyGoogleCalendarsAction();
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error("expected success");
+    expect(result.data.status).toBe("no_connection");
+  });
+
+  it("getMyGoogleCalendarsAction reads already-persisted calendars without calling the Google API", async () => {
+    await identifyThenListWith([{ id: "ana@amorebloom.com", summary: "Ana", primary: true }]);
+    mockListGoogleCalendars.mockClear();
+
+    const result = await getMyGoogleCalendarsAction();
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error("expected success");
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].summary).toBe("Ana");
+    expect(mockListGoogleCalendars).not.toHaveBeenCalled();
+  });
+
+  it("getMyGoogleCalendarsAction returns an empty array before any account exists", async () => {
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(sessionFor(WORKSPACE_ID, MEMBER_ID));
+    const result = await getMyGoogleCalendarsAction();
+    expect(result).toEqual({ success: true, data: [] });
+  });
+
+  it("13. denies a same-workspace, different member from reading persisted calendars", async () => {
+    await identifyThenListWith([{ id: "cal_1", primary: true }]);
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(sessionFor(WORKSPACE_ID, OTHER_MEMBER_ID));
+    const result = await getMyGoogleCalendarsAction();
+    expect(result).toEqual({ success: true, data: [] });
   });
 });

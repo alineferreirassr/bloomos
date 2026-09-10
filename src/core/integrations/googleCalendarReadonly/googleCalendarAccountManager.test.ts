@@ -6,7 +6,8 @@ import { getProvider } from "@/core/integrations/providerRegistry";
 import { resetConnectionStore } from "@/lib/data/core/integrations/connectionStore";
 import { installProvider } from "@/core/integrations/integrationManager";
 import { resetGoogleCalendarAccountStore } from "@/lib/data/core/integrations/googleCalendarReadonly/accountStore";
-import { getAccountForCaller, getOwnAccount, upsertAccount } from "@/core/integrations/googleCalendarReadonly/googleCalendarAccountManager";
+import { resetGoogleCalendarStore } from "@/lib/data/core/integrations/googleCalendarReadonly/calendarStore";
+import { calendarExistsForAccount, getAccountForCaller, getOwnAccount, listCalendarsForCaller, upsertAccount, upsertCalendar } from "@/core/integrations/googleCalendarReadonly/googleCalendarAccountManager";
 
 registerBuiltinProviders();
 
@@ -23,6 +24,7 @@ async function installGoogleCalendarReadonlyConnection(workspaceId: string, memb
 beforeEach(() => {
   resetConnectionStore();
   resetGoogleCalendarAccountStore();
+  resetGoogleCalendarStore();
 });
 
 describe("google-calendar-readonly provider registration (GCAL-02)", () => {
@@ -155,5 +157,139 @@ describe("getAccountForCaller / getOwnAccount — ownership isolation (12, 13, 1
     const account = await upsertAccount({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, integrationConnectionId: connectionId });
 
     expect(await getAccountForCaller(account.id, { workspaceId: OTHER_WORKSPACE_ID, memberId: MEMBER_1 })).toBeNull();
+  });
+});
+
+describe("upsertCalendar (GCAL-03)", () => {
+  async function seedAccount(): Promise<string> {
+    const connectionId = await installGoogleCalendarReadonlyConnection(WORKSPACE_ID, MEMBER_1);
+    const account = await upsertAccount({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, integrationConnectionId: connectionId });
+    return account.id;
+  }
+
+  it("9. inserts a new calendar bound to the caller's own account", async () => {
+    const accountId = await seedAccount();
+    const calendar = await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId, providerCalendarId: "ana@amorebloom.com", summary: "Ana", isPrimary: true, isSelected: true });
+
+    expect(calendar.account_id).toBe(accountId);
+    expect(calendar.provider_calendar_id).toBe("ana@amorebloom.com");
+    expect(calendar.summary).toBe("Ana");
+    expect(calendar.is_primary).toBe(true);
+    expect(calendar.is_selected).toBe(true);
+    expect(calendar.sync_token).toBeNull();
+  });
+
+  it("10. updates metadata on an existing calendar (same account/provider id)", async () => {
+    const accountId = await seedAccount();
+    const first = await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId, providerCalendarId: "ana@amorebloom.com", summary: "Ana", isPrimary: true, isSelected: true });
+    const second = await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId, providerCalendarId: "ana@amorebloom.com", summary: "Ana Ferreira", timeZone: "America/Los_Angeles" });
+
+    expect(second.id).toBe(first.id);
+    expect(second.summary).toBe("Ana Ferreira");
+    expect(second.time_zone).toBe("America/Los_Angeles");
+  });
+
+  it("11. is unique per (account_id, provider_calendar_id) — a second upsert with the same provider id updates in place, never duplicates", async () => {
+    const accountId = await seedAccount();
+    await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId, providerCalendarId: "cal_1", isSelected: false });
+    await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId, providerCalendarId: "cal_1", isSelected: false });
+
+    const calendars = await listCalendarsForCaller(accountId, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(calendars).toHaveLength(1);
+  });
+
+  it("provider_calendar_id stays a distinct field from the internal uuid id", async () => {
+    const accountId = await seedAccount();
+    const calendar = await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId, providerCalendarId: "ana@amorebloom.com" });
+    expect(calendar.id).not.toBe("ana@amorebloom.com");
+    expect(calendar.provider_calendar_id).toBe("ana@amorebloom.com");
+  });
+
+  it("12. primary === true maps to is_primary true", async () => {
+    const accountId = await seedAccount();
+    const calendar = await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId, providerCalendarId: "cal_1", isPrimary: true });
+    expect(calendar.is_primary).toBe(true);
+  });
+
+  it("13. a calendar without primary maps to is_primary false", async () => {
+    const accountId = await seedAccount();
+    const calendar = await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId, providerCalendarId: "cal_2" });
+    expect(calendar.is_primary).toBe(false);
+  });
+
+  it("14. a new primary calendar defaults to selected when the caller explicitly passes isSelected", async () => {
+    const accountId = await seedAccount();
+    const calendar = await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId, providerCalendarId: "primary_cal", isPrimary: true, isSelected: true });
+    expect(calendar.is_selected).toBe(true);
+  });
+
+  it("15. a new non-primary calendar defaults to not-selected when omitted", async () => {
+    const accountId = await seedAccount();
+    const calendar = await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId, providerCalendarId: "secondary_cal" });
+    expect(calendar.is_selected).toBe(false);
+  });
+
+  it("16 & 17. omitting isSelected on an update preserves the existing row's own selection, in both directions", async () => {
+    const accountId = await seedAccount();
+    const selected = await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId, providerCalendarId: "cal_a", isSelected: true });
+    const notSelected = await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId, providerCalendarId: "cal_b", isSelected: false });
+
+    // Simulate a later manual user change (not modeled by a UI yet, but the persisted state a future selector would produce).
+    // Then simulate a refresh that omits isSelected entirely, as the service always does for an existing row.
+    const refreshedSelected = await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId, providerCalendarId: "cal_a", summary: "Updated" });
+    const refreshedNotSelected = await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId, providerCalendarId: "cal_b", summary: "Updated" });
+
+    expect(refreshedSelected.id).toBe(selected.id);
+    expect(refreshedSelected.is_selected).toBe(true);
+    expect(refreshedNotSelected.id).toBe(notSelected.id);
+    expect(refreshedNotSelected.is_selected).toBe(false);
+  });
+
+  it("rejects (forged account ownership) when the caller's workspaceId/memberId don't match the account's own ownership", async () => {
+    const accountId = await seedAccount();
+    await expect(upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_2, accountId, providerCalendarId: "cal_1" })).rejects.toThrow(/not owned by the caller/);
+  });
+
+  it("17. rejects an unknown account id (foreign account denial)", async () => {
+    await expect(upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId: "account_missing", providerCalendarId: "cal_1" })).rejects.toThrow(/No Google Calendar account/);
+  });
+});
+
+describe("listCalendarsForCaller / calendarExistsForAccount — ownership isolation", () => {
+  async function seedAccount(memberId: string = MEMBER_1): Promise<string> {
+    const connectionId = await installGoogleCalendarReadonlyConnection(WORKSPACE_ID, memberId);
+    const account = await upsertAccount({ workspaceId: WORKSPACE_ID, memberId, integrationConnectionId: connectionId });
+    return account.id;
+  }
+
+  it("5. the owning member can list their own account's calendars", async () => {
+    const accountId = await seedAccount();
+    await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId, providerCalendarId: "cal_1" });
+
+    const calendars = await listCalendarsForCaller(accountId, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(calendars).toHaveLength(1);
+  });
+
+  it("6. denies a same-workspace, different member from listing another member's calendars", async () => {
+    const accountId = await seedAccount();
+    await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId, providerCalendarId: "cal_1" });
+
+    await expect(listCalendarsForCaller(accountId, { workspaceId: WORKSPACE_ID, memberId: MEMBER_2 })).rejects.toThrow();
+  });
+
+  it("7. denies a cross-workspace caller from listing calendars", async () => {
+    const accountId = await seedAccount();
+    await expect(listCalendarsForCaller(accountId, { workspaceId: OTHER_WORKSPACE_ID, memberId: MEMBER_1 })).rejects.toThrow();
+  });
+
+  it("8. denies a foreign account id from being probed via calendarExistsForAccount", async () => {
+    await expect(calendarExistsForAccount("account_missing", "cal_1", { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 })).rejects.toThrow(/No Google Calendar account/);
+  });
+
+  it("calendarExistsForAccount correctly reports existence without leaking calendar content", async () => {
+    const accountId = await seedAccount();
+    expect(await calendarExistsForAccount(accountId, "cal_1", { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 })).toBe(false);
+    await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId, providerCalendarId: "cal_1" });
+    expect(await calendarExistsForAccount(accountId, "cal_1", { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 })).toBe(true);
   });
 });

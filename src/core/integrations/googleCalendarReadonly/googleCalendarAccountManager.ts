@@ -8,7 +8,15 @@ import {
   listAccountsForWorkspace,
   updateAccount,
 } from "@/lib/data/core/integrations/googleCalendarReadonly/accountStore";
-import type { GoogleCalendarAccount, UpsertGoogleCalendarAccountParams } from "@/core/integrations/googleCalendarReadonly/types";
+import {
+  generateGoogleCalendarId,
+  getCalendarById,
+  getCalendarByProviderId,
+  insertCalendar,
+  listCalendarsForAccount,
+  updateCalendar,
+} from "@/lib/data/core/integrations/googleCalendarReadonly/calendarStore";
+import type { GoogleCalendar, GoogleCalendarAccount, UpsertGoogleCalendarAccountParams, UpsertGoogleCalendarParams } from "@/core/integrations/googleCalendarReadonly/types";
 
 /**
  * GCAL-02 — the Google Calendar (read-only) Account Manager, mirroring
@@ -92,4 +100,85 @@ export async function getAccountForCaller(accountId: string, caller: GoogleCalen
 export async function getOwnAccount(caller: GoogleCalendarCallerScope): Promise<GoogleCalendarAccount | null> {
   const accounts = await listAccountsForWorkspace(caller.workspaceId);
   return accounts.find((account) => account.member_id === caller.memberId) ?? null;
+}
+
+/** GCAL-03 — the DB-level FK on `google_calendars.account_id` can't itself enforce "this account belongs to this exact workspace/member" — this is that check, done here instead (mirrors `assertGoogleCalendarConnectionOwnership` above, one level down). */
+async function assertAccountOwnership(accountId: string, caller: GoogleCalendarCallerScope): Promise<GoogleCalendarAccount> {
+  const account = await getAccountById(accountId);
+  if (!account) throw new Error("No Google Calendar account found for this calendar.");
+  if (!isOwnedByCaller(account, caller)) throw new Error("This account is not owned by the caller.");
+  return account;
+}
+
+/**
+ * GCAL-03 — insert-or-update by `(accountId, providerCalendarId)`.
+ *
+ * `isSelected` is deliberately optional and asymmetric between the two
+ * paths: on the INSERT path (a calendar seen for the first time) it
+ * defaults to `false` when omitted — the service always supplies it
+ * explicitly there (`true` only for the one primary calendar, per
+ * GCAL-03's own default-selection rule). On the UPDATE path (a calendar
+ * already persisted from an earlier listing) it defaults to the
+ * *existing* row's own value when omitted, never to the newly-fetched
+ * `is_primary` flag — this is what keeps a later user selection change
+ * from being silently reverted by the next calendar-list refresh
+ * (GCAL-03's own selection-preservation rule). The service achieves this
+ * by only ever passing `isSelected` explicitly for a row it already
+ * knows is new.
+ */
+export async function upsertCalendar(params: UpsertGoogleCalendarParams): Promise<GoogleCalendar> {
+  const caller: GoogleCalendarCallerScope = { workspaceId: params.workspaceId, memberId: params.memberId };
+  await assertAccountOwnership(params.accountId, caller);
+
+  const existing = await getCalendarByProviderId(params.accountId, params.providerCalendarId);
+  if (existing) {
+    if (!isOwnedByCaller(existing, caller)) throw new Error("This calendar is not owned by the caller.");
+    const updated = await updateCalendar(existing.id, {
+      summary: params.summary ?? existing.summary,
+      description: params.description ?? existing.description,
+      time_zone: params.timeZone ?? existing.time_zone,
+      access_role: params.accessRole ?? existing.access_role,
+      is_primary: params.isPrimary ?? existing.is_primary,
+      is_selected: params.isSelected ?? existing.is_selected,
+    });
+    if (!updated) throw new Error("Could not update this calendar.");
+    return updated;
+  }
+
+  const now = nowIso();
+  const calendar: GoogleCalendar = {
+    id: generateGoogleCalendarId(),
+    workspace_id: params.workspaceId,
+    member_id: params.memberId,
+    account_id: params.accountId,
+    provider_calendar_id: params.providerCalendarId,
+    summary: params.summary ?? null,
+    description: params.description ?? null,
+    time_zone: params.timeZone ?? null,
+    access_role: params.accessRole ?? null,
+    is_primary: params.isPrimary ?? false,
+    is_selected: params.isSelected ?? false,
+    sync_token: null,
+    created_at: now,
+    updated_at: now,
+  };
+  return insertCalendar(calendar);
+}
+
+export async function getCalendarForCaller(calendarId: string, caller: GoogleCalendarCallerScope): Promise<GoogleCalendar | null> {
+  const calendar = await getCalendarById(calendarId);
+  if (!calendar || !isOwnedByCaller(calendar, caller)) return null;
+  return calendar;
+}
+
+/** Whether a calendar with this provider id has already been persisted for this account — used by the service to decide whether an upsert call is a genuinely new row (and should set a default selection) or a refresh of an existing one (and must leave selection untouched). Never exposes anything beyond that boolean-shaped answer to callers outside this manager. */
+export async function calendarExistsForAccount(accountId: string, providerCalendarId: string, caller: GoogleCalendarCallerScope): Promise<boolean> {
+  await assertAccountOwnership(accountId, caller);
+  const existing = await getCalendarByProviderId(accountId, providerCalendarId);
+  return existing !== null;
+}
+
+export async function listCalendarsForCaller(accountId: string, caller: GoogleCalendarCallerScope): Promise<GoogleCalendar[]> {
+  await assertAccountOwnership(accountId, caller);
+  return listCalendarsForAccount(accountId);
 }
