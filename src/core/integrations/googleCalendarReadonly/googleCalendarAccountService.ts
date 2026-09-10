@@ -5,11 +5,12 @@ import { getCredential, resolveAccessToken } from "@/core/integrations/credentia
 import { refreshProviderOAuthConnectionAction } from "@/modules/integrations/manageOAuthConnectionActions";
 import { GoogleCalendarApiError, getPrimaryCalendarAccountIdentity } from "@/core/integrations/googleCalendarReadonly/googleCalendarIdentity";
 import { listGoogleCalendars, type GoogleCalendarListApiItem } from "@/core/integrations/googleCalendarReadonly/googleCalendarListApi";
-import { listGoogleCalendarEvents, type GoogleCalendarEventApiItem } from "@/core/integrations/googleCalendarReadonly/googleCalendarEventApi";
+import { listGoogleCalendarEvents, type GoogleCalendarEventApiItem, type ListGoogleCalendarEventsParams } from "@/core/integrations/googleCalendarReadonly/googleCalendarEventApi";
 import {
   calendarExistsForAccount,
   getOwnAccount,
   listCalendarsForCaller,
+  updateCalendarSyncToken,
   upsertAccount,
   upsertCalendar,
   upsertCalendarEvent,
@@ -97,12 +98,13 @@ async function findOwnGoogleCalendarConnection(caller: GoogleCalendarAccountCall
   return connections.find((connection) => connection.provider_id === "google-calendar-readonly" && connection.member_id === caller.memberId) ?? null;
 }
 
-/** Non-sensitive, machine-readable classification of a Google Calendar API failure — never the raw provider response body. Mirrors `gmailSyncEngine.ts`'s own `classifyGmailApiError`, adapted for Calendar's own status-code meanings (GCAL-02 scope: no sync-token/410 handling yet — that's GCAL-05's). */
+/** Non-sensitive, machine-readable classification of a Google Calendar API failure — never the raw provider response body. Mirrors `gmailSyncEngine.ts`'s own `classifyGmailApiError`, adapted for Calendar's own status-code meanings. GCAL-05 adds the one code this domain's sync now acts on specially: 410 (Google's canonical "your `syncToken` is expired/invalid, `fullSyncRequired`" signal) gets its own distinct code — `google_calendar_sync_token_invalid` — so `syncOneCalendarEvents` can recognize it and trigger a bounded full-resync recovery, rather than it falling into the generic per-status-code bucket every other unmapped status uses. */
 function classifyGoogleCalendarApiError(error: unknown): { code: string; reconnectRequired: boolean } {
   if (error instanceof GoogleCalendarApiError) {
     if (error.status === 401) return { code: "google_calendar_unauthorized", reconnectRequired: true };
     if (error.status === 403) return { code: "google_calendar_forbidden", reconnectRequired: false };
     if (error.status === 404) return { code: "google_calendar_not_found", reconnectRequired: false };
+    if (error.status === 410) return { code: "google_calendar_sync_token_invalid", reconnectRequired: false };
     if (error.status === 429) return { code: "google_calendar_rate_limited", reconnectRequired: false };
     if (error.status >= 500) return { code: "google_calendar_provider_error", reconnectRequired: false };
     return { code: `google_calendar_api_error_${error.status}`, reconnectRequired: false };
@@ -375,7 +377,8 @@ function mapGoogleCalendarEventItem(item: GoogleCalendarEventApiItem): Omit<Upse
 
 export interface CalendarEventSyncOutcome {
   calendarId: string;
-  status: "success" | "reconnect_required" | "error";
+  status: "success" | "incomplete" | "reconnect_required" | "error";
+  mode?: "full" | "incremental" | "full_resync_after_invalid_token";
   eventsProcessed?: number;
   reason?: string;
 }
@@ -388,13 +391,122 @@ export type SyncGoogleCalendarEventsResult =
   | { status: "error"; reason: string };
 
 /**
- * GCAL-04 — syncs one calendar's events as its own independent bounded
- * unit: fetches the *entire* bounded page set into memory first, then
- * persists — a mid-pagination failure therefore returns an error
- * outcome for exactly this calendar without touching any of its
- * existing rows (matching `listAndPersistOwnGoogleCalendars`'s own
- * "atomic logical completion" choice), and never affects any other
- * selected calendar's own outcome.
+ * GCAL-05 — fetches one bounded page set (the entire allowed traversal
+ * for this run, not just one page) for either of Google's own two
+ * listing modes, reusing the exact pagination/bounds philosophy GCAL-04
+ * established rather than a second, incompatible bound system.
+ * `complete` is true only when the loop actually reached Google's own
+ * true final page (no `nextPageToken`) within `EVENTS_MAX_PAGES`/
+ * `EVENTS_MAX_EVENTS` — never when it stopped early because of those
+ * bounds. `nextSyncToken` is populated only alongside `complete: true`,
+ * since Google itself only ever returns `nextSyncToken` on that same
+ * true-final page (never together with `nextPageToken`) — this is what
+ * lets the caller treat "did we get a fresh cursor" and "did we finish
+ * the whole traversal" as the same fact, exactly the invariant GCAL-05's
+ * cursor-advancement rule needs.
+ */
+async function fetchBoundedEventPages(
+  accessToken: string,
+  providerCalendarId: string,
+  requestParams: { timeMin: string; timeMax: string } | { syncToken: string },
+): Promise<{ items: GoogleCalendarEventApiItem[]; nextSyncToken?: string; complete: boolean }> {
+  const items: GoogleCalendarEventApiItem[] = [];
+  let pageToken: string | undefined;
+  let pagesFetched = 0;
+
+  for (;;) {
+    const page = await listGoogleCalendarEvents(accessToken, providerCalendarId, {
+      ...requestParams,
+      maxResults: EVENTS_PAGE_SIZE,
+      pageToken,
+    } as ListGoogleCalendarEventsParams);
+    pagesFetched++;
+
+    const remainingCapacity = EVENTS_MAX_EVENTS - items.length;
+    if (page.items.length > remainingCapacity) {
+      items.push(...page.items.slice(0, Math.max(remainingCapacity, 0)));
+      return { items, complete: false };
+    }
+    items.push(...page.items);
+
+    if (!page.nextPageToken) {
+      return { items, nextSyncToken: page.nextSyncToken, complete: true };
+    }
+    if (pagesFetched >= EVENTS_MAX_PAGES) {
+      return { items, complete: false };
+    }
+    pageToken = page.nextPageToken;
+  }
+}
+
+/**
+ * GCAL-04/GCAL-05 — applies a fetched page set through the one canonical
+ * event-write path (`mapGoogleCalendarEventItem` + `upsertCalendarEvent`)
+ * — the same path a bounded initial sync, an incremental delta, and a
+ * 410-recovery full resync all share, so all three modes converge on
+ * identical persisted truth (identity, all-day/timed mapping, timezone,
+ * `recurring_event_id`, "first tombstone wins" cancellation,
+ * resurrection). One event's persistence failure is logged and does not
+ * stop the rest of the page set from being attempted (matching GCAL-04's
+ * own "don't drop unseen changes" behavior on a partial failure) — but
+ * `allSucceeded` is tracked precisely so the caller can still withhold
+ * cursor advancement when even one event failed, per GCAL-05's own
+ * cursor-advancement rule.
+ */
+async function applyFetchedEvents(
+  items: GoogleCalendarEventApiItem[],
+  params: { workspaceId: string; memberId: string; calendarId: string },
+): Promise<{ eventsProcessed: number; allSucceeded: boolean }> {
+  let eventsProcessed = 0;
+  let allSucceeded = true;
+  for (const item of items) {
+    try {
+      const mapped = mapGoogleCalendarEventItem(item);
+      await upsertCalendarEvent({ workspaceId: params.workspaceId, memberId: params.memberId, calendarId: params.calendarId, ...mapped });
+      eventsProcessed++;
+    } catch (error) {
+      allSucceeded = false;
+      getLogger().error("Google Calendar event sync: could not persist one event", { calendarId: params.calendarId, providerEventId: item.id, error: error instanceof Error ? error.message : "unknown" });
+    }
+  }
+  return { eventsProcessed, allSucceeded };
+}
+
+/**
+ * GCAL-05 — syncs one calendar's events as its own independent unit,
+ * choosing Google's full or incremental listing mode from the
+ * calendar's own persisted `sync_token` (never a global/account-level
+ * cursor — Google issues one token per calendar, and so does this
+ * domain's own `google_calendars.sync_token` column).
+ *
+ * Cursor-advancement rule (non-negotiable): the new `sync_token` is only
+ * ever persisted after (1) the entire bounded page traversal for this
+ * run reached Google's true final page (`fetch.complete`) and (2) every
+ * fetched event was mapped and persisted successfully (`allSucceeded`).
+ * Any failure at any step — provider error, an individual event's
+ * mapping/persistence failure, or a bounded-overflow traversal that
+ * never reached the final page — leaves the calendar's existing
+ * `sync_token` completely untouched, so a later retry safely
+ * re-requests the exact same delta (Google's own `syncToken` semantics)
+ * or, for a `null` cursor, the exact same bounded window — and every
+ * event write is idempotent (`(calendar_id, provider_event_id)`-keyed
+ * upsert), so replaying an already-applied page is always safe.
+ *
+ * 410 (`google_calendar_sync_token_invalid`) is the one error this
+ * function recovers from automatically, and only during an incremental
+ * attempt, and only once per invocation: the invalid token is cleared
+ * immediately — before the recovery attempt below runs — so that even if
+ * that recovery attempt itself also fails, a future call deterministically
+ * falls back to full mode (a `null` cursor) rather than ever retrying the
+ * same known-bad token. This was chosen over adding a new
+ * "recovery-required" state because it needs no new column or status
+ * vocabulary at all: a cleared cursor already *is* this domain's
+ * existing, already-tested "start from a bounded full sync" signal, so
+ * no future call can ever loop on an invalid token no matter how the
+ * recovery attempt itself turns out (see GCAL-05's final report for the
+ * full reasoning). The resync itself runs through the exact same
+ * `fetchBoundedEventPages`/`applyFetchedEvents` path an initial sync
+ * uses — never a second, parallel recovery-specific mapper.
  */
 async function syncOneCalendarEvents(params: {
   workspaceId: string;
@@ -404,56 +516,79 @@ async function syncOneCalendarEvents(params: {
   accessToken: string;
   timeMin: string;
   timeMax: string;
+  syncToken: string | null;
+  caller: GoogleCalendarCallerScope;
 }): Promise<CalendarEventSyncOutcome> {
-  const items: GoogleCalendarEventApiItem[] = [];
-  let pageToken: string | undefined;
-  let pagesFetched = 0;
-  try {
-    do {
-      const page = await listGoogleCalendarEvents(params.accessToken, params.providerCalendarId, { timeMin: params.timeMin, timeMax: params.timeMax, maxResults: EVENTS_PAGE_SIZE, pageToken });
-      pagesFetched++;
-      for (const item of page.items) {
-        if (items.length >= EVENTS_MAX_EVENTS) break;
-        items.push(item);
-      }
-      pageToken = page.nextPageToken;
-    } while (pageToken && items.length < EVENTS_MAX_EVENTS && pagesFetched < EVENTS_MAX_PAGES);
-  } catch (error) {
-    const { code, reconnectRequired } = classifyGoogleCalendarApiError(error);
-    getLogger().error("Google Calendar event sync failed for one calendar", { calendarId: params.calendarId, code });
-    return { calendarId: params.calendarId, status: reconnectRequired ? "reconnect_required" : "error", reason: code };
-  }
+  const mode: "full" | "incremental" = params.syncToken ? "incremental" : "full";
 
-  let eventsProcessed = 0;
-  for (const item of items) {
+  async function runFullResync(): Promise<CalendarEventSyncOutcome> {
     try {
-      const mapped = mapGoogleCalendarEventItem(item);
-      await upsertCalendarEvent({ workspaceId: params.workspaceId, memberId: params.memberId, calendarId: params.calendarId, ...mapped });
-      eventsProcessed++;
-    } catch (error) {
-      getLogger().error("Google Calendar event sync: could not persist one event", { calendarId: params.calendarId, providerEventId: item.id, error: error instanceof Error ? error.message : "unknown" });
+      const fetch = await fetchBoundedEventPages(params.accessToken, params.providerCalendarId, { timeMin: params.timeMin, timeMax: params.timeMax });
+      const { eventsProcessed, allSucceeded } = await applyFetchedEvents(fetch.items, params);
+
+      if (!fetch.complete || !allSucceeded) {
+        return { calendarId: params.calendarId, status: "incomplete", mode: "full_resync_after_invalid_token", eventsProcessed };
+      }
+      if (fetch.nextSyncToken) {
+        await updateCalendarSyncToken(params.calendarId, fetch.nextSyncToken, params.caller);
+      }
+      return { calendarId: params.calendarId, status: "success", mode: "full_resync_after_invalid_token", eventsProcessed };
+    } catch (resyncError) {
+      const classified = classifyGoogleCalendarApiError(resyncError);
+      getLogger().error("Google Calendar 410 recovery resync failed", { calendarId: params.calendarId, code: classified.code });
+      return { calendarId: params.calendarId, status: classified.reconnectRequired ? "reconnect_required" : "error", mode: "full_resync_after_invalid_token", reason: classified.code };
     }
   }
 
-  return { calendarId: params.calendarId, status: "success", eventsProcessed };
+  try {
+    const requestParams = mode === "incremental" ? { syncToken: params.syncToken as string } : { timeMin: params.timeMin, timeMax: params.timeMax };
+    const fetch = await fetchBoundedEventPages(params.accessToken, params.providerCalendarId, requestParams);
+    const { eventsProcessed, allSucceeded } = await applyFetchedEvents(fetch.items, params);
+
+    if (!fetch.complete || !allSucceeded) {
+      return { calendarId: params.calendarId, status: "incomplete", mode, eventsProcessed };
+    }
+    if (fetch.nextSyncToken) {
+      await updateCalendarSyncToken(params.calendarId, fetch.nextSyncToken, params.caller);
+    }
+    return { calendarId: params.calendarId, status: "success", mode, eventsProcessed };
+  } catch (error) {
+    const { code, reconnectRequired } = classifyGoogleCalendarApiError(error);
+
+    if (mode === "incremental" && code === "google_calendar_sync_token_invalid") {
+      try {
+        await updateCalendarSyncToken(params.calendarId, null, params.caller);
+      } catch (clearError) {
+        getLogger().error("Google Calendar sync: could not clear invalid sync token", { calendarId: params.calendarId, error: clearError instanceof Error ? clearError.message : "unknown" });
+      }
+      return runFullResync();
+    }
+
+    getLogger().error("Google Calendar event sync failed for one calendar", { calendarId: params.calendarId, code });
+    return { calendarId: params.calendarId, status: reconnectRequired ? "reconnect_required" : "error", mode, reason: code };
+  }
 }
 
 /**
- * GCAL-04 — the bounded initial event sync entry point. Applies only to
- * the caller's own `is_selected = true` calendars (GCAL-03's own
- * persisted selection state) — never every persisted calendar, and
- * never an arbitrary fallback when nothing is selected
- * (`no_selected_calendars` is returned instead). Each selected calendar
- * is synced as its own independent unit (`syncOneCalendarEvents`) — one
- * calendar's failure is reported in that calendar's own outcome only
- * and never marks a different, successfully-synced calendar's own
- * outcome as failed.
+ * GCAL-04/GCAL-05 — the event sync entry point. Applies only to the
+ * caller's own `is_selected = true` calendars (GCAL-03's own persisted
+ * selection state) — never every persisted calendar, and never an
+ * arbitrary fallback when nothing is selected (`no_selected_calendars`
+ * is returned instead, with zero Google API calls and zero cursor
+ * mutation). Each selected calendar is synced as its own fully
+ * independent unit, owning its own `sync_token` — one calendar's failure
+ * is reported in that calendar's own outcome only and never marks a
+ * different, successfully-synced calendar's own outcome as failed, and
+ * a calendar that has since become unselected is never visited at all
+ * (its persisted events and cursor stay exactly as they were — it isn't
+ * in `selectedCalendars` to begin with).
  *
- * `sync_token` is never read or written here — GCAL-04 is a bounded,
- * time-windowed listing only; GCAL-05 owns incremental sync and cursor
- * activation. `now` is injectable (defaults to the real current time)
- * so tests can exercise the bounded window deterministically without
- * depending on wall-clock time.
+ * `now` is injectable (defaults to the real current time) so tests can
+ * exercise the bounded initial window deterministically without
+ * depending on wall-clock time; an incremental run doesn't use
+ * `timeMin`/`timeMax` at all (see `googleCalendarEventApi.ts`), but the
+ * window is still computed once up front so it's ready for whichever
+ * selected calendar needs a full (or full-resync) traversal.
  */
 export async function syncOwnGoogleCalendarEvents(caller: GoogleCalendarAccountCaller, now: Date = new Date()): Promise<SyncGoogleCalendarEventsResult> {
   const connection = await findOwnGoogleCalendarConnection(caller);
@@ -494,6 +629,8 @@ export async function syncOwnGoogleCalendarEvents(caller: GoogleCalendarAccountC
       accessToken,
       timeMin,
       timeMax,
+      syncToken: calendar.sync_token,
+      caller: scopeCaller,
     });
     results.push(outcome);
   }

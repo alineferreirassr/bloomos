@@ -15,6 +15,7 @@ import {
   getOwnAccount,
   listCalendarsForCaller,
   listEventsForCalendar,
+  updateCalendarSyncToken,
   upsertAccount,
   upsertCalendar,
   upsertCalendarEvent,
@@ -264,6 +265,50 @@ describe("upsertCalendar (GCAL-03)", () => {
 
   it("17. rejects an unknown account id (foreign account denial)", async () => {
     await expect(upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, accountId: "account_missing", providerCalendarId: "cal_1" })).rejects.toThrow(/No Google Calendar account/);
+  });
+});
+
+describe("updateCalendarSyncToken (GCAL-05)", () => {
+  async function seedCalendar(memberId: string = MEMBER_1): Promise<string> {
+    const connectionId = await installGoogleCalendarReadonlyConnection(WORKSPACE_ID, memberId);
+    const account = await upsertAccount({ workspaceId: WORKSPACE_ID, memberId, integrationConnectionId: connectionId });
+    const calendar = await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId, accountId: account.id, providerCalendarId: "cal_1" });
+    return calendar.id;
+  }
+
+  it("sets sync_token on the caller's own calendar", async () => {
+    const calendarId = await seedCalendar();
+    const updated = await updateCalendarSyncToken(calendarId, "sync_abc123", { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(updated.sync_token).toBe("sync_abc123");
+  });
+
+  it("clears sync_token back to null (410 recovery's own use)", async () => {
+    const calendarId = await seedCalendar();
+    await updateCalendarSyncToken(calendarId, "sync_abc123", { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    const cleared = await updateCalendarSyncToken(calendarId, null, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(cleared.sync_token).toBeNull();
+  });
+
+  it("never touches any other field on the calendar row", async () => {
+    const calendarId = await seedCalendar();
+    const updated = await updateCalendarSyncToken(calendarId, "sync_abc123", { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(updated.provider_calendar_id).toBe("cal_1");
+    expect(updated.is_selected).toBe(false);
+    expect(updated.is_primary).toBe(false);
+  });
+
+  it("GCAL05-AL:48. denies a same-workspace, different member from updating another member's calendar sync token", async () => {
+    const calendarId = await seedCalendar(MEMBER_1);
+    await expect(updateCalendarSyncToken(calendarId, "sync_abc123", { workspaceId: WORKSPACE_ID, memberId: MEMBER_2 })).rejects.toThrow(/not owned by the caller/);
+  });
+
+  it("GCAL05-AL:49. denies a cross-workspace caller from updating a calendar's sync token", async () => {
+    const calendarId = await seedCalendar(MEMBER_1);
+    await expect(updateCalendarSyncToken(calendarId, "sync_abc123", { workspaceId: OTHER_WORKSPACE_ID, memberId: MEMBER_1 })).rejects.toThrow(/not owned by the caller/);
+  });
+
+  it("GCAL05-AL:50. rejects an unknown/foreign calendar id — no client-supplied id can bypass ownership", async () => {
+    await expect(updateCalendarSyncToken("calendar_missing", "sync_abc123", { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 })).rejects.toThrow(/No Google Calendar found/);
   });
 });
 

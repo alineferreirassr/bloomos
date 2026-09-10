@@ -24,6 +24,21 @@ vi.mock("@/modules/integrations/manageOAuthConnectionActions", async () => {
   return { ...actual, refreshProviderOAuthConnectionAction: vi.fn(actual.refreshProviderOAuthConnectionAction) };
 });
 
+/**
+ * GCAL-05 — a selectively-overridable wrapper around the real
+ * `upsertCalendarEvent`, defaulting to its actual behavior. Only one
+ * test (below, "6 & 20") overrides this to fail for exactly one event
+ * while a page is otherwise complete — proving cursor advancement is
+ * gated on every event write succeeding, not merely on the fetch
+ * completing. Every other test uses the real, unmodified persistence
+ * path (no other test in this file touches this wrapper at all).
+ */
+vi.mock("@/core/integrations/googleCalendarReadonly/googleCalendarAccountManager", async () => {
+  const actual = await vi.importActual<typeof import("@/core/integrations/googleCalendarReadonly/googleCalendarAccountManager")>("@/core/integrations/googleCalendarReadonly/googleCalendarAccountManager");
+  const wrapped = vi.fn(actual.upsertCalendarEvent);
+  return { ...actual, upsertCalendarEvent: wrapped };
+});
+
 import { GoogleCalendarApiError } from "@/core/integrations/googleCalendarReadonly/googleCalendarIdentity";
 import { refreshProviderOAuthConnectionAction } from "@/modules/integrations/manageOAuthConnectionActions";
 import { registerBuiltinProviders } from "@/modules/integrations/registerBuiltinProviders";
@@ -34,7 +49,7 @@ import { installProvider, attachCredential, applyConnectionEvent } from "@/core/
 import { resetGoogleCalendarAccountStore } from "@/lib/data/core/integrations/googleCalendarReadonly/accountStore";
 import { resetGoogleCalendarStore } from "@/lib/data/core/integrations/googleCalendarReadonly/calendarStore";
 import { resetGoogleCalendarEventStore } from "@/lib/data/core/integrations/googleCalendarReadonly/calendarEventStore";
-import { getOwnAccount, listCalendarsForCaller, listEventsForCalendar, upsertCalendar } from "@/core/integrations/googleCalendarReadonly/googleCalendarAccountManager";
+import { getOwnAccount, listCalendarsForCaller, listEventsForCalendar, upsertCalendar, upsertCalendarEvent } from "@/core/integrations/googleCalendarReadonly/googleCalendarAccountManager";
 import {
   CALENDAR_LIST_MAX_CALENDARS,
   CALENDAR_LIST_MAX_PAGES,
@@ -812,7 +827,7 @@ describe("syncOwnGoogleCalendarEvents — error classification (37, 38, 39, 40, 
     mockListGoogleCalendarEvents.mockRejectedValue(new GoogleCalendarApiError("Google Calendar API error 401", 401));
     const result = await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
     if (result.status !== "success") throw new Error("expected a success envelope");
-    expect(result.results[0]).toEqual({ calendarId: expect.any(String), status: "reconnect_required", reason: "google_calendar_unauthorized" });
+    expect(result.results[0]).toEqual({ calendarId: expect.any(String), status: "reconnect_required", mode: "full", reason: "google_calendar_unauthorized" });
   });
 
   it("38. classifies a 403 as a non-reconnect error", async () => {
@@ -820,7 +835,7 @@ describe("syncOwnGoogleCalendarEvents — error classification (37, 38, 39, 40, 
     mockListGoogleCalendarEvents.mockRejectedValue(new GoogleCalendarApiError("Google Calendar API error 403", 403));
     const result = await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
     if (result.status !== "success") throw new Error("expected a success envelope");
-    expect(result.results[0]).toEqual({ calendarId: expect.any(String), status: "error", reason: "google_calendar_forbidden" });
+    expect(result.results[0]).toEqual({ calendarId: expect.any(String), status: "error", mode: "full", reason: "google_calendar_forbidden" });
   });
 
   it("39. classifies a 404 as a non-reconnect error", async () => {
@@ -828,7 +843,7 @@ describe("syncOwnGoogleCalendarEvents — error classification (37, 38, 39, 40, 
     mockListGoogleCalendarEvents.mockRejectedValue(new GoogleCalendarApiError("Google Calendar API error 404", 404));
     const result = await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
     if (result.status !== "success") throw new Error("expected a success envelope");
-    expect(result.results[0]).toEqual({ calendarId: expect.any(String), status: "error", reason: "google_calendar_not_found" });
+    expect(result.results[0]).toEqual({ calendarId: expect.any(String), status: "error", mode: "full", reason: "google_calendar_not_found" });
   });
 
   it("40. classifies a 429 distinctly", async () => {
@@ -836,7 +851,7 @@ describe("syncOwnGoogleCalendarEvents — error classification (37, 38, 39, 40, 
     mockListGoogleCalendarEvents.mockRejectedValue(new GoogleCalendarApiError("Google Calendar API error 429", 429));
     const result = await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
     if (result.status !== "success") throw new Error("expected a success envelope");
-    expect(result.results[0]).toEqual({ calendarId: expect.any(String), status: "error", reason: "google_calendar_rate_limited" });
+    expect(result.results[0]).toEqual({ calendarId: expect.any(String), status: "error", mode: "full", reason: "google_calendar_rate_limited" });
   });
 
   it("41. classifies a 5xx distinctly", async () => {
@@ -844,7 +859,24 @@ describe("syncOwnGoogleCalendarEvents — error classification (37, 38, 39, 40, 
     mockListGoogleCalendarEvents.mockRejectedValue(new GoogleCalendarApiError("Google Calendar API error 503", 503));
     const result = await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
     if (result.status !== "success") throw new Error("expected a success envelope");
-    expect(result.results[0]).toEqual({ calendarId: expect.any(String), status: "error", reason: "google_calendar_provider_error" });
+    expect(result.results[0]).toEqual({ calendarId: expect.any(String), status: "error", mode: "full", reason: "google_calendar_provider_error" });
+  });
+
+  it("GCAL05-AL:33. classifies a 410 during an incremental attempt distinctly, and it does not surface as a generic error — it's absorbed into a successful recovery (see the 410-recovery describe block below)", async () => {
+    const { calendarId } = await setUpAccountWithSelectedCalendar();
+    mockListGoogleCalendarEvents.mockResolvedValueOnce({ items: [], nextSyncToken: "sync_initial" });
+    await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    let calendars = await listCalendarsForCaller((await getOwnAccount({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID }))!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(calendars.find((c) => c.id === calendarId)!.sync_token).toBe("sync_initial");
+
+    mockListGoogleCalendarEvents.mockRejectedValueOnce(new GoogleCalendarApiError("Google Calendar API error 410", 410)).mockResolvedValueOnce({ items: [], nextSyncToken: "sync_after_recovery" });
+    const result = await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    if (result.status !== "success") throw new Error("expected a success envelope");
+    expect(result.results[0].status).toBe("success");
+    expect(result.results[0].mode).toBe("full_resync_after_invalid_token");
+
+    calendars = await listCalendarsForCaller((await getOwnAccount({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID }))!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(calendars.find((c) => c.id === calendarId)!.sync_token).toBe("sync_after_recovery");
   });
 
   it("42. never leaks a raw provider error message", async () => {
@@ -883,15 +915,279 @@ describe("syncOwnGoogleCalendarEvents — token refresh, exposure, sync_token, s
     expect(Object.keys(events[0])).not.toContain("access_token");
   });
 
-  it("48 & 49. sync_token remains null/unchanged after an initial sync, and Google's own nextSyncToken (if ever returned) is ignored", async () => {
+  it("GCAL05-AL:5 & 18. sync_token is persisted from Google's own nextSyncToken after a complete, fully-successful full sync", async () => {
     const { calendarId } = await setUpAccountWithSelectedCalendar();
-    // Even if a real Google response happened to include a nextSyncToken (not modeled by this checkpoint's own API item type), GCAL-04 never reads or persists it.
-    mockListGoogleCalendarEvents.mockResolvedValue({ items: [eventItem({ id: "evt_1" })] });
+    mockListGoogleCalendarEvents.mockResolvedValue({ items: [eventItem({ id: "evt_1" })], nextSyncToken: "sync_token_from_google" });
     await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
 
     const calendars = await listCalendarsForCaller((await getOwnAccount({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID }))!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
     const calendar = calendars.find((c) => c.id === calendarId)!;
-    expect(calendar.sync_token).toBeNull();
+    expect(calendar.sync_token).toBe("sync_token_from_google");
+  });
+
+  it("sync_token stays null when the provider never returns a nextSyncToken (no final-page signal received)", async () => {
+    const { calendarId } = await setUpAccountWithSelectedCalendar();
+    mockListGoogleCalendarEvents.mockResolvedValue({ items: [eventItem({ id: "evt_1" })] }); // no nextSyncToken
+    await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+
+    const calendars = await listCalendarsForCaller((await getOwnAccount({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID }))!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(calendars.find((c) => c.id === calendarId)!.sync_token).toBeNull();
+  });
+});
+
+describe("syncOwnGoogleCalendarEvents — GCAL-05 mode selection (1, 4, 7, 8, 9, 10)", () => {
+  it("GCAL05-AL:1. a calendar with sync_token null is synced in full mode, sending timeMin/timeMax and no syncToken", async () => {
+    await setUpAccountWithSelectedCalendar();
+    mockListGoogleCalendarEvents.mockResolvedValue({ items: [] });
+    const result = await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    if (result.status !== "success") throw new Error("expected success");
+    expect(result.results[0].mode).toBe("full");
+
+    const call = mockListGoogleCalendarEvents.mock.calls[0] as [string, string, Record<string, unknown>];
+    expect(call[2]).toHaveProperty("timeMin");
+    expect(call[2]).toHaveProperty("timeMax");
+    expect(call[2]).not.toHaveProperty("syncToken");
+  });
+
+  it("GCAL05-AL:4. full mode never sends a syncToken param at the service layer", async () => {
+    await setUpAccountWithSelectedCalendar();
+    mockListGoogleCalendarEvents.mockResolvedValue({ items: [] });
+    await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const call = mockListGoogleCalendarEvents.mock.calls[0] as [string, string, Record<string, unknown>];
+    expect(call[2].syncToken).toBeUndefined();
+  });
+
+  it("GCAL05-AL:7, 8, 9, 10. a calendar with an existing sync_token is synced in incremental mode, sending exactly that syncToken and no timeMin/timeMax", async () => {
+    const { calendarId } = await setUpAccountWithSelectedCalendar();
+    mockListGoogleCalendarEvents.mockResolvedValueOnce({ items: [], nextSyncToken: "sync_established" });
+    await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    mockListGoogleCalendarEvents.mockClear();
+
+    mockListGoogleCalendarEvents.mockResolvedValue({ items: [] });
+    const result = await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    if (result.status !== "success") throw new Error("expected success");
+    expect(result.results[0].mode).toBe("incremental");
+
+    const call = mockListGoogleCalendarEvents.mock.calls[0] as [string, string, Record<string, unknown>];
+    expect(call[2].syncToken).toBe("sync_established");
+    expect(call[2]).not.toHaveProperty("timeMin");
+    expect(call[2]).not.toHaveProperty("timeMax");
+    void calendarId;
+  });
+});
+
+describe("syncOwnGoogleCalendarEvents — GCAL-05 cursor-advancement safety (6, 16, 17, 19, 20, 22)", () => {
+  it("GCAL05-AL:6 & 20. cursor is NOT persisted when the fetched page is complete but one event's persistence fails — the other event still gets applied", async () => {
+    const { calendarId } = await setUpAccountWithSelectedCalendar();
+    vi.mocked(upsertCalendarEvent).mockRejectedValueOnce(new Error("simulated persistence failure"));
+    mockListGoogleCalendarEvents.mockResolvedValue({ items: [eventItem({ id: "evt_bad" }), eventItem({ id: "evt_ok" })], nextSyncToken: "sync_would_advance" });
+
+    const result = await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    if (result.status !== "success") throw new Error("expected success");
+    expect(result.results[0].status).toBe("incomplete");
+    expect(result.results[0].eventsProcessed).toBe(1); // evt_ok still applied despite evt_bad's failure
+
+    const events = await listEventsForCalendar(calendarId, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(events.some((e) => e.provider_event_id === "evt_ok")).toBe(true);
+
+    const calendars = await listCalendarsForCaller((await getOwnAccount({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID }))!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(calendars.find((c) => c.id === calendarId)!.sync_token).toBeNull(); // cursor withheld despite the complete, otherwise-successful fetch
+  });
+
+  it("GCAL05-AL:16 & 17. a bounded-overflow (incomplete) traversal never persists a cursor, even if an intermediate page reported nextPageToken", async () => {
+    const { calendarId } = await setUpAccountWithSelectedCalendar();
+    mockListGoogleCalendarEvents.mockImplementation(async () => ({ items: [eventItem({ id: `evt_${Math.random()}` })], nextPageToken: "always_more" }));
+
+    const result = await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    if (result.status !== "success") throw new Error("expected success");
+    expect(result.results[0].status).toBe("incomplete");
+
+    const calendars = await listCalendarsForCaller((await getOwnAccount({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID }))!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(calendars.find((c) => c.id === calendarId)!.sync_token).toBeNull();
+  });
+
+  it("GCAL05-AL:19. a provider failure mid-run leaves the existing sync_token completely unchanged", async () => {
+    const { calendarId } = await setUpAccountWithSelectedCalendar();
+    mockListGoogleCalendarEvents.mockResolvedValueOnce({ items: [], nextSyncToken: "sync_established" });
+    await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+
+    mockListGoogleCalendarEvents.mockRejectedValue(new GoogleCalendarApiError("Google Calendar API error 503", 503));
+    const result = await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    if (result.status !== "success") throw new Error("expected success");
+    expect(result.results[0].status).toBe("error");
+
+    const calendars = await listCalendarsForCaller((await getOwnAccount({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID }))!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(calendars.find((c) => c.id === calendarId)!.sync_token).toBe("sync_established");
+  });
+
+  it("GCAL05-AL:22. a retry after a bounded-overflow failure is idempotent — no duplicate events, and the retry can still succeed and advance the cursor once complete", async () => {
+    const { calendarId } = await setUpAccountWithSelectedCalendar();
+    mockListGoogleCalendarEvents.mockImplementation(async () => ({ items: [eventItem({ id: "evt_stable" })], nextPageToken: "always_more" }));
+    await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID }); // bounded overflow, incomplete, no cursor
+
+    let events = await listEventsForCalendar(calendarId, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(events).toHaveLength(1); // same event id upserted repeatedly across pages — idempotent, not duplicated
+
+    mockListGoogleCalendarEvents.mockReset();
+    mockListGoogleCalendarEvents.mockResolvedValue({ items: [eventItem({ id: "evt_stable" })], nextSyncToken: "sync_after_retry" });
+    const result = await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    if (result.status !== "success") throw new Error("expected success");
+    expect(result.results[0].status).toBe("success");
+
+    events = await listEventsForCalendar(calendarId, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(events).toHaveLength(1);
+    const calendars = await listCalendarsForCaller((await getOwnAccount({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID }))!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(calendars.find((c) => c.id === calendarId)!.sync_token).toBe("sync_after_retry");
+  });
+});
+
+describe("syncOwnGoogleCalendarEvents — GCAL-05 410 recovery (33, 34, 35, 36, 37, 38, 39, 40)", () => {
+  async function establishSyncToken(): Promise<{ calendarId: string }> {
+    const { calendarId } = await setUpAccountWithSelectedCalendar();
+    mockListGoogleCalendarEvents.mockResolvedValueOnce({ items: [], nextSyncToken: "sync_initial" });
+    await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    mockListGoogleCalendarEvents.mockClear();
+    return { calendarId };
+  }
+
+  it("GCAL05-AL:34. attempts recovery at most once — a second 410 during the recovery resync itself is never retried again", async () => {
+    await establishSyncToken();
+    mockListGoogleCalendarEvents.mockRejectedValue(new GoogleCalendarApiError("Google Calendar API error 410", 410));
+
+    const result = await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    if (result.status !== "success") throw new Error("expected success");
+    // One call for the failed incremental attempt, one for the recovery resync attempt — never more.
+    expect(mockListGoogleCalendarEvents).toHaveBeenCalledTimes(2);
+    expect(result.results[0].mode).toBe("full_resync_after_invalid_token");
+  });
+
+  it("GCAL05-AL:35 & 36. the recovery resync uses the bounded time window (timeMin/timeMax), not a syncToken", async () => {
+    await establishSyncToken();
+    mockListGoogleCalendarEvents.mockRejectedValueOnce(new GoogleCalendarApiError("Google Calendar API error 410", 410)).mockResolvedValueOnce({ items: [], nextSyncToken: "sync_recovered" });
+
+    await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const recoveryCall = mockListGoogleCalendarEvents.mock.calls[1] as [string, string, Record<string, unknown>];
+    expect(recoveryCall[2]).toHaveProperty("timeMin");
+    expect(recoveryCall[2]).toHaveProperty("timeMax");
+    expect(recoveryCall[2].syncToken).toBeUndefined();
+  });
+
+  it("GCAL05-AL:37 & 38. a successful recovery obtains and persists a fresh nextSyncToken, replacing the invalid one", async () => {
+    const { calendarId } = await establishSyncToken();
+    mockListGoogleCalendarEvents.mockRejectedValueOnce(new GoogleCalendarApiError("Google Calendar API error 410", 410)).mockResolvedValueOnce({ items: [], nextSyncToken: "sync_recovered" });
+
+    await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const calendars = await listCalendarsForCaller((await getOwnAccount({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID }))!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const calendar = calendars.find((c) => c.id === calendarId)!;
+    expect(calendar.sync_token).toBe("sync_recovered");
+    expect(calendar.sync_token).not.toBe("sync_initial");
+  });
+
+  it("GCAL05-AL:39. a recovery resync that itself fails does not persist any fresh cursor — the invalid token was already cleared, so the calendar is simply left at null", async () => {
+    const { calendarId } = await establishSyncToken();
+    mockListGoogleCalendarEvents.mockRejectedValueOnce(new GoogleCalendarApiError("Google Calendar API error 410", 410)).mockRejectedValueOnce(new GoogleCalendarApiError("Google Calendar API error 503", 503));
+
+    const result = await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    if (result.status !== "success") throw new Error("expected success");
+    expect(result.results[0].status).toBe("error");
+    expect(result.results[0].mode).toBe("full_resync_after_invalid_token");
+
+    const calendars = await listCalendarsForCaller((await getOwnAccount({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID }))!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(calendars.find((c) => c.id === calendarId)!.sync_token).toBeNull();
+  });
+
+  it("GCAL05-AL:40. a future call after a failed recovery behaves exactly like an ordinary first-time full sync — no stuck state, no infinite 410 loop", async () => {
+    const { calendarId } = await establishSyncToken();
+    mockListGoogleCalendarEvents.mockRejectedValueOnce(new GoogleCalendarApiError("Google Calendar API error 410", 410)).mockRejectedValueOnce(new GoogleCalendarApiError("Google Calendar API error 503", 503));
+    await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID }); // failed recovery, cursor now null
+
+    mockListGoogleCalendarEvents.mockReset();
+    mockListGoogleCalendarEvents.mockResolvedValue({ items: [], nextSyncToken: "sync_final" });
+    const result = await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    if (result.status !== "success") throw new Error("expected success");
+    expect(result.results[0].mode).toBe("full"); // ordinary full mode, not a special recovery state
+    expect(result.results[0].status).toBe("success");
+
+    const call = mockListGoogleCalendarEvents.mock.calls[0] as [string, string, Record<string, unknown>];
+    expect(call[2]).toHaveProperty("timeMin");
+    expect(call[2].syncToken).toBeUndefined();
+    void calendarId;
+  });
+});
+
+describe("syncOwnGoogleCalendarEvents — GCAL-05 per-calendar independence and unselected freeze (28, 29, 31)", () => {
+  it("GCAL05-AL:29. an unselected calendar's own sync_token and events are never touched by a run that syncs a different selected calendar", async () => {
+    await setUpConnectedGoogleCalendarReadonly();
+    const identified = await identifyOwnGoogleCalendarAccount({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    if (identified.status !== "success") throw new Error("expected success");
+    mockListGoogleCalendars.mockResolvedValueOnce({ items: [calendarItem({ id: "primary_cal", primary: true }), calendarItem({ id: "secondary_cal" })] });
+    await listAndPersistOwnGoogleCalendars({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+
+    const account = await getOwnAccount({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    // Give the unselected secondary calendar a sync_token as if it had been synced before being deselected.
+    const beforeCalendars = await listCalendarsForCaller(account!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const secondaryBefore = beforeCalendars.find((c) => c.provider_calendar_id === "secondary_cal")!;
+    expect(secondaryBefore.is_selected).toBe(false);
+
+    mockListGoogleCalendarEvents.mockResolvedValue({ items: [], nextSyncToken: "sync_primary_only" });
+    await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(mockListGoogleCalendarEvents).toHaveBeenCalledTimes(1); // only the selected primary calendar
+
+    const afterCalendars = await listCalendarsForCaller(account!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const secondaryAfter = afterCalendars.find((c) => c.provider_calendar_id === "secondary_cal")!;
+    expect(secondaryAfter.sync_token).toBeNull(); // unchanged — was never null-vs-something before either
+    expect(secondaryAfter.updated_at).toBe(secondaryBefore.updated_at); // row genuinely untouched
+  });
+
+  it("GCAL05-AL:31. two selected calendars each obtain and persist their own independent sync_token from their own response — never swapped", async () => {
+    await setUpConnectedGoogleCalendarReadonly();
+    const identified = await identifyOwnGoogleCalendarAccount({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    if (identified.status !== "success") throw new Error("expected success");
+    mockListGoogleCalendars.mockResolvedValueOnce({ items: [calendarItem({ id: "primary_cal", primary: true }), calendarItem({ id: "secondary_cal" })] });
+    const listed = await listAndPersistOwnGoogleCalendars({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    if (listed.status !== "success") throw new Error("expected success");
+    const account = await getOwnAccount({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    await upsertCalendar({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID, accountId: account!.id, providerCalendarId: "secondary_cal", isSelected: true });
+
+    mockListGoogleCalendarEvents.mockImplementation(async (_token: string, providerCalendarId: string) => {
+      if (providerCalendarId === "primary_cal") return { items: [], nextSyncToken: "sync_primary" };
+      return { items: [], nextSyncToken: "sync_secondary" };
+    });
+
+    const result = await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    if (result.status !== "success") throw new Error("expected success");
+    expect(result.results).toHaveLength(2);
+
+    const calendars = await listCalendarsForCaller(account!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(calendars.find((c) => c.provider_calendar_id === "primary_cal")!.sync_token).toBe("sync_primary");
+    expect(calendars.find((c) => c.provider_calendar_id === "secondary_cal")!.sync_token).toBe("sync_secondary");
+  });
+});
+
+describe("syncOwnGoogleCalendarEvents — GCAL-05 refresh failure preserves cursor (47)", () => {
+  it("GCAL05-AL:47. a token refresh failure never calls events.list and never touches the calendar's own persisted sync_token", async () => {
+    const { credentialId, calendarId } = await (async () => {
+      const { credentialId } = await setUpConnectedGoogleCalendarReadonly();
+      const identified = await identifyOwnGoogleCalendarAccount({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+      if (identified.status !== "success") throw new Error("expected success");
+      mockListGoogleCalendars.mockResolvedValueOnce({ items: [calendarItem({ id: "primary_cal", primary: true })] });
+      const listed = await listAndPersistOwnGoogleCalendars({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+      if (listed.status !== "success") throw new Error("expected success");
+      mockListGoogleCalendarEvents.mockResolvedValueOnce({ items: [], nextSyncToken: "sync_before_refresh_failure" });
+      await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+      return { credentialId, calendarId: listed.calendars[0].id };
+    })();
+
+    await rotateOAuthCredential(credentialId, { accessToken: "real-access-token", expiresAt: new Date(Date.now() + 30 * 1000).toISOString() });
+    vi.mocked(refreshProviderOAuthConnectionAction).mockResolvedValueOnce({ success: false, error: "refresh failed" });
+    mockListGoogleCalendarEvents.mockClear();
+
+    const result = await syncOwnGoogleCalendarEvents({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(result).toEqual({ status: "reconnect_required", reason: "refresh_failed" });
+    expect(mockListGoogleCalendarEvents).not.toHaveBeenCalled();
+
+    const calendars = await listCalendarsForCaller((await getOwnAccount({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID }))!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(calendars.find((c) => c.id === calendarId)!.sync_token).toBe("sync_before_refresh_failure");
   });
 });
 

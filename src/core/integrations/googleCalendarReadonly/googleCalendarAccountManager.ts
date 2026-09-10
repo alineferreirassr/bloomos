@@ -198,6 +198,30 @@ export async function listCalendarsForCaller(accountId: string, caller: GoogleCa
   return listCalendarsForAccount(accountId);
 }
 
+/**
+ * GCAL-05 — the smallest capability needed to read/write a calendar's own
+ * incremental-sync cursor: `GoogleCalendar.sync_token` is already read
+ * through the existing `getCalendarForCaller`/`listCalendarsForCaller`
+ * (no new read path needed), so this is only the write side. Deliberately
+ * a dedicated, minimal function rather than routing cursor updates
+ * through `upsertCalendar` — that function's identity key
+ * (`accountId`/`providerCalendarId`) and its full field set belong to
+ * GCAL-03's own calendar-listing refresh flow; reusing it here would
+ * force the event-sync path to either re-supply every other calendar
+ * field or risk silently overwriting them, for no benefit. Ownership is
+ * enforced the same way as every other write in this file
+ * (`assertCalendarOwnership`, reused, not reimplemented) — no
+ * client-supplied provider calendar id can reach this function at all,
+ * only an already-ownership-checked internal `calendarId`. Pass `null`
+ * to clear an invalid cursor (GCAL-05's own 410 recovery path).
+ */
+export async function updateCalendarSyncToken(calendarId: string, syncToken: string | null, caller: GoogleCalendarCallerScope): Promise<GoogleCalendar> {
+  await assertCalendarOwnership(calendarId, caller);
+  const updated = await updateCalendar(calendarId, { sync_token: syncToken });
+  if (!updated) throw new Error("Could not update this calendar's sync token.");
+  return updated;
+}
+
 /** GCAL-04 — the DB-level FK on `google_calendar_events.calendar_id` can't itself enforce "this calendar belongs to this exact workspace/member" — this is that check, done here instead (mirrors `assertAccountOwnership` above, one level down). */
 async function assertCalendarOwnership(calendarId: string, caller: GoogleCalendarCallerScope): Promise<GoogleCalendar> {
   const calendar = await getCalendarById(calendarId);

@@ -157,4 +157,74 @@ describe("listGoogleCalendarEvents (GCAL-04)", () => {
       expect((error as Error).message.length).toBeLessThan(300);
     }
   });
+
+  it("full mode never sends a syncToken param", async () => {
+    const fetchMock = mockFetchOnce(200, { items: [] });
+    await listGoogleCalendarEvents("real-access-token", "cal_1", { timeMin: "2026-01-01T00:00:00Z", timeMax: "2026-04-01T00:00:00Z", maxResults: 250 });
+    const calledUrl = new URL((fetchMock.mock.calls[0] as [string, unknown])[0] as string);
+    expect(calledUrl.searchParams.has("syncToken")).toBe(false);
+  });
+});
+
+describe("listGoogleCalendarEvents — incremental mode (GCAL-05)", () => {
+  it("GCAL05-AL:8. sends the exact syncToken value", async () => {
+    const fetchMock = mockFetchOnce(200, { items: [] });
+    await listGoogleCalendarEvents("real-access-token", "cal_1", { syncToken: "sync_abc123", maxResults: 250 });
+    const calledUrl = new URL((fetchMock.mock.calls[0] as [string, unknown])[0] as string);
+    expect(calledUrl.searchParams.get("syncToken")).toBe("sync_abc123");
+  });
+
+  it("GCAL05-AL:9. omits timeMin entirely — not sent as an empty string, not sent at all", async () => {
+    const fetchMock = mockFetchOnce(200, { items: [] });
+    await listGoogleCalendarEvents("real-access-token", "cal_1", { syncToken: "sync_abc123", maxResults: 250 });
+    const calledUrl = new URL((fetchMock.mock.calls[0] as [string, unknown])[0] as string);
+    expect(calledUrl.searchParams.has("timeMin")).toBe(false);
+  });
+
+  it("GCAL05-AL:10. omits timeMax entirely", async () => {
+    const fetchMock = mockFetchOnce(200, { items: [] });
+    await listGoogleCalendarEvents("real-access-token", "cal_1", { syncToken: "sync_abc123", maxResults: 250 });
+    const calledUrl = new URL((fetchMock.mock.calls[0] as [string, unknown])[0] as string);
+    expect(calledUrl.searchParams.has("timeMax")).toBe(false);
+  });
+
+  it("GCAL05-AL:11. still sends singleEvents=true", async () => {
+    const fetchMock = mockFetchOnce(200, { items: [] });
+    await listGoogleCalendarEvents("real-access-token", "cal_1", { syncToken: "sync_abc123", maxResults: 250 });
+    const calledUrl = new URL((fetchMock.mock.calls[0] as [string, unknown])[0] as string);
+    expect(calledUrl.searchParams.get("singleEvents")).toBe("true");
+  });
+
+  it("GCAL05-AL:12. still sends showDeleted=true", async () => {
+    const fetchMock = mockFetchOnce(200, { items: [] });
+    await listGoogleCalendarEvents("real-access-token", "cal_1", { syncToken: "sync_abc123", maxResults: 250 });
+    const calledUrl = new URL((fetchMock.mock.calls[0] as [string, unknown])[0] as string);
+    expect(calledUrl.searchParams.get("showDeleted")).toBe("true");
+  });
+
+  it("GCAL05-AL:13. incremental pagination includes pageToken when supplied", async () => {
+    const fetchMock = mockFetchOnce(200, { items: [] });
+    await listGoogleCalendarEvents("real-access-token", "cal_1", { syncToken: "sync_abc123", maxResults: 250, pageToken: "page_2" });
+    const calledUrl = new URL((fetchMock.mock.calls[0] as [string, unknown])[0] as string);
+    expect(calledUrl.searchParams.get("pageToken")).toBe("page_2");
+    expect(calledUrl.searchParams.get("syncToken")).toBe("sync_abc123");
+  });
+
+  it("GCAL05-AL:37. parses nextSyncToken from the final page", async () => {
+    mockFetchOnce(200, { items: [], nextSyncToken: "sync_next_abc" });
+    const page = await listGoogleCalendarEvents("real-access-token", "cal_1", { syncToken: "sync_abc123", maxResults: 250 });
+    expect(page.nextSyncToken).toBe("sync_next_abc");
+  });
+
+  it("does not confuse nextPageToken with nextSyncToken — an intermediate page returns nextPageToken and no nextSyncToken", async () => {
+    mockFetchOnce(200, { items: [], nextPageToken: "page_2" });
+    const page = await listGoogleCalendarEvents("real-access-token", "cal_1", { syncToken: "sync_abc123", maxResults: 250 });
+    expect(page.nextPageToken).toBe("page_2");
+    expect(page.nextSyncToken).toBeUndefined();
+  });
+
+  it("410. throws a GoogleCalendarApiError carrying status 410 (invalid/expired sync token)", async () => {
+    mockFetchOnce(410, { error: { errors: [{ reason: "fullSyncRequired" }] } });
+    await expect(listGoogleCalendarEvents("real-access-token", "cal_1", { syncToken: "stale_sync_token", maxResults: 250 })).rejects.toMatchObject({ status: 410 });
+  });
 });
