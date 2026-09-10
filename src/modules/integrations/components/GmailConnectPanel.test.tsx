@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -14,12 +14,18 @@ vi.mock("@/modules/integrations/manageOAuthConnectionActions", () => ({
   refreshProviderOAuthConnectionAction: vi.fn(),
 }));
 
+vi.mock("@/modules/integrations/gmail/syncGmailMailboxAction", () => ({
+  getOwnGmailMailboxSummaryAction: vi.fn(),
+  syncMyGmailMailboxAction: vi.fn(),
+}));
+
 import {
   beginProviderOAuthConnectionAction,
   disconnectOAuthProviderAction,
   getOwnProviderConnectionAction,
   refreshProviderOAuthConnectionAction,
 } from "@/modules/integrations/manageOAuthConnectionActions";
+import { getOwnGmailMailboxSummaryAction, syncMyGmailMailboxAction } from "@/modules/integrations/gmail/syncGmailMailboxAction";
 import { GmailConnectPanel } from "@/modules/integrations/components/GmailConnectPanel";
 import type { IntegrationConnection } from "@/core/integrations/types";
 
@@ -45,6 +51,10 @@ function connection(overrides: Partial<IntegrationConnection> = {}): Integration
     ...overrides,
   };
 }
+
+beforeEach(() => {
+  vi.mocked(getOwnGmailMailboxSummaryAction).mockResolvedValue({ success: true, data: null });
+});
 
 afterEach(() => {
   mockSearchParams = new URLSearchParams();
@@ -133,5 +143,66 @@ describe("GmailConnectPanel", () => {
     render(<GmailConnectPanel />);
     await waitFor(() => expect(getOwnProviderConnectionAction).toHaveBeenCalled());
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  describe("Sync now (GMAIL-05)", () => {
+    it("shows a Sync now action and 'Never synced yet' when connected but never synced", async () => {
+      vi.mocked(getOwnProviderConnectionAction).mockResolvedValue({ success: true, data: connection({ state: "connected" }) });
+      render(<GmailConnectPanel />);
+      expect(await screen.findByRole("button", { name: "Sync now" })).toBeInTheDocument();
+      expect(screen.getByText("Never synced yet.")).toBeInTheDocument();
+    });
+
+    it("does not show Sync now when not connected", async () => {
+      vi.mocked(getOwnProviderConnectionAction).mockResolvedValue({ success: true, data: null });
+      render(<GmailConnectPanel />);
+      await screen.findByRole("button", { name: "Connect Gmail" });
+      expect(screen.queryByRole("button", { name: "Sync now" })).not.toBeInTheDocument();
+    });
+
+    it("shows the last-synced timestamp from the mailbox summary", async () => {
+      vi.mocked(getOwnProviderConnectionAction).mockResolvedValue({ success: true, data: connection({ state: "connected" }) });
+      vi.mocked(getOwnGmailMailboxSummaryAction).mockResolvedValue({
+        success: true,
+        data: { syncStatus: "synced", lastSyncedAt: "2026-01-01T12:00:00.000Z", lastSuccessfulSyncAt: "2026-01-01T12:00:00.000Z", syncErrorCode: null },
+      });
+      render(<GmailConnectPanel />);
+      expect(await screen.findByText(/Last synced/)).toBeInTheDocument();
+    });
+
+    it("Sync now calls the manual sync action (no client-supplied ids — it takes none) and shows a success message", async () => {
+      vi.mocked(getOwnProviderConnectionAction).mockResolvedValue({ success: true, data: connection({ state: "connected" }) });
+      vi.mocked(syncMyGmailMailboxAction).mockResolvedValue({ success: true, data: { status: "success", threadsProcessed: 3, messagesProcessed: 5, threadsSkipped: 0, messagesSkipped: 0, syncedAt: "2026-01-01T00:00:00Z" } });
+
+      render(<GmailConnectPanel />);
+      await userEvent.click(await screen.findByRole("button", { name: "Sync now" }));
+
+      expect(syncMyGmailMailboxAction).toHaveBeenCalledWith();
+      expect(await screen.findByRole("alert")).toHaveTextContent(/Synced 3 threads/);
+    });
+
+    it("shows a reconnect message, not raw internals, when sync reports reconnect_required", async () => {
+      vi.mocked(getOwnProviderConnectionAction).mockResolvedValue({ success: true, data: connection({ state: "connected" }) });
+      vi.mocked(syncMyGmailMailboxAction).mockResolvedValue({ success: true, data: { status: "reconnect_required", reason: "missing_readonly_scope" } });
+
+      render(<GmailConnectPanel />);
+      await userEvent.click(await screen.findByRole("button", { name: "Sync now" }));
+
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent(/reconnected/i);
+      expect(alert).not.toHaveTextContent(/missing_readonly_scope/);
+    });
+
+    it("never renders a message list, thread list, or message body anywhere in the panel", async () => {
+      vi.mocked(getOwnProviderConnectionAction).mockResolvedValue({ success: true, data: connection({ state: "connected" }) });
+      vi.mocked(syncMyGmailMailboxAction).mockResolvedValue({ success: true, data: { status: "success", threadsProcessed: 2, messagesProcessed: 4, threadsSkipped: 0, messagesSkipped: 0, syncedAt: "2026-01-01T00:00:00Z" } });
+
+      render(<GmailConnectPanel />);
+      await userEvent.click(await screen.findByRole("button", { name: "Sync now" }));
+      await screen.findByRole("alert");
+
+      expect(screen.queryByRole("list")).not.toBeInTheDocument();
+      expect(screen.queryByRole("article")).not.toBeInTheDocument();
+    });
   });
 });

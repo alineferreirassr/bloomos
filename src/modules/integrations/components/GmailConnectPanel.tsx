@@ -11,6 +11,7 @@ import {
   getOwnProviderConnectionAction,
   refreshProviderOAuthConnectionAction,
 } from "@/modules/integrations/manageOAuthConnectionActions";
+import { getOwnGmailMailboxSummaryAction, syncMyGmailMailboxAction, type GmailMailboxSummary } from "@/modules/integrations/gmail/syncGmailMailboxAction";
 import { CONNECTION_STATE_LABELS } from "@/core/integrations/types";
 import type { ConnectionState, IntegrationConnection } from "@/core/integrations/types";
 
@@ -57,30 +58,33 @@ export function GmailConnectPanel() {
   const searchParams = useSearchParams();
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [connection, setConnection] = useState<IntegrationConnection | null>(null);
+  const [mailboxSummary, setMailboxSummary] = useState<GmailMailboxSummary | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "error" | "success"; text: string } | null>(() => initialCallbackMessage(searchParams));
 
   const load = () => {
     setState({ status: "loading" });
-    getOwnProviderConnectionAction("gmail").then((result) => {
-      if (!result.success) {
+    Promise.all([getOwnProviderConnectionAction("gmail"), getOwnGmailMailboxSummaryAction()]).then(([connectionResult, summaryResult]) => {
+      if (!connectionResult.success) {
         setState({ status: "error" });
         return;
       }
-      setConnection(result.data);
+      setConnection(connectionResult.data);
+      setMailboxSummary(summaryResult.success ? summaryResult.data : null);
       setState({ status: "ready" });
     });
   };
 
   useEffect(() => {
     let cancelled = false;
-    getOwnProviderConnectionAction("gmail").then((result) => {
+    Promise.all([getOwnProviderConnectionAction("gmail"), getOwnGmailMailboxSummaryAction()]).then(([connectionResult, summaryResult]) => {
       if (cancelled) return;
-      if (!result.success) {
+      if (!connectionResult.success) {
         setState({ status: "error" });
         return;
       }
-      setConnection(result.data);
+      setConnection(connectionResult.data);
+      setMailboxSummary(summaryResult.success ? summaryResult.data : null);
       setState({ status: "ready" });
     });
     return () => {
@@ -126,6 +130,24 @@ export function GmailConnectPanel() {
       return;
     }
     setMessage({ tone: "success", text: "Gmail's connection was refreshed." });
+    load();
+  };
+
+  const syncNow = async () => {
+    setBusy(true);
+    setMessage(null);
+    const result = await syncMyGmailMailboxAction();
+    setBusy(false);
+    if (!result.success) {
+      setMessage({ tone: "error", text: "Sync failed — try again shortly." });
+      load();
+      return;
+    }
+    if (result.data.status === "reconnect_required") {
+      setMessage({ tone: "error", text: "Gmail needs to be reconnected before syncing can continue." });
+    } else if (result.data.status === "success") {
+      setMessage({ tone: "success", text: `Synced ${result.data.threadsProcessed} thread${result.data.threadsProcessed === 1 ? "" : "s"}.` });
+    }
     load();
   };
 
@@ -185,7 +207,16 @@ export function GmailConnectPanel() {
             Disconnect Gmail
           </Button>
         )}
+        {connection?.state === "connected" ? (
+          <Button variant="secondary" disabled={busy} onClick={syncNow}>
+            {busy ? "Syncing…" : "Sync now"}
+          </Button>
+        ) : null}
       </div>
+
+      {connection?.state === "connected" ? (
+        <p className="mt-3 text-xs text-text-muted">{mailboxSummary?.lastSyncedAt ? `Last synced ${new Date(mailboxSummary.lastSyncedAt).toLocaleString()}` : "Never synced yet."}</p>
+      ) : null}
     </Card>
   );
 }

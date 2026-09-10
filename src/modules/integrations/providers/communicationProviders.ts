@@ -61,9 +61,13 @@ export function registerCommunicationProviders(): void {
     version: 2,
     capabilities: ["communication", "oauth"],
     // v2 Checkpoint 43 — a real GmailProvider (core/integrations/providers/gmail/) now implements
-    // CommunicationProvider.sendEmail against the real Gmail REST API. No OAuth client is configured
-    // in this environment, so the connection remains unverified — see docs/email-integration.md.
-    description: "Send approved Communication Template emails through a connected Gmail account. Real adapter implemented; connection unverified — no OAuth client credentials are configured in this environment.",
+    // CommunicationProvider.sendEmail against the real Gmail REST API. GMAIL-05 adds gmail.readonly
+    // (mailbox sync — see gmailSyncEngine.ts) alongside the original gmail.send; a connection
+    // authorized before GMAIL-05 only holds gmail.send in its own IntegrationCredential.scopes and
+    // must reconnect before sync will run — see gmailSyncEngine.ts's own scope-upgrade check. No
+    // OAuth client is configured in this environment, so the connection remains unverified — see
+    // docs/email-integration.md.
+    description: "Send approved Communication Template emails through a connected Gmail account, and read your own connected mailbox for BloomOS's Gmail sync. Real adapter implemented; connection unverified — no OAuth client credentials are configured in this environment.",
     requiredPermission: "integrations.email",
     requiredApiScopes: ["crm.read"],
     subscribedWebhookEvents: ["proposal.accepted"],
@@ -71,7 +75,7 @@ export function registerCommunicationProviders(): void {
       authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
       tokenEndpoint: "https://oauth2.googleapis.com/token",
       revocationEndpoint: "https://oauth2.googleapis.com/revoke",
-      defaultScopes: ["https://www.googleapis.com/auth/gmail.send"],
+      defaultScopes: ["https://www.googleapis.com/auth/gmail.send", "https://www.googleapis.com/auth/gmail.readonly"],
       supportsPkce: true,
     },
   } satisfies ProviderDefinition);
