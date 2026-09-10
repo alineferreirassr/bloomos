@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 
 vi.mock("@/lib/auth/memberSessionSnapshot", () => ({

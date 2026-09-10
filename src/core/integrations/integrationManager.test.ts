@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 import { resetConnectionStore } from "@/lib/data/core/integrations/connectionStore";
 import { registerProvider, resetProviderRegistry } from "@/core/integrations/providerRegistry";
 import { resetCredentialStore } from "@/lib/data/core/integrations/credentialStore";
@@ -43,11 +44,19 @@ describe("installProvider", () => {
     expect(connection.state).toBe("disconnected");
     expect(connection.capabilities).toEqual(["oauth"]);
     expect(connection.version).toBe(1);
-    expect(listConnections("ws_1")).toHaveLength(1);
+    expect(await listConnections("ws_1")).toHaveLength(1);
   });
 
   it("throws for an unregistered provider", async () => {
     await expect(installProvider({ workspaceId: "ws_1", providerId: "missing", installedBy: "user_1" })).rejects.toThrow(/No provider is registered/);
+  });
+
+  it("GMAIL-02: defaults to member_id null (workspace-owned) when memberId is omitted, and threads it through when supplied", async () => {
+    const workspaceOwned = await installProvider({ workspaceId: "ws_1", providerId: "test-provider", installedBy: "user_1" });
+    expect(workspaceOwned.member_id).toBeNull();
+
+    const memberOwned = await installProvider({ workspaceId: "ws_1", providerId: "test-provider", installedBy: "user_2", memberId: "user_2" });
+    expect(memberOwned.member_id).toBe("user_2");
   });
 });
 
@@ -58,7 +67,7 @@ describe("applyConnectionEvent", () => {
     expect(step1.connection.state).toBe("connecting");
     const step2 = await applyConnectionEvent(connection.id, "connect_succeeded", "user_1");
     expect(step2.connection.state).toBe("connected");
-    expect(getConnectionHistory(connection.id)).toHaveLength(2);
+    expect(await getConnectionHistory(connection.id)).toHaveLength(2);
   });
 
   it("rejects an event the state machine doesn't allow from the current state", async () => {
@@ -82,7 +91,7 @@ describe("applyConnectionEvent", () => {
 describe("listAvailableActions", () => {
   it("returns the exact events the state machine allows from the connection's current state", async () => {
     const connection = await installProvider({ workspaceId: "ws_1", providerId: "test-provider", installedBy: "user_1" });
-    const actions = listAvailableActions(connection.id);
+    const actions = await listAvailableActions(connection.id);
     expect(actions).toContain("connect_requested");
     expect(actions).not.toContain("connect_succeeded");
     expect(actions).not.toContain("disable_requested");
@@ -93,11 +102,11 @@ describe("attachCredential / getConnectionHealth", () => {
   it("computes a health snapshot reflecting the connection's own state and attached credential", async () => {
     const connection = await installProvider({ workspaceId: "ws_1", providerId: "test-provider", installedBy: "user_1" });
     const { credential } = await issueApiKeyCredential({ workspaceId: "ws_1", connectionId: connection.id, scopes: [], createdBy: "user_1" });
-    attachCredential(connection.id, credential.id);
+    await attachCredential(connection.id, credential.id);
     await applyConnectionEvent(connection.id, "connect_requested", "user_1");
     await applyConnectionEvent(connection.id, "connect_succeeded", "user_1");
 
-    const health = getConnectionHealth(connection.id);
+    const health = await getConnectionHealth(connection.id);
     expect(health?.state).toBe("connected");
     expect(health?.connection_id).toBe(connection.id);
   });
@@ -107,10 +116,10 @@ describe("uninstallConnection", () => {
   it("removes the connection and revokes its credential", async () => {
     const connection = await installProvider({ workspaceId: "ws_1", providerId: "test-provider", installedBy: "user_1" });
     const { credential } = await issueApiKeyCredential({ workspaceId: "ws_1", connectionId: connection.id, scopes: [], createdBy: "user_1" });
-    attachCredential(connection.id, credential.id);
+    await attachCredential(connection.id, credential.id);
 
     const removed = await uninstallConnection(connection.id, "user_1");
     expect(removed).toBe(true);
-    expect(getConnection(connection.id)).toBeNull();
+    expect(await getConnection(connection.id)).toBeNull();
   });
 });

@@ -53,7 +53,8 @@ export function registerIntegrationNotificationProviders(): void {
           : null;
       if (!recipient) return { success: false, error: "Recipient could not be resolved." };
 
-      const connection = listConnections(recipient.workspaceId).find((c) => c.provider_id === "gmail" && c.state === "connected");
+      const recipientConnections = await listConnections(recipient.workspaceId);
+      const connection = recipientConnections.find((c) => c.provider_id === "gmail" && c.state === "connected");
       if (!connection?.credential_id) return { success: false, error: "No connected Gmail account for this workspace." };
 
       const accessToken = await resolveAccessToken(connection.credential_id);

@@ -42,6 +42,8 @@ export interface InstallProviderParams {
   providerId: string;
   installedBy: string;
   config?: Record<string, string | number | boolean>;
+  /** GMAIL-02 addendum — null (the default) installs a workspace-owned connection, matching every provider's existing shape. Set only for a member-owned connection (e.g. Gmail). */
+  memberId?: string | null;
 }
 
 export async function installProvider(params: InstallProviderParams): Promise<IntegrationConnection> {
@@ -52,6 +54,7 @@ export async function installProvider(params: InstallProviderParams): Promise<In
   const connection: IntegrationConnection = {
     id: generateConnectionId(),
     workspace_id: params.workspaceId,
+    member_id: params.memberId ?? null,
     provider_id: params.providerId,
     state: "disconnected",
     config: params.config ?? {},
@@ -68,7 +71,7 @@ export async function installProvider(params: InstallProviderParams): Promise<In
     retry_count: 0,
   };
 
-  insertConnection(connection);
+  await insertConnection(connection);
   await recordConnectionAuditEvent(params.workspaceId, params.installedBy, "connection.installed", connection.id, null, { provider_id: params.providerId, state: connection.state });
   return connection;
 }
@@ -83,7 +86,7 @@ const RECOVERY_EVENTS: ConnectionEvent[] = ["connect_succeeded", "refresh_succee
 
 /** The one door every state change goes through — an event the state machine rejects from the connection's current state throws, rather than the caller silently overwriting `state` by hand. */
 export async function applyConnectionEvent(connectionId: string, event: ConnectionEvent, actor: string, note: string | null = null): Promise<ApplyConnectionEventResult> {
-  const connection = getConnectionById(connectionId);
+  const connection = await getConnectionById(connectionId);
   if (!connection) throw new Error(`No connection found for id "${connectionId}".`);
 
   const result = canTransition(connection.state, event);
@@ -95,7 +98,7 @@ export async function applyConnectionEvent(connectionId: string, event: Connecti
   if (RECOVERY_EVENTS.includes(event)) patch.failure_count = 0;
   if (event === "health_check_failed" || event === "health_check_unknown") patch.last_health_check_at = now;
 
-  const updated = updateConnection(connectionId, patch);
+  const updated = await updateConnection(connectionId, patch);
   if (!updated) throw new Error(`Connection "${connectionId}" was removed mid-transition.`);
 
   const transition: ConnectionStateTransition = {
@@ -107,7 +110,7 @@ export async function applyConnectionEvent(connectionId: string, event: Connecti
     occurred_at: now,
     note,
   };
-  insertTransition(transition);
+  await insertTransition(transition);
   await recordConnectionAuditEvent(connection.workspace_id, actor, `connection.${event}`, connectionId, { state: connection.state }, { state: result.nextState });
 
   return { connection: updated, transition };
@@ -115,46 +118,46 @@ export async function applyConnectionEvent(connectionId: string, event: Connecti
 
 /** Revokes the connection's own credential (if any) and removes the installation — never leaves an orphaned, still-valid credential behind, the same discipline `uninstallConnector` (Checkpoint 18) already established. */
 export async function uninstallConnection(connectionId: string, actor: string): Promise<boolean> {
-  const connection = getConnectionById(connectionId);
+  const connection = await getConnectionById(connectionId);
   if (!connection) return false;
-  if (connection.credential_id) revokeCredential(connection.credential_id);
-  const removed = deleteConnection(connectionId);
+  if (connection.credential_id) await revokeCredential(connection.credential_id);
+  const removed = await deleteConnection(connectionId);
   if (removed) await recordConnectionAuditEvent(connection.workspace_id, actor, "connection.uninstalled", connectionId, { state: connection.state }, null);
   return removed;
 }
 
-export function attachCredential(connectionId: string, credentialId: string): IntegrationConnection | null {
+export async function attachCredential(connectionId: string, credentialId: string): Promise<IntegrationConnection | null> {
   return updateConnection(connectionId, { credential_id: credentialId });
 }
 
 /** Merges into a connection's own free-form `config` — e.g. Stripe's `mode` (`sandbox`/`production`), the exact "declared by the provider's own configSchema-equivalent" slot Checkpoint 22 designed for connection-level settings that aren't a credential. */
-export function setConnectionConfig(connectionId: string, config: Record<string, string | number | boolean>): IntegrationConnection | null {
-  const existing = getConnectionById(connectionId);
+export async function setConnectionConfig(connectionId: string, config: Record<string, string | number | boolean>): Promise<IntegrationConnection | null> {
+  const existing = await getConnectionById(connectionId);
   if (!existing) return null;
   return updateConnection(connectionId, { config: { ...existing.config, ...config } });
 }
 
-export function getConnection(connectionId: string): IntegrationConnection | null {
+export async function getConnection(connectionId: string): Promise<IntegrationConnection | null> {
   return getConnectionById(connectionId);
 }
 
-export function listConnections(workspaceId: string): IntegrationConnection[] {
+export async function listConnections(workspaceId: string): Promise<IntegrationConnection[]> {
   return listConnectionsForWorkspace(workspaceId);
 }
 
-export function getConnectionHistory(connectionId: string): ConnectionStateTransition[] {
+export async function getConnectionHistory(connectionId: string): Promise<ConnectionStateTransition[]> {
   return listTransitionsForConnection(connectionId);
 }
 
-export function listAvailableActions(connectionId: string): ConnectionEvent[] {
-  const connection = getConnectionById(connectionId);
+export async function listAvailableActions(connectionId: string): Promise<ConnectionEvent[]> {
+  const connection = await getConnectionById(connectionId);
   if (!connection) return [];
   return listValidEventsFrom(connection.state);
 }
 
-export function getConnectionHealth(connectionId: string): IntegrationHealthSnapshot | null {
-  const connection = getConnectionById(connectionId);
+export async function getConnectionHealth(connectionId: string): Promise<IntegrationHealthSnapshot | null> {
+  const connection = await getConnectionById(connectionId);
   if (!connection) return null;
-  const credential = connection.credential_id ? getCredential(connection.credential_id) : null;
+  const credential = connection.credential_id ? await getCredential(connection.credential_id) : null;
   return computeHealthSnapshot(connection, credential);
 }

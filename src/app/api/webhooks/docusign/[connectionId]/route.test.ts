@@ -1,5 +1,6 @@
 import { createHmac } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 import { POST } from "./route";
 import { installProvider, applyConnectionEvent, attachCredential, setConnectionConfig } from "@/core/integrations/integrationManager";
 import { issueOAuthCredential, issueProviderSecretCredential } from "@/core/integrations/credentialManager";
@@ -12,9 +13,9 @@ async function setUpConnectedDocuSignConnection(): Promise<string> {
   registerBuiltinProviders();
   const connection = await installProvider({ workspaceId: "ws_1", providerId: "docusign", installedBy: "m1" });
   const oauthCredential = await issueOAuthCredential({ workspaceId: "ws_1", connectionId: connection.id, scopes: ["signature"], createdBy: "m1", accessToken: "tok_123" });
-  attachCredential(connection.id, oauthCredential.id);
+  await attachCredential(connection.id, oauthCredential.id);
   const webhookCredential = await issueProviderSecretCredential({ workspaceId: "ws_1", connectionId: connection.id, createdBy: "m1", secret: "connect_secret" });
-  setConnectionConfig(connection.id, { webhook_secret_credential_id: webhookCredential.id });
+  await setConnectionConfig(connection.id, { webhook_secret_credential_id: webhookCredential.id });
   await applyConnectionEvent(connection.id, "connect_requested", "m1");
   await applyConnectionEvent(connection.id, "connect_succeeded", "m1");
   return connection.id;

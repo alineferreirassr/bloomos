@@ -5,6 +5,8 @@ vi.mock("@/lib/auth/memberSessionSnapshot", () => ({
   resolveMemberSessionSnapshot: vi.fn(),
 }));
 
+vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
+
 import {
   markNotificationReadAction,
   markAllNotificationsReadAction,

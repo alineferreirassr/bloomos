@@ -33,7 +33,7 @@ export class StripeConnectionNotReadyError extends Error {
  * credential can't be resolved.
  */
 export async function getStripeClientForConnection(connectionId: string): Promise<Stripe> {
-  const connection = getConnection(connectionId);
+  const connection = await getConnection(connectionId);
   if (!connection) throw new StripeConnectionNotReadyError("No connection found for this Stripe integration.");
   if (connection.state !== "connected") throw new StripeConnectionNotReadyError(`This Stripe connection is "${connection.state}", not connected — real payment operations are blocked until it's reconnected.`);
   if (!connection.credential_id) throw new StripeConnectionNotReadyError("This Stripe connection has no credential attached yet.");
@@ -45,20 +45,21 @@ export async function getStripeClientForConnection(connectionId: string): Promis
 }
 
 /** Reads the `mode` (`sandbox`/`production`) a connection was configured with — stored on `IntegrationConnection.config`, the exact "declared by the provider's own configSchema-equivalent" slot Checkpoint 22 designed for this. */
-export function getStripeConnectionMode(connectionId: string): "sandbox" | "production" | null {
-  const connection = getConnection(connectionId);
+export async function getStripeConnectionMode(connectionId: string): Promise<"sandbox" | "production" | null> {
+  const connection = await getConnection(connectionId);
   const mode = connection?.config.mode;
   return mode === "sandbox" || mode === "production" ? mode : null;
 }
 
 /** A workspace has at most one Stripe connection — every Customer/Product/Checkout/Invoice/Refund operation resolves it this same way, never a hardcoded id. */
-export function getStripeConnectionForWorkspace(workspaceId: string): IntegrationConnection | null {
-  return listConnections(workspaceId).find((connection) => connection.provider_id === "stripe") ?? null;
+export async function getStripeConnectionForWorkspace(workspaceId: string): Promise<IntegrationConnection | null> {
+  const connections = await listConnections(workspaceId);
+  return connections.find((connection) => connection.provider_id === "stripe") ?? null;
 }
 
 /** The one function every real Stripe operation (Customers, Products, Checkout, Invoices, Refunds) uses to get a ready `StripeProvider` — resolves the connection, checks it's actually `connected`, decrypts the credential, and wraps it. Never called with a workspace that has no connected Stripe integration. */
 export async function getStripeProviderForWorkspace(workspaceId: string): Promise<StripeProvider> {
-  const connection = getStripeConnectionForWorkspace(workspaceId);
+  const connection = await getStripeConnectionForWorkspace(workspaceId);
   if (!connection) throw new StripeConnectionNotReadyError("This workspace has no Stripe connection yet.");
   const client = await getStripeClientForConnection(connection.id);
   return withApiCallLogging(workspaceId, new StripeProvider(client));

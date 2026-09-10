@@ -51,13 +51,15 @@ export async function getIntegrationsConsoleData(): Promise<GetIntegrationsConso
   if (!session.permissions.includes("workspace.manage")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
   const providers = listProviders();
-  const rawConnections = listConnections(session.workspace.id);
-  const connections: ConnectionWithHealth[] = rawConnections.map((connection) => ({
-    connection,
-    provider: providers.find((provider) => provider.id === connection.provider_id) ?? null,
-    health: getConnectionHealth(connection.id),
-    availableActions: listAvailableActions(connection.id),
-  }));
+  const rawConnections = await listConnections(session.workspace.id);
+  const connections: ConnectionWithHealth[] = await Promise.all(
+    rawConnections.map(async (connection) => ({
+      connection,
+      provider: providers.find((provider) => provider.id === connection.provider_id) ?? null,
+      health: await getConnectionHealth(connection.id),
+      availableActions: await listAvailableActions(connection.id),
+    })),
+  );
 
   const syncRuns = rawConnections.flatMap((connection) => listSyncRunsForConnection(connection.id));
   const syncConflicts = rawConnections.flatMap((connection) => listConflictsForConnection(connection.id));

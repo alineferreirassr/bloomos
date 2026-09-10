@@ -46,16 +46,22 @@ export async function getIntegrationConnectionDetail(providerId: string): Promis
   if (!session.permissions.includes("integrations.view") && !session.permissions.includes("workspace.manage")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
   const provider = getProvider(providerId) ?? null;
-  const connections = listConnections(session.workspace.id).filter((connection) => connection.provider_id === providerId);
+  const allConnections = await listConnections(session.workspace.id);
+  const connections = allConnections.filter((connection) => connection.provider_id === providerId);
 
-  const rows: IntegrationConnectionDetailRow[] = connections.map((connection) => ({
-    connection,
-    health: getConnectionHealth(connection.id),
-    history: getConnectionHistory(connection.id).slice(0, 10),
-    mappings: listMappingsForConnection(connection.id).slice(0, 20),
-    recentErrors: listErrorRecordsForConnection(connection.id).slice(0, 10),
-    syncRunCount: listSyncRunsForConnection(connection.id).length,
-  }));
+  const rows: IntegrationConnectionDetailRow[] = await Promise.all(
+    connections.map(async (connection) => {
+      const [health, history] = await Promise.all([getConnectionHealth(connection.id), getConnectionHistory(connection.id)]);
+      return {
+        connection,
+        health,
+        history: history.slice(0, 10),
+        mappings: listMappingsForConnection(connection.id).slice(0, 20),
+        recentErrors: listErrorRecordsForConnection(connection.id).slice(0, 10),
+        syncRunCount: listSyncRunsForConnection(connection.id).length,
+      };
+    }),
+  );
 
   return { success: true, data: { provider, connections: rows } };
 }

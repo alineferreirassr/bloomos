@@ -1,5 +1,6 @@
 import { createHmac } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 import { POST } from "./route";
 import { installProvider, applyConnectionEvent, attachCredential } from "@/core/integrations/integrationManager";
 import { issueProviderSecretCredential } from "@/core/integrations/credentialManager";
@@ -19,7 +20,7 @@ async function setUpConnectedTwilioConnection(): Promise<string> {
   registerBuiltinProviders();
   const connection = await installProvider({ workspaceId: "ws_1", providerId: "twilio", installedBy: "m1" });
   const credential = await issueProviderSecretCredential({ workspaceId: "ws_1", connectionId: connection.id, createdBy: "m1", secret: "AC_test:auth_token_123:+15551234567" });
-  attachCredential(connection.id, credential.id);
+  await attachCredential(connection.id, credential.id);
   await applyConnectionEvent(connection.id, "connect_requested", "m1");
   await applyConnectionEvent(connection.id, "connect_succeeded", "m1");
   return connection.id;

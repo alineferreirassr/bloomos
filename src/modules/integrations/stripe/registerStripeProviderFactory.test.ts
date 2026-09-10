@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 import { createProviderInstance, hasProviderImplementation, resetProviderFactoryRegistry } from "@/core/integrations/providerFactory";
 import { registerStripeProviderFactory } from "@/modules/integrations/stripe/registerStripeProviderFactory";
 import { StripeProvider } from "@/core/integrations/providers/stripe/stripeProvider";

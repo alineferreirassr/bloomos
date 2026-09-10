@@ -392,7 +392,8 @@ export async function sendContractForSignatureAction(contractId: string): Promis
   const client = await getClientById(contract.client_id).catch(() => null);
   if (!client?.email) return { success: false, error: "This Client has no email on file to send for signature." };
 
-  const connection = listConnections(session.workspace.id).find((c) => c.provider_id === "docusign" && c.state === "connected");
+  const workspaceConnections = await listConnections(session.workspace.id);
+  const connection = workspaceConnections.find((c) => c.provider_id === "docusign" && c.state === "connected");
   if (!connection?.credential_id) return { success: false, error: "No connected DocuSign account for this workspace." };
 
   const accessToken = await resolveAccessToken(connection.credential_id);

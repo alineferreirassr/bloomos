@@ -24,7 +24,13 @@ function migrationFiles(): string[] {
  * work is confirmed (via `git status`) to be uncommitted and unrelated to
  * the release under test — never to silently excuse an actual miscount.
  */
-const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set(["20260902100000_employee_wellness_privacy.sql"]);
+const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
+  "20260902100000_employee_wellness_privacy.sql",
+  // GMAIL-02 — Secure Integration Connection + Credential Persistence
+  // Foundation. Independently-tracked, not-yet-released, unrelated to the
+  // Finance release this exact-count assertion describes.
+  "20260903100000_integration_connection_credential_persistence.sql",
+]);
 
 function migrationFilesForThisRelease(): string[] {
   return migrationFiles().filter((name) => !KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS.has(name));

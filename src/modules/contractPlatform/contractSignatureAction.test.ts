@@ -84,7 +84,7 @@ const connectedDocuSign = {
 beforeEach(() => {
   resetAllMockData();
   vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session);
-  vi.mocked(listConnections).mockReturnValue([connectedDocuSign] as never);
+  vi.mocked(listConnections).mockResolvedValue([connectedDocuSign] as never);
   vi.mocked(resolveAccessToken).mockResolvedValue("tok_123");
   createSignatureRequestMock.mockResolvedValue({ externalRequestId: "env_1" });
 });
@@ -109,7 +109,7 @@ describe("sendContractForSignatureAction — v2 Checkpoint 44, Step 9", () => {
   });
 
   it("fails honestly (never flips status) when no DocuSign account is connected", async () => {
-    vi.mocked(listConnections).mockReturnValue([]);
+    vi.mocked(listConnections).mockResolvedValue([]);
     const contract = await makeContract();
     const result = await sendContractForSignatureAction(contract.id);
     expect(result.success).toBe(false);

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 import { registerIntegrationNotificationProviders, resetIntegrationNotificationProvidersRegistration } from "@/modules/integrations/notificationDeliveryProviders";
 import { getNotificationProvider, isChannelConfigured } from "@/core/notifications/registry";
 import { installProvider, applyConnectionEvent } from "@/core/integrations/integrationManager";

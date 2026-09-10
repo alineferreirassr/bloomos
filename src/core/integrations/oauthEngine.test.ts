@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 import { resetProviderRegistry, registerProvider } from "@/core/integrations/providerRegistry";
 import { resetCredentialStore } from "@/lib/data/core/integrations/credentialStore";
 import { resetEncryptionProvider } from "@/core/integrations/credentialManager";

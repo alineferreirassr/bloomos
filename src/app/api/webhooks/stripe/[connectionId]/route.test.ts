@@ -44,7 +44,7 @@ afterEach(() => {
 
 describe("POST /api/webhooks/stripe/[connectionId]", () => {
   it("404s for an unknown connection", async () => {
-    vi.mocked(getConnection).mockReturnValueOnce(null);
+    vi.mocked(getConnection).mockResolvedValueOnce(null);
     const response = await POST(makeRequest("{}", "t=1,v1=abc"), { params: Promise.resolve({ connectionId: "conn_missing" }) });
     expect(response.status).toBe(404);
   });

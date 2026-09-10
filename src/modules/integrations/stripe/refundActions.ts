@@ -34,7 +34,7 @@ export async function refundStripePaymentAction(paymentId: string, amountMinor: 
   if (!payment.reference) return { success: false, error: "This payment has no Stripe reference to refund against." };
   if (reason && !STRIPE_REFUND_REASONS.includes(reason)) return { success: false, error: `"${reason}" isn't a reason Stripe accepts.` };
 
-  const connection = getStripeConnectionForWorkspace(session.workspace.id);
+  const connection = await getStripeConnectionForWorkspace(session.workspace.id);
   if (!connection) return { success: false, error: "This workspace has no Stripe connection." };
 
   let refund: Stripe.Refund;

@@ -57,8 +57,9 @@ export async function getIntegrationsDashboardData(): Promise<GetIntegrationsDas
   if (!session.permissions.includes("workspace.manage")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
   const providers = listProviders();
-  const rawConnections = listConnections(session.workspace.id);
-  const healthSnapshots = rawConnections.map((connection) => getConnectionHealth(connection.id)).filter((snapshot): snapshot is NonNullable<typeof snapshot> => snapshot !== null);
+  const rawConnections = await listConnections(session.workspace.id);
+  const healthSnapshotResults = await Promise.all(rawConnections.map((connection) => getConnectionHealth(connection.id)));
+  const healthSnapshots = healthSnapshotResults.filter((snapshot): snapshot is NonNullable<typeof snapshot> => snapshot !== null);
 
   const connections: IntegrationsDashboardConnectionRow[] = rawConnections.map((connection) => {
     const snapshot = healthSnapshots.find((health) => health.connection_id === connection.id) ?? null;
@@ -69,7 +70,8 @@ export async function getIntegrationsDashboardData(): Promise<GetIntegrationsDas
   const unresolvedConflicts = rawConnections.flatMap((connection) => listConflictsForConnection(connection.id)).filter((conflict) => conflict.resolution === "unresolved").length;
   const auditLog = await getIntegrationAuditLog(session.workspace.id);
 
-  const credentialsByConnectionId = new Map(rawConnections.map((connection) => [connection.id, getCredentialForConnection(connection.id)]));
+  const credentialEntries = await Promise.all(rawConnections.map(async (connection) => [connection.id, await getCredentialForConnection(connection.id)] as const));
+  const credentialsByConnectionId = new Map(credentialEntries);
 
   return {
     success: true,

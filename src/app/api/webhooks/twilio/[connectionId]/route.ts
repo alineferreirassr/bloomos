@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request, context: { params: Promise<{ connectionId: string }> }): Promise<NextResponse> {
   const { connectionId } = await context.params;
 
-  const connection = getConnection(connectionId);
+  const connection = await getConnection(connectionId);
   if (!connection || connection.provider_id !== "twilio") {
     return NextResponse.json({ error: "Unknown Twilio connection." }, { status: 404 });
   }

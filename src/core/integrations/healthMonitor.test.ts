@@ -6,6 +6,7 @@ function makeConnection(overrides: Partial<IntegrationConnection> = {}): Integra
   return {
     id: "conn_1",
     workspace_id: "ws_1",
+    member_id: null,
     provider_id: "stripe",
     state: "connected",
     config: {},

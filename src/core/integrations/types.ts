@@ -134,6 +134,8 @@ export type ConnectionEvent = (typeof CONNECTION_EVENTS)[number];
 export interface IntegrationConnection {
   id: string;
   workspace_id: string;
+  /** GMAIL-02 addendum — null for a workspace-owned connection (every provider's shape before this checkpoint: Stripe/Twilio/DocuSign/Gmail-send). Not null for a member-owned connection (a member's own connected Gmail/Google Calendar mailbox) — only that exact member may read or write it, even within the same workspace; no owner/admin exception exists, mirroring `employee_wellness_checkins`. */
+  member_id: string | null;
   provider_id: string;
   state: ConnectionState;
   /** Free-form, declared by the provider's own `configSchema`-equivalent — same "no live validation against a real provider" scope as `ConnectorInstallation.config`. */
@@ -191,6 +193,8 @@ export type CredentialKind = (typeof CREDENTIAL_KINDS)[number];
 export interface IntegrationCredential {
   id: string;
   workspace_id: string;
+  /** GMAIL-02 addendum — mirrors the owning connection's own `member_id` exactly (null = workspace-owned, not null = member-owned). See `IntegrationConnection.member_id`. */
+  member_id: string | null;
   connection_id: string;
   kind: CredentialKind;
   /** `api_key` kind only — mirrors `ApiKey.key_hash`/`key_prefix` exactly. */

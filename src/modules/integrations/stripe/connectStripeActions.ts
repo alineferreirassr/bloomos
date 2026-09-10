@@ -20,12 +20,13 @@ export type StripeMode = "sandbox" | "production";
 export type ManageStripeConnectionResult<T> = { success: true; data: T } | { success: false; error: string };
 
 /** A workspace has at most one Stripe connection — this is the one place every Stripe Server Action finds (or lazily creates, still `disconnected`) it. */
-function getOrInstallStripeConnectionSync(workspaceId: string): IntegrationConnection | null {
-  return listConnections(workspaceId).find((connection) => connection.provider_id === "stripe") ?? null;
+async function findStripeConnection(workspaceId: string): Promise<IntegrationConnection | null> {
+  const connections = await listConnections(workspaceId);
+  return connections.find((connection) => connection.provider_id === "stripe") ?? null;
 }
 
 async function getOrInstallStripeConnection(workspaceId: string, installedBy: string): Promise<IntegrationConnection> {
-  const existing = getOrInstallStripeConnectionSync(workspaceId);
+  const existing = await findStripeConnection(workspaceId);
   if (existing) return existing;
   return installProvider({ workspaceId, providerId: "stripe", installedBy });
 }
@@ -49,7 +50,7 @@ export async function getStripeConnectionAction(): Promise<ManageStripeConnectio
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("workspace.manage")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
-  const connection = getOrInstallStripeConnectionSync(session.workspace.id);
+  const connection = await findStripeConnection(session.workspace.id);
   const mode = connection?.config.mode;
   return { success: true, data: { connection, mode: mode === "sandbox" || mode === "production" ? mode : null } };
 }
@@ -80,7 +81,7 @@ export async function connectStripeAction(secret: string, mode: StripeMode): Pro
   }
 
   const connection = await getOrInstallStripeConnection(session.workspace.id, session.membership.id);
-  setConnectionConfig(connection.id, { mode });
+  await setConnectionConfig(connection.id, { mode });
 
   let withCredential = connection;
   if (connection.credential_id) {
@@ -88,7 +89,7 @@ export async function connectStripeAction(secret: string, mode: StripeMode): Pro
     if (!rotated) return { success: false, error: "Could not update the existing Stripe credential." };
   } else {
     const credential = await issueProviderSecretCredential({ workspaceId: session.workspace.id, connectionId: connection.id, createdBy: session.membership.id, secret: trimmedSecret });
-    const updated = attachCredential(connection.id, credential.id);
+    const updated = await attachCredential(connection.id, credential.id);
     if (!updated) return { success: false, error: "Could not attach the new Stripe credential to this connection." };
     withCredential = updated;
   }
@@ -98,7 +99,7 @@ export async function connectStripeAction(secret: string, mode: StripeMode): Pro
     if (withCredential.state === "disabled") {
       await applyConnectionEvent(connection.id, "enable_requested", session.membership.id);
     }
-    const afterEnable = getConnection(connection.id) ?? withCredential;
+    const afterEnable = (await getConnection(connection.id)) ?? withCredential;
     if (afterEnable.state === "disconnected" || afterEnable.state === "failed") {
       await applyConnectionEvent(connection.id, afterEnable.state === "failed" ? "reconnect_requested" : "connect_requested", session.membership.id);
     }
@@ -115,7 +116,7 @@ export async function testStripeConnectionAction(connectionId: string): Promise<
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("workspace.manage")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
-  const connection = getConnection(connectionId);
+  const connection = await getConnection(connectionId);
   if (!connection || connection.workspace_id !== session.workspace.id || connection.provider_id !== "stripe") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!connection.credential_id) return { success: false, error: "This connection has no credential yet." };
 
@@ -145,7 +146,7 @@ export async function disconnectStripeAction(connectionId: string): Promise<Mana
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("workspace.manage")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
-  const connection = getConnection(connectionId);
+  const connection = await getConnection(connectionId);
   if (!connection || connection.workspace_id !== session.workspace.id || connection.provider_id !== "stripe") return { success: false, error: GENERIC_ACCESS_ERROR };
 
   try {
@@ -162,7 +163,7 @@ export async function reconnectStripeAction(connectionId: string): Promise<Manag
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("workspace.manage")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
-  const connection = getConnection(connectionId);
+  const connection = await getConnection(connectionId);
   if (!connection || connection.workspace_id !== session.workspace.id || connection.provider_id !== "stripe") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!connection.credential_id) return { success: false, error: "This connection has no credential to reconnect with — connect it with a key first." };
 
@@ -175,7 +176,7 @@ export async function reconnectStripeAction(connectionId: string): Promise<Manag
 
   try {
     if (connection.state === "disabled") await applyConnectionEvent(connectionId, "enable_requested", session.membership.id);
-    const afterEnable = getConnection(connectionId) ?? connection;
+    const afterEnable = (await getConnection(connectionId)) ?? connection;
     if (afterEnable.state === "disconnected" || afterEnable.state === "failed") {
       await applyConnectionEvent(connectionId, afterEnable.state === "failed" ? "reconnect_requested" : "connect_requested", session.membership.id);
     }
@@ -202,7 +203,7 @@ export async function setStripeWebhookSecretAction(connectionId: string, webhook
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("workspace.manage")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
-  const connection = getConnection(connectionId);
+  const connection = await getConnection(connectionId);
   if (!connection || connection.workspace_id !== session.workspace.id || connection.provider_id !== "stripe") return { success: false, error: GENERIC_ACCESS_ERROR };
 
   const trimmed = webhookSecret.trim();
@@ -214,7 +215,7 @@ export async function setStripeWebhookSecretAction(connectionId: string, webhook
     if (!rotated) return { success: false, error: "Could not update the existing webhook secret." };
   } else {
     const credential = await issueProviderSecretCredential({ workspaceId: session.workspace.id, connectionId, createdBy: session.membership.id, secret: trimmed });
-    setConnectionConfig(connectionId, { webhook_secret_credential_id: credential.id });
+    await setConnectionConfig(connectionId, { webhook_secret_credential_id: credential.id });
   }
 
   return { success: true, data: { connectionId } };

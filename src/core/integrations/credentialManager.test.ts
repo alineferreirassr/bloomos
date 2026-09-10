@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 import { resetCredentialStore } from "@/lib/data/core/integrations/credentialStore";
 import {
   issueApiKeyCredential,
@@ -47,7 +48,7 @@ describe("issueOAuthCredential", () => {
 
   it("returns null once the credential is revoked", async () => {
     const credential = await issueOAuthCredential({ workspaceId: "ws_1", connectionId: "conn_3", scopes: [], createdBy: "user_1", accessToken: "raw" });
-    revokeCredential(credential.id);
+    await revokeCredential(credential.id);
     await expect(resolveAccessToken(credential.id)).resolves.toBeNull();
   });
 });
@@ -74,7 +75,7 @@ describe("issueProviderSecretCredential", () => {
 
   it("returns null once revoked, and resolveProviderSecret never resolves an oauth_token-kind credential", async () => {
     const providerSecret = await issueProviderSecretCredential({ workspaceId: "ws_1", connectionId: "conn_8", createdBy: "user_1", secret: "sk_test_xyz" });
-    revokeCredential(providerSecret.id);
+    await revokeCredential(providerSecret.id);
     await expect(resolveProviderSecret(providerSecret.id)).resolves.toBeNull();
 
     const oauthCredential = await issueOAuthCredential({ workspaceId: "ws_1", connectionId: "conn_9", scopes: [], createdBy: "user_1", accessToken: "raw" });
@@ -96,8 +97,32 @@ describe("listCredentials / getCredentialForConnection", () => {
   it("scopes listCredentials to the workspace and resolves a credential by connection id", async () => {
     await issueApiKeyCredential({ workspaceId: "ws_1", connectionId: "conn_5", scopes: [], createdBy: "user_1" });
     await issueApiKeyCredential({ workspaceId: "ws_2", connectionId: "conn_6", scopes: [], createdBy: "user_1" });
-    expect(listCredentials("ws_1")).toHaveLength(1);
-    expect(getCredentialForConnection("conn_5")).not.toBeNull();
-    expect(getCredentialForConnection("conn_nonexistent")).toBeNull();
+    expect(await listCredentials("ws_1")).toHaveLength(1);
+    expect(await getCredentialForConnection("conn_5")).not.toBeNull();
+    expect(await getCredentialForConnection("conn_nonexistent")).toBeNull();
+  });
+});
+
+describe("GMAIL-02 — member_id ownership threading", () => {
+  it("defaults every credential kind to member_id: null (workspace-owned), matching every provider's existing shape", async () => {
+    const { credential: apiKey } = await issueApiKeyCredential({ workspaceId: "ws_1", connectionId: "conn_20", scopes: [], createdBy: "user_1" });
+    const oauth = await issueOAuthCredential({ workspaceId: "ws_1", connectionId: "conn_21", scopes: [], createdBy: "user_1", accessToken: "tok" });
+    const providerSecret = await issueProviderSecretCredential({ workspaceId: "ws_1", connectionId: "conn_22", createdBy: "user_1", secret: "sk_test_x" });
+    expect(apiKey.member_id).toBeNull();
+    expect(oauth.member_id).toBeNull();
+    expect(providerSecret.member_id).toBeNull();
+  });
+
+  it("issues a member-owned oauth_token credential when memberId is supplied — the shape a Gmail connection needs", async () => {
+    const credential = await issueOAuthCredential({
+      workspaceId: "ws_1",
+      connectionId: "conn_23",
+      scopes: ["gmail.readonly"],
+      createdBy: "user_1",
+      accessToken: "gmail_tok",
+      memberId: "user_2",
+    });
+    expect(credential.member_id).toBe("user_2");
+    expect(credential.workspace_id).toBe("ws_1");
   });
 });

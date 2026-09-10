@@ -24,8 +24,9 @@ function isOAuthProviderId(providerId: string): providerId is OAuthProviderId {
   return (OAUTH_PROVIDER_IDS as readonly string[]).includes(providerId);
 }
 
-function getOrInstallConnectionSync(workspaceId: string, providerId: string): IntegrationConnection | null {
-  return listConnections(workspaceId).find((connection) => connection.provider_id === providerId) ?? null;
+async function findExistingConnection(workspaceId: string, providerId: string): Promise<IntegrationConnection | null> {
+  const connections = await listConnections(workspaceId);
+  return connections.find((connection) => connection.provider_id === providerId) ?? null;
 }
 
 /**
@@ -47,7 +48,7 @@ export async function beginProviderOAuthConnectionAction(providerId: string, red
   const provider = getProvider(providerId);
   if (!provider?.oauth) return { success: false, error: "This provider has no OAuth configuration registered." };
 
-  const connection = getOrInstallConnectionSync(session.workspace.id, providerId) ?? (await installProvider({ workspaceId: session.workspace.id, providerId, installedBy: session.membership.id }));
+  const connection = (await findExistingConnection(session.workspace.id, providerId)) ?? (await installProvider({ workspaceId: session.workspace.id, providerId, installedBy: session.membership.id }));
 
   const result = await beginAuthorization({ workspaceId: session.workspace.id, connectionId: connection.id, providerId, redirectUri });
   return { success: true, data: { authorizationUrl: result.authorizationUrl, state: result.state } };
@@ -89,7 +90,7 @@ export async function completeProviderOAuthConnectionAction(providerId: string, 
       scopes: provider.oauth.defaultScopes,
     });
     pending = completion.connectionId;
-    const withCredential = attachCredential(pending, completion.credential.id);
+    const withCredential = await attachCredential(pending, completion.credential.id);
     if (!withCredential) return { success: false, error: "Could not attach the new credential to this connection." };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "This authorization request has expired or was already used." };
@@ -112,7 +113,7 @@ export async function disconnectOAuthProviderAction(connectionId: string): Promi
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("integrations.disconnect")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
-  const connection = getConnection(connectionId);
+  const connection = await getConnection(connectionId);
   if (!connection || connection.workspace_id !== session.workspace.id) return { success: false, error: GENERIC_ACCESS_ERROR };
 
   if (connection.credential_id) await revokeCredential(connection.credential_id);
@@ -129,10 +130,10 @@ export async function setProviderConnectionConfigAction(connectionId: string, co
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("integrations.manage")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
-  const connection = getConnection(connectionId);
+  const connection = await getConnection(connectionId);
   if (!connection || connection.workspace_id !== session.workspace.id) return { success: false, error: GENERIC_ACCESS_ERROR };
 
-  const updated = setConnectionConfig(connectionId, config);
+  const updated = await setConnectionConfig(connectionId, config);
   if (!updated) return { success: false, error: "Could not update this connection's configuration." };
   return { success: true, data: updated };
 }
@@ -142,7 +143,7 @@ export async function resolveConnectionAccessTokenForServer(connectionId: string
   const session = await resolveMemberSessionSnapshot();
   if (session.kind !== "active" || !session.permissions.includes("integrations.sensitive")) return null;
 
-  const connection = getConnection(connectionId);
+  const connection = await getConnection(connectionId);
   if (!connection || connection.workspace_id !== session.workspace.id || !connection.credential_id) return null;
 
   return resolveAccessToken(connection.credential_id);

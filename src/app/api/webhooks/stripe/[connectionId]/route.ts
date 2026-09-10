@@ -35,7 +35,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request, context: { params: Promise<{ connectionId: string }> }): Promise<NextResponse> {
   const { connectionId } = await context.params;
 
-  const connection = getConnection(connectionId);
+  const connection = await getConnection(connectionId);
   if (!connection || connection.provider_id !== "stripe") {
     return NextResponse.json({ error: "Unknown Stripe connection." }, { status: 404 });
   }

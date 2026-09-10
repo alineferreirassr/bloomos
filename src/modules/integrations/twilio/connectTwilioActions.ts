@@ -16,8 +16,9 @@ registerCheckpoint43ProviderFactories();
 
 export type ManageTwilioConnectionResult<T> = { success: true; data: T } | { success: false; error: string };
 
-function getOrInstallTwilioConnectionSync(workspaceId: string): IntegrationConnection | null {
-  return listConnections(workspaceId).find((connection) => connection.provider_id === "twilio") ?? null;
+async function findTwilioConnection(workspaceId: string): Promise<IntegrationConnection | null> {
+  const connections = await listConnections(workspaceId);
+  return connections.find((connection) => connection.provider_id === "twilio") ?? null;
 }
 
 /**
@@ -44,7 +45,7 @@ export async function connectTwilioAction(accountSid: string, authToken: string,
     return { success: false, error: `Twilio rejected these credentials: ${testResult.error ?? "unknown error"}.` };
   }
 
-  const connection = getOrInstallTwilioConnectionSync(session.workspace.id) ?? (await installProvider({ workspaceId: session.workspace.id, providerId: "twilio", installedBy: session.membership.id }));
+  const connection = (await findTwilioConnection(session.workspace.id)) ?? (await installProvider({ workspaceId: session.workspace.id, providerId: "twilio", installedBy: session.membership.id }));
   const packedSecret = `${trimmedSid}:${trimmedToken}:${trimmedFrom}`;
 
   let withCredential = connection;
@@ -53,14 +54,14 @@ export async function connectTwilioAction(accountSid: string, authToken: string,
     if (!rotated) return { success: false, error: "Could not update the existing Twilio credential." };
   } else {
     const credential = await issueProviderSecretCredential({ workspaceId: session.workspace.id, connectionId: connection.id, createdBy: session.membership.id, secret: packedSecret });
-    const updated = attachCredential(connection.id, credential.id);
+    const updated = await attachCredential(connection.id, credential.id);
     if (!updated) return { success: false, error: "Could not attach the new Twilio credential to this connection." };
     withCredential = updated;
   }
 
   try {
     if (withCredential.state === "disabled") await applyConnectionEvent(connection.id, "enable_requested", session.membership.id);
-    const afterEnable = getConnection(connection.id) ?? withCredential;
+    const afterEnable = (await getConnection(connection.id)) ?? withCredential;
     if (afterEnable.state === "disconnected" || afterEnable.state === "failed") {
       await applyConnectionEvent(connection.id, afterEnable.state === "failed" ? "reconnect_requested" : "connect_requested", session.membership.id);
     }
@@ -76,7 +77,7 @@ export async function testTwilioConnectionAction(connectionId: string): Promise<
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("integrations.connect")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
-  const connection = getConnection(connectionId);
+  const connection = await getConnection(connectionId);
   if (!connection || connection.workspace_id !== session.workspace.id || connection.provider_id !== "twilio") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!connection.credential_id) return { success: false, error: "This connection has no credential yet." };
 
@@ -100,7 +101,7 @@ export async function disconnectTwilioAction(connectionId: string): Promise<Mana
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("integrations.disconnect")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
-  const connection = getConnection(connectionId);
+  const connection = await getConnection(connectionId);
   if (!connection || connection.workspace_id !== session.workspace.id || connection.provider_id !== "twilio") return { success: false, error: GENERIC_ACCESS_ERROR };
 
   try {

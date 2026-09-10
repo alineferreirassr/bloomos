@@ -23,7 +23,7 @@ export async function setDocuSignWebhookSecretAction(connectionId: string, webho
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("integrations.signatures")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
-  const connection = getConnection(connectionId);
+  const connection = await getConnection(connectionId);
   if (!connection || connection.workspace_id !== session.workspace.id || connection.provider_id !== "docusign") return { success: false, error: GENERIC_ACCESS_ERROR };
 
   const trimmed = webhookSecret.trim();
@@ -35,7 +35,7 @@ export async function setDocuSignWebhookSecretAction(connectionId: string, webho
     if (!rotated) return { success: false, error: "Could not update the existing webhook secret." };
   } else {
     const credential = await issueProviderSecretCredential({ workspaceId: session.workspace.id, connectionId, createdBy: session.membership.id, secret: trimmed });
-    setConnectionConfig(connectionId, { webhook_secret_credential_id: credential.id });
+    await setConnectionConfig(connectionId, { webhook_secret_credential_id: credential.id });
   }
 
   return { success: true, data: { connectionId } };

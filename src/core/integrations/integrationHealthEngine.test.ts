@@ -8,6 +8,7 @@ function makeConnection(overrides: Partial<IntegrationConnection> = {}): Integra
   return {
     id: "conn_1",
     workspace_id: "ws_1",
+    member_id: null,
     provider_id: "stripe",
     state: "connected",
     config: {},
@@ -55,6 +56,7 @@ describe("computeIntegrationsHealth", () => {
     const credential: IntegrationCredential = {
       id: "cred_1",
       workspace_id: "ws_1",
+      member_id: null,
       connection_id: "conn_1",
       kind: "oauth_token",
       key_hash: null,

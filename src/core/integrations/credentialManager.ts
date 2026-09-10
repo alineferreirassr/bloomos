@@ -1,5 +1,7 @@
 import { generateApiKeySecret, hashApiKeySecret, displayPrefix } from "@/lib/api/apiKeyToken";
 import { nowIso } from "@/lib/data/utils";
+import { getDataMode } from "@/lib/data/provider";
+import { SupabaseVaultEncryptionProvider } from "@/core/integrations/vaultEncryptionProvider";
 import {
   generateCredentialId,
   getCredentialByConnectionId,
@@ -53,7 +55,20 @@ export class InMemoryEncryptionProvider implements EncryptionProvider {
   }
 }
 
-let encryptionProvider: EncryptionProvider = new InMemoryEncryptionProvider();
+/**
+ * GMAIL-02 — mock mode keeps the exact `InMemoryEncryptionProvider` this
+ * file has always defaulted to (zero behavior change for every existing
+ * mock-mode test). Supabase mode defaults to the real, Vault-backed
+ * provider instead — production must never silently fall back to the
+ * non-encrypting in-memory implementation. `setEncryptionProvider`/
+ * `resetEncryptionProvider` remain the same test/future-checkpoint seam
+ * either way.
+ */
+function defaultEncryptionProvider(): EncryptionProvider {
+  return getDataMode() === "supabase" ? new SupabaseVaultEncryptionProvider() : new InMemoryEncryptionProvider();
+}
+
+let encryptionProvider: EncryptionProvider = defaultEncryptionProvider();
 
 /** Test/future-checkpoint seam — swap in a real provider without touching any caller. */
 export function setEncryptionProvider(provider: EncryptionProvider): void {
@@ -61,7 +76,7 @@ export function setEncryptionProvider(provider: EncryptionProvider): void {
 }
 
 export function resetEncryptionProvider(): void {
-  encryptionProvider = new InMemoryEncryptionProvider();
+  encryptionProvider = defaultEncryptionProvider();
 }
 
 export interface IssueApiKeyCredentialParams {
@@ -69,6 +84,8 @@ export interface IssueApiKeyCredentialParams {
   connectionId: string;
   scopes: string[];
   createdBy: string;
+  /** GMAIL-02 addendum — null (the default) issues a workspace-owned credential, matching every provider's existing shape. Set only for a member-owned connection (e.g. Gmail). */
+  memberId?: string | null;
 }
 
 export interface IssuedApiKeyCredential {
@@ -77,10 +94,11 @@ export interface IssuedApiKeyCredential {
   secret: string;
 }
 
-function baseCredential(kind: CredentialKind, params: { workspaceId: string; connectionId: string; scopes: string[]; createdBy: string }): Omit<IntegrationCredential, "id" | "key_hash" | "key_prefix" | "access_token_ref" | "refresh_token_ref"> {
+function baseCredential(kind: CredentialKind, params: { workspaceId: string; connectionId: string; scopes: string[]; createdBy: string; memberId?: string | null }): Omit<IntegrationCredential, "id" | "key_hash" | "key_prefix" | "access_token_ref" | "refresh_token_ref"> {
   const now = nowIso();
   return {
     workspace_id: params.workspaceId,
+    member_id: params.memberId ?? null,
     connection_id: params.connectionId,
     kind,
     scopes: params.scopes,
@@ -103,7 +121,7 @@ export async function issueApiKeyCredential(params: IssueApiKeyCredentialParams)
     access_token_ref: null,
     refresh_token_ref: null,
   };
-  return { credential: insertCredential(credential), secret };
+  return { credential: await insertCredential(credential), secret };
 }
 
 export interface IssueOAuthCredentialParams {
@@ -114,6 +132,8 @@ export interface IssueOAuthCredentialParams {
   accessToken: string;
   refreshToken?: string | null;
   expiresAt?: string | null;
+  /** GMAIL-02 addendum — see `IssueApiKeyCredentialParams.memberId`. */
+  memberId?: string | null;
 }
 
 /** Never called with a real third-party token this checkpoint — the OAuth Engine's own "no real handshake" scope means every caller today only exercises this with a synthetic/test value. */
@@ -134,7 +154,7 @@ export async function issueOAuthCredential(params: IssueOAuthCredentialParams): 
 
 /** Resolves the real access token for an `oauth_token`-kind credential. Never used for `api_key`-kind credentials — those are only ever verified by hash (`verifyApiKeySecret`), never read back. */
 export async function resolveAccessToken(credentialId: string): Promise<string | null> {
-  const credential = getCredentialById(credentialId);
+  const credential = await getCredentialById(credentialId);
   if (!credential || credential.kind !== "oauth_token" || !credential.access_token_ref || credential.revoked_at) return null;
   return encryptionProvider.decrypt(credential.access_token_ref);
 }
@@ -145,6 +165,8 @@ export interface IssueProviderSecretCredentialParams {
   createdBy: string;
   /** The real secret the workspace pasted in (e.g. a Stripe `sk_test_...`/`sk_live_...` key) — encrypted immediately via `EncryptionProvider`, never persisted in plaintext. */
   secret: string;
+  /** GMAIL-02 addendum — see `IssueApiKeyCredentialParams.memberId`. */
+  memberId?: string | null;
 }
 
 /** v2 Checkpoint 23 — issues a `provider_secret`-kind credential for a static, workspace-supplied third-party secret. Reuses the exact same `EncryptionProvider` storage `issueOAuthCredential` already established — never a new plaintext column. */
@@ -152,7 +174,7 @@ export async function issueProviderSecretCredential(params: IssueProviderSecretC
   const accessTokenRef = await encryptionProvider.encrypt(params.secret);
   const credential: IntegrationCredential = {
     id: generateCredentialId(),
-    ...baseCredential("provider_secret", { workspaceId: params.workspaceId, connectionId: params.connectionId, scopes: [], createdBy: params.createdBy }),
+    ...baseCredential("provider_secret", { workspaceId: params.workspaceId, connectionId: params.connectionId, scopes: [], createdBy: params.createdBy, memberId: params.memberId }),
     key_hash: null,
     key_prefix: null,
     access_token_ref: accessTokenRef,
@@ -163,14 +185,14 @@ export async function issueProviderSecretCredential(params: IssueProviderSecretC
 
 /** Resolves the real secret for a `provider_secret`-kind credential — the one place a real outbound call to a real provider's API is allowed to read the actual value. Never logged, never returned to the client. */
 export async function resolveProviderSecret(credentialId: string): Promise<string | null> {
-  const credential = getCredentialById(credentialId);
+  const credential = await getCredentialById(credentialId);
   if (!credential || credential.kind !== "provider_secret" || !credential.access_token_ref || credential.revoked_at) return null;
   return encryptionProvider.decrypt(credential.access_token_ref);
 }
 
 /** Hashes the presented secret and compares against the stored hash — the same "never compare/store plaintext" discipline `apiKeyToken.ts`'s own callers already use for the Public API. */
 export async function verifyApiKeySecret(connectionId: string, presentedSecret: string): Promise<boolean> {
-  const credential = getCredentialByConnectionId(connectionId);
+  const credential = await getCredentialByConnectionId(connectionId);
   if (!credential || credential.kind !== "api_key" || !credential.key_hash || credential.revoked_at) return false;
   const presentedHash = await hashApiKeySecret(presentedSecret);
   return presentedHash === credential.key_hash;
@@ -178,10 +200,10 @@ export async function verifyApiKeySecret(connectionId: string, presentedSecret: 
 
 /** Issues a brand-new secret/token and marks the old one rotated — the same "old value stops verifying immediately, history isn't lost" precedent `rotateWebhookEndpointSecret` already established. */
 export async function rotateApiKeyCredential(credentialId: string): Promise<IssuedApiKeyCredential | null> {
-  const existing = getCredentialById(credentialId);
+  const existing = await getCredentialById(credentialId);
   if (!existing || existing.kind !== "api_key") return null;
   const secret = generateApiKeySecret();
-  const updated = updateCredential(credentialId, {
+  const updated = await updateCredential(credentialId, {
     key_hash: await hashApiKeySecret(secret),
     key_prefix: displayPrefix(secret),
     rotated_at: nowIso(),
@@ -192,24 +214,24 @@ export async function rotateApiKeyCredential(credentialId: string): Promise<Issu
 
 /** Replaces a `provider_secret`-kind credential's own encrypted value in place — e.g. a workspace rotating a leaked Stripe key or swapping sandbox for a production key. Same id, so anything already pointing at `credential_id` (the `IntegrationConnection`) keeps working. */
 export async function rotateProviderSecretCredential(credentialId: string, newSecret: string): Promise<IntegrationCredential | null> {
-  const existing = getCredentialById(credentialId);
+  const existing = await getCredentialById(credentialId);
   if (!existing || existing.kind !== "provider_secret") return null;
   const accessTokenRef = await encryptionProvider.encrypt(newSecret);
   return updateCredential(credentialId, { access_token_ref: accessTokenRef, rotated_at: nowIso() });
 }
 
-export function revokeCredential(credentialId: string): IntegrationCredential | null {
+export async function revokeCredential(credentialId: string): Promise<IntegrationCredential | null> {
   return updateCredential(credentialId, { revoked_at: nowIso() });
 }
 
-export function getCredential(credentialId: string): IntegrationCredential | null {
+export async function getCredential(credentialId: string): Promise<IntegrationCredential | null> {
   return getCredentialById(credentialId);
 }
 
-export function getCredentialForConnection(connectionId: string): IntegrationCredential | null {
+export async function getCredentialForConnection(connectionId: string): Promise<IntegrationCredential | null> {
   return getCredentialByConnectionId(connectionId);
 }
 
-export function listCredentials(workspaceId: string): IntegrationCredential[] {
+export async function listCredentials(workspaceId: string): Promise<IntegrationCredential[]> {
   return listCredentialsForWorkspace(workspaceId);
 }

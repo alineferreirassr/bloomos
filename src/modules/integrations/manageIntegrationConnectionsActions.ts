@@ -23,8 +23,8 @@ export async function installProviderAction(providerId: string): Promise<ManageI
   }
 }
 
-function assertOwnedByWorkspace(connectionId: string, workspaceId: string): { ok: true } | { ok: false; error: string } {
-  const connection = getConnection(connectionId);
+async function assertOwnedByWorkspace(connectionId: string, workspaceId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const connection = await getConnection(connectionId);
   if (!connection || connection.workspace_id !== workspaceId) return { ok: false, error: GENERIC_ACCESS_ERROR };
   return { ok: true };
 }
@@ -35,7 +35,7 @@ export async function applyConnectionEventAction(connectionId: string, event: Co
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("workspace.manage")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
-  const ownership = assertOwnedByWorkspace(connectionId, session.workspace.id);
+  const ownership = await assertOwnedByWorkspace(connectionId, session.workspace.id);
   if (!ownership.ok) return { success: false, error: ownership.error };
 
   try {
@@ -51,7 +51,7 @@ export async function uninstallConnectionAction(connectionId: string): Promise<M
   if (session.kind !== "active") return { success: false, error: GENERIC_ACCESS_ERROR };
   if (!session.permissions.includes("workspace.manage")) return { success: false, error: GENERIC_ACCESS_ERROR };
 
-  const ownership = assertOwnedByWorkspace(connectionId, session.workspace.id);
+  const ownership = await assertOwnedByWorkspace(connectionId, session.workspace.id);
   if (!ownership.ok) return { success: false, error: ownership.error };
 
   const removed = await uninstallConnection(connectionId, session.membership.id);

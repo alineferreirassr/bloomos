@@ -2467,9 +2467,35 @@ export interface Database {
         Update: { id?: string; workspace_id?: string; event_service_id?: string; question_id?: string; response_text?: string | null; response_options?: string[] | null; response_boolean?: boolean | null; response_date?: string | null; created_at?: string; updated_at?: string };
         Relationships: [];
       };
+      integration_connections: {
+        Row: { id: string; workspace_id: string; member_id: string | null; provider_id: string; state: string; config: Record<string, string | number | boolean>; credential_id: string | null; capabilities: string[]; version: number; installed_by: string; created_at: string; updated_at: string; last_state_change_at: string; last_health_check_at: string | null; last_sync_at: string | null; failure_count: number; retry_count: number };
+        Insert: { id?: string; workspace_id: string; member_id?: string | null; provider_id: string; state?: string; config?: Record<string, string | number | boolean>; credential_id?: string | null; capabilities?: string[]; version?: number; installed_by: string; created_at?: string; updated_at?: string; last_state_change_at?: string; last_health_check_at?: string | null; last_sync_at?: string | null; failure_count?: number; retry_count?: number };
+        Update: { id?: string; workspace_id?: string; member_id?: string | null; provider_id?: string; state?: string; config?: Record<string, string | number | boolean>; credential_id?: string | null; capabilities?: string[]; version?: number; installed_by?: string; created_at?: string; updated_at?: string; last_state_change_at?: string; last_health_check_at?: string | null; last_sync_at?: string | null; failure_count?: number; retry_count?: number };
+        Relationships: [];
+      };
+      integration_connection_transitions: {
+        Row: { id: string; connection_id: string; from_state: string; to_state: string; event: string; occurred_at: string; note: string | null };
+        Insert: { id?: string; connection_id: string; from_state: string; to_state: string; event: string; occurred_at?: string; note?: string | null };
+        Update: { id?: string; connection_id?: string; from_state?: string; to_state?: string; event?: string; occurred_at?: string; note?: string | null };
+        Relationships: [];
+      };
+      integration_credentials: {
+        Row: { id: string; workspace_id: string; member_id: string | null; connection_id: string; kind: string; scopes: string[]; expires_at: string | null; rotated_at: string | null; revoked_at: string | null; key_hash: string | null; key_prefix: string | null; access_token_ref: string | null; refresh_token_ref: string | null; created_by: string; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; member_id?: string | null; connection_id: string; kind: string; scopes?: string[]; expires_at?: string | null; rotated_at?: string | null; revoked_at?: string | null; key_hash?: string | null; key_prefix?: string | null; access_token_ref?: string | null; refresh_token_ref?: string | null; created_by: string; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; member_id?: string | null; connection_id?: string; kind?: string; scopes?: string[]; expires_at?: string | null; rotated_at?: string | null; revoked_at?: string | null; key_hash?: string | null; key_prefix?: string | null; access_token_ref?: string | null; refresh_token_ref?: string | null; created_by?: string; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
+      store_integration_secret: {
+        Args: { p_plaintext: string; p_name?: string | null };
+        Returns: string;
+      };
+      read_integration_secret: {
+        Args: { p_secret_id: string };
+        Returns: string | null;
+      };
       is_workspace_member: {
         Args: { workspace_uuid: string };
         Returns: boolean;
