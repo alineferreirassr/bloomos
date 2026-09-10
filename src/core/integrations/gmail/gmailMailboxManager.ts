@@ -286,22 +286,35 @@ export interface ReconcileThreadMetadataParams {
 }
 
 /**
- * GMAIL-08 — recomputes a thread's own `message_count`/`unread_count`/
- * `latest_message_at` directly from its canonical local active (not
- * tombstoned) message set. Deliberately a local recomputation, never a
- * live Gmail refetch: a `messagesDeleted` history event already means
- * Gmail confirmed the message is gone, so re-fetching the thread to
- * derive this would spend an API call `markMessageDeleted`'s own doc
- * comment (GMAIL-06K) already decided tombstoning shouldn't need.
+ * GMAIL-08/GMAIL-09 — recomputes a thread's own `message_count`/
+ * `unread_count`/`latest_message_at`/`snippet` directly from its
+ * canonical local active (not tombstoned) message set. Deliberately a
+ * local recomputation, never a live Gmail refetch: a `messagesDeleted`
+ * history event already means Gmail confirmed the message is gone, so
+ * re-fetching the thread to derive this would spend an API call
+ * `markMessageDeleted`'s own doc comment (GMAIL-06K) already decided
+ * tombstoning shouldn't need.
  *
- * Always recomputes from scratch (never `count - 1`/`count + 1`), so
- * this is idempotent by construction — replaying the same tombstone
- * and reconciling twice is exactly as safe as reconciling once. A
- * thread whose only messages are all tombstoned is never hard-deleted:
- * it keeps existing with `message_count`/`unread_count` at `0` and
- * `latest_message_at` at `null` (the column is nullable — see the
- * GMAIL-04 migration's own schema — so this is a truthful empty state,
- * not a fabricated sentinel).
+ * `snippet` (GMAIL-09) is sourced from the same canonical "latest
+ * active message" this function already derives `latest_message_at`
+ * from — not from array order (`listMessagesForThread`'s two backends
+ * disagree on where a null `internal_date` sorts, so "last item" isn't
+ * a safe proxy for "latest"), and not from a live Gmail refetch, since
+ * a tombstoned message's own preview text must never resurface as a
+ * thread's active preview. `subject` is left untouched — GMAIL-08
+ * concluded it's real thread-level Gmail metadata (identical across a
+ * thread's messages in practice), not a snippet-like single-message
+ * fact, and no new evidence here changes that.
+ *
+ * Always recomputes from scratch (never `count - 1`/`count + 1`, never
+ * string-patches the prior snippet), so this is idempotent by
+ * construction — replaying the same tombstone and reconciling twice is
+ * exactly as safe as reconciling once. A thread whose only messages
+ * are all tombstoned is never hard-deleted: it keeps existing with
+ * `message_count`/`unread_count` at `0` and `latest_message_at`/
+ * `snippet` at `null` (both columns are nullable — see the GMAIL-04
+ * migration's own schema — so this is a truthful empty state, never a
+ * fabricated sentinel like `"(deleted)"`).
  *
  * Ownership is enforced the same way every other write in this file
  * is: `assertThreadOwnership` throws for a thread that doesn't exist,
@@ -318,16 +331,17 @@ export async function reconcileThreadMetadata(params: ReconcileThreadMetadataPar
 
   const messageCount = activeMessages.length;
   const unreadCount = activeMessages.filter((message) => !message.is_read).length;
-  const latestMessageAt = activeMessages.reduce<string | null>((latest, message) => {
+  const latestActiveMessage = activeMessages.reduce<GmailMessage | null>((latest, message) => {
     if (!message.internal_date) return latest;
-    if (!latest || message.internal_date > latest) return message.internal_date;
+    if (!latest || !latest.internal_date || message.internal_date > latest.internal_date) return message;
     return latest;
   }, null);
 
   const updated = await updateThread(thread.id, {
     message_count: messageCount,
     unread_count: unreadCount,
-    latest_message_at: latestMessageAt,
+    latest_message_at: latestActiveMessage?.internal_date ?? null,
+    snippet: latestActiveMessage?.snippet ?? null,
   });
   if (!updated) throw new Error("Could not reconcile this thread's metadata.");
   return updated;

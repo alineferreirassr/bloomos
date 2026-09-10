@@ -945,3 +945,144 @@ describe("syncGmailMailbox — GMAIL-08 thread metadata reconciliation after tom
     expect(reconciledThread.unread_count).toBe(0);
   });
 });
+
+describe("syncGmailMailbox — GMAIL-09 thread snippet reconciliation after tombstones", () => {
+  /** Two persisted messages with distinct, individually-identifiable snippets, so a later assertion can prove exactly which one's preview text survives. */
+  async function seedThreadWithDistinctSnippets(): Promise<{ threadId: string }> {
+    mockListThreads.mockResolvedValueOnce({ threads: [{ id: "thread_1" }] });
+    mockGetThread.mockResolvedValueOnce({
+      id: "thread_1",
+      messages: [
+        gmailMessage({ id: "msg_1", threadId: "thread_1", internalDate: "1735689600000", snippet: "EARLIER preview text", labelIds: ["INBOX"] }),
+        gmailMessage({ id: "msg_2", threadId: "thread_1", internalDate: "1735776000000", snippet: "LATEST preview text", labelIds: ["INBOX", "UNREAD"] }),
+      ],
+    });
+    await establishHistoryId();
+
+    const mailbox = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const threads = await listThreadsForCaller(mailbox!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    return { threadId: threads[0].id };
+  }
+
+  it("deleting the latest (snippet-source) message via a real incremental sync falls back to the next-latest active message's own snippet", async () => {
+    await setUpConnectedGmail();
+    const { threadId } = await seedThreadWithDistinctSnippets();
+
+    mockListHistory.mockResolvedValue({ history: [{ id: "1000", messagesDeleted: [{ message: { id: "msg_2", threadId: "thread_1" } }] }] });
+    const result = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(result.status).toBe("success");
+
+    const mailbox = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const threads = await listThreadsForCaller(mailbox!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const reconciledThread = threads.find((t) => t.id === threadId)!;
+    expect(reconciledThread.snippet).toBe("EARLIER preview text");
+    // Privacy proof: the deleted message's own preview text must not survive as the thread's active preview.
+    expect(reconciledThread.snippet).not.toContain("LATEST preview text");
+  });
+
+  it("deleting every active message clears the thread's snippet to null — no stale deleted-message preview is ever exposed as the active thread preview", async () => {
+    await setUpConnectedGmail();
+    const { threadId } = await seedThreadWithDistinctSnippets();
+
+    mockListHistory.mockResolvedValue({
+      history: [
+        { id: "1000", messagesDeleted: [{ message: { id: "msg_1", threadId: "thread_1" } }] },
+        { id: "1001", messagesDeleted: [{ message: { id: "msg_2", threadId: "thread_1" } }] },
+      ],
+    });
+    const result = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(result.status).toBe("success");
+
+    const mailbox = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const threads = await listThreadsForCaller(mailbox!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const reconciledThread = threads.find((t) => t.id === threadId)!;
+    expect(reconciledThread.snippet).toBeNull();
+    expect(reconciledThread.message_count).toBe(0);
+
+    // Confirms what an "all-deleted" Inbox read would see: the tombstoned messages are still
+    // fetchable for audit purposes, but every one is marked deleted — none is exposed as active.
+    const messages = await listMessagesForThreadForCaller(threadId, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(messages.every((m) => m.deleted_at !== null)).toBe(true);
+    expect(messages.filter((m) => m.deleted_at === null)).toHaveLength(0);
+  });
+
+  it("resurrecting the deleted snippet-source message restores the canonical snippet dictated by the live Gmail thread state", async () => {
+    await setUpConnectedGmail();
+    const { threadId } = await seedThreadWithDistinctSnippets();
+
+    mockListHistory.mockResolvedValueOnce({ history: [{ id: "1000", messagesDeleted: [{ message: { id: "msg_2", threadId: "thread_1" } }] }] });
+    await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+
+    let mailbox = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    let threads = await listThreadsForCaller(mailbox!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(threads.find((t) => t.id === threadId)!.snippet).toBe("EARLIER preview text");
+
+    // msg_2 resurfaces via a labelsAdded event — the normal upsert path refetches the thread live.
+    mockListHistory.mockResolvedValueOnce({
+      history: [{ id: "1001", labelsAdded: [{ message: { id: "msg_2", threadId: "thread_1" }, labelIds: ["INBOX", "UNREAD"] }] }],
+    });
+    mockGetThread.mockResolvedValueOnce({
+      id: "thread_1",
+      messages: [
+        gmailMessage({ id: "msg_1", threadId: "thread_1", internalDate: "1735689600000", snippet: "EARLIER preview text", labelIds: ["INBOX"] }),
+        gmailMessage({ id: "msg_2", threadId: "thread_1", internalDate: "1735776000000", snippet: "LATEST preview text", labelIds: ["INBOX", "UNREAD"] }),
+      ],
+    });
+    const result = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(result.status).toBe("success");
+
+    mailbox = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    threads = await listThreadsForCaller(mailbox!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(threads.find((t) => t.id === threadId)!.snippet).toBe("LATEST preview text");
+  });
+
+  it("a full_resync recomputes snippet purely from Gmail's live thread response — no stale tombstoned snippet survives, no regression to counts/latest_message_at", async () => {
+    await setUpConnectedGmail();
+    const { threadId } = await seedThreadWithDistinctSnippets();
+
+    mockListHistory.mockResolvedValueOnce({ history: [{ id: "1000", messagesDeleted: [{ message: { id: "msg_2", threadId: "thread_1" } }] }] });
+    await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+
+    mockListHistory.mockRejectedValueOnce(new GmailApiError("Gmail API error 404: Invalid startHistoryId", 404));
+    mockListThreads.mockResolvedValueOnce({ threads: [{ id: "thread_1" }] });
+    mockGetThread.mockResolvedValueOnce({ id: "thread_1", messages: [gmailMessage({ id: "msg_1", threadId: "thread_1", internalDate: "1735689600000", snippet: "EARLIER preview text", labelIds: ["INBOX"] })] });
+
+    const result = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(result.status).toBe("success");
+    if (result.status !== "success") throw new Error("expected success");
+    expect(result.syncMode).toBe("full_resync");
+
+    const mailbox = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const threads = await listThreadsForCaller(mailbox!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const reconciledThread = threads.find((t) => t.id === threadId)!;
+    expect(reconciledThread.snippet).toBe("EARLIER preview text");
+    expect(reconciledThread.message_count).toBe(1);
+    expect(reconciledThread.unread_count).toBe(0);
+    expect(reconciledThread.latest_message_at).toBe("2025-01-01T00:00:00.000Z");
+  });
+
+  it("a reconciliation failure after a successful tombstone still prevents history_id from advancing, and the pre-failure snippet is left as-is (not partially updated) — retry then produces the correct final snippet", async () => {
+    await setUpConnectedGmail();
+    const { threadId } = await seedThreadWithDistinctSnippets();
+    const mailboxBefore = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+
+    const manager = await import("@/core/integrations/gmail/gmailMailboxManager");
+    const reconcileSpy = vi.spyOn(manager, "reconcileThreadMetadata").mockRejectedValueOnce(new Error("simulated reconciliation failure"));
+
+    mockListHistory.mockResolvedValue({ history: [{ id: "1000", messagesDeleted: [{ message: { id: "msg_2", threadId: "thread_1" } }] }] });
+    const failed = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(failed.status).toBe("error");
+    const mailboxAfterFailure = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(mailboxAfterFailure?.history_id).toBe(mailboxBefore?.history_id);
+
+    let threads = await listThreadsForCaller(mailboxBefore!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(threads.find((t) => t.id === threadId)!.snippet).toBe("LATEST preview text"); // unreconciled — pre-failure value, not a partial write
+
+    reconcileSpy.mockRestore();
+    const retried = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(retried.status).toBe("success");
+
+    threads = await listThreadsForCaller(mailboxBefore!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(threads.find((t) => t.id === threadId)!.snippet).toBe("EARLIER preview text");
+  });
+});

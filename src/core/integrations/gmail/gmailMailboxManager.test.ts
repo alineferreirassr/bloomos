@@ -353,7 +353,7 @@ describe("reconcileThreadMetadata (GMAIL-08)", () => {
     mailboxId: string,
     threadId: string,
     providerMessageId: string,
-    overrides: { internalDate?: string | null; isRead?: boolean } = {},
+    overrides: { internalDate?: string | null; isRead?: boolean; snippet?: string | null } = {},
   ) {
     return upsertMessage({
       workspaceId: WORKSPACE_ID,
@@ -364,6 +364,7 @@ describe("reconcileThreadMetadata (GMAIL-08)", () => {
       providerThreadId: "thread_abc123",
       internalDate: overrides.internalDate ?? "1735689600000",
       isRead: overrides.isRead ?? true,
+      snippet: overrides.snippet ?? null,
     });
   }
 
@@ -513,5 +514,93 @@ describe("reconcileThreadMetadata (GMAIL-08)", () => {
     await expect(
       reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId: "gmail-thread_missing" }),
     ).rejects.toThrow(/No thread found/);
+  });
+
+  describe("snippet (GMAIL-09)", () => {
+    it("1. with one active message, snippet is that message's own snippet", async () => {
+      const { mailboxId, threadId } = await seedMailboxAndThread();
+      await addMessage(mailboxId, threadId, "msg_1", { snippet: "Hi Ana, following up" });
+
+      const reconciled = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+      expect(reconciled.snippet).toBe("Hi Ana, following up");
+    });
+
+    it("2 & 3. with multiple active messages, snippet deterministically comes from the latest (max internal_date) one, not array order", async () => {
+      const { mailboxId, threadId } = await seedMailboxAndThread();
+      // Inserted out of chronological order on purpose — the source must be date-driven, not insertion-order-driven.
+      await addMessage(mailboxId, threadId, "msg_2", { internalDate: "1735776000000", snippet: "Second, later message" });
+      await addMessage(mailboxId, threadId, "msg_1", { internalDate: "1735689600000", snippet: "First, earlier message" });
+
+      const reconciled = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+      expect(reconciled.snippet).toBe("Second, later message");
+    });
+
+    it("4 & 5. tombstoning the current snippet-source message falls back to the next-latest active message's own snippet", async () => {
+      const { mailboxId, threadId } = await seedMailboxAndThread();
+      await addMessage(mailboxId, threadId, "msg_1", { internalDate: "1735689600000", snippet: "Earlier message" });
+      await addMessage(mailboxId, threadId, "msg_2", { internalDate: "1735776000000", snippet: "Latest message — will be deleted" });
+      await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+
+      await markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId: "msg_2" });
+      const reconciled = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+
+      expect(reconciled.snippet).toBe("Earlier message");
+    });
+
+    it("6. tombstoning a non-source (non-latest) message leaves the snippet unchanged", async () => {
+      const { mailboxId, threadId } = await seedMailboxAndThread();
+      await addMessage(mailboxId, threadId, "msg_1", { internalDate: "1735689600000", snippet: "Earlier message — will be deleted" });
+      await addMessage(mailboxId, threadId, "msg_2", { internalDate: "1735776000000", snippet: "Latest message" });
+
+      await markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId: "msg_1" });
+      const reconciled = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+
+      expect(reconciled.snippet).toBe("Latest message");
+    });
+
+    it("7 & 8. tombstoning the final active message clears snippet to null, never a sentinel string", async () => {
+      const { mailboxId, threadId } = await seedMailboxAndThread();
+      await addMessage(mailboxId, threadId, "msg_1", { snippet: "Only message here" });
+      await markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId: "msg_1" });
+
+      const reconciled = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+      expect(reconciled.snippet).toBeNull();
+      expect(reconciled.snippet).not.toBe("(deleted)");
+      expect(reconciled.snippet).not.toBe("No messages");
+      expect(reconciled.snippet).not.toBe("Message unavailable");
+    });
+
+    it("9. reconciling twice after the same tombstone is idempotent — snippet doesn't change on replay", async () => {
+      const { mailboxId, threadId } = await seedMailboxAndThread();
+      await addMessage(mailboxId, threadId, "msg_1", { internalDate: "1735689600000", snippet: "Earlier message" });
+      await addMessage(mailboxId, threadId, "msg_2", { internalDate: "1735776000000", snippet: "Latest message" });
+      await markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId: "msg_2" });
+
+      const first = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+      await markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId: "msg_2" }); // replay, idempotent no-op
+      const second = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+
+      expect(first.snippet).toBe("Earlier message");
+      expect(second.snippet).toBe("Earlier message");
+    });
+
+    it("26. subject is never touched by reconciliation, regardless of which message is tombstoned", async () => {
+      const { mailboxId, threadId } = await seedMailboxAndThread();
+      await upsertThread({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerThreadId: "thread_abc123", subject: "Original Subject" });
+      await addMessage(mailboxId, threadId, "msg_1", { snippet: "Body preview" });
+      await markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId: "msg_1" });
+
+      const reconciled = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+      expect(reconciled.subject).toBe("Original Subject");
+    });
+
+    it("a message with no snippet at all still reconciles safely (null propagates, no crash)", async () => {
+      const { mailboxId, threadId } = await seedMailboxAndThread();
+      await addMessage(mailboxId, threadId, "msg_1", { snippet: null });
+
+      const reconciled = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+      expect(reconciled.snippet).toBeNull();
+      expect(reconciled.message_count).toBe(1);
+    });
   });
 });
