@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -215,7 +216,14 @@ export function GmailConnectPanel() {
       </div>
 
       {connection?.state === "connected" ? (
-        <p className="mt-3 text-xs text-text-muted">{mailboxSummary?.lastSyncedAt ? `Last synced ${new Date(mailboxSummary.lastSyncedAt).toLocaleString()}` : "Never synced yet."}</p>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-text-muted">{mailboxSummary?.lastSyncedAt ? `Last synced ${new Date(mailboxSummary.lastSyncedAt).toLocaleString()}` : "Never synced yet."}</p>
+          {mailboxSummary?.syncStatus === "synced" ? (
+            <Link href="/gmail-inbox" className="text-xs text-accent underline">
+              Open Inbox
+            </Link>
+          ) : null}
+        </div>
       ) : null}
     </Card>
   );

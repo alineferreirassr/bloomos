@@ -205,4 +205,32 @@ describe("GmailConnectPanel", () => {
       expect(screen.queryByRole("article")).not.toBeInTheDocument();
     });
   });
+
+  describe("Open Inbox link (GMAIL-07)", () => {
+    it("shows an Open Inbox link to /gmail-inbox once the mailbox has actually synced", async () => {
+      vi.mocked(getOwnProviderConnectionAction).mockResolvedValue({ success: true, data: connection({ state: "connected" }) });
+      vi.mocked(getOwnGmailMailboxSummaryAction).mockResolvedValue({
+        success: true,
+        data: { syncStatus: "synced", lastSyncedAt: "2026-01-01T12:00:00.000Z", lastSuccessfulSyncAt: "2026-01-01T12:00:00.000Z", syncErrorCode: null },
+      });
+
+      render(<GmailConnectPanel />);
+      const link = await screen.findByRole("link", { name: "Open Inbox" });
+      expect(link).toHaveAttribute("href", "/gmail-inbox");
+    });
+
+    it("does not show Open Inbox before the mailbox has ever synced", async () => {
+      vi.mocked(getOwnProviderConnectionAction).mockResolvedValue({ success: true, data: connection({ state: "connected" }) });
+      render(<GmailConnectPanel />);
+      await screen.findByRole("button", { name: "Sync now" });
+      expect(screen.queryByRole("link", { name: "Open Inbox" })).not.toBeInTheDocument();
+    });
+
+    it("does not show Open Inbox when not connected", async () => {
+      vi.mocked(getOwnProviderConnectionAction).mockResolvedValue({ success: true, data: null });
+      render(<GmailConnectPanel />);
+      await screen.findByRole("button", { name: "Connect Gmail" });
+      expect(screen.queryByRole("link", { name: "Open Inbox" })).not.toBeInTheDocument();
+    });
+  });
 });

@@ -102,6 +102,13 @@ export const ROUTE_ACCESS_MAP: RouteAccessEntry[] = [
   // to know what's happening.
   { prefix: "/communications", requirement: { kind: "permission", permission: "communications.view" } },
   { prefix: "/inbox", requirement: { kind: "permission", permission: "communications.view" } },
+  // GMAIL-07 — the read-only Gmail Inbox. Deliberately its own top-level
+  // route, not nested under `/inbox` (that's the internal Client Portal/
+  // team-messaging domain, a real collision to avoid, not rename). Gated
+  // on `integrations.email` — the same permission the `gmail` provider's
+  // own `requiredPermission` already uses — rather than `communications.view`,
+  // since this reads a member-owned mailbox, not shared workspace inbox data.
+  { prefix: "/gmail-inbox", requirement: { kind: "permission", permission: "integrations.email" } },
   // v2.0 Checkpoint 41 — Notification Center. A new, dedicated route tree
   // additive to `/communications`'s own `notifications` tab (which keeps
   // working unchanged) — gated by the new, more granular
