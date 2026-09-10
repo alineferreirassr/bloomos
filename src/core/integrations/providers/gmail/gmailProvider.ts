@@ -1,6 +1,6 @@
 import type { CommunicationProvider } from "@/core/integrations/sdk";
 import type { ProviderCapability } from "@/core/integrations/types";
-import type { GmailApiProfile, GmailApiThread, GmailApiThreadListResponse } from "@/core/integrations/providers/gmail/gmailApiTypes";
+import type { GmailApiHistoryListResponse, GmailApiProfile, GmailApiThread, GmailApiThreadListResponse } from "@/core/integrations/providers/gmail/gmailApiTypes";
 
 const GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1";
 
@@ -80,6 +80,20 @@ export class GmailProvider implements CommunicationProvider {
   /** `users.threads.get` with `format=full` — every message in the thread, full MIME payload. Never fetches attachment bytes (`format=full` includes headers/body text/HTML but not `attachments.get`'s binary payload). */
   async getThread(threadId: string): Promise<GmailApiThread> {
     return this.request<GmailApiThread>(`/users/me/threads/${encodeURIComponent(threadId)}?format=full`);
+  }
+
+  /**
+   * `users.history.list` — GMAIL-06's incremental-sync read. Google
+   * returns HTTP 404 when `startHistoryId` is too old/invalid (history
+   * records have been purged); callers (`gmailSyncEngine.ts`) classify
+   * that `GmailApiError.status === 404` as "must fall back to a full
+   * resync," never as a generic failure.
+   */
+  async listHistory(params: { startHistoryId: string; pageToken?: string; maxResults?: number }): Promise<GmailApiHistoryListResponse> {
+    const query = new URLSearchParams({ startHistoryId: params.startHistoryId });
+    if (params.pageToken) query.set("pageToken", params.pageToken);
+    if (params.maxResults) query.set("maxResults", String(params.maxResults));
+    return this.request<GmailApiHistoryListResponse>(`/users/me/history?${query.toString()}`);
   }
 
   async sendEmail(params: { to: string; subject: string; body: string }): Promise<{ externalMessageId: string; status: string }> {

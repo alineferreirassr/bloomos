@@ -83,4 +83,34 @@ describe("GmailProvider — read surface (GMAIL-05)", () => {
     const provider = new GmailProvider("super-secret-access-token-value");
     await expect(provider.getProfile()).rejects.not.toThrow(/super-secret-access-token-value/);
   });
+
+  it("listHistory sends startHistoryId, an optional pageToken, and an optional maxResults as query params", async () => {
+    const fetchMock = mockFetchOnce(200, { history: [], historyId: "999" });
+    const provider = new GmailProvider("real-access-token");
+
+    await provider.listHistory({ startHistoryId: "100", pageToken: "page_2", maxResults: 100 });
+
+    const calledUrl = new URL((fetchMock.mock.calls[0] as [string, unknown])[0] as string);
+    expect(calledUrl.pathname).toBe("/gmail/v1/users/me/history");
+    expect(calledUrl.searchParams.get("startHistoryId")).toBe("100");
+    expect(calledUrl.searchParams.get("pageToken")).toBe("page_2");
+    expect(calledUrl.searchParams.get("maxResults")).toBe("100");
+  });
+
+  it("listHistory omits pageToken/maxResults when not supplied", async () => {
+    const fetchMock = mockFetchOnce(200, { history: [] });
+    const provider = new GmailProvider("real-access-token");
+
+    await provider.listHistory({ startHistoryId: "100" });
+
+    const calledUrl = new URL((fetchMock.mock.calls[0] as [string, unknown])[0] as string);
+    expect(calledUrl.searchParams.has("pageToken")).toBe(false);
+    expect(calledUrl.searchParams.has("maxResults")).toBe(false);
+  });
+
+  it("listHistory throws a GmailApiError with status 404 for an invalid/too-old startHistoryId, distinguishable from other failures", async () => {
+    mockFetchOnce(404, { error: { message: "Invalid startHistoryId" } });
+    const provider = new GmailProvider("real-access-token");
+    await expect(provider.listHistory({ startHistoryId: "1" })).rejects.toMatchObject({ status: 404 });
+  });
 });

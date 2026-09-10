@@ -199,6 +199,11 @@ export async function upsertMessage(params: UpsertGmailMessageParams): Promise<G
       is_draft: params.isDraft ?? existing.is_draft,
       is_sent: params.isSent ?? existing.is_sent,
       has_attachments: params.hasAttachments ?? existing.has_attachments,
+      // GMAIL-06 — an upsert means Gmail just confirmed this message currently
+      // exists (a bounded resync, or a history.list messagesAdded/labels*
+      // event that triggered a canonical refetch) — always clear any prior
+      // tombstone, never conditionally. See markMessageDeleted's own doc.
+      deleted_at: null,
     });
     if (!updated) throw new Error("Could not update this message.");
     return updated;
@@ -232,6 +237,7 @@ export async function upsertMessage(params: UpsertGmailMessageParams): Promise<G
     is_draft: params.isDraft ?? false,
     is_sent: params.isSent ?? false,
     has_attachments: params.hasAttachments ?? false,
+    deleted_at: null,
     created_at: now,
     updated_at: now,
   };
@@ -242,4 +248,32 @@ export async function listMessagesForThreadForCaller(threadId: string, caller: G
   const thread = await getThreadForCaller(threadId, caller);
   if (!thread) return [];
   return listMessagesForThread(threadId);
+}
+
+export interface MarkMessageDeletedParams {
+  workspaceId: string;
+  memberId: string;
+  mailboxId: string;
+  providerMessageId: string;
+}
+
+/**
+ * GMAIL-06 — tombstones one message by its own provider-native id, for a
+ * `history.list` `messagesDeleted` event. Never a hard delete (see the
+ * GMAIL-06 migration's own header comment). Idempotent: a message that's
+ * already tombstoned is returned as-is, its own `deleted_at` left
+ * untouched (first tombstone wins) rather than overwritten with a new
+ * timestamp on every replay. A provider message id with no matching
+ * local row is handled the same safe way `upsertMessage`'s own siblings
+ * do — nothing to tombstone, return null, never throw for "not found".
+ */
+export async function markMessageDeleted(params: MarkMessageDeletedParams): Promise<GmailMessage | null> {
+  const caller: GmailCallerScope = { workspaceId: params.workspaceId, memberId: params.memberId };
+  await assertMailboxOwnership(params.mailboxId, caller);
+
+  const existing = await getMessageByProviderId(params.mailboxId, params.providerMessageId);
+  if (!existing) return null;
+  if (existing.deleted_at !== null) return existing;
+
+  return updateMessage(existing.id, { deleted_at: nowIso() });
 }

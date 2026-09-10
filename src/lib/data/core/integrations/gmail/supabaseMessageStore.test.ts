@@ -75,6 +75,7 @@ function messageRow(overrides: Partial<Record<string, unknown>> = {}) {
     is_draft: false,
     is_sent: false,
     has_attachments: false,
+    deleted_at: null,
     created_at: "2026-01-01T00:00:00.000Z",
     updated_at: "2026-01-01T00:00:00.000Z",
     ...overrides,
@@ -108,6 +109,7 @@ const MESSAGE: GmailMessage = {
   is_draft: false,
   is_sent: false,
   has_attachments: false,
+  deleted_at: null,
   created_at: "2026-01-01T00:00:00.000Z",
   updated_at: "2026-01-01T00:00:00.000Z",
 };

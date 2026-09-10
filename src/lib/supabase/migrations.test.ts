@@ -38,6 +38,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // Independently-tracked, not-yet-released, unrelated to the Finance
   // release this exact-count assertion describes.
   "20260905100000_gmail_mailbox_persistence_foundation.sql",
+  // GMAIL-06 — Gmail Message Deletion/Tombstone Foundation.
+  // Independently-tracked, not-yet-released, unrelated to the Finance
+  // release this exact-count assertion describes.
+  "20260906100000_gmail_message_deletion_tombstone.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {
@@ -3930,5 +3934,44 @@ describe("GMAIL-04 migration — gmail_mailboxes / gmail_threads / gmail_message
     const code = stripSqlComments(sql());
     expect(code.match(/execute function public\.set_updated_at\(\)/g)).toHaveLength(3);
     expect(code).not.toMatch(/create (or replace )?function public\.set_updated_at/);
+  });
+});
+
+describe("GMAIL-06 migration — gmail_messages.deleted_at tombstone", () => {
+  function sql(): string {
+    return readMigration("20260906100000_gmail_message_deletion_tombstone.sql");
+  }
+
+  it("additively adds a single nullable deleted_at column to gmail_messages", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/alter table public\.gmail_messages\s*\n\s*add column if not exists deleted_at timestamptz;/);
+  });
+
+  it("does not add a redundant second boolean column alongside deleted_at", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/provider_deleted\s+boolean/);
+    expect(code).not.toMatch(/is_deleted\s+boolean/);
+  });
+
+  it("is purely additive — no DROP/TRUNCATE/DELETE, no RLS disable, and does not touch the GMAIL-04/GMAIL-05 migration files", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/drop table/);
+    expect(code).not.toMatch(/drop column/);
+    expect(code).not.toMatch(/truncate/);
+    expect(code).not.toMatch(/\bdelete from\b/);
+    expect(code).not.toMatch(/\balter table\b.*\bdisable row level security\b/);
+    const gmail04 = readMigration("20260905100000_gmail_mailbox_persistence_foundation.sql");
+    expect(gmail04).not.toMatch(/deleted_at/);
+  });
+
+  it("does not define a new RLS policy — the existing gmail_messages_own_scope policy already protects every column, this one included", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/create policy/);
+    expect(code).not.toMatch(/enable row level security/);
+  });
+
+  it("indexes deleted_at for the mailbox-scoped tombstone lookup", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create index if not exists gmail_messages_deleted_at_idx on public\.gmail_messages \(mailbox_id\) where deleted_at is not null/);
   });
 });

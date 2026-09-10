@@ -172,7 +172,7 @@ describe("GmailConnectPanel", () => {
 
     it("Sync now calls the manual sync action (no client-supplied ids — it takes none) and shows a success message", async () => {
       vi.mocked(getOwnProviderConnectionAction).mockResolvedValue({ success: true, data: connection({ state: "connected" }) });
-      vi.mocked(syncMyGmailMailboxAction).mockResolvedValue({ success: true, data: { status: "success", threadsProcessed: 3, messagesProcessed: 5, threadsSkipped: 0, messagesSkipped: 0, syncedAt: "2026-01-01T00:00:00Z" } });
+      vi.mocked(syncMyGmailMailboxAction).mockResolvedValue({ success: true, data: { status: "success", syncMode: "initial", threadsProcessed: 3, messagesProcessed: 5, messagesDeleted: 0, threadsSkipped: 0, messagesSkipped: 0, syncedAt: "2026-01-01T00:00:00Z" } });
 
       render(<GmailConnectPanel />);
       await userEvent.click(await screen.findByRole("button", { name: "Sync now" }));
@@ -195,7 +195,7 @@ describe("GmailConnectPanel", () => {
 
     it("never renders a message list, thread list, or message body anywhere in the panel", async () => {
       vi.mocked(getOwnProviderConnectionAction).mockResolvedValue({ success: true, data: connection({ state: "connected" }) });
-      vi.mocked(syncMyGmailMailboxAction).mockResolvedValue({ success: true, data: { status: "success", threadsProcessed: 2, messagesProcessed: 4, threadsSkipped: 0, messagesSkipped: 0, syncedAt: "2026-01-01T00:00:00Z" } });
+      vi.mocked(syncMyGmailMailboxAction).mockResolvedValue({ success: true, data: { status: "success", syncMode: "initial", threadsProcessed: 2, messagesProcessed: 4, messagesDeleted: 0, threadsSkipped: 0, messagesSkipped: 0, syncedAt: "2026-01-01T00:00:00Z" } });
 
       render(<GmailConnectPanel />);
       await userEvent.click(await screen.findByRole("button", { name: "Sync now" }));

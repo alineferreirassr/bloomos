@@ -38,6 +38,7 @@ function mapRow(row: MessageRow): GmailMessage {
     is_draft: row.is_draft,
     is_sent: row.is_sent,
     has_attachments: row.has_attachments,
+    deleted_at: row.deleted_at,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -74,6 +75,7 @@ export async function insertMessage(message: GmailMessage): Promise<GmailMessage
       is_draft: message.is_draft,
       is_sent: message.is_sent,
       has_attachments: message.has_attachments,
+      deleted_at: message.deleted_at,
     })
     .select("*")
     .single();
@@ -117,6 +119,7 @@ export async function updateMessage(id: string, patch: Partial<GmailMessage>): P
       ...(patch.is_draft !== undefined ? { is_draft: patch.is_draft } : {}),
       ...(patch.is_sent !== undefined ? { is_sent: patch.is_sent } : {}),
       ...(patch.has_attachments !== undefined ? { has_attachments: patch.has_attachments } : {}),
+      ...(patch.deleted_at !== undefined ? { deleted_at: patch.deleted_at } : {}),
     })
     .eq("id", id)
     .select("*")

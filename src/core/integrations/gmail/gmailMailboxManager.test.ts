@@ -13,6 +13,7 @@ import {
   getThreadForCaller,
   listMessagesForThreadForCaller,
   listThreadsForCaller,
+  markMessageDeleted,
   upsertMailbox,
   upsertMessage,
   upsertThread,
@@ -282,5 +283,59 @@ describe("getThreadForCaller — cross-owner isolation", () => {
     const thread = await upsertThread({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId: mailbox.id, providerThreadId: "thread_abc123" });
 
     expect(await getThreadForCaller(thread.id, { workspaceId: OTHER_WORKSPACE_ID, memberId: MEMBER_1 })).toBeNull();
+  });
+});
+
+describe("markMessageDeleted (GMAIL-06)", () => {
+  async function seedMessage(): Promise<{ mailboxId: string; threadId: string; providerMessageId: string }> {
+    const connectionId = await installGmailConnection(WORKSPACE_ID, MEMBER_1);
+    const mailbox = await upsertMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, integrationConnectionId: connectionId });
+    const thread = await upsertThread({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId: mailbox.id, providerThreadId: "thread_abc123" });
+    await upsertMessage({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId: mailbox.id, threadId: thread.id, providerMessageId: "msg_1", providerThreadId: "thread_abc123" });
+    return { mailboxId: mailbox.id, threadId: thread.id, providerMessageId: "msg_1" };
+  }
+
+  it("tombstones a message by its own provider id, never hard-deleting the row", async () => {
+    const { mailboxId, threadId, providerMessageId } = await seedMessage();
+    const tombstoned = await markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId });
+
+    expect(tombstoned?.deleted_at).not.toBeNull();
+    expect(tombstoned?.provider_message_id).toBe(providerMessageId);
+
+    const stillPresent = await listMessagesForThreadForCaller(threadId, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(stillPresent.find((m) => m.provider_message_id === providerMessageId)).toBeTruthy();
+  });
+
+  it("is idempotent — tombstoning an already-deleted message keeps the original deleted_at rather than overwriting it", async () => {
+    const { mailboxId, providerMessageId } = await seedMessage();
+    const first = await markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = await markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId });
+
+    expect(second?.deleted_at).toBe(first?.deleted_at);
+  });
+
+  it("handles a nonexistent provider message id safely — returns null, never throws", async () => {
+    const { mailboxId } = await seedMessage();
+    const result = await markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId: "msg_never_existed" });
+    expect(result).toBeNull();
+  });
+
+  it("denies a same-workspace, different member from tombstoning a message that isn't theirs", async () => {
+    const { mailboxId, providerMessageId } = await seedMessage();
+    await expect(markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_2, mailboxId, providerMessageId })).rejects.toThrow(/not owned by the caller/);
+  });
+
+  it("denies a cross-workspace caller from tombstoning a message", async () => {
+    const { mailboxId, providerMessageId } = await seedMessage();
+    await expect(markMessageDeleted({ workspaceId: OTHER_WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId })).rejects.toThrow();
+  });
+
+  it("upsertMessage clears an existing tombstone when the provider message legitimately exists again (resurrection)", async () => {
+    const { mailboxId, threadId, providerMessageId } = await seedMessage();
+    await markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId });
+
+    const resurrected = await upsertMessage({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId, providerMessageId, providerThreadId: "thread_abc123", subject: "Still here" });
+    expect(resurrected.deleted_at).toBeNull();
   });
 });

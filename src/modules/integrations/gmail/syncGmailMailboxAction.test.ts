@@ -50,10 +50,10 @@ describe("syncMyGmailMailboxAction", () => {
 
   it("returns a safe success summary", async () => {
     vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(ACTIVE_SESSION);
-    vi.mocked(syncGmailMailbox).mockResolvedValue({ status: "success", threadsProcessed: 3, messagesProcessed: 7, threadsSkipped: 0, messagesSkipped: 0, syncedAt: "2026-01-01T00:00:00Z" });
+    vi.mocked(syncGmailMailbox).mockResolvedValue({ status: "success", syncMode: "initial", threadsProcessed: 3, messagesProcessed: 7, messagesDeleted: 0, threadsSkipped: 0, messagesSkipped: 0, syncedAt: "2026-01-01T00:00:00Z" });
 
     const result = await syncMyGmailMailboxAction();
-    expect(result).toEqual({ success: true, data: { status: "success", threadsProcessed: 3, messagesProcessed: 7, threadsSkipped: 0, messagesSkipped: 0, syncedAt: "2026-01-01T00:00:00Z" } });
+    expect(result).toEqual({ success: true, data: { status: "success", syncMode: "initial", threadsProcessed: 3, messagesProcessed: 7, messagesDeleted: 0, threadsSkipped: 0, messagesSkipped: 0, syncedAt: "2026-01-01T00:00:00Z" } });
   });
 
   it("surfaces reconnect_required as a success:true result carrying the reason, not a thrown error", async () => {
@@ -74,7 +74,7 @@ describe("syncMyGmailMailboxAction", () => {
 
   it("never returns a token or message body in any branch", async () => {
     vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(ACTIVE_SESSION);
-    vi.mocked(syncGmailMailbox).mockResolvedValue({ status: "success", threadsProcessed: 1, messagesProcessed: 1, threadsSkipped: 0, messagesSkipped: 0, syncedAt: "2026-01-01T00:00:00Z" });
+    vi.mocked(syncGmailMailbox).mockResolvedValue({ status: "success", syncMode: "initial", threadsProcessed: 1, messagesProcessed: 1, messagesDeleted: 0, threadsSkipped: 0, messagesSkipped: 0, syncedAt: "2026-01-01T00:00:00Z" });
 
     const result = await syncMyGmailMailboxAction();
     const serialized = JSON.stringify(result);

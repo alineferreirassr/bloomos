@@ -3,17 +3,19 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 
 vi.mock("@/modules/integrations/manageOAuthConnectionActions", () => ({ refreshProviderOAuthConnectionAction: vi.fn() }));
 
-const { mockGetProfile, mockListThreads, mockGetThread, GmailProviderMock } = vi.hoisted(() => {
+const { mockGetProfile, mockListThreads, mockGetThread, mockListHistory, GmailProviderMock } = vi.hoisted(() => {
   const mockGetProfile = vi.fn();
   const mockListThreads = vi.fn();
   const mockGetThread = vi.fn();
+  const mockListHistory = vi.fn();
   const GmailProviderMock = vi.fn().mockImplementation(function GmailProviderMockImpl(this: Record<string, unknown>, accessToken: string) {
     this.accessToken = accessToken;
     this.getProfile = mockGetProfile;
     this.listThreads = mockListThreads;
     this.getThread = mockGetThread;
+    this.listHistory = mockListHistory;
   });
-  return { mockGetProfile, mockListThreads, mockGetThread, GmailProviderMock };
+  return { mockGetProfile, mockListThreads, mockGetThread, mockListHistory, GmailProviderMock };
 });
 vi.mock("@/core/integrations/providers/gmail/gmailProvider", async () => {
   const actual = await vi.importActual<typeof import("@/core/integrations/providers/gmail/gmailProvider")>("@/core/integrations/providers/gmail/gmailProvider");
@@ -31,7 +33,14 @@ import { resetGmailMailboxStore } from "@/lib/data/core/integrations/gmail/mailb
 import { resetGmailThreadStore } from "@/lib/data/core/integrations/gmail/threadStore";
 import { resetGmailMessageStore } from "@/lib/data/core/integrations/gmail/messageStore";
 import { getOwnMailbox, listThreadsForCaller, listMessagesForThreadForCaller } from "@/core/integrations/gmail/gmailMailboxManager";
-import { GMAIL_READONLY_SCOPE, GMAIL_SYNC_MAX_THREADS, GMAIL_SYNC_PAGE_SIZE, syncGmailMailbox } from "@/core/integrations/gmail/gmailSyncEngine";
+import {
+  GMAIL_HISTORY_MAX_PAGES,
+  GMAIL_HISTORY_PAGE_SIZE,
+  GMAIL_READONLY_SCOPE,
+  GMAIL_SYNC_MAX_THREADS,
+  GMAIL_SYNC_PAGE_SIZE,
+  syncGmailMailbox,
+} from "@/core/integrations/gmail/gmailSyncEngine";
 
 registerBuiltinProviders();
 
@@ -82,6 +91,7 @@ beforeEach(() => {
   mockGetProfile.mockResolvedValue({ emailAddress: "ana@amorebloom.com", historyId: "999" });
   mockListThreads.mockResolvedValue({ threads: [], resultSizeEstimate: 0 });
   mockGetThread.mockResolvedValue({ id: "thread_1", messages: [] });
+  mockListHistory.mockResolvedValue({ history: [], historyId: "999" });
   vi.mocked(refreshProviderOAuthConnectionAction).mockImplementation(async (connectionId: string) => {
     const connection = await getConnection(connectionId);
     if (!connection?.credential_id) return { success: false, error: "no credential" };
@@ -367,5 +377,321 @@ describe("syncGmailMailbox — no sensitive data in the result", () => {
     expect(serialized).not.toContain("real-access-token");
     expect(serialized).not.toContain("real-refresh-token");
     expect(serialized).not.toContain("Hello"); // the message body text
+  });
+});
+
+/** Runs one sync with the default (empty) mocks — establishes mailbox.history_id="999" via the "initial" path, so a following sync goes down the "incremental" path. */
+async function establishHistoryId(): Promise<void> {
+  const result = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+  if (result.status !== "success" || result.syncMode !== "initial") throw new Error("expected the setup sync to be a successful initial sync");
+  mockListThreads.mockClear();
+  mockGetThread.mockClear();
+  mockGetProfile.mockClear();
+}
+
+describe("syncGmailMailbox — GMAIL-06 mode selection", () => {
+  it("runs an initial (bounded full) sync when the mailbox has no history_id yet", async () => {
+    await setUpConnectedGmail();
+    const result = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(result.status).toBe("success");
+    if (result.status !== "success") throw new Error("expected success");
+    expect(result.syncMode).toBe("initial");
+    expect(mockListHistory).not.toHaveBeenCalled();
+  });
+
+  it("runs an incremental sync, using the persisted history_id as startHistoryId, once one exists", async () => {
+    await setUpConnectedGmail();
+    await establishHistoryId();
+
+    const result = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(result.status).toBe("success");
+    if (result.status !== "success") throw new Error("expected success");
+    expect(result.syncMode).toBe("incremental");
+    expect(mockListHistory).toHaveBeenCalledWith(expect.objectContaining({ startHistoryId: "999" }));
+    expect(mockListThreads).not.toHaveBeenCalled();
+  });
+});
+
+describe("syncGmailMailbox — GMAIL-06 history event processing", () => {
+  it("processes messagesAdded by fetching and upserting the affected thread", async () => {
+    await setUpConnectedGmail();
+    await establishHistoryId();
+
+    mockListHistory.mockResolvedValue({ history: [{ id: "1000", messagesAdded: [{ message: { id: "msg_new", threadId: "thread_new" } }] }] });
+    mockGetThread.mockResolvedValue({ id: "thread_new", messages: [gmailMessage({ id: "msg_new", threadId: "thread_new" })] });
+
+    const result = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(result.status).toBe("success");
+    if (result.status !== "success") throw new Error("expected success");
+    expect(result.threadsProcessed).toBe(1);
+    expect(result.messagesProcessed).toBe(1);
+    expect(mockGetThread).toHaveBeenCalledWith("thread_new");
+
+    const mailbox = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const threads = await listThreadsForCaller(mailbox!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(threads.find((t) => t.provider_thread_id === "thread_new")).toBeTruthy();
+  });
+
+  it("processes messagesDeleted by tombstoning directly — never calling getThread for that message", async () => {
+    await setUpConnectedGmail();
+    // Seed a real message via an initial sync with one thread present.
+    mockListThreads.mockResolvedValueOnce({ threads: [{ id: "thread_1" }] });
+    mockGetThread.mockResolvedValueOnce({ id: "thread_1", messages: [gmailMessage({ id: "msg_1", threadId: "thread_1" })] });
+    await establishHistoryId();
+
+    mockListHistory.mockResolvedValue({ history: [{ id: "1000", messagesDeleted: [{ message: { id: "msg_1", threadId: "thread_1" } }] }] });
+
+    const result = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(result.status).toBe("success");
+    if (result.status !== "success") throw new Error("expected success");
+    expect(result.messagesDeleted).toBe(1);
+    expect(mockGetThread).not.toHaveBeenCalled();
+
+    const mailbox = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const threads = await listThreadsForCaller(mailbox!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const messages = await listMessagesForThreadForCaller(threads[0].id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(messages[0].deleted_at).not.toBeNull();
+  });
+
+  it("handles a messagesDeleted event for a message with no local row safely (idempotent no-op)", async () => {
+    await setUpConnectedGmail();
+    await establishHistoryId();
+    mockListHistory.mockResolvedValue({ history: [{ id: "1000", messagesDeleted: [{ message: { id: "msg_never_synced", threadId: "thread_x" } }] }] });
+
+    const result = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(result.status).toBe("success");
+    if (result.status !== "success") throw new Error("expected success");
+    expect(result.messagesDeleted).toBe(0); // nothing local to tombstone
+    expect(mockGetThread).not.toHaveBeenCalled();
+  });
+
+  it("processes labelsAdded/labelsRemoved by refetching the canonical current message, never by mutating labels", async () => {
+    await setUpConnectedGmail();
+    await establishHistoryId();
+    mockListHistory.mockResolvedValue({
+      history: [{ id: "1000", labelsAdded: [{ message: { id: "msg_1", threadId: "thread_1" }, labelIds: ["STARRED"] }] }],
+    });
+    mockGetThread.mockResolvedValue({ id: "thread_1", messages: [gmailMessage({ id: "msg_1", threadId: "thread_1", labelIds: ["INBOX", "STARRED"] })] });
+
+    const result = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(result.status).toBe("success");
+    if (result.status !== "success") throw new Error("expected success");
+    expect(mockGetThread).toHaveBeenCalledWith("thread_1");
+
+    const mailbox = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const threads = await listThreadsForCaller(mailbox!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const messages = await listMessagesForThreadForCaller(threads[0].id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(messages[0].is_starred).toBe(true);
+  });
+
+  it("collapses overlapping messagesAdded + labelsAdded for the same message id into one canonical refresh (deduplication)", async () => {
+    await setUpConnectedGmail();
+    await establishHistoryId();
+    mockListHistory.mockResolvedValue({
+      history: [
+        { id: "1000", messagesAdded: [{ message: { id: "msg_1", threadId: "thread_1" } }] },
+        { id: "1001", labelsAdded: [{ message: { id: "msg_1", threadId: "thread_1" }, labelIds: ["STARRED"] }] },
+      ],
+    });
+    mockGetThread.mockResolvedValue({ id: "thread_1", messages: [gmailMessage({ id: "msg_1", threadId: "thread_1" })] });
+
+    const result = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(result.status).toBe("success");
+    if (result.status !== "success") throw new Error("expected success");
+    expect(result.threadsProcessed).toBe(1);
+    expect(mockGetThread).toHaveBeenCalledTimes(1);
+  });
+
+  it("a later messagesDeleted overrides an earlier messagesAdded for the same id within one batch", async () => {
+    await setUpConnectedGmail();
+    await establishHistoryId();
+    mockListHistory.mockResolvedValue({
+      history: [
+        { id: "1000", messagesAdded: [{ message: { id: "msg_1", threadId: "thread_1" } }] },
+        { id: "1001", messagesDeleted: [{ message: { id: "msg_1", threadId: "thread_1" } }] },
+      ],
+    });
+
+    const result = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(result.status).toBe("success");
+    if (result.status !== "success") throw new Error("expected success");
+    expect(result.threadsProcessed).toBe(0);
+    expect(mockGetThread).not.toHaveBeenCalled();
+  });
+});
+
+describe("syncGmailMailbox — GMAIL-06 history pagination and bounds", () => {
+  it("requests history.list with the configured page size", async () => {
+    await setUpConnectedGmail();
+    await establishHistoryId();
+    await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(mockListHistory).toHaveBeenCalledWith(expect.objectContaining({ maxResults: GMAIL_HISTORY_PAGE_SIZE }));
+  });
+
+  it("never calls listHistory more than GMAIL_HISTORY_MAX_PAGES times, even with a pathological always-more-pages response", async () => {
+    await setUpConnectedGmail();
+    await establishHistoryId();
+    mockListHistory.mockImplementation(async () => ({ history: [{ id: `${Math.random()}` }], nextPageToken: "always_more" }));
+
+    await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(mockListHistory.mock.calls.length).toBeLessThanOrEqual(GMAIL_HISTORY_MAX_PAGES);
+  });
+
+  it("follows pageToken across multiple history pages", async () => {
+    await setUpConnectedGmail();
+    await establishHistoryId();
+    mockListHistory
+      .mockResolvedValueOnce({ history: [{ id: "1000", messagesAdded: [{ message: { id: "msg_a", threadId: "thread_a" } }] }], nextPageToken: "page_2" })
+      .mockResolvedValueOnce({ history: [{ id: "1001", messagesAdded: [{ message: { id: "msg_b", threadId: "thread_b" } }] }] });
+    mockGetThread.mockImplementation(async (id: string) => ({ id, messages: [gmailMessage({ id: `${id}_msg`, threadId: id })] }));
+
+    const result = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(result.status).toBe("success");
+    if (result.status !== "success") throw new Error("expected success");
+    expect(mockListHistory).toHaveBeenCalledTimes(2);
+    expect(result.threadsProcessed).toBe(2);
+  });
+});
+
+describe("syncGmailMailbox — GMAIL-06 invalid/expired history cursor", () => {
+  it("falls back to a bounded full resync when the cursor is rejected as invalid (404), and reports syncMode=full_resync", async () => {
+    await setUpConnectedGmail();
+    await establishHistoryId();
+    mockListHistory.mockRejectedValue(new GmailApiError("Gmail API error 404: Invalid startHistoryId", 404));
+    mockListThreads.mockResolvedValue({ threads: [{ id: "thread_resync" }] });
+    mockGetThread.mockResolvedValue({ id: "thread_resync", messages: [gmailMessage({ id: "msg_resync", threadId: "thread_resync" })] });
+
+    const result = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(result.status).toBe("success");
+    if (result.status !== "success") throw new Error("expected success");
+    expect(result.syncMode).toBe("full_resync");
+    expect(mockListThreads).toHaveBeenCalled();
+
+    const mailbox = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(mailbox?.history_id).toBe("999"); // the fresh profile historyId, not the stale one
+  });
+
+  it("does not corrupt or discard local state on an invalid cursor — the full resync's own upserts are the only effect", async () => {
+    await setUpConnectedGmail();
+    mockListThreads.mockResolvedValueOnce({ threads: [{ id: "thread_1" }] });
+    mockGetThread.mockResolvedValueOnce({ id: "thread_1", messages: [gmailMessage({ id: "msg_1", threadId: "thread_1" })] });
+    await establishHistoryId();
+
+    mockListHistory.mockRejectedValue(new GmailApiError("Gmail API error 404", 404));
+    mockListThreads.mockResolvedValue({ threads: [{ id: "thread_1" }] }); // the resync still sees the same thread
+    mockGetThread.mockResolvedValue({ id: "thread_1", messages: [gmailMessage({ id: "msg_1", threadId: "thread_1" })] });
+
+    await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+
+    const mailbox = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const threads = await listThreadsForCaller(mailbox!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(threads).toHaveLength(1);
+    const messages = await listMessagesForThreadForCaller(threads[0].id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(messages).toHaveLength(1);
+  });
+});
+
+describe("syncGmailMailbox — GMAIL-06 cursor advancement and partial-failure safety", () => {
+  it("advances history_id only after a successful incremental batch", async () => {
+    await setUpConnectedGmail();
+    await establishHistoryId();
+    mockListHistory.mockResolvedValue({ history: [{ id: "1050" }] }); // no events, but still a real page consumed
+
+    await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+
+    const mailbox = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(mailbox?.history_id).toBe("1050");
+  });
+
+  it("does not advance history_id when a fatal Gmail error occurs while processing the incremental batch", async () => {
+    await setUpConnectedGmail();
+    await establishHistoryId();
+    const mailboxBefore = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+
+    mockListHistory.mockResolvedValue({ history: [{ id: "1000", messagesAdded: [{ message: { id: "msg_1", threadId: "thread_1" } }] }] });
+    mockGetThread.mockRejectedValue(new GmailApiError("Gmail API error 500", 500));
+
+    const result = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(result.status).toBe("error");
+
+    const mailboxAfter = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(mailboxAfter?.history_id).toBe(mailboxBefore?.history_id);
+    expect(mailboxAfter?.sync_status).toBe("error");
+  });
+
+  it("does not advance history_id when listHistory itself fails with a fatal (non-404) error", async () => {
+    await setUpConnectedGmail();
+    await establishHistoryId();
+    const mailboxBefore = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+
+    mockListHistory.mockRejectedValue(new GmailApiError("Gmail API error 401", 401));
+
+    const result = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(result.status).toBe("reconnect_required");
+
+    const mailboxAfter = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(mailboxAfter?.history_id).toBe(mailboxBefore?.history_id);
+  });
+
+  it("classifies a 403/429/5xx from listHistory the same way as the full-listing path", async () => {
+    await setUpConnectedGmail();
+    await establishHistoryId();
+    mockListHistory.mockRejectedValue(new GmailApiError("Gmail API error 429", 429));
+
+    const result = await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(result).toEqual({ status: "error", reason: "gmail_rate_limited" });
+  });
+});
+
+describe("syncGmailMailbox — GMAIL-06 replay idempotency", () => {
+  it("replaying the exact same history page (e.g. after a retry) does not duplicate the message", async () => {
+    await setUpConnectedGmail();
+    await establishHistoryId();
+    mockListHistory.mockResolvedValue({ history: [{ id: "1000", messagesAdded: [{ message: { id: "msg_1", threadId: "thread_1" } }] }] });
+    mockGetThread.mockResolvedValue({ id: "thread_1", messages: [gmailMessage({ id: "msg_1", threadId: "thread_1" })] });
+
+    await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    // Second sync starts from the NEW (advanced) history_id, but since the mock keeps returning
+    // the same page shape regardless of startHistoryId, this exercises "the same event applied
+    // twice" without duplicating anything — upsert semantics are idempotent by provider id.
+    await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+
+    const mailbox = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const threads = await listThreadsForCaller(mailbox!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(threads).toHaveLength(1);
+    const messages = await listMessagesForThreadForCaller(threads[0].id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    expect(messages).toHaveLength(1);
+  });
+
+  it("replaying the same deletion keeps the message tombstoned exactly once (deleted_at unchanged)", async () => {
+    await setUpConnectedGmail();
+    mockListThreads.mockResolvedValueOnce({ threads: [{ id: "thread_1" }] });
+    mockGetThread.mockResolvedValueOnce({ id: "thread_1", messages: [gmailMessage({ id: "msg_1", threadId: "thread_1" })] });
+    await establishHistoryId();
+
+    mockListHistory.mockResolvedValue({ history: [{ id: "1000", messagesDeleted: [{ message: { id: "msg_1", threadId: "thread_1" } }] }] });
+    await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const mailbox = await getOwnMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const threads = await listThreadsForCaller(mailbox!.id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const firstDeletedAt = (await listMessagesForThreadForCaller(threads[0].id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID }))[0].deleted_at;
+
+    await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+    const secondDeletedAt = (await listMessagesForThreadForCaller(threads[0].id, { workspaceId: WORKSPACE_ID, memberId: MEMBER_ID }))[0].deleted_at;
+    expect(secondDeletedAt).toBe(firstDeletedAt);
+  });
+});
+
+describe("syncGmailMailbox — GMAIL-06 scope/mutation boundaries", () => {
+  it("never calls a label-mutation or attachment-download method — the mocked provider only ever exposes read methods", async () => {
+    await setUpConnectedGmail();
+    await establishHistoryId();
+    mockListHistory.mockResolvedValue({ history: [{ id: "1000", messagesDeleted: [{ message: { id: "msg_1", threadId: "thread_1" } }] }] });
+
+    await syncGmailMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_ID });
+
+    const provider = GmailProviderMock.mock.results[0]!.value as Record<string, unknown>;
+    expect(Object.keys(provider)).not.toContain("modifyMessage");
+    expect(Object.keys(provider)).not.toContain("modifyThread");
+    expect(Object.keys(provider)).not.toContain("getAttachment");
   });
 });

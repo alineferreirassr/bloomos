@@ -109,6 +109,8 @@ export interface GmailMessage {
   is_sent: boolean;
   /** The only attachment signal persisted this checkpoint — no bytes, no metadata rows. */
   has_attachments: boolean;
+  /** GMAIL-06 — null = not deleted (every message before GMAIL-06, and every newly-synced one). Non-null = tombstoned, set by `gmailMailboxManager.markMessageDeleted` when Gmail's `history.list` reports a `messagesDeleted` event. Never a hard delete — see the GMAIL-06 migration's own header comment. Cleared back to null by `upsertMessage` if the provider message legitimately exists again. */
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 }
