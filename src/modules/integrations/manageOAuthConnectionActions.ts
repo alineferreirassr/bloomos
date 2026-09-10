@@ -13,7 +13,7 @@ import { getLogger } from "@/core/observability/logger";
 import type { IntegrationConnection } from "@/core/integrations/types";
 
 const GENERIC_ACCESS_ERROR = "That integration connection isn't available. You may not have access to it.";
-const OAUTH_PROVIDER_IDS = ["google-calendar", "gmail", "google-drive", "docusign", "dropbox"] as const;
+const OAUTH_PROVIDER_IDS = ["google-calendar", "google-calendar-readonly", "gmail", "google-drive", "docusign", "dropbox"] as const;
 type OAuthProviderId = (typeof OAUTH_PROVIDER_IDS)[number];
 
 /**
@@ -23,8 +23,17 @@ type OAuthProviderId = (typeof OAUTH_PROVIDER_IDS)[number];
  * exactly as it always has been — this set is the ONLY place that
  * decision is made, so adding a future member-owned provider never means
  * re-deriving `memberId`/ownership logic at every call site below.
+ *
+ * GCAL-02 — `google-calendar-readonly` is added here deliberately, for
+ * the same reason Gmail is: it's a member's own personal Google Calendar
+ * connection, not a workspace-shared one. Its sibling `google-calendar`
+ * (the pre-existing, workspace-owned, write-capable outbound provider)
+ * is NOT added here and keeps its exact existing ownership behavior —
+ * this set is per provider id, not per real-world service, so the two
+ * Google Calendar provider ids can and do carry different ownership
+ * models without any conflict.
  */
-const MEMBER_OWNED_PROVIDER_IDS = new Set<OAuthProviderId>(["gmail"]);
+const MEMBER_OWNED_PROVIDER_IDS = new Set<OAuthProviderId>(["gmail", "google-calendar-readonly"]);
 
 registerBuiltinProviders();
 registerCheckpoint43ProviderFactories();

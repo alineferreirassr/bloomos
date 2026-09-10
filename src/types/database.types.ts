@@ -2509,6 +2509,12 @@ export interface Database {
         Update: { id?: string; workspace_id?: string; member_id?: string; mailbox_id?: string; thread_id?: string; provider_message_id?: string; provider_thread_id?: string; internal_date?: string | null; subject?: string | null; snippet?: string | null; body_text?: string | null; body_html?: string | null; from_address?: Record<string, unknown> | null; to_addresses?: Record<string, unknown>[]; cc_addresses?: Record<string, unknown>[]; bcc_addresses?: Record<string, unknown>[]; reply_to_addresses?: Record<string, unknown>[]; message_id_header?: string | null; in_reply_to?: string | null; references_header?: string | null; label_ids?: string[]; is_read?: boolean; is_starred?: boolean; is_draft?: boolean; is_sent?: boolean; has_attachments?: boolean; deleted_at?: string | null; created_at?: string; updated_at?: string };
         Relationships: [];
       };
+      google_calendar_accounts: {
+        Row: { id: string; workspace_id: string; member_id: string; integration_connection_id: string; provider_account_id: string | null; provider_account_email: string | null; sync_status: string; last_synced_at: string | null; last_successful_sync_at: string | null; sync_error_code: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; member_id: string; integration_connection_id: string; provider_account_id?: string | null; provider_account_email?: string | null; sync_status?: string; last_synced_at?: string | null; last_successful_sync_at?: string | null; sync_error_code?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; member_id?: string; integration_connection_id?: string; provider_account_id?: string | null; provider_account_email?: string | null; sync_status?: string; last_synced_at?: string | null; last_successful_sync_at?: string | null; sync_error_code?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

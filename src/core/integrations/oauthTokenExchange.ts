@@ -23,6 +23,10 @@ export interface OAuthClientCredentials {
 
 const OAUTH_CLIENT_ENV_VARS: Record<string, { idVar: string; secretVar: string }> = {
   "google-calendar": { idVar: "GOOGLE_OAUTH_CLIENT_ID", secretVar: "GOOGLE_OAUTH_CLIENT_SECRET" },
+  // GCAL-02 — the same Google Cloud OAuth client as `google-calendar`/`gmail` above; a real
+  // Google OAuth client can issue tokens for multiple scopes/consent flows, so this reuses the
+  // existing env vars rather than requiring a second registered Google app.
+  "google-calendar-readonly": { idVar: "GOOGLE_OAUTH_CLIENT_ID", secretVar: "GOOGLE_OAUTH_CLIENT_SECRET" },
   gmail: { idVar: "GOOGLE_OAUTH_CLIENT_ID", secretVar: "GOOGLE_OAUTH_CLIENT_SECRET" },
   "google-drive": { idVar: "GOOGLE_OAUTH_CLIENT_ID", secretVar: "GOOGLE_OAUTH_CLIENT_SECRET" },
   docusign: { idVar: "DOCUSIGN_OAUTH_CLIENT_ID", secretVar: "DOCUSIGN_OAUTH_CLIENT_SECRET" },

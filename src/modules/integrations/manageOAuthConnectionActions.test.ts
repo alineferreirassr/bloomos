@@ -440,3 +440,89 @@ describe("getOwnProviderConnectionAction (GMAIL-03R2)", () => {
     expect(result.success && result.data).toBeNull();
   });
 });
+
+describe("google-calendar-readonly member-owned connection lifecycle (GCAL-02)", () => {
+  it("5, 6, 7. is member-owned like Gmail, while the existing google-calendar provider remains workspace-owned and Gmail remains member-owned — all three classified independently, not by real-world service", async () => {
+    const { complete: readonlyComplete } = await beginAndComplete("google-calendar-readonly", session);
+    expect(readonlyComplete.success).toBe(true);
+    const readonlyOwn = await getOwnProviderConnectionAction("google-calendar-readonly");
+    expect(readonlyOwn.success && readonlyOwn.data?.member_id).toBe("user_1");
+
+    const { complete: broadComplete } = await beginAndComplete("google-calendar", session);
+    expect(broadComplete.success).toBe(true);
+    const broadOwn = await getOwnProviderConnectionAction("google-calendar");
+    expect(broadOwn.success && broadOwn.data?.member_id).toBeNull();
+
+    const { complete: gmailComplete } = await beginAndComplete("gmail", session);
+    expect(gmailComplete.success).toBe(true);
+    const gmailOwn = await getOwnProviderConnectionAction("gmail");
+    expect(gmailOwn.success && gmailOwn.data?.member_id).toBe("user_1");
+  });
+
+  it("begin sets the connection's member_id and installed_by to session.user.id, not session.membership.id", async () => {
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session);
+    await beginProviderOAuthConnectionAction("google-calendar-readonly", "https://app.test/cb");
+    const own = await getOwnProviderConnectionAction("google-calendar-readonly");
+    expect(own.success && own.data?.member_id).toBe("user_1");
+    expect(own.success && own.data?.installed_by).toBe("user_1");
+  });
+
+  it("two different members each get their own separate google-calendar-readonly connection", async () => {
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session);
+    await beginProviderOAuthConnectionAction("google-calendar-readonly", "https://app.test/cb");
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(otherMemberSession);
+    await beginProviderOAuthConnectionAction("google-calendar-readonly", "https://app.test/cb");
+
+    const ownAsUser2 = await getOwnProviderConnectionAction("google-calendar-readonly");
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session);
+    const ownAsUser1 = await getOwnProviderConnectionAction("google-calendar-readonly");
+    if (!ownAsUser1.success || !ownAsUser2.success) throw new Error("expected both lookups to succeed");
+    expect(ownAsUser1.data?.member_id).toBe("user_1");
+    expect(ownAsUser2.data?.member_id).toBe("user_2");
+    expect(ownAsUser1.data?.id).not.toBe(ownAsUser2.data?.id);
+  });
+
+  it("13. denies a same-workspace, different member from reading another member's connection", async () => {
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session);
+    await beginProviderOAuthConnectionAction("google-calendar-readonly", "https://app.test/cb");
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(otherMemberSession);
+    const result = await getOwnProviderConnectionAction("google-calendar-readonly");
+    expect(result.success && result.data).toBeNull();
+  });
+
+  it("14. denies a cross-workspace caller from reading the connection", async () => {
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session);
+    await beginProviderOAuthConnectionAction("google-calendar-readonly", "https://app.test/cb");
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(crossTenantSession);
+    const result = await getOwnProviderConnectionAction("google-calendar-readonly");
+    expect(result.success && result.data).toBeNull();
+  });
+
+  it("13. denies a same-workspace, different member from disconnecting someone else's connection", async () => {
+    const { complete } = await beginAndComplete("google-calendar-readonly", session);
+    if (!complete.success || !("id" in complete.data)) throw new Error("expected a real connection");
+    const connectionId = complete.data.id;
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue({ ...otherMemberSession, permissions: session.permissions });
+    const result = await disconnectOAuthProviderAction(connectionId);
+    expect(result.success).toBe(false);
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session);
+    const stillOwn = await getOwnProviderConnectionAction("google-calendar-readonly");
+    expect(stillOwn.success && stillOwn.data?.state).toBe("connected");
+  });
+
+  it("27 & 28. disconnect revokes the credential and transitions connection state, without this checkpoint having any local Calendar data to preserve/purge yet", async () => {
+    const { complete } = await beginAndComplete("google-calendar-readonly", session);
+    if (!complete.success || !("id" in complete.data)) throw new Error("expected a real connection");
+    const connectionId = complete.data.id;
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session);
+    const result = await disconnectOAuthProviderAction(connectionId);
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.state).toBe("disabled");
+  });
+});

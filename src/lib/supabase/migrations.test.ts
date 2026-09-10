@@ -42,6 +42,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // Independently-tracked, not-yet-released, unrelated to the Finance
   // release this exact-count assertion describes.
   "20260906100000_gmail_message_deletion_tombstone.sql",
+  // GCAL-02 — Member-Owned Google Calendar (Read-Only) Account Foundation.
+  // Independently-tracked, not-yet-released, unrelated to the Finance
+  // release this exact-count assertion describes.
+  "20260910100000_google_calendar_readonly_account_foundation.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {
