@@ -14,6 +14,7 @@ import {
   listMessagesForThreadForCaller,
   listThreadsForCaller,
   markMessageDeleted,
+  reconcileThreadMetadata,
   upsertMailbox,
   upsertMessage,
   upsertThread,
@@ -337,5 +338,180 @@ describe("markMessageDeleted (GMAIL-06)", () => {
 
     const resurrected = await upsertMessage({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId, providerMessageId, providerThreadId: "thread_abc123", subject: "Still here" });
     expect(resurrected.deleted_at).toBeNull();
+  });
+});
+
+describe("reconcileThreadMetadata (GMAIL-08)", () => {
+  async function seedMailboxAndThread(): Promise<{ mailboxId: string; threadId: string }> {
+    const connectionId = await installGmailConnection(WORKSPACE_ID, MEMBER_1);
+    const mailbox = await upsertMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, integrationConnectionId: connectionId });
+    const thread = await upsertThread({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId: mailbox.id, providerThreadId: "thread_abc123" });
+    return { mailboxId: mailbox.id, threadId: thread.id };
+  }
+
+  async function addMessage(
+    mailboxId: string,
+    threadId: string,
+    providerMessageId: string,
+    overrides: { internalDate?: string | null; isRead?: boolean } = {},
+  ) {
+    return upsertMessage({
+      workspaceId: WORKSPACE_ID,
+      memberId: MEMBER_1,
+      mailboxId,
+      threadId,
+      providerMessageId,
+      providerThreadId: "thread_abc123",
+      internalDate: overrides.internalDate ?? "1735689600000",
+      isRead: overrides.isRead ?? true,
+    });
+  }
+
+  it("1. counts every active (non-tombstoned) message", async () => {
+    const { mailboxId, threadId } = await seedMailboxAndThread();
+    await addMessage(mailboxId, threadId, "msg_1");
+    await addMessage(mailboxId, threadId, "msg_2");
+    await addMessage(mailboxId, threadId, "msg_3");
+
+    const reconciled = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+    expect(reconciled.message_count).toBe(3);
+  });
+
+  it("2. excludes a tombstoned message from the count", async () => {
+    const { mailboxId, threadId } = await seedMailboxAndThread();
+    await addMessage(mailboxId, threadId, "msg_1");
+    await addMessage(mailboxId, threadId, "msg_2");
+    await markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId: "msg_2" });
+
+    const reconciled = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+    expect(reconciled.message_count).toBe(1);
+  });
+
+  it("3. replaying the same tombstone and reconciling twice does not double-decrement", async () => {
+    const { mailboxId, threadId } = await seedMailboxAndThread();
+    await addMessage(mailboxId, threadId, "msg_1");
+    await addMessage(mailboxId, threadId, "msg_2");
+    await markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId: "msg_2" });
+
+    const first = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+    // Replay: the same provider message id tombstoned again (idempotent no-op), reconciled again.
+    await markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId: "msg_2" });
+    const second = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+
+    expect(first.message_count).toBe(1);
+    expect(second.message_count).toBe(1);
+  });
+
+  it("4. counts an active unread message", async () => {
+    const { mailboxId, threadId } = await seedMailboxAndThread();
+    await addMessage(mailboxId, threadId, "msg_1", { isRead: false });
+
+    const reconciled = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+    expect(reconciled.unread_count).toBe(1);
+  });
+
+  it("5. does not count an active read message as unread", async () => {
+    const { mailboxId, threadId } = await seedMailboxAndThread();
+    await addMessage(mailboxId, threadId, "msg_1", { isRead: true });
+
+    const reconciled = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+    expect(reconciled.unread_count).toBe(0);
+  });
+
+  it("6. excludes a tombstoned unread message from unread_count", async () => {
+    const { mailboxId, threadId } = await seedMailboxAndThread();
+    await addMessage(mailboxId, threadId, "msg_1", { isRead: false });
+    await addMessage(mailboxId, threadId, "msg_2", { isRead: false });
+    await markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId: "msg_2" });
+
+    const reconciled = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+    expect(reconciled.unread_count).toBe(1);
+  });
+
+  it("7. a tombstoned read message does not affect unread_count either way", async () => {
+    const { mailboxId, threadId } = await seedMailboxAndThread();
+    await addMessage(mailboxId, threadId, "msg_1", { isRead: false });
+    await addMessage(mailboxId, threadId, "msg_2", { isRead: true });
+    await markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId: "msg_2" });
+
+    const reconciled = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+    expect(reconciled.unread_count).toBe(1);
+    expect(reconciled.message_count).toBe(1);
+  });
+
+  it("8. latest_message_at is the max internal_date among active messages", async () => {
+    const { mailboxId, threadId } = await seedMailboxAndThread();
+    await addMessage(mailboxId, threadId, "msg_1", { internalDate: "1735689600000" }); // earlier
+    await addMessage(mailboxId, threadId, "msg_2", { internalDate: "1735776000000" }); // later
+
+    const reconciled = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+    expect(reconciled.latest_message_at).toBe("1735776000000");
+  });
+
+  it("9. deleting a non-latest message leaves latest_message_at unchanged", async () => {
+    const { mailboxId, threadId } = await seedMailboxAndThread();
+    await addMessage(mailboxId, threadId, "msg_1", { internalDate: "1735689600000" }); // earlier — will be deleted
+    await addMessage(mailboxId, threadId, "msg_2", { internalDate: "1735776000000" }); // later, stays
+    await markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId: "msg_1" });
+
+    const reconciled = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+    expect(reconciled.latest_message_at).toBe("1735776000000");
+  });
+
+  it("10 & 11. deleting the current-latest message falls back to the next-latest active message", async () => {
+    const { mailboxId, threadId } = await seedMailboxAndThread();
+    await addMessage(mailboxId, threadId, "msg_1", { internalDate: "1735689600000" }); // earlier
+    await addMessage(mailboxId, threadId, "msg_2", { internalDate: "1735776000000" }); // latest — will be deleted
+    await markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId: "msg_2" });
+
+    const reconciled = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+    expect(reconciled.latest_message_at).toBe("1735689600000");
+  });
+
+  it("12, 13, 14, 15. deleting the final active message produces the canonical empty-thread state (0/0/null), thread row preserved", async () => {
+    const { mailboxId, threadId } = await seedMailboxAndThread();
+    await addMessage(mailboxId, threadId, "msg_1", { internalDate: "1735689600000", isRead: false });
+    await markMessageDeleted({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, providerMessageId: "msg_1" });
+
+    const reconciled = await reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId });
+    expect(reconciled.message_count).toBe(0);
+    expect(reconciled.unread_count).toBe(0);
+    expect(reconciled.latest_message_at).toBeNull();
+    // The thread row itself is never hard-deleted — still readable by the owning caller.
+    const stillThere = await getThreadForCaller(threadId, { workspaceId: WORKSPACE_ID, memberId: MEMBER_1 });
+    expect(stillThere).not.toBeNull();
+  });
+
+  it("16. the owning member can reconcile their own thread", async () => {
+    const { mailboxId, threadId } = await seedMailboxAndThread();
+    await addMessage(mailboxId, threadId, "msg_1");
+    await expect(reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId })).resolves.toBeTruthy();
+  });
+
+  it("17. denies a same-workspace, different member from reconciling a thread that isn't theirs", async () => {
+    const { mailboxId, threadId } = await seedMailboxAndThread();
+    await expect(reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_2, mailboxId, threadId })).rejects.toThrow(/not owned by the caller/);
+  });
+
+  it("18. denies a cross-workspace caller from reconciling a thread", async () => {
+    const { mailboxId, threadId } = await seedMailboxAndThread();
+    await expect(reconcileThreadMetadata({ workspaceId: OTHER_WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId })).rejects.toThrow();
+  });
+
+  it("19. denies a thread id that belongs to a different mailbox than the one supplied", async () => {
+    const { threadId } = await seedMailboxAndThread();
+    const otherConnectionId = await installGmailConnection(WORKSPACE_ID, MEMBER_2);
+    const otherMailbox = await upsertMailbox({ workspaceId: WORKSPACE_ID, memberId: MEMBER_2, integrationConnectionId: otherConnectionId });
+
+    await expect(
+      reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId: otherMailbox.id, threadId }),
+    ).rejects.toThrow();
+  });
+
+  it("rejects an unknown thread id", async () => {
+    const { mailboxId } = await seedMailboxAndThread();
+    await expect(
+      reconcileThreadMetadata({ workspaceId: WORKSPACE_ID, memberId: MEMBER_1, mailboxId, threadId: "gmail-thread_missing" }),
+    ).rejects.toThrow(/No thread found/);
   });
 });

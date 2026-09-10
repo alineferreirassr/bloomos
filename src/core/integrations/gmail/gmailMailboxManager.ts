@@ -277,3 +277,58 @@ export async function markMessageDeleted(params: MarkMessageDeletedParams): Prom
 
   return updateMessage(existing.id, { deleted_at: nowIso() });
 }
+
+export interface ReconcileThreadMetadataParams {
+  workspaceId: string;
+  memberId: string;
+  mailboxId: string;
+  threadId: string;
+}
+
+/**
+ * GMAIL-08 — recomputes a thread's own `message_count`/`unread_count`/
+ * `latest_message_at` directly from its canonical local active (not
+ * tombstoned) message set. Deliberately a local recomputation, never a
+ * live Gmail refetch: a `messagesDeleted` history event already means
+ * Gmail confirmed the message is gone, so re-fetching the thread to
+ * derive this would spend an API call `markMessageDeleted`'s own doc
+ * comment (GMAIL-06K) already decided tombstoning shouldn't need.
+ *
+ * Always recomputes from scratch (never `count - 1`/`count + 1`), so
+ * this is idempotent by construction — replaying the same tombstone
+ * and reconciling twice is exactly as safe as reconciling once. A
+ * thread whose only messages are all tombstoned is never hard-deleted:
+ * it keeps existing with `message_count`/`unread_count` at `0` and
+ * `latest_message_at` at `null` (the column is nullable — see the
+ * GMAIL-04 migration's own schema — so this is a truthful empty state,
+ * not a fabricated sentinel).
+ *
+ * Ownership is enforced the same way every other write in this file
+ * is: `assertThreadOwnership` throws for a thread that doesn't exist,
+ * isn't the caller's own, or doesn't belong to the given mailbox — no
+ * client-supplied ownership authority, no distinguishable cross-tenant
+ * error from any other rejection in this module.
+ */
+export async function reconcileThreadMetadata(params: ReconcileThreadMetadataParams): Promise<GmailThread> {
+  const caller: GmailCallerScope = { workspaceId: params.workspaceId, memberId: params.memberId };
+  const thread = await assertThreadOwnership(params.threadId, params.mailboxId, caller);
+
+  const allMessages = await listMessagesForThread(thread.id);
+  const activeMessages = allMessages.filter((message) => message.deleted_at === null);
+
+  const messageCount = activeMessages.length;
+  const unreadCount = activeMessages.filter((message) => !message.is_read).length;
+  const latestMessageAt = activeMessages.reduce<string | null>((latest, message) => {
+    if (!message.internal_date) return latest;
+    if (!latest || message.internal_date > latest) return message.internal_date;
+    return latest;
+  }, null);
+
+  const updated = await updateThread(thread.id, {
+    message_count: messageCount,
+    unread_count: unreadCount,
+    latest_message_at: latestMessageAt,
+  });
+  if (!updated) throw new Error("Could not reconcile this thread's metadata.");
+  return updated;
+}

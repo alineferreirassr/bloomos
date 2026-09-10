@@ -5,7 +5,7 @@ import { getCredential, resolveAccessToken } from "@/core/integrations/credentia
 import { refreshProviderOAuthConnectionAction } from "@/modules/integrations/manageOAuthConnectionActions";
 import { GmailApiError, GmailProvider } from "@/core/integrations/providers/gmail/gmailProvider";
 import { parseGmailMessage } from "@/core/integrations/providers/gmail/gmailMessageParser";
-import { markMessageDeleted, upsertMailbox, upsertMessage, upsertThread } from "@/core/integrations/gmail/gmailMailboxManager";
+import { markMessageDeleted, reconcileThreadMetadata, upsertMailbox, upsertMessage, upsertThread } from "@/core/integrations/gmail/gmailMailboxManager";
 import type { IntegrationConnection } from "@/core/integrations/types";
 import type { GmailMailbox } from "@/core/integrations/gmail/types";
 
@@ -307,17 +307,37 @@ async function runIncrementalSync(gmail: GmailProvider, caller: GmailSyncCaller,
   }
 
   let messagesDeleted = 0;
+  const deletedThreadIds = new Set<string>();
   for (const [providerMessageId, info] of finalState) {
     if (info.action !== "delete") continue;
     try {
       // markMessageDeleted returns null (not counted) for a provider message id
       // with no local row — a real, safe no-op, not a failure.
       const tombstoned = await markMessageDeleted({ workspaceId: caller.workspaceId, memberId: caller.memberId, mailboxId: mailbox.id, providerMessageId });
-      if (tombstoned) messagesDeleted++;
+      if (tombstoned) {
+        messagesDeleted++;
+        deletedThreadIds.add(tombstoned.thread_id);
+      }
     } catch (error) {
       messagesSkipped++;
       getLogger().warn("Gmail sync: skipped one deletion that could not be persisted", { mailboxId: mailbox.id, providerMessageId, error: error instanceof Error ? error.message : "unknown" });
     }
+  }
+
+  // GMAIL-08 — reconcile local thread metadata (message_count/unread_count/
+  // latest_message_at) once per distinct thread that had at least one
+  // message tombstoned this batch (never N calls for N deletions in the
+  // same thread). Deliberately NOT wrapped in a try/catch the way the
+  // tombstone loop above is: a tombstone that succeeds but whose thread
+  // then fails to reconcile leaves persisted metadata *known* stale, not
+  // merely "one skipped item" — so this propagates and aborts the sync the
+  // same way a fatal Gmail API error already does (see isFatalGmailApiError
+  // below), which is exactly what keeps newHistoryId from advancing this
+  // batch. Both markMessageDeleted and reconcileThreadMetadata recompute
+  // from canonical state rather than incrementing/decrementing, so the
+  // retry this forces is always idempotent.
+  for (const threadId of deletedThreadIds) {
+    await reconcileThreadMetadata({ workspaceId: caller.workspaceId, memberId: caller.memberId, mailboxId: mailbox.id, threadId });
   }
 
   return { kind: "success", newHistoryId: lastConsumedHistoryId, threadsProcessed, messagesProcessed, messagesDeleted, threadsSkipped, messagesSkipped };
