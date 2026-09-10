@@ -2485,6 +2485,12 @@ export interface Database {
         Update: { id?: string; workspace_id?: string; member_id?: string | null; connection_id?: string; kind?: string; scopes?: string[]; expires_at?: string | null; rotated_at?: string | null; revoked_at?: string | null; key_hash?: string | null; key_prefix?: string | null; access_token_ref?: string | null; refresh_token_ref?: string | null; created_by?: string; created_at?: string; updated_at?: string };
         Relationships: [];
       };
+      oauth_pending_authorizations: {
+        Row: { state: string; workspace_id: string; member_id: string | null; provider_id: string; connection_id: string; redirect_uri: string; code_verifier_ref: string | null; created_at: string; expires_at: string };
+        Insert: { state: string; workspace_id: string; member_id?: string | null; provider_id: string; connection_id: string; redirect_uri: string; code_verifier_ref?: string | null; created_at?: string; expires_at: string };
+        Update: { state?: string; workspace_id?: string; member_id?: string | null; provider_id?: string; connection_id?: string; redirect_uri?: string; code_verifier_ref?: string | null; created_at?: string; expires_at?: string };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -2493,6 +2499,10 @@ export interface Database {
         Returns: string;
       };
       read_integration_secret: {
+        Args: { p_secret_id: string };
+        Returns: string | null;
+      };
+      read_pending_oauth_secret: {
         Args: { p_secret_id: string };
         Returns: string | null;
       };

@@ -30,6 +30,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // Foundation. Independently-tracked, not-yet-released, unrelated to the
   // Finance release this exact-count assertion describes.
   "20260903100000_integration_connection_credential_persistence.sql",
+  // GMAIL-03P — Durable OAuth Pending-Authorization Persistence.
+  // Independently-tracked, not-yet-released, unrelated to the Finance
+  // release this exact-count assertion describes.
+  "20260904100000_oauth_pending_authorization_persistence.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {
@@ -3762,5 +3766,66 @@ describe("Finance F2.1C-F-E-D-B2 migration — Create Expense Request Idempotenc
     const code = stripSqlComments(sql());
     expect(code).not.toMatch(/exception when unique_violation/);
     expect(code).not.toMatch(/loop\s/);
+  });
+});
+
+describe("GMAIL-03P migration — oauth_pending_authorizations", () => {
+  function sql(): string {
+    return readMigration("20260904100000_oauth_pending_authorization_persistence.sql");
+  }
+
+  it("creates the table with state as primary key and the required workspace/member/connection columns", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create table if not exists public\.oauth_pending_authorizations/);
+    expect(code).toMatch(/state\s+text primary key/);
+    expect(code).toMatch(/workspace_id\s+uuid not null references public\.workspaces \(id\) on delete cascade/);
+    expect(code).toMatch(/member_id\s+uuid references auth\.users \(id\) on delete cascade/);
+    expect(code).toMatch(/connection_id\s+uuid not null references public\.integration_connections \(id\) on delete cascade/);
+    expect(code).toMatch(/code_verifier_ref\s+uuid/);
+    expect(code).toMatch(/expires_at\s+timestamptz not null/);
+  });
+
+  it("is purely additive — no DROP, TRUNCATE, or DELETE of existing business data, no destructive rewrite", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/drop table/);
+    expect(code).not.toMatch(/drop column/);
+    expect(code).not.toMatch(/truncate/);
+    expect(code).not.toMatch(/\bdelete from\b/);
+    expect(code).not.toMatch(/\balter table\b.*\bdisable row level security\b/);
+  });
+
+  it("enables RLS and scopes the same-workspace/member-or-null ownership policy exactly like integration_connections", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/alter table public\.oauth_pending_authorizations enable row level security/);
+    expect(code).toMatch(/create policy "oauth_pending_authorizations_all_own_scope"/);
+    expect(code).toMatch(/using \(public\.is_workspace_member\(workspace_id\) and \(member_id is null or member_id = auth\.uid\(\)\)\)/);
+    expect(code).toMatch(/with check \(public\.is_workspace_member\(workspace_id\) and \(member_id is null or member_id = auth\.uid\(\)\)\)/);
+  });
+
+  it("indexes workspace_id, member_id (partial), and expires_at for the lookups the store/cleanup paths need", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create index if not exists oauth_pending_authorizations_workspace_id_idx on public\.oauth_pending_authorizations \(workspace_id\)/);
+    expect(code).toMatch(/create index if not exists oauth_pending_authorizations_member_id_idx on public\.oauth_pending_authorizations \(member_id\) where member_id is not null/);
+    expect(code).toMatch(/create index if not exists oauth_pending_authorizations_expires_at_idx on public\.oauth_pending_authorizations \(expires_at\)/);
+  });
+
+  it("adds read_pending_oauth_secret as its own SECURITY DEFINER function, separate from read_integration_secret, checking ownership against oauth_pending_authorizations", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create or replace function public\.read_pending_oauth_secret\(p_secret_id uuid\)/);
+    expect(code).toMatch(/security definer/);
+    expect(code).toMatch(/from public\.oauth_pending_authorizations p\s*\n\s*where p\.code_verifier_ref = p_secret_id/);
+    expect(code).not.toMatch(/read_pending_oauth_secret[\s\S]*from public\.integration_credentials/);
+  });
+
+  it("revokes read_pending_oauth_secret from public and grants execute only to authenticated", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/revoke all on function public\.read_pending_oauth_secret\(uuid\) from public/);
+    expect(code).toMatch(/grant execute on function public\.read_pending_oauth_secret\(uuid\) to authenticated/);
+  });
+
+  it("reuses store_integration_secret as-is rather than defining a second secret-creation function", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/create (or replace )?function public\.store_pending_oauth_secret/);
+    expect(code).not.toMatch(/create extension/); // supabase_vault already enabled by the GMAIL-02 migration
   });
 });

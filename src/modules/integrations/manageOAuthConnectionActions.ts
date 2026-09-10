@@ -70,7 +70,7 @@ export async function completeProviderOAuthConnectionAction(providerId: string, 
   const provider = getProvider(providerId);
   if (!provider?.oauth) return { success: false, error: "This provider has no OAuth configuration registered." };
 
-  if (!getPendingAuthorization(state)) return { success: false, error: "This authorization request has expired or was already used." };
+  if (!(await getPendingAuthorization(state))) return { success: false, error: "This authorization request has expired or was already used." };
 
   // Real token exchange happens before the pending state is consumed, so an
   // unconfigured OAuth client leaves the state valid for a genuine retry
