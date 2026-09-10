@@ -34,6 +34,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // Independently-tracked, not-yet-released, unrelated to the Finance
   // release this exact-count assertion describes.
   "20260904100000_oauth_pending_authorization_persistence.sql",
+  // GMAIL-04 — Gmail Mailbox/Thread/Message Persistence Foundation.
+  // Independently-tracked, not-yet-released, unrelated to the Finance
+  // release this exact-count assertion describes.
+  "20260905100000_gmail_mailbox_persistence_foundation.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {
@@ -3827,5 +3831,104 @@ describe("GMAIL-03P migration — oauth_pending_authorizations", () => {
     const code = stripSqlComments(sql());
     expect(code).not.toMatch(/create (or replace )?function public\.store_pending_oauth_secret/);
     expect(code).not.toMatch(/create extension/); // supabase_vault already enabled by the GMAIL-02 migration
+  });
+});
+
+describe("GMAIL-04 migration — gmail_mailboxes / gmail_threads / gmail_messages", () => {
+  function sql(): string {
+    return readMigration("20260905100000_gmail_mailbox_persistence_foundation.sql");
+  }
+
+  it("creates all three tables with uuid primary keys", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create table if not exists public\.gmail_mailboxes/);
+    expect(code).toMatch(/create table if not exists public\.gmail_threads/);
+    expect(code).toMatch(/create table if not exists public\.gmail_messages/);
+    expect(code.match(/id\s+uuid primary key default gen_random_uuid\(\)/g)).toHaveLength(3);
+  });
+
+  it("requires member_id (never null) on all three tables — mailbox content is personal, not shared workspace infrastructure", () => {
+    const code = stripSqlComments(sql());
+    expect(code.match(/member_id\s+uuid not null references auth\.users \(id\) on delete cascade/g)).toHaveLength(3);
+    // Unlike integration_connections.member_id, there is no nullable/optional member_id anywhere in this migration.
+    expect(code).not.toMatch(/member_id\s+uuid references auth\.users/);
+  });
+
+  it("binds gmail_mailboxes to integration_connections via a plain FK", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/integration_connection_id\s+uuid not null references public\.integration_connections \(id\) on delete cascade/);
+    expect(code).toMatch(/unique \(integration_connection_id\)/);
+  });
+
+  it("is purely additive — no DROP, TRUNCATE, or DELETE of existing business data, no destructive rewrite, and does not touch the GMAIL-02/GMAIL-03P migration files", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/drop table/);
+    expect(code).not.toMatch(/drop column/);
+    expect(code).not.toMatch(/truncate/);
+    expect(code).not.toMatch(/\bdelete from\b/);
+    expect(code).not.toMatch(/\balter table\b.*\bdisable row level security\b/);
+    const gmail02 = readMigration("20260903100000_integration_connection_credential_persistence.sql");
+    const gmail03p = readMigration("20260904100000_oauth_pending_authorization_persistence.sql");
+    expect(gmail02).not.toMatch(/gmail_mailboxes|gmail_threads|gmail_messages/);
+    expect(gmail03p).not.toMatch(/gmail_mailboxes|gmail_threads|gmail_messages/);
+  });
+
+  it("enables RLS on all three tables with no member_id IS NULL escape hatch, unlike integration_connections", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/alter table public\.gmail_mailboxes enable row level security/);
+    expect(code).toMatch(/alter table public\.gmail_threads enable row level security/);
+    expect(code).toMatch(/alter table public\.gmail_messages enable row level security/);
+    expect(code).not.toMatch(/member_id is null or member_id = auth\.uid\(\)/);
+  });
+
+  it("gmail_mailboxes RLS requires is_workspace_member and member_id = auth.uid() with no exception", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create policy "gmail_mailboxes_own_scope"[\s\S]*?using \(public\.is_workspace_member\(workspace_id\) and member_id = auth\.uid\(\)\)/);
+  });
+
+  it("gmail_threads and gmail_messages RLS re-verify ownership against their real parent row, not just their own denormalized workspace_id/member_id columns", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create policy "gmail_threads_own_scope"[\s\S]*?exists \(\s*select 1 from public\.gmail_mailboxes mb/);
+    expect(code).toMatch(/create policy "gmail_messages_own_scope"[\s\S]*?exists \(\s*select 1 from public\.gmail_mailboxes mb/);
+    expect(code).toMatch(/create policy "gmail_messages_own_scope"[\s\S]*?exists \(\s*select 1 from public\.gmail_threads th/);
+  });
+
+  it("indexes owner/time-scoped lookups", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create index if not exists gmail_mailboxes_workspace_id_idx/);
+    expect(code).toMatch(/create index if not exists gmail_mailboxes_member_id_idx/);
+    expect(code).toMatch(/create index if not exists gmail_threads_mailbox_id_idx/);
+    expect(code).toMatch(/create index if not exists gmail_messages_thread_id_idx/);
+  });
+
+  it("enforces uniqueness for provider-native ids scoped to their owning row — never a bare unique on the provider id alone", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/unique \(mailbox_id, provider_thread_id\)/);
+    expect(code).toMatch(/unique \(mailbox_id, provider_message_id\)/);
+  });
+
+  it("persists no attachment bytes or storage bucket reference — has_attachments is the only attachment signal", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/has_attachments\s+boolean not null default false/);
+    expect(code).not.toMatch(/attachment_bytes|storage\.buckets|create bucket/i);
+  });
+
+  it("persists provider label ids as a plain text array — no normalized labels table", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/label_ids\s+text\[\] not null default '\{\}'::text\[\]/);
+    expect(code).not.toMatch(/create table if not exists public\.gmail_labels/);
+  });
+
+  it("supports a nullable email_address and history_id — GMAIL-03 never acquired identity scopes", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/email_address\s+text/);
+    expect(code).toMatch(/history_id\s+text/);
+    expect(code).not.toMatch(/email_address\s+text not null/);
+  });
+
+  it("reuses the existing set_updated_at trigger function rather than inventing a new timestamp pattern", () => {
+    const code = stripSqlComments(sql());
+    expect(code.match(/execute function public\.set_updated_at\(\)/g)).toHaveLength(3);
+    expect(code).not.toMatch(/create (or replace )?function public\.set_updated_at/);
   });
 });
