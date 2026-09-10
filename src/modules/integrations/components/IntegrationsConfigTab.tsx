@@ -8,12 +8,22 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import type { BadgeTone } from "@/components/ui/Badge";
 import { applyConnectionEventAction, installProviderAction, uninstallConnectionAction } from "@/modules/integrations/manageIntegrationConnectionsActions";
 import { StripeConnectPanel } from "@/modules/integrations/stripe/components/StripeConnectPanel";
+import { GmailConnectPanel } from "@/modules/integrations/components/GmailConnectPanel";
 import { CONNECTION_STATE_LABELS } from "@/core/integrations/types";
 import type { ConnectionEvent, ConnectionState, ProviderDefinition } from "@/core/integrations/types";
 import type { ConnectionWithHealth } from "@/modules/integrations/getIntegrationsConsoleData";
 
-/** v2 Checkpoint 23 — providers with a real SDK implementation get their own dedicated connection flow (real API verification before any state transition), not the generic "just flip the state" table below. Stripe is the first. */
-const REAL_PROVIDER_IDS = new Set(["stripe"]);
+/**
+ * v2 Checkpoint 23 — providers with a real SDK implementation get their
+ * own dedicated connection flow (real API verification before any state
+ * transition), not the generic "just flip the state" table below. Stripe
+ * was the first. GMAIL-03R2 adds `gmail`: its connection is member-owned
+ * (GMAIL-02/GMAIL-03R2), and the generic table's buttons only ever check
+ * `workspace.manage` — they have no member-ownership concept at all, so
+ * leaving Gmail in that table would let any workspace manager "Refresh"
+ * or "Disable" a connection that isn't theirs to touch.
+ */
+const REAL_PROVIDER_IDS = new Set(["stripe", "gmail"]);
 
 const STATE_TONE: Record<ConnectionState, BadgeTone> = {
   disconnected: "neutral",
@@ -88,6 +98,7 @@ export function IntegrationsConfigTab({ providers, connections, onChanged }: Int
       ) : null}
 
       <StripeConnectPanel />
+      <GmailConnectPanel />
 
       <Card>
         <h3 className="font-serif text-[17px] font-semibold text-text">Installed connections</h3>

@@ -171,16 +171,14 @@ export async function getPendingAuthorization(state: string): Promise<PendingAut
 }
 
 /**
- * GMAIL-03P — an additive, opt-in ownership-scoped accessor alongside
+ * An additive, opt-in ownership-scoped accessor alongside
  * `getPendingAuthorization`. In Supabase mode this is defense-in-depth
  * (the table's own RLS policy already denies a cross-workspace or
  * cross-member read at the database level); in mock mode, where there is
- * no RLS, this is the *only* enforcement — matching this codebase's
- * existing "ownership checked by the caller, not the mock store" pattern
- * (e.g. `resolveConnectionAccessTokenForServer`). No existing caller uses
- * this yet — `manageOAuthConnectionActions.ts`'s begin/complete actions
- * keep their exact current behavior; wiring this in is GMAIL-03's own
- * ownership-enforcement work, not this checkpoint's.
+ * no RLS, this is the enforcement — matching this codebase's existing
+ * "ownership checked by the caller, not the mock store" pattern (e.g.
+ * `resolveConnectionAccessTokenForServer`). GMAIL-03R2 wires this into
+ * `manageOAuthConnectionActions.ts`'s `completeProviderOAuthConnectionAction`.
  */
 export async function getPendingAuthorizationForCaller(state: string, caller: { workspaceId: string; memberId?: string | null }): Promise<PendingAuthorization | null> {
   const pending = await getPendingAuthorization(state);
@@ -188,6 +186,18 @@ export async function getPendingAuthorizationForCaller(state: string, caller: { 
   if (pending.workspace_id !== caller.workspaceId) return null;
   if (pending.member_id !== null && pending.member_id !== (caller.memberId ?? null)) return null;
   return pending;
+}
+
+/** GMAIL-03R2 — the one legitimate way to recover a pending authorization's plaintext PKCE `code_verifier`: server-side only, never through a client-supplied param (there is no external caller that could supply one — a real callback route resolves it here). Returns null for a provider that didn't use PKCE, an unknown/expired state, or an ownership mismatch when `caller` is supplied. */
+export async function resolvePendingAuthorizationCodeVerifier(state: string, caller?: { workspaceId: string; memberId?: string | null }): Promise<string | null> {
+  const row = await getPendingAuthorizationByState(state);
+  if (!row || isExpired(row)) return null;
+  if (caller) {
+    if (row.workspace_id !== caller.workspaceId) return null;
+    if (row.member_id !== null && row.member_id !== (caller.memberId ?? null)) return null;
+  }
+  if (!row.code_verifier_ref) return null;
+  return pendingSecretProvider.decrypt(row.code_verifier_ref);
 }
 
 export interface CompleteAuthorizationParams {
@@ -198,6 +208,9 @@ export interface CompleteAuthorizationParams {
   refreshToken?: string | null;
   expiresAt?: string | null;
   scopes?: string[];
+  /** GMAIL-03R2 addendum — when supplied, enforces the same ownership scope as `getPendingAuthorizationForCaller` before consuming the row, using the exact same "no pending authorization" message on a mismatch as on a genuinely missing state (never distinguishing "exists but isn't yours" from "doesn't exist"). Optional so every existing caller/test keeps its current behavior. */
+  callerWorkspaceId?: string;
+  callerMemberId?: string | null;
 }
 
 export interface OAuthCompletionResult {
@@ -206,27 +219,51 @@ export interface OAuthCompletionResult {
   providerId: string;
 }
 
-/** Consumes a pending authorization exactly once — a replayed or expired `state` throws, the same CSRF discipline a real callback route needs regardless of provider. The row is deleted before the credential is issued, matching the prior in-memory implementation's own ordering — a failure issuing the credential does not resurrect a consumed state. */
+/**
+ * Consumes a pending authorization exactly once — a replayed or expired
+ * `state` throws, the same CSRF discipline a real callback route needs
+ * regardless of provider. The row is deleted before the credential is
+ * issued, matching the prior in-memory implementation's own ordering —
+ * a failure issuing the credential does not resurrect a consumed state.
+ * The issued credential's own `member_id` mirrors the pending row's
+ * `member_id` exactly, so a member-owned connection's credential is
+ * member-owned too.
+ *
+ * GMAIL-03R2 — an ownership mismatch (`callerWorkspaceId`/`callerMemberId`
+ * supplied but not matching) throws *without* deleting the row: a wrong
+ * caller must never be able to destroy someone else's still-valid,
+ * in-progress authorization just by guessing/observing its `state` and
+ * calling complete with the wrong identity. Only a genuinely expired row
+ * is lazily removed here.
+ */
 export async function completeAuthorization(params: CompleteAuthorizationParams): Promise<OAuthCompletionResult> {
   const row = await getPendingAuthorizationByState(params.state);
-  if (!row || isExpired(row)) {
-    if (row) await deletePendingAuthorization(params.state);
+  if (row && isExpired(row)) await deletePendingAuthorization(params.state);
+  const usableRow = row && !isExpired(row) ? row : null;
+
+  const ownershipMismatch =
+    usableRow !== null &&
+    params.callerWorkspaceId !== undefined &&
+    (usableRow.workspace_id !== params.callerWorkspaceId || (usableRow.member_id !== null && usableRow.member_id !== (params.callerMemberId ?? null)));
+
+  if (!usableRow || ownershipMismatch) {
     throw new Error("No pending authorization for this state — it may have expired or already been completed.");
   }
 
   await deletePendingAuthorization(params.state);
 
   const credential = await issueOAuthCredential({
-    workspaceId: row.workspace_id,
-    connectionId: row.connection_id,
+    workspaceId: usableRow.workspace_id,
+    connectionId: usableRow.connection_id,
     scopes: params.scopes ?? [],
     createdBy: params.createdBy,
+    memberId: usableRow.member_id,
     accessToken: params.accessToken,
     refreshToken: params.refreshToken,
     expiresAt: params.expiresAt,
   });
 
-  return { credential, connectionId: row.connection_id, providerId: row.provider_id };
+  return { credential, connectionId: usableRow.connection_id, providerId: usableRow.provider_id };
 }
 
 /** Discards a pending authorization without completing it — e.g. the user cancelled at the provider's own consent screen. */

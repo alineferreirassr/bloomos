@@ -220,6 +220,37 @@ export async function rotateProviderSecretCredential(credentialId: string, newSe
   return updateCredential(credentialId, { access_token_ref: accessTokenRef, rotated_at: nowIso() });
 }
 
+/** Resolves the real refresh token for an `oauth_token`-kind credential — server-only, mirroring `resolveAccessToken`'s exact "fail closed, return null" shape (unknown id, wrong kind, revoked, or no refresh token at all). Never used for `api_key`/`provider_secret`-kind credentials. */
+export async function resolveRefreshToken(credentialId: string): Promise<string | null> {
+  const credential = await getCredentialById(credentialId);
+  if (!credential || credential.kind !== "oauth_token" || !credential.refresh_token_ref || credential.revoked_at) return null;
+  return encryptionProvider.decrypt(credential.refresh_token_ref);
+}
+
+export interface RotateOAuthCredentialParams {
+  accessToken: string;
+  /** Google's own refresh response omits `refresh_token` when it hasn't changed — pass `undefined`/`null` in that case. Only an explicit string here replaces the stored `refresh_token_ref`; omitting it leaves the existing one in place, exactly like `rotateApiKeyCredential`'s "old value stops verifying, nothing else changes" precedent. */
+  refreshToken?: string | null;
+  expiresAt?: string | null;
+}
+
+/** GMAIL-03R2 — replaces an `oauth_token`-kind credential's encrypted access token (and, when supplied, its refresh token) in place, for a persisted server-side refresh cycle. Same id, so the owning `IntegrationConnection.credential_id` keeps working. Never clears a valid `refresh_token_ref` just because the caller didn't supply a new one — see `RotateOAuthCredentialParams.refreshToken`. */
+export async function rotateOAuthCredential(credentialId: string, params: RotateOAuthCredentialParams): Promise<IntegrationCredential | null> {
+  const existing = await getCredentialById(credentialId);
+  if (!existing || existing.kind !== "oauth_token") return null;
+
+  const patch: Partial<IntegrationCredential> = {
+    access_token_ref: await encryptionProvider.encrypt(params.accessToken),
+    expires_at: params.expiresAt ?? existing.expires_at,
+    rotated_at: nowIso(),
+  };
+  if (params.refreshToken !== undefined && params.refreshToken !== null) {
+    patch.refresh_token_ref = await encryptionProvider.encrypt(params.refreshToken);
+  }
+
+  return updateCredential(credentialId, patch);
+}
+
 export async function revokeCredential(credentialId: string): Promise<IntegrationCredential | null> {
   return updateCredential(credentialId, { revoked_at: nowIso() });
 }

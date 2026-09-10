@@ -11,6 +11,7 @@ import {
   getPendingAuthorization,
   getPendingAuthorizationForCaller,
   resetOAuthEngine,
+  resolvePendingAuthorizationCodeVerifier,
   setPendingSecretProvider,
 } from "@/core/integrations/oauthEngine";
 import { getPendingAuthorizationByState } from "@/lib/data/core/integrations/pendingOAuthAuthorizationStore";
@@ -164,6 +165,63 @@ describe("cancelAuthorization", () => {
     const { state } = await beginAuthorization({ workspaceId: "ws_1", connectionId: "conn_1", providerId: "test-oauth-provider", redirectUri: "https://app.test/callback" });
     await cancelAuthorization(state);
     expect(await getPendingAuthorization(state)).toBeNull();
+  });
+});
+
+describe("resolvePendingAuthorizationCodeVerifier (GMAIL-03R2)", () => {
+  it("resolves the real plaintext PKCE code_verifier server-side", async () => {
+    const { state } = await beginAuthorization({ workspaceId: "ws_1", connectionId: "conn_1", providerId: "test-oauth-provider", redirectUri: "https://app.test/callback" });
+    const verifier = await resolvePendingAuthorizationCodeVerifier(state);
+    expect(typeof verifier).toBe("string");
+    expect(verifier!.length).toBeGreaterThan(0);
+  });
+
+  it("returns null for an unknown state", async () => {
+    expect(await resolvePendingAuthorizationCodeVerifier("state_never_existed")).toBeNull();
+  });
+
+  it("returns null when the caller's workspace doesn't match", async () => {
+    const { state } = await beginAuthorization({ workspaceId: "ws_1", connectionId: "conn_1", providerId: "test-oauth-provider", redirectUri: "https://app.test/callback" });
+    expect(await resolvePendingAuthorizationCodeVerifier(state, { workspaceId: "ws_other" })).toBeNull();
+  });
+
+  it("returns null when the caller's member id doesn't match a member-owned pending authorization", async () => {
+    const { state } = await beginAuthorization({ workspaceId: "ws_1", connectionId: "conn_1", providerId: "test-oauth-provider", redirectUri: "https://app.test/callback", memberId: "user_1" });
+    expect(await resolvePendingAuthorizationCodeVerifier(state, { workspaceId: "ws_1", memberId: "user_2" })).toBeNull();
+    expect(await resolvePendingAuthorizationCodeVerifier(state, { workspaceId: "ws_1", memberId: "user_1" })).toBeTruthy();
+  });
+});
+
+describe("completeAuthorization — ownership scoping (GMAIL-03R2)", () => {
+  it("succeeds when the caller's workspace/member matches the pending authorization", async () => {
+    const { state } = await beginAuthorization({ workspaceId: "ws_1", connectionId: "conn_1", providerId: "test-oauth-provider", redirectUri: "https://app.test/callback", memberId: "user_1" });
+    const result = await completeAuthorization({ state, createdBy: "user_1", accessToken: "tok", callerWorkspaceId: "ws_1", callerMemberId: "user_1" });
+    expect(result.credential.member_id).toBe("user_1");
+  });
+
+  it("rejects a mismatched member without deleting the still-valid pending row — the real owner can still complete it", async () => {
+    const { state } = await beginAuthorization({ workspaceId: "ws_1", connectionId: "conn_1", providerId: "test-oauth-provider", redirectUri: "https://app.test/callback", memberId: "user_1" });
+
+    await expect(completeAuthorization({ state, createdBy: "user_2", accessToken: "tok", callerWorkspaceId: "ws_1", callerMemberId: "user_2" })).rejects.toThrow(/No pending authorization/);
+
+    // Still there — a wrong caller must never be able to destroy someone else's in-progress authorization.
+    const result = await completeAuthorization({ state, createdBy: "user_1", accessToken: "tok", callerWorkspaceId: "ws_1", callerMemberId: "user_1" });
+    expect(result.credential.member_id).toBe("user_1");
+  });
+
+  it("rejects a mismatched workspace the same way, without deleting the row", async () => {
+    const { state } = await beginAuthorization({ workspaceId: "ws_1", connectionId: "conn_1", providerId: "test-oauth-provider", redirectUri: "https://app.test/callback" });
+
+    await expect(completeAuthorization({ state, createdBy: "user_1", accessToken: "tok", callerWorkspaceId: "ws_other" })).rejects.toThrow(/No pending authorization/);
+
+    const result = await completeAuthorization({ state, createdBy: "user_1", accessToken: "tok", callerWorkspaceId: "ws_1" });
+    expect(result.connectionId).toBe("conn_1");
+  });
+
+  it("preserves the exact prior behavior when no caller scope is supplied at all", async () => {
+    const { state } = await beginAuthorization({ workspaceId: "ws_1", connectionId: "conn_1", providerId: "test-oauth-provider", redirectUri: "https://app.test/callback" });
+    const result = await completeAuthorization({ state, createdBy: "user_1", accessToken: "tok" });
+    expect(result.connectionId).toBe("conn_1");
   });
 });
 

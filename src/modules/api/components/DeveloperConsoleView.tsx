@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getDeveloperConsoleData, type DeveloperConsoleData } from "@/modules/api/getDeveloperConsoleData";
 import { createApiKeyAction, rotateApiKeyAction, revokeApiKeyAction } from "@/modules/api/manageApiKeysActions";
 import { getWebhooksConsoleData, type WebhooksConsoleData } from "@/modules/webhooks/getWebhooksConsoleData";
@@ -48,6 +48,7 @@ function keyStatus(key: ApiKey): { label: string; tone: "accent" | "neutral" } {
  */
 export function DeveloperConsoleView() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [createOpen, setCreateOpen] = useState(false);
   const [secretModal, setSecretModal] = useState<{ name: string; secret: string } | null>(null);
@@ -123,7 +124,10 @@ export function DeveloperConsoleView() {
         </div>
       ) : null}
 
-      <Tabs defaultValue="keys">
+      {/* GMAIL-03R2 — the generic OAuth callback route redirects here with `integration_status`
+          after a real Connect attempt; land straight on the Integrations tab so the outcome is
+          actually visible, rather than defaulting to Keys and silently discarding it. */}
+      <Tabs defaultValue={searchParams.get("integration_status") ? "integrations" : "keys"}>
         <TabList aria-label="Developer Console sections">
           <Tab value="keys">API Keys</Tab>
           <Tab value="webhooks">Webhooks</Tab>
