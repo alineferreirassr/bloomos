@@ -54,6 +54,14 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // Persistence Foundation). Independently-tracked, not-yet-released,
   // unrelated to the Finance release this exact-count assertion describes.
   "20260912100000_google_calendar_events_foundation.sql",
+  // CONTRACTS-02 — durable DocuSign envelope-id mapping. Independently-
+  // tracked, not-yet-released, unrelated to the Finance release this
+  // exact-count assertion describes.
+  "20260913100000_contracts_docusign_envelope_id.sql",
+  // CONTRACTS-02 — additive Client Portal contract_exhibits RLS.
+  // Independently-tracked, not-yet-released, unrelated to the Finance
+  // release this exact-count assertion describes.
+  "20260913100100_client_portal_contract_exhibits_rls.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {
@@ -3985,5 +3993,54 @@ describe("GMAIL-06 migration — gmail_messages.deleted_at tombstone", () => {
   it("indexes deleted_at for the mailbox-scoped tombstone lookup", () => {
     const code = stripSqlComments(sql());
     expect(code).toMatch(/create index if not exists gmail_messages_deleted_at_idx on public\.gmail_messages \(mailbox_id\) where deleted_at is not null/);
+  });
+});
+
+describe("CONTRACTS-02 migration — contracts.docusign_envelope_id", () => {
+  function sql(): string {
+    return readMigration("20260913100000_contracts_docusign_envelope_id.sql");
+  }
+
+  it("additively adds a single nullable docusign_envelope_id column to contracts", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/alter table public\.contracts\s*\n\s*add column if not exists docusign_envelope_id text;/);
+  });
+
+  it("is purely additive — no DROP/TRUNCATE/DELETE, no RLS disable, no new RLS policy, no other table touched", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/drop table/);
+    expect(code).not.toMatch(/drop column/);
+    expect(code).not.toMatch(/truncate/);
+    expect(code).not.toMatch(/\bdelete from\b/);
+    expect(code).not.toMatch(/\balter table\b.*\bdisable row level security\b/);
+    expect(code).not.toMatch(/create policy/);
+    expect(code).not.toMatch(/on public\.(?!contracts\b)\w+/);
+  });
+});
+
+describe("CONTRACTS-02 migration — client portal contract_exhibits RLS", () => {
+  function sql(): string {
+    return readMigration("20260913100100_client_portal_contract_exhibits_rls.sql");
+  }
+
+  it("adds one additive client-facing select policy for contract_exhibits, never touching existing policies", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/drop policy/i);
+    expect(code).toMatch(/create policy "contract_exhibits_select_client_account"/);
+    expect(code).toMatch(/on public\.contract_exhibits for select/);
+  });
+
+  it("re-derives ownership through contracts rather than trusting contract_exhibits' own workspace_id alone", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/from public\.contracts/);
+    expect(code).toMatch(/contracts\.id = contract_exhibits\.contract_id/);
+    expect(code).toMatch(/is_client_account_holder_in_workspace\(contracts\.workspace_id, contracts\.client_id\)/);
+  });
+
+  it("grants select only — no insert/update/delete policy for the client account role", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/for insert/i);
+    expect(code).not.toMatch(/for update/i);
+    expect(code).not.toMatch(/for delete/i);
   });
 });

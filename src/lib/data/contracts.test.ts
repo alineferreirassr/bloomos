@@ -316,6 +316,20 @@ describe("signature workflow: sendContract / markViewed / markSigned / markDecli
     expect(result.success).toBe(false);
   });
 
+  it("sendContract persists a provided envelope id as docusign_envelope_id (CONTRACTS-02)", async () => {
+    const result = await sendContract("contract_2", "env_abc123");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.docusign_envelope_id).toBe("env_abc123");
+  });
+
+  it("sendContract leaves docusign_envelope_id null when no envelope id is passed (the plain manual-send path)", async () => {
+    const result = await sendContract("contract_2");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.docusign_envelope_id).toBeNull();
+  });
+
   it("markViewed rejects a contract that hasn't been sent yet", async () => {
     const result = await markViewed("contract_2"); // still draft
     expect(result.success).toBe(false);
@@ -517,6 +531,14 @@ describe("duplicateContract", () => {
     expect(result.data.version_history).toEqual([]);
     expect(result.data.signed_at).toBeNull();
     expect(result.data.sent_at).toBeNull();
+  });
+
+  it("never carries the original's docusign_envelope_id onto the duplicate (CONTRACTS-02)", async () => {
+    await sendContract("contract_2", "env_original");
+    const result = await duplicateContract("contract_2");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.docusign_envelope_id).toBeNull();
   });
 
   it("gives the duplicate a contract_number distinct from the original (duplicate prevention)", async () => {

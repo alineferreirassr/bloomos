@@ -150,7 +150,7 @@ describe("ContractDetailView", () => {
     expect(screen.getByText("Exhibits")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Notes" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Timeline" })).toBeInTheDocument();
-    expect(screen.getByText("Future Integrations")).toBeInTheDocument();
+    expect(screen.getByText("Document & Signature")).toBeInTheDocument();
     expect(screen.getByText("Standard Event Services Agreement")).toBeInTheDocument();
     expect(screen.getByText("Payment Schedule")).toBeInTheDocument();
   });

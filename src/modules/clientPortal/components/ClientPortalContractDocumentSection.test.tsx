@@ -54,4 +54,14 @@ describe("ClientPortalContractDocumentSection", () => {
     await waitFor(() => expect(screen.getByText("Your review request has been sent.")).toBeInTheDocument());
     expect(requestClientPortalContractReviewAction).toHaveBeenCalledWith("contract_1", "Please check the deposit clause.");
   });
+
+  it("links Download Contract PDF to the real client-portal PDF route, not a disabled stub (CONTRACTS-02)", async () => {
+    vi.mocked(getClientPortalContractDocumentAction).mockResolvedValue({ success: true, data: SUMMARY } as never);
+    render(<ClientPortalContractDocumentSection contractId="contract_1" />);
+    await waitFor(() => expect(screen.getByText("Contract Document")).toBeInTheDocument());
+
+    const link = screen.getByRole("link", { name: /download contract pdf/i });
+    expect(link).toHaveAttribute("href", "/api/client-portal/contracts/contract_1/pdf");
+    expect(link.querySelector("button")).not.toBeDisabled();
+  });
 });

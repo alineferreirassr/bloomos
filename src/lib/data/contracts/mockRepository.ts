@@ -152,6 +152,7 @@ async function createContract(input: ContractInput): Promise<DataResult<Contract
     cancelled_at: null,
     archived_at: null,
     remaining_balance: computeRemainingBalance(parsed.data.total_value, parsed.data.deposit_amount),
+    docusign_envelope_id: null,
     created_at: timestamp,
     updated_at: timestamp,
   };
@@ -256,7 +257,7 @@ async function updateContractStatus(id: string, status: ContractStatus): Promise
   return ok(updated);
 }
 
-async function sendContract(id: string): Promise<DataResult<Contract>> {
+async function sendContract(id: string, envelopeId?: string | null): Promise<DataResult<Contract>> {
   const existing = readContracts().find((c) => c.id === id);
   if (!existing) {
     return fail("Contract not found.");
@@ -272,6 +273,7 @@ async function sendContract(id: string): Promise<DataResult<Contract>> {
     signature_status: "sent",
     sent_at: timestamp,
     updated_at: timestamp,
+    docusign_envelope_id: envelopeId !== undefined ? envelopeId : existing.docusign_envelope_id,
   };
   writeContracts(readContracts().map((c) => (c.id === id ? updated : c)));
   recordTimelineActivity(existing.workspace_id, "contract", id, "contract_sent", `Contract sent: "${existing.title}"`);
@@ -517,6 +519,7 @@ async function duplicateContract(id: string): Promise<DataResult<Contract>> {
     declined_at: null,
     cancelled_at: null,
     archived_at: null,
+    docusign_envelope_id: null,
     created_at: timestamp,
     updated_at: timestamp,
   };

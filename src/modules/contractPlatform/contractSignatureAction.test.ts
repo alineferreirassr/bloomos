@@ -6,9 +6,10 @@ vi.mock("@/core/integrations/integrationManager", () => ({ listConnections: vi.f
 vi.mock("@/core/integrations/credentialManager", () => ({ resolveAccessToken: vi.fn() }));
 
 const createSignatureRequestMock = vi.fn();
+const getSignatureStatusMock = vi.fn();
 vi.mock("@/core/integrations/providers/docusign/docusignProvider", () => ({
   DocuSignProvider: vi.fn().mockImplementation(function DocuSignProviderMock() {
-    return { createSignatureRequest: createSignatureRequestMock };
+    return { createSignatureRequest: createSignatureRequestMock, getSignatureStatus: getSignatureStatusMock };
   }),
 }));
 
@@ -23,7 +24,7 @@ vi.mock("@/lib/supabase/server", () => ({
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 import { listConnections } from "@/core/integrations/integrationManager";
 import { resolveAccessToken } from "@/core/integrations/credentialManager";
-import { sendContractForSignatureAction } from "@/modules/contractPlatform/contractPlatformActions";
+import { sendContractForSignatureAction, checkContractSignatureStatusAction } from "@/modules/contractPlatform/contractPlatformActions";
 import { createContract, getContract, resetAllMockData } from "@/lib/data";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 import type { ContractInput } from "@/modules/contracts/schema";
@@ -87,6 +88,7 @@ beforeEach(() => {
   vi.mocked(listConnections).mockResolvedValue([connectedDocuSign] as never);
   vi.mocked(resolveAccessToken).mockResolvedValue("tok_123");
   createSignatureRequestMock.mockResolvedValue({ externalRequestId: "env_1" });
+  getSignatureStatusMock.mockResolvedValue({ status: "sent", completedDocumentUrl: null });
 });
 
 afterEach(() => {
@@ -106,6 +108,7 @@ describe("sendContractForSignatureAction — v2 Checkpoint 44, Step 9", () => {
 
     const persisted = await getContract(contract.id);
     expect(persisted.signature_status).toBe("sent");
+    expect(persisted.docusign_envelope_id).toBe("env_1");
   });
 
   it("fails honestly (never flips status) when no DocuSign account is connected", async () => {
@@ -141,5 +144,90 @@ describe("sendContractForSignatureAction — v2 Checkpoint 44, Step 9", () => {
 
     const persisted = await getContract(contract.id);
     expect(persisted.signature_status).toBe("unsigned");
+  });
+});
+
+/**
+ * CONTRACTS-02 — checkContractSignatureStatusAction closes the signature
+ * loop via authenticated on-demand polling (never an inbound webhook
+ * write — see the action's own doc comment for why). These tests reuse
+ * `sendContractForSignatureAction` to get a real contract into the "sent
+ * for signature, has a docusign_envelope_id" state each polling scenario
+ * starts from.
+ */
+describe("checkContractSignatureStatusAction — CONTRACTS-02", () => {
+  async function makeSentContract() {
+    const contract = await makeContract();
+    const sent = await sendContractForSignatureAction(contract.id);
+    if (!sent.success) throw new Error(`setup failed: ${sent.error}`);
+    return sent.data;
+  }
+
+  it("marks the contract signed via the canonical markSigned path when DocuSign reports completed", async () => {
+    const contract = await makeSentContract();
+    getSignatureStatusMock.mockResolvedValue({ status: "signed", completedDocumentUrl: "https://demo.docusign.net/doc" });
+
+    const result = await checkContractSignatureStatusAction(contract.id);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.signature_status).toBe("signed");
+    expect(getSignatureStatusMock).toHaveBeenCalledWith("env_1");
+
+    const persisted = await getContract(contract.id);
+    expect(persisted.signature_status).toBe("signed");
+    expect(persisted.status).toBe("signed");
+  });
+
+  it("marks the contract declined via the canonical markDeclined path when DocuSign reports declined", async () => {
+    const contract = await makeSentContract();
+    getSignatureStatusMock.mockResolvedValue({ status: "declined", completedDocumentUrl: null });
+
+    const result = await checkContractSignatureStatusAction(contract.id);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.signature_status).toBe("declined");
+
+    const persisted = await getContract(contract.id);
+    expect(persisted.signature_status).toBe("declined");
+  });
+
+  it("is a no-op (never flips status) while DocuSign still reports sent/viewed", async () => {
+    const contract = await makeSentContract();
+    getSignatureStatusMock.mockResolvedValue({ status: "viewed", completedDocumentUrl: null });
+
+    const result = await checkContractSignatureStatusAction(contract.id);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.signature_status).toBe("sent");
+
+    const persisted = await getContract(contract.id);
+    expect(persisted.signature_status).toBe("sent");
+  });
+
+  it("fails honestly when the contract was never sent through DocuSign (no envelope id)", async () => {
+    const contract = await makeContract();
+    const result = await checkContractSignatureStatusAction(contract.id);
+    expect(result.success).toBe(false);
+    expect(getSignatureStatusMock).not.toHaveBeenCalled();
+  });
+
+  it("never calls DocuSign and returns failure when the acting member lacks contracts.lifecycle", async () => {
+    const contract = await makeSentContract();
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue({ ...session, permissions: [] });
+
+    const result = await checkContractSignatureStatusAction(contract.id);
+    expect(result.success).toBe(false);
+    expect(getSignatureStatusMock).not.toHaveBeenCalled();
+  });
+
+  it("reports a sanitized error and never flips status when the DocuSign status call itself fails", async () => {
+    const contract = await makeSentContract();
+    getSignatureStatusMock.mockRejectedValue(new Error("DocuSign API unavailable"));
+
+    const result = await checkContractSignatureStatusAction(contract.id);
+    expect(result.success).toBe(false);
+
+    const persisted = await getContract(contract.id);
+    expect(persisted.signature_status).toBe("sent");
   });
 });

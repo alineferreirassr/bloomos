@@ -42,24 +42,33 @@ vi.mock("@/lib/data", () => ({
   updateContractStatus: vi.fn(),
 }));
 
+vi.mock("@/modules/contractPlatform/contractPlatformActions", () => ({
+  sendContractForSignatureAction: vi.fn(),
+  checkContractSignatureStatusAction: vi.fn(),
+}));
+
 import * as dataLayer from "@/lib/data";
+import * as contractPlatformActions from "@/modules/contractPlatform/contractPlatformActions";
 
 describe("ContractActions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("shows Edit, Send, Cancel, Archive, Duplicate, and the status select for a draft contract", () => {
+  it("shows Edit, Send for Signature, Mark Sent Manually, Download PDF, Cancel, Archive, Duplicate, and the status select for a draft contract", () => {
     renderContractActions({ contract: makeContract({ status: "draft" }), onChanged: vi.fn() });
 
     expect(screen.getByRole("link", { name: /edit/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /send contract/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /send for signature/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /mark sent manually/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /download pdf/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /cancel contract/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^archive$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^duplicate$/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/contract status/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /mark viewed/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /mark signed/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /check signature status/i })).not.toBeInTheDocument();
   });
 
   it("shows Mark Viewed, Mark Signed, Mark Declined, and Expire for a sent contract, and hides the status select", () => {
@@ -92,18 +101,68 @@ describe("ContractActions", () => {
     expect(screen.getByRole("button", { name: /^archive$/i })).toBeInTheDocument();
   });
 
-  it("sends the contract through a confirmation modal", async () => {
+  it("marks a contract sent manually (no DocuSign) through a confirmation modal", async () => {
     const user = userEvent.setup();
     vi.mocked(dataLayer.sendContract).mockResolvedValue({ success: true, data: makeContract({ status: "sent" }) });
     const onChanged = vi.fn();
     renderContractActions({ contract: makeContract({ id: "contract_1", status: "ready" }), onChanged: onChanged });
 
-    await user.click(screen.getByRole("button", { name: /send contract/i }));
-    const dialog = screen.getByRole("dialog", { name: /send contract/i });
-    await user.click(within(dialog).getByRole("button", { name: /^send$/i }));
+    await user.click(screen.getByRole("button", { name: /mark sent manually/i }));
+    const dialog = screen.getByRole("dialog", { name: /mark sent manually/i });
+    await user.click(within(dialog).getByRole("button", { name: /^mark sent$/i }));
 
     await waitFor(() => expect(dataLayer.sendContract).toHaveBeenCalledWith("contract_1"));
     expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("sends a contract for real DocuSign signature through its own confirmation modal (CONTRACTS-02)", async () => {
+    const user = userEvent.setup();
+    vi.mocked(contractPlatformActions.sendContractForSignatureAction).mockResolvedValue({
+      success: true,
+      data: makeContract({ status: "sent", signature_status: "sent", docusign_envelope_id: "env_1" }),
+    });
+    const onChanged = vi.fn();
+    renderContractActions({ contract: makeContract({ id: "contract_1", status: "ready" }), onChanged: onChanged });
+
+    await user.click(screen.getByRole("button", { name: /send for signature/i }));
+    const dialog = screen.getByRole("dialog", { name: /send for signature/i });
+    await user.click(within(dialog).getByRole("button", { name: /send for signature/i }));
+
+    await waitFor(() => expect(contractPlatformActions.sendContractForSignatureAction).toHaveBeenCalledWith("contract_1"));
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("hides Send for Signature but keeps Mark Sent Manually once a signature request is already out", () => {
+    renderContractActions({
+      contract: makeContract({ status: "draft", signature_status: "sent", docusign_envelope_id: "env_1" }),
+      onChanged: vi.fn(),
+    });
+    expect(screen.queryByRole("button", { name: /send for signature/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /mark sent manually/i })).toBeInTheDocument();
+  });
+
+  it("shows Check Signature Status for a contract sent through DocuSign, and checking it updates the contract", async () => {
+    const user = userEvent.setup();
+    vi.mocked(contractPlatformActions.checkContractSignatureStatusAction).mockResolvedValue({
+      success: true,
+      data: makeContract({ status: "signed", signature_status: "signed", docusign_envelope_id: "env_1" }),
+    });
+    const onChanged = vi.fn();
+    renderContractActions({
+      contract: makeContract({ id: "contract_1", status: "sent", signature_status: "sent", docusign_envelope_id: "env_1" }),
+      onChanged,
+    });
+
+    const button = screen.getByRole("button", { name: /check signature status/i });
+    await user.click(button);
+
+    await waitFor(() => expect(contractPlatformActions.checkContractSignatureStatusAction).toHaveBeenCalledWith("contract_1"));
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("hides Check Signature Status for a contract with no docusign_envelope_id", () => {
+    renderContractActions({ contract: makeContract({ status: "sent", signature_status: "sent", docusign_envelope_id: null }), onChanged: vi.fn() });
+    expect(screen.queryByRole("button", { name: /check signature status/i })).not.toBeInTheDocument();
   });
 
   it("marks viewed directly, without a confirmation modal", async () => {
@@ -253,8 +312,10 @@ describe("ContractActions — permission gating", () => {
 
     expect(screen.getByRole("link", { name: /edit/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^duplicate$/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /send contract/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /send for signature/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /mark sent manually/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^archive$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /download pdf/i })).toBeInTheDocument();
   });
 
   it("hides Edit and the status select for a member without contracts.update, while keeping lifecycle actions", () => {
@@ -265,7 +326,8 @@ describe("ContractActions — permission gating", () => {
 
     expect(screen.queryByRole("link", { name: /edit/i })).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/contract status/i)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /send contract/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /send for signature/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /mark sent manually/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^archive$/i })).toBeInTheDocument();
   });
 });

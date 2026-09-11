@@ -61,9 +61,52 @@ export function ClientPortalContractDetailView({ contractId }: { contractId: str
         ) : null}
       </Card>
 
+      <ContractSignatureCard contract={contract} />
+
       <ClientPortalContractDocumentSection contractId={contract.id} />
     </div>
   );
+}
+
+/**
+ * CONTRACTS-02 — a truthful, non-embedded Sign CTA. DocuSignProvider only
+ * supports remote/email-based signing (createSignatureRequest emails the
+ * signer directly) — there is no embedded signing URL anywhere in this
+ * codebase. Rather than fake an in-app signing experience, this only ever
+ * reflects the real `signature_status` already on the Contract and points
+ * the client to their email, where DocuSign actually sent the request.
+ */
+function ContractSignatureCard({ contract }: { contract: ClientPortalContract }) {
+  if (contract.signature_status === "sent" || contract.signature_status === "viewed") {
+    return (
+      <Card>
+        <h3 className="font-serif text-[17px] font-semibold text-text">Signature requested</h3>
+        <p className="mt-2 text-sm text-text-muted">
+          A signature request for this contract has been sent to your email via DocuSign. Please check your inbox
+          (and spam folder) to review and sign.
+        </p>
+      </Card>
+    );
+  }
+  if (contract.signature_status === "signed") {
+    return (
+      <Card>
+        <h3 className="font-serif text-[17px] font-semibold text-text">Signed</h3>
+        <p className="mt-2 text-sm text-text-muted">
+          This contract was signed{contract.signed_at ? ` on ${new Date(contract.signed_at).toLocaleDateString()}` : ""}. No further action is needed.
+        </p>
+      </Card>
+    );
+  }
+  if (contract.signature_status === "declined") {
+    return (
+      <Card>
+        <h3 className="font-serif text-[17px] font-semibold text-text">Signature declined</h3>
+        <p className="mt-2 text-sm text-text-muted">This signature request was declined. Please reach out if you have questions.</p>
+      </Card>
+    );
+  }
+  return null;
 }
 
 function Field({ label, value }: { label: string; value: string | null }) {

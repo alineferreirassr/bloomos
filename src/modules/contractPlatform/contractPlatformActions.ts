@@ -3,7 +3,7 @@
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 import { recordTimelineActivity } from "@/lib/data/mock/timelineStore";
 import { nowIso } from "@/lib/data/utils";
-import { getClientById, getContract, getContracts, getEventById, getContractExhibitsByContractId, sendContract } from "@/lib/data";
+import { getClientById, getContract, getContracts, getEventById, getContractExhibitsByContractId, sendContract, markSigned, markDeclined } from "@/lib/data";
 import { getProposalsRepository } from "@/lib/data/proposals";
 import { listConnections } from "@/core/integrations/integrationManager";
 import { resolveAccessToken } from "@/core/integrations/credentialManager";
@@ -44,7 +44,7 @@ import type {
 } from "@/types/contractPlatform";
 import type { Contract } from "@/types/contract";
 import type { OperationalRecommendation } from "@/types/businessHealth";
-import type { DocumentBlock } from "@/types/documentPlatform";
+import { buildContractSigningDocument } from "@/modules/contracts/buildContractSigningDocument";
 
 const GENERIC_ACCESS_ERROR = "The Contract Platform isn't available. You may not have access to it.";
 const NOT_FOUND_ERROR = "This contract could not be found.";
@@ -372,13 +372,6 @@ export async function markContractReadyAction(contractId: string): Promise<Actio
 // untouched, per this checkpoint's own "don't migrate it" instruction.
 // ---------------------------------------------------------------------------
 
-function buildContractSigningDocument(contract: Contract): DocumentBlock[] {
-  const blocks: DocumentBlock[] = [{ id: "title", type: "heading", level: 1, runs: [{ text: contract.title }] }];
-  if (contract.description) blocks.push({ id: "description", type: "paragraph", runs: [{ text: contract.description }] });
-  if (contract.notes) blocks.push({ id: "notes", type: "paragraph", runs: [{ text: contract.notes }] });
-  return blocks;
-}
-
 export async function sendContractForSignatureAction(contractId: string): Promise<ActionResult<Contract>> {
   const session = await resolveMemberSessionSnapshot();
   if (session.kind !== "active" || !session.permissions.includes("contracts.lifecycle")) return { success: false, error: GENERIC_ACCESS_ERROR };
@@ -408,20 +401,81 @@ export async function sendContractForSignatureAction(contractId: string): Promis
   const pdfBytes = await renderDocumentToPdf(buildContractSigningDocument(contract), { documentTitle: contract.title, brandTheme, mode: "print" });
   const clientName = [client.first_name, client.last_name].filter(Boolean).join(" ") || client.email;
 
+  let envelopeId: string;
   try {
     const provider = new DocuSignProvider(accessToken, accountId, accountBaseUri);
-    await provider.createSignatureRequest({
+    const request = await provider.createSignatureRequest({
       documentName: `${contract.title}.pdf`,
       documentContent: new Blob([Buffer.from(pdfBytes)], { type: "application/pdf" }),
       signers: [{ name: clientName, email: client.email }],
     });
+    envelopeId = request.externalRequestId;
   } catch (error) {
     const record = sanitizeIntegrationError({ connectionId: connection.id, providerId: "docusign", rawMessage: error instanceof Error ? error.message : "Unknown DocuSign delivery error" });
     insertErrorRecord(record);
     return { success: false, error: record.message };
   }
 
-  const result = await sendContract(contractId);
+  const result = await sendContract(contractId, envelopeId);
+  if (result.success) invalidateContractCache(session.workspace.id);
+  return result;
+}
+
+/**
+ * CONTRACTS-02 — closes the signature loop via authenticated on-demand
+ * polling rather than an inbound webhook write. `markSigned`/`markDeclined`
+ * (lib/data/contracts) require a real team-member Workspace session
+ * (`requireWorkspaceSession()` in the Supabase repository) — an inbound
+ * DocuSign webhook has no session and this codebase has never used a
+ * service-role client to bypass that, so writing from the webhook route
+ * itself would silently fail in real Supabase mode. This action reuses the
+ * exact same canonical lifecycle functions a team member's own UI action
+ * would call, just triggered by a real DocuSign status check instead of a
+ * push event — never bypassing them. A client account has no Workspace
+ * session either, so this is internal-only; the Client Portal only ever
+ * reads the `signature_status` this leaves behind.
+ */
+export async function checkContractSignatureStatusAction(contractId: string): Promise<ActionResult<Contract>> {
+  const session = await resolveMemberSessionSnapshot();
+  if (session.kind !== "active" || !session.permissions.includes("contracts.lifecycle")) return { success: false, error: GENERIC_ACCESS_ERROR };
+
+  const contract = await getContract(contractId).catch(() => null);
+  if (!contract || contract.workspace_id !== session.workspace.id) return { success: false, error: NOT_FOUND_ERROR };
+  if (!contract.docusign_envelope_id) return { success: false, error: "This contract hasn't been sent for signature through DocuSign." };
+  if (contract.signature_status !== "sent" && contract.signature_status !== "viewed") {
+    return { success: true, data: contract };
+  }
+
+  const workspaceConnections = await listConnections(session.workspace.id);
+  const connection = workspaceConnections.find((c) => c.provider_id === "docusign" && c.state === "connected");
+  if (!connection?.credential_id) return { success: false, error: "No connected DocuSign account for this workspace." };
+
+  const accessToken = await resolveAccessToken(connection.credential_id);
+  const accountId = connection.config.docusign_account_id;
+  const accountBaseUri = connection.config.docusign_account_base_uri;
+  if (!accessToken || typeof accountId !== "string" || typeof accountBaseUri !== "string") {
+    return { success: false, error: "The DocuSign connection is missing required account details." };
+  }
+
+  let remoteStatus: { status: "sent" | "viewed" | "partially_signed" | "signed" | "declined" | "expired" | "cancelled" };
+  try {
+    const provider = new DocuSignProvider(accessToken, accountId, accountBaseUri);
+    remoteStatus = await provider.getSignatureStatus(contract.docusign_envelope_id);
+  } catch (error) {
+    const record = sanitizeIntegrationError({ connectionId: connection.id, providerId: "docusign", rawMessage: error instanceof Error ? error.message : "Unknown DocuSign status error" });
+    insertErrorRecord(record);
+    return { success: false, error: record.message };
+  }
+
+  let result: ActionResult<Contract>;
+  if (remoteStatus.status === "signed") {
+    result = await markSigned(contractId);
+  } else if (remoteStatus.status === "declined" || remoteStatus.status === "cancelled") {
+    result = await markDeclined(contractId);
+  } else {
+    return { success: true, data: contract };
+  }
+
   if (result.success) invalidateContractCache(session.workspace.id);
   return result;
 }

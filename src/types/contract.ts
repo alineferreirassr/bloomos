@@ -66,6 +66,8 @@ export interface Contract {
   remaining_balance: number | null;
   currency: string;
   notes: string | null;
+  /** The DocuSign envelope id for this contract's current (or most recent) signature request — set by sendContractForSignatureAction, cleared on decline/re-send. Nullable — a Contract sent only via the cosmetic "Mark Sent"/"Mark Signed" path never gets one. */
+  docusign_envelope_id: string | null;
   created_at: string;
   updated_at: string;
 }

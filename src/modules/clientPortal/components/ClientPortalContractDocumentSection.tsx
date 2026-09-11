@@ -67,9 +67,9 @@ export function ClientPortalContractDocumentSection({ contractId }: { contractId
         <h3 className="font-serif text-[17px] font-semibold text-text">Contract Document</h3>
         <div className="flex items-center gap-2">
           <Badge tone="neutral">v{summary.currentVersionNumber}</Badge>
-          <Button variant="ghost" disabled title="PDF generation is not available yet.">
-            Download PDF
-          </Button>
+          <a href={`/api/client-portal/contracts/${contractId}/pdf`} target="_blank" rel="noopener noreferrer">
+            <Button variant="ghost">Download Contract PDF</Button>
+          </a>
         </div>
       </div>
 

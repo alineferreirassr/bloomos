@@ -1166,8 +1166,8 @@ export async function updateContractStatus(id: string, status: ContractStatus): 
   return contractsRepository().updateContractStatus(id, status);
 }
 
-export async function sendContract(id: string): Promise<DataResult<Contract>> {
-  return contractsRepository().sendContract(id);
+export async function sendContract(id: string, envelopeId?: string | null): Promise<DataResult<Contract>> {
+  return contractsRepository().sendContract(id, envelopeId);
 }
 
 export async function markViewed(id: string): Promise<DataResult<Contract>> {

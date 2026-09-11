@@ -1016,6 +1016,7 @@ export interface Database {
           remaining_balance: number | null;
           currency: string;
           notes: string | null;
+          docusign_envelope_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1046,6 +1047,7 @@ export interface Database {
           remaining_balance?: number | null;
           currency?: string;
           notes?: string | null;
+          docusign_envelope_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1076,6 +1078,7 @@ export interface Database {
           remaining_balance?: number | null;
           currency?: string;
           notes?: string | null;
+          docusign_envelope_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };

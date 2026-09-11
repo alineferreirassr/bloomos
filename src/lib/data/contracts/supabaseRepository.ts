@@ -391,7 +391,7 @@ async function updateContractStatus(id: string, status: ContractStatus): Promise
   return ok(updated);
 }
 
-async function sendContract(id: string): Promise<DataResult<Contract>> {
+async function sendContract(id: string, envelopeId?: string | null): Promise<DataResult<Contract>> {
   const existing = await fetchContractRow(id);
   if (!existing) {
     return fail("Contract not found.");
@@ -405,14 +405,27 @@ async function sendContract(id: string): Promise<DataResult<Contract>> {
   const timestamp = new Date().toISOString();
   const { data, error } = await supabase
     .from("contracts")
-    .update({ status: "sent", signature_status: "sent", sent_at: timestamp })
+    .update({
+      status: "sent",
+      signature_status: "sent",
+      sent_at: timestamp,
+      ...(envelopeId !== undefined ? { docusign_envelope_id: envelopeId } : {}),
+    })
     .eq("id", id)
     .select("*")
     .single();
   if (error) throw normalizeSupabaseError(error);
 
   const updated = mapContractRow(data);
-  await insertTimelineActivity(supabase, resolveActorName(session), updated.workspace_id, id, "contract_sent", `Contract sent: "${existing.title}"`);
+  await insertTimelineActivity(
+    supabase,
+    resolveActorName(session),
+    updated.workspace_id,
+    id,
+    "contract_sent",
+    `Contract sent: "${existing.title}"`,
+    envelopeId ? { docusignEnvelopeId: envelopeId } : undefined,
+  );
 
   return ok(updated);
 }

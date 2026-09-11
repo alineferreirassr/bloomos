@@ -330,12 +330,12 @@ export function ContractDetailView({ contractId }: { contractId: string }) {
           </Card>
 
           <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Future Integrations</h3>
-            <p className="mt-2 text-xs text-text-muted">Not built yet — reserved for upcoming modules.</p>
-            <ul className="mt-3 space-y-1.5 text-sm text-text-muted">
-              <li>Document rendering &amp; PDF export</li>
-              <li>Electronic signature provider</li>
-            </ul>
+            <h3 className="font-serif text-[17px] font-semibold text-text">Document &amp; Signature</h3>
+            <p className="mt-2 text-xs text-text-muted">
+              Download a PDF of this contract anytime from the actions above. &ldquo;Send for Signature&rdquo; routes it through
+              your workspace&apos;s connected DocuSign account for a real e-signature request — &ldquo;Check Signature
+              Status&rdquo; confirms with DocuSign once the client has signed.
+            </p>
           </Card>
         </div>
       </div>

@@ -16,6 +16,7 @@ import {
   restoreContract,
   sendContract,
 } from "@/lib/data";
+import { sendContractForSignatureAction, checkContractSignatureStatusAction } from "@/modules/contractPlatform/contractPlatformActions";
 import type { Contract } from "@/types/contract";
 import { isContractClosed, isContractFullyLocked } from "@/core/workflows/contractWorkflow";
 import { ContractStatusSelect } from "@/modules/contracts/components/ContractStatusSelect";
@@ -27,7 +28,7 @@ interface ContractActionsProps {
   onChanged: () => void;
 }
 
-type ModalKind = "send" | "signed" | "declined" | "expire" | "cancel" | "complete" | "archive" | null;
+type ModalKind = "send" | "sendForSignature" | "signed" | "declined" | "expire" | "cancel" | "complete" | "archive" | null;
 
 /**
  * Every transition here goes through the existing dedicated data-layer
@@ -53,15 +54,32 @@ export function ContractActions({ contract, onChanged }: ContractActionsProps) {
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
   const [viewing, setViewing] = useState(false);
   const [viewError, setViewError] = useState<string | null>(null);
+  const [checkingStatus, setCheckingStatus] = useState(false);
+  const [checkStatusError, setCheckStatusError] = useState<string | null>(null);
 
   const isArchived = contract.status === "archived";
   const canSend = contract.status === "draft" || contract.status === "review" || contract.status === "ready";
+  const canSendForSignature = canSend && (contract.signature_status === "unsigned" || contract.signature_status === "declined");
   const canMarkViewed = contract.status === "sent";
   const canMarkSigned = contract.status === "sent" || contract.status === "viewed";
   const canMarkDeclined = contract.status === "sent" || contract.status === "viewed";
   const canExpire = contract.status === "sent" || contract.status === "viewed";
   const canCancel = !isContractClosed(contract.status);
   const canComplete = contract.status === "signed";
+  const canCheckSignatureStatus =
+    Boolean(contract.docusign_envelope_id) && (contract.signature_status === "sent" || contract.signature_status === "viewed");
+
+  const handleCheckSignatureStatus = async () => {
+    setCheckingStatus(true);
+    setCheckStatusError(null);
+    const result = await checkContractSignatureStatusAction(contract.id);
+    setCheckingStatus(false);
+    if (!result.success) {
+      setCheckStatusError(result.error);
+      return;
+    }
+    onChanged();
+  };
 
   const handleRestore = async () => {
     setRestoring(true);
@@ -142,11 +160,31 @@ export function ContractActions({ contract, onChanged }: ContractActionsProps) {
             <Button variant="secondary">Edit</Button>
           </Link>
         ) : null}
-        {canSend && canLifecycle ? (
-          <Button variant="secondary" onClick={() => setModal("send")}>
-            Send Contract
+        {canSendForSignature && canLifecycle ? (
+          <Button variant="secondary" onClick={() => setModal("sendForSignature")}>
+            Send for Signature
           </Button>
         ) : null}
+        {canSend && canLifecycle ? (
+          <Button variant="secondary" onClick={() => setModal("send")}>
+            Mark Sent Manually
+          </Button>
+        ) : null}
+        {canCheckSignatureStatus && canLifecycle ? (
+          <div>
+            <Button variant="secondary" onClick={handleCheckSignatureStatus} disabled={checkingStatus}>
+              {checkingStatus ? "Checking…" : "Check Signature Status"}
+            </Button>
+            {checkStatusError ? (
+              <p role="alert" className="mt-1.5 text-xs text-rose-600 dark:text-rose-400">
+                {checkStatusError}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        <a href={`/api/contracts/${contract.id}/pdf`} target="_blank" rel="noopener noreferrer">
+          <Button variant="secondary">Download PDF</Button>
+        </a>
         {canMarkViewed && canLifecycle ? (
           <div>
             <Button variant="secondary" onClick={handleMarkViewed} disabled={viewing}>
@@ -200,12 +238,22 @@ export function ContractActions({ contract, onChanged }: ContractActionsProps) {
       ) : null}
 
       <ConfirmContractActionModal
+        open={modal === "sendForSignature"}
+        onClose={() => setModal(null)}
+        title="Send for Signature"
+        description={`This sends "${contract.title}" to the client through your workspace's connected DocuSign account for a real e-signature. Requires a connected DocuSign integration.`}
+        confirmLabel="Send for Signature"
+        pendingLabel="Sending…"
+        onConfirm={() => sendContractForSignatureAction(contract.id)}
+        onConfirmed={onChanged}
+      />
+      <ConfirmContractActionModal
         open={modal === "send"}
         onClose={() => setModal(null)}
-        title="Send Contract"
-        description={`This marks "${contract.title}" as sent to the client. Mark Viewed/Signed/Declined become available afterward.`}
-        confirmLabel="Send"
-        pendingLabel="Sending…"
+        title="Mark Sent Manually"
+        description={`This marks "${contract.title}" as sent to the client without going through DocuSign — for a contract signed outside BloomOS (in person, by mail, etc). Mark Viewed/Signed/Declined become available afterward.`}
+        confirmLabel="Mark Sent"
+        pendingLabel="Marking…"
         onConfirm={() => sendContract(contract.id)}
         onConfirmed={onChanged}
       />
@@ -213,7 +261,7 @@ export function ContractActions({ contract, onChanged }: ContractActionsProps) {
         open={modal === "signed"}
         onClose={() => setModal(null)}
         title="Mark Signed"
-        description={`This marks "${contract.title}" as signed and locks its commercial terms from further editing.`}
+        description={`Administrative override: this marks "${contract.title}" as signed and locks its commercial terms from further editing, without verifying a completed DocuSign signature. Use "Check Signature Status" instead to confirm a real DocuSign completion.`}
         confirmLabel="Mark Signed"
         pendingLabel="Marking…"
         onConfirm={() => markSigned(contract.id)}

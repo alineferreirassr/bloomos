@@ -68,3 +68,46 @@ describe("ClientPortalContractDetailView", () => {
     expect(screen.queryByText(/internal/i)).not.toBeInTheDocument();
   });
 });
+
+describe("ClientPortalContractDetailView — Sign CTA (CONTRACTS-02)", () => {
+  it("tells the client a signature request was emailed via DocuSign when signature_status is sent", async () => {
+    vi.mocked(getClientPortalContractById).mockResolvedValue({ ...CONTRACT, signature_status: "sent" } as never);
+    render(<ClientPortalContractDetailView contractId="contract_1" />);
+    await waitFor(() => expect(screen.getByText("Signature requested")).toBeInTheDocument());
+    expect(screen.getByText(/sent to your email via docusign/i)).toBeInTheDocument();
+  });
+
+  it("tells the client a signature request was emailed via DocuSign when signature_status is viewed", async () => {
+    vi.mocked(getClientPortalContractById).mockResolvedValue({ ...CONTRACT, signature_status: "viewed" } as never);
+    render(<ClientPortalContractDetailView contractId="contract_1" />);
+    await waitFor(() => expect(screen.getByText("Signature requested")).toBeInTheDocument());
+  });
+
+  it("never claims an embedded in-app signing experience exists", async () => {
+    vi.mocked(getClientPortalContractById).mockResolvedValue({ ...CONTRACT, signature_status: "sent" } as never);
+    render(<ClientPortalContractDetailView contractId="contract_1" />);
+    await waitFor(() => expect(screen.getByText("Signature requested")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /^sign$/i })).not.toBeInTheDocument();
+  });
+
+  it("shows a signed confirmation when signature_status is signed", async () => {
+    vi.mocked(getClientPortalContractById).mockResolvedValue({ ...CONTRACT, signature_status: "signed", signed_at: "2026-02-01T00:00:00.000Z" } as never);
+    render(<ClientPortalContractDetailView contractId="contract_1" />);
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Signed" })).toBeInTheDocument());
+  });
+
+  it("shows a declined notice when signature_status is declined", async () => {
+    vi.mocked(getClientPortalContractById).mockResolvedValue({ ...CONTRACT, signature_status: "declined" } as never);
+    render(<ClientPortalContractDetailView contractId="contract_1" />);
+    await waitFor(() => expect(screen.getByText("Signature declined")).toBeInTheDocument());
+  });
+
+  it("shows no signature card when signature_status is unsigned (not yet sent)", async () => {
+    vi.mocked(getClientPortalContractById).mockResolvedValue({ ...CONTRACT, signature_status: "unsigned" } as never);
+    render(<ClientPortalContractDetailView contractId="contract_1" />);
+    await waitFor(() => expect(screen.getByText("Wedding Services Agreement")).toBeInTheDocument());
+    expect(screen.queryByText("Signature requested")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Signed" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Signature declined")).not.toBeInTheDocument();
+  });
+});

@@ -52,7 +52,8 @@ export interface ContractsRepository {
   createContract(input: ContractInput): Promise<DataResult<Contract>>;
   updateContract(id: string, input: ContractInput): Promise<DataResult<Contract>>;
   updateContractStatus(id: string, status: ContractStatus): Promise<DataResult<Contract>>;
-  sendContract(id: string): Promise<DataResult<Contract>>;
+  /** `envelopeId`, when provided, persists it as the contract's `docusign_envelope_id` atomically with the send transition — set by sendContractForSignatureAction, omitted by the plain cosmetic "Send Contract" path. */
+  sendContract(id: string, envelopeId?: string | null): Promise<DataResult<Contract>>;
   markViewed(id: string): Promise<DataResult<Contract>>;
   markSigned(id: string): Promise<DataResult<Contract>>;
   markDeclined(id: string): Promise<DataResult<Contract>>;
