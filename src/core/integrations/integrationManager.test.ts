@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
+import * as connectionStore from "@/lib/data/core/integrations/connectionStore";
 import { resetConnectionStore } from "@/lib/data/core/integrations/connectionStore";
 import { registerProvider, resetProviderRegistry } from "@/core/integrations/providerRegistry";
 import { resetCredentialStore } from "@/lib/data/core/integrations/credentialStore";
@@ -36,6 +37,10 @@ beforeEach(() => {
   resetCredentialStore();
   resetEncryptionProvider();
   registerProvider(provider);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe("installProvider", () => {
@@ -80,6 +85,32 @@ describe("applyConnectionEvent", () => {
   it("rejects an event the state machine doesn't allow from the current state", async () => {
     const connection = await installProvider({ workspaceId: "ws_1", providerId: "test-provider", installedBy: "user_1" });
     await expect(applyConnectionEvent(connection.id, "connect_succeeded", "user_1")).rejects.toThrow(/not valid from state/);
+  });
+
+  it("GMAIL-CONNECTION-FIX-02 — returns the transition insertTransition actually persisted, never its own locally-built (and, in Supabase mode, discarded-id) object", async () => {
+    const connection = await installProvider({ workspaceId: "ws_1", providerId: "test-provider", installedBy: "user_1" });
+    const persistedTransition = {
+      id: "9f2c1a3e-4444-4b2b-8c3d-000000000004",
+      connection_id: connection.id,
+      from_state: "disconnected" as const,
+      to_state: "connecting" as const,
+      event: "connect_requested" as const,
+      occurred_at: "2026-01-01T00:00:00.000Z",
+      note: "Beginning OAuth authorization.",
+    };
+    vi.spyOn(connectionStore, "insertTransition").mockResolvedValueOnce(persistedTransition);
+
+    const result = await applyConnectionEvent(connection.id, "connect_requested", "user_1");
+
+    expect(result.transition.id).toBe("9f2c1a3e-4444-4b2b-8c3d-000000000004");
+    expect(result.transition).toBe(persistedTransition);
+  });
+
+  it("GMAIL-CONNECTION-FIX-02 — mock-mode transition behavior is unchanged: still generates and returns its own id (mock insertTransition echoes the input back unchanged)", async () => {
+    const connection = await installProvider({ workspaceId: "ws_1", providerId: "test-provider", installedBy: "user_1" });
+    const result = await applyConnectionEvent(connection.id, "connect_requested", "user_1");
+    expect(result.transition.id).toMatch(/^connection-transition_/);
+    expect(await getConnectionHistory(connection.id)).toHaveLength(1);
   });
 
   it("tracks failure_count across connect_failed and resets it on connect_succeeded", async () => {

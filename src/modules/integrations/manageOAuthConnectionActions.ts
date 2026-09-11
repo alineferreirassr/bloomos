@@ -114,6 +114,13 @@ export async function beginProviderOAuthConnectionAction(providerId: string, red
   try {
     await applyConnectionEvent(connection.id, "connect_requested", session.membership.id, "Beginning OAuth authorization.");
   } catch (error) {
+    // GMAIL-CONNECTION-FIX-02 — the browser only ever sees the safe,
+    // normalized message below; this is the one place the real cause
+    // (e.g. a Postgres schema/type error) is recorded, mirroring
+    // `refreshProviderOAuthConnectionAction`'s own logging convention.
+    // Never logs OAuth state, PKCE material, or any token/secret — none
+    // of those exist yet at this stage of the flow.
+    getLogger().error("connect_requested transition failed", { connectionId: connection.id, providerId, error: error instanceof Error ? error.message : "unknown error" });
     return { success: false, error: error instanceof Error ? error.message : "Could not begin a new connection from this connection's current state." };
   }
 
@@ -121,6 +128,7 @@ export async function beginProviderOAuthConnectionAction(providerId: string, red
   try {
     result = await beginAuthorization({ workspaceId: session.workspace.id, connectionId: connection.id, providerId, redirectUri, memberId });
   } catch (error) {
+    getLogger().error("beginAuthorization failed", { connectionId: connection.id, providerId, error: error instanceof Error ? error.message : "unknown error" });
     // Roll back via the existing connect_failed transition (valid from
     // "connecting") rather than leaving the connection stuck mid-flow —
     // best-effort: a failure here would already be a second, unrelated

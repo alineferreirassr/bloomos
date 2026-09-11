@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 
 import { createClient } from "@/lib/supabase/server";
-import { getConnectionById, insertConnection, listConnectionsForWorkspace } from "@/lib/data/core/integrations/supabaseConnectionStore";
-import type { IntegrationConnection } from "@/core/integrations/types";
+import { getConnectionById, insertConnection, insertTransition, listConnectionsForWorkspace } from "@/lib/data/core/integrations/supabaseConnectionStore";
+import type { ConnectionStateTransition, IntegrationConnection } from "@/core/integrations/types";
 
 type QueryResult = { data: unknown; error: unknown };
 
@@ -91,6 +91,29 @@ const CONNECTION: IntegrationConnection = {
   retry_count: 0,
 };
 
+function transitionRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: "9f2c1a3e-3333-4b2b-8c3d-000000000003",
+    connection_id: "conn_1",
+    from_state: "disconnected",
+    to_state: "connecting",
+    event: "connect_requested",
+    occurred_at: "2026-01-01T00:00:00.000Z",
+    note: "Beginning OAuth authorization.",
+    ...overrides,
+  };
+}
+
+const TRANSITION: ConnectionStateTransition = {
+  id: "connection-transition_not-a-real-uuid",
+  connection_id: "conn_1",
+  from_state: "disconnected",
+  to_state: "connecting",
+  event: "connect_requested",
+  occurred_at: "2026-01-01T00:00:00.000Z",
+  note: "Beginning OAuth authorization.",
+};
+
 afterEach(() => {
   vi.clearAllMocks();
 });
@@ -123,6 +146,24 @@ describe("supabaseConnectionStore", () => {
     const result = await insertConnection({ ...CONNECTION, id: "integration-connection_not-a-real-uuid" });
 
     expect(result.id).toBe("9f2c1a3e-1111-4b2b-8c3d-000000000001");
+  });
+
+  it("GMAIL-CONNECTION-FIX-02 — insertTransition never sends the client-generated placeholder id; integration_connection_transitions.id is a real Postgres uuid column with its own gen_random_uuid() default", async () => {
+    const { calls } = mockSupabase([{ data: transitionRow(), error: null }]);
+
+    await insertTransition(TRANSITION);
+
+    const insertCall = calls.find((c) => c.table === "integration_connection_transitions" && c.method === "insert");
+    const payload = insertCall?.args[0] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty("id");
+  });
+
+  it("GMAIL-CONNECTION-FIX-02 — insertTransition returns the database-generated uuid, never the client-supplied placeholder", async () => {
+    mockSupabase([{ data: transitionRow({ id: "9f2c1a3e-3333-4b2b-8c3d-000000000003" }), error: null }]);
+
+    const result = await insertTransition(TRANSITION);
+
+    expect(result.id).toBe("9f2c1a3e-3333-4b2b-8c3d-000000000003");
   });
 
   it("getConnectionById maps a workspace-owned row (null member_id) correctly", async () => {

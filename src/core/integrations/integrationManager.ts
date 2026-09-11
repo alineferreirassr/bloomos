@@ -107,6 +107,12 @@ export async function applyConnectionEvent(connectionId: string, event: Connecti
   const updated = await updateConnection(connectionId, patch);
   if (!updated) throw new Error(`Connection "${connectionId}" was removed mid-transition.`);
 
+  // GMAIL-CONNECTION-FIX-02 — must use the row `insertTransition` actually
+  // persisted, never the locally-built `transition` object: in Supabase
+  // mode the real database-generated uuid (see `supabaseConnectionStore.
+  // insertTransition`'s own doc comment) differs from `transition.id`'s
+  // client-generated placeholder, which is discarded rather than ever
+  // written to the row.
   const transition: ConnectionStateTransition = {
     id: generateId("connection-transition"),
     connection_id: connectionId,
@@ -116,10 +122,10 @@ export async function applyConnectionEvent(connectionId: string, event: Connecti
     occurred_at: now,
     note,
   };
-  await insertTransition(transition);
+  const persistedTransition = await insertTransition(transition);
   await recordConnectionAuditEvent(connection.workspace_id, actor, `connection.${event}`, connectionId, { state: connection.state }, { state: result.nextState });
 
-  return { connection: updated, transition };
+  return { connection: updated, transition: persistedTransition };
 }
 
 /** Revokes the connection's own credential (if any) and removes the installation — never leaves an orphaned, still-valid credential behind, the same discipline `uninstallConnector` (Checkpoint 18) already established. */

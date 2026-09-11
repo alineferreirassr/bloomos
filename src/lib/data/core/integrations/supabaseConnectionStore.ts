@@ -130,12 +130,22 @@ export async function deleteConnection(id: string): Promise<boolean> {
   return (data?.length ?? 0) > 0;
 }
 
+/**
+ * GMAIL-CONNECTION-FIX-02 — the same fix as `insertConnection`/
+ * `insertCredential`: never sends `transition.id` (a mock-mode-only
+ * placeholder from `generateId("connection-transition")`, not a valid
+ * uuid) into `integration_connection_transitions.id`, a real
+ * `uuid primary key default gen_random_uuid()` column (confirmed live).
+ * GMAIL-LIVE-QA-03 proved this exact defect was the actual cause of the
+ * live "connecting"-stuck Gmail connection — the caller,
+ * `applyConnectionEvent`, must use this function's own return value,
+ * never its own locally-built transition object.
+ */
 export async function insertTransition(transition: ConnectionStateTransition): Promise<ConnectionStateTransition> {
   const supabase = await createSupabaseClient();
   const { data, error } = await supabase
     .from("integration_connection_transitions")
     .insert({
-      id: transition.id,
       connection_id: transition.connection_id,
       from_state: transition.from_state,
       to_state: transition.to_state,

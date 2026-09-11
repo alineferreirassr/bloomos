@@ -17,6 +17,8 @@ vi.mock("@/core/integrations/providerFactory", async () => {
 });
 
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+import * as connectionStore from "@/lib/data/core/integrations/connectionStore";
+import { setLogger, consoleLogger } from "@/core/observability/logger";
 import { exchangeAuthorizationCode, exchangeMetaAuthorizationCode, refreshOAuthToken } from "@/core/integrations/oauthTokenExchange";
 import { createProviderInstance } from "@/core/integrations/providerFactory";
 import {
@@ -184,6 +186,53 @@ describe("GMAIL-03R2-FIX1 — shared connect_requested → connecting → connec
     expect(own.success && own.data?.state).toBe("failed");
 
     insertSpy.mockRestore();
+  });
+
+  it("GMAIL-CONNECTION-FIX-02 — logs the real cause server-side when connect_requested itself fails, while the browser still only sees the safe, generic message", async () => {
+    const errorSpy = vi.fn();
+    setLogger({ ...consoleLogger, error: errorSpy });
+    const transitionSpy = vi
+      .spyOn(connectionStore, "insertTransition")
+      .mockRejectedValueOnce(new Error('invalid input syntax for type uuid: "connection-transition_abc123"'));
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session);
+    const begin = await beginProviderOAuthConnectionAction("gmail", "https://app.test/cb");
+
+    expect(begin.success).toBe(false);
+    if (!begin.success) expect(begin.error).toBe('invalid input syntax for type uuid: "connection-transition_abc123"');
+    // The message above is exactly what the *existing* fallback (`error.message`)
+    // already surfaces to the caller today — this test is about the new
+    // server-side log, not a UI-facing change. Confirm the log captured
+    // real diagnostic context, never any OAuth/token/secret material (none
+    // exists yet at this stage of the flow).
+    expect(errorSpy).toHaveBeenCalledWith(
+      "connect_requested transition failed",
+      expect.objectContaining({ providerId: "gmail", error: expect.stringContaining("uuid") }),
+    );
+    const loggedContext = errorSpy.mock.calls[0][1] as Record<string, unknown>;
+    expect(JSON.stringify(loggedContext)).not.toMatch(/state|verifier|token|secret/i);
+
+    transitionSpy.mockRestore();
+    setLogger(consoleLogger);
+  });
+
+  it("GMAIL-CONNECTION-FIX-02 — logs the real cause server-side when beginAuthorization fails, while the browser still only sees the safe, generic message", async () => {
+    const errorSpy = vi.fn();
+    setLogger({ ...consoleLogger, error: errorSpy });
+    const pendingStore = await import("@/lib/data/core/integrations/pendingOAuthAuthorizationStore");
+    const insertSpy = vi.spyOn(pendingStore, "insertPendingAuthorization").mockRejectedValueOnce(new Error("store unavailable"));
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session);
+    const begin = await beginProviderOAuthConnectionAction("gmail", "https://app.test/cb");
+
+    expect(begin.success).toBe(false);
+    if (!begin.success) expect(begin.error).toBe("store unavailable");
+    expect(errorSpy).toHaveBeenCalledWith("beginAuthorization failed", expect.objectContaining({ providerId: "gmail", error: "store unavailable" }));
+    const loggedContext = errorSpy.mock.calls[0][1] as Record<string, unknown>;
+    expect(JSON.stringify(loggedContext)).not.toMatch(/state|verifier|token|secret/i);
+
+    insertSpy.mockRestore();
+    setLogger(consoleLogger);
   });
 
   it("rejects a fresh Connect attempt on an already-connected connection instead of forcing a re-entry", async () => {
