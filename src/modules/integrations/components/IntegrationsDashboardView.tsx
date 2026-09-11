@@ -43,27 +43,33 @@ export function IntegrationsDashboardView() {
   const router = useRouter();
   const [state, setState] = useState<LoadState>({ status: "loading" });
 
+  /** Shared by both fetch sites below so neither can drift out of sync with the other — a `{success:false}` controlled result and a rejected Server Action promise both land here as the same safe, generic error state, never a raw stack trace or Supabase internal. */
+  function applyResult(result: Awaited<ReturnType<typeof getIntegrationsDashboardData>>) {
+    if (!result.success) {
+      setState({ status: "error" });
+      return;
+    }
+    setState({ status: "ready", data: result.data });
+  }
+
   const load = () => {
     setState({ status: "loading" });
-    getIntegrationsDashboardData().then((result) => {
-      if (!result.success) {
-        setState({ status: "error" });
-        return;
-      }
-      setState({ status: "ready", data: result.data });
-    });
+    getIntegrationsDashboardData()
+      .then(applyResult)
+      .catch(() => setState({ status: "error" }));
   };
 
   useEffect(() => {
     let cancelled = false;
-    getIntegrationsDashboardData().then((result) => {
-      if (cancelled) return;
-      if (!result.success) {
+    getIntegrationsDashboardData()
+      .then((result) => {
+        if (cancelled) return;
+        applyResult(result);
+      })
+      .catch(() => {
+        if (cancelled) return;
         setState({ status: "error" });
-        return;
-      }
-      setState({ status: "ready", data: result.data });
-    });
+      });
     return () => {
       cancelled = true;
     };
