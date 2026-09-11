@@ -95,5 +95,42 @@ export function registerEmergingCategoryProviders(): void {
     },
   } satisfies ProviderDefinition);
 
+  /**
+   * SOCIAL-02 — Meta account/provider foundation: connects Amoré Bloom's
+   * own Facebook Page + its linked Instagram professional account (the
+   * "Facebook Login for Business" flow, chosen deliberately over the
+   * newer Page-less "Business Login for Instagram" flow, since this
+   * product's own scope treats the Facebook Page as a first-class
+   * companion identity alongside Instagram — see the SOCIAL-02
+   * architecture-gate report for the full evidence trail). `capabilities`
+   * is deliberately `["oauth"]` only — real Page/Instagram account
+   * discovery exists (`src/modules/integrations/meta/metaAccountActions.ts`),
+   * but publishing does not, so no `signature`/`webhook`-style capability
+   * is advertised for a method this provider doesn't implement yet.
+   * Scopes requested are read/discovery-only (`pages_show_list`,
+   * `pages_read_engagement`, `instagram_basic`) — `instagram_content_publish`/
+   * `pages_manage_posts` are deliberately NOT requested until SOCIAL-03
+   * actually implements publishing, matching Meta's own App Review
+   * guidance against requesting a permission the app doesn't yet exercise.
+   */
+  registerProvider({
+    id: "meta",
+    name: "Meta",
+    category: "social",
+    icon: "Instagram",
+    version: 1,
+    capabilities: ["oauth"],
+    description: "Connect Amoré Bloom's Facebook Page and its linked Instagram professional account — account foundation only, no publishing yet.",
+    requiredPermission: "workspace.manage",
+    requiredApiScopes: [],
+    subscribedWebhookEvents: [],
+    oauth: {
+      authorizationEndpoint: "https://www.facebook.com/v26.0/dialog/oauth",
+      tokenEndpoint: "https://graph.facebook.com/v26.0/oauth/access_token",
+      defaultScopes: ["pages_show_list", "pages_read_engagement", "instagram_basic"],
+      supportsPkce: false,
+    },
+  } satisfies ProviderDefinition);
+
   registered = true;
 }

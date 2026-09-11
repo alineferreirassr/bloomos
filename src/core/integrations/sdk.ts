@@ -101,8 +101,21 @@ export interface SignatureProvider extends BaseProvider {
  * Integration Manager knows which ones a given `ProviderDefinition`
  * declares — without ever importing a provider-specific class into
  * shared code. See `docs/provider-registry.md` for the mapping table.
+ *
+ * SOCIAL-02 — `BaseProvider` itself is included as a member, not just its
+ * richer extensions: a real, working provider whose only implemented
+ * capability so far is `oauth` (account/connection discovery, no
+ * capability-specific SDK interface written for it yet — see
+ * `MetaProvider`) is a genuine, honest state to construct via the
+ * factory, not something that should be forced to fake-implement one of
+ * the richer interfaces (`OAuthProvider`'s own `buildAuthorizationUrl`/
+ * `exchangeCodeForToken`/etc. are never actually called by the real OAuth
+ * flow — see `oauthEngine.ts`/`oauthTokenExchange.ts` — so implementing
+ * them here would only be decorative, exactly what this checkpoint's own
+ * "don't advertise capabilities that aren't real" principle forbids).
  */
 export type AnyCapabilityProvider =
+  | BaseProvider
   | OAuthProvider
   | WebhookProvider
   | StorageProvider

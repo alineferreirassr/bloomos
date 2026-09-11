@@ -4,6 +4,7 @@ import { GmailProvider } from "@/core/integrations/providers/gmail/gmailProvider
 import { TwilioProvider } from "@/core/integrations/providers/twilio/twilioProvider";
 import { DocuSignProvider } from "@/core/integrations/providers/docusign/docusignProvider";
 import { GoogleDriveProvider } from "@/core/integrations/providers/googleDrive/googleDriveProvider";
+import { MetaProvider } from "@/core/integrations/providers/meta/metaProvider";
 
 let registered = false;
 
@@ -57,6 +58,14 @@ export function registerCheckpoint43ProviderFactories(): void {
   registerProviderFactory("google-drive", (params) => {
     if (!params?.accessToken) throw new Error("A Google OAuth access token is required to construct a GoogleDriveProvider instance.");
     return new GoogleDriveProvider(params.accessToken, params.secret ?? null);
+  });
+
+  // SOCIAL-02 — Meta (Facebook Login for Business). The access token supplied
+  // here is always the long-lived (~60 day) user token exchangeMetaAuthorizationCode
+  // already resolved — never the short-lived token from the first exchange step.
+  registerProviderFactory("meta", (params) => {
+    if (!params?.accessToken) throw new Error("A Meta OAuth access token is required to construct a MetaProvider instance.");
+    return new MetaProvider(params.accessToken);
   });
 
   registered = true;

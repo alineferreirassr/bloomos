@@ -18,9 +18,15 @@ const INTEGRATIONS_RETURN_PATH = "/developer";
  * GC02-01's own audit). This is a fixed, internal, allowlisted mapping —
  * never influenced by any request/query input — so it can't become an
  * open redirect.
+ *
+ * SOCIAL-02 — `meta` is a second exception, for the same reason: its own
+ * account/Page/Instagram-selection surface lives at
+ * `/settings/integrations/meta`, not the workspace-admin `/developer`
+ * console.
  */
 function getIntegrationReturnPath(providerId: string): string {
   if (providerId === "google-calendar-readonly") return "/settings/integrations/google-calendar";
+  if (providerId === "meta") return "/settings/integrations/meta";
   return INTEGRATIONS_RETURN_PATH;
 }
 

@@ -7,13 +7,13 @@ import { applyConnectionEvent, attachCredential, getConnection, installProvider,
 import { getCredential, resolveAccessToken, resolveRefreshToken, revokeCredential, rotateOAuthCredential } from "@/core/integrations/credentialManager";
 import { getProvider } from "@/core/integrations/providerRegistry";
 import { beginAuthorization, completeAuthorization, getPendingAuthorizationForCaller, resolvePendingAuthorizationCodeVerifier } from "@/core/integrations/oauthEngine";
-import { exchangeAuthorizationCode, refreshOAuthToken } from "@/core/integrations/oauthTokenExchange";
+import { exchangeAuthorizationCode, exchangeMetaAuthorizationCode, refreshOAuthToken } from "@/core/integrations/oauthTokenExchange";
 import { createProviderInstance } from "@/core/integrations/providerFactory";
 import { getLogger } from "@/core/observability/logger";
 import type { IntegrationConnection } from "@/core/integrations/types";
 
 const GENERIC_ACCESS_ERROR = "That integration connection isn't available. You may not have access to it.";
-const OAUTH_PROVIDER_IDS = ["google-calendar", "google-calendar-readonly", "gmail", "google-drive", "docusign", "dropbox"] as const;
+const OAUTH_PROVIDER_IDS = ["google-calendar", "google-calendar-readonly", "gmail", "google-drive", "docusign", "dropbox", "meta"] as const;
 type OAuthProviderId = (typeof OAUTH_PROVIDER_IDS)[number];
 
 /**
@@ -159,7 +159,18 @@ export async function completeProviderOAuthConnectionAction(providerId: string, 
   // unconfigured OAuth client leaves the state valid for a genuine retry
   // once the provider is configured — rather than burning it on a call we
   // already know will report `configured: false`.
-  const exchange = await exchangeAuthorizationCode({ providerId, tokenEndpoint: provider.oauth.tokenEndpoint, code, redirectUri, codeVerifier });
+  //
+  // SOCIAL-02 — Meta's real token endpoint doesn't fit the generic
+  // POST-with-grant_type shape (a GET-based code exchange immediately
+  // followed by a separate long-lived-token exchange; see
+  // `oauthTokenExchange.ts`'s own doc comment for the full evidence
+  // trail) — this is the one narrow branch point, never a parallel OAuth
+  // system: every other provider's call, and everything before/after this
+  // line, is completely unchanged.
+  const exchange =
+    providerId === "meta"
+      ? await exchangeMetaAuthorizationCode({ tokenEndpoint: provider.oauth.tokenEndpoint, code, redirectUri })
+      : await exchangeAuthorizationCode({ providerId, tokenEndpoint: provider.oauth.tokenEndpoint, code, redirectUri, codeVerifier });
   if (!exchange.configured) return { success: true, data: { pendingConfiguration: true, reason: exchange.reason } };
 
   const createdBy = MEMBER_OWNED_PROVIDER_IDS.has(providerId) ? session.user.id : session.membership.id;
@@ -232,6 +243,16 @@ export async function getOwnProviderConnectionAction(providerId: string): Promis
  * `refresh_requested`/`refresh_succeeded`/`refresh_failed` connection
  * states — no new state-machine vocabulary. Never returns a raw
  * provider error to the caller (logged server-side only via `getLogger()`).
+ *
+ * SOCIAL-02 — Meta has no separate `refresh_token` at all (its long-lived
+ * user token is what gets re-extended, not refreshed via a stored
+ * secondary token — see `oauthTokenExchange.ts`'s own doc comment). No
+ * Meta-specific branch was added here: `resolveRefreshToken` already
+ * returns null for a Meta credential (none was ever issued), so this
+ * action already, correctly, honestly reports "no refresh token on file —
+ * reconnect it" for Meta without any code change — exactly the truthful
+ * `RECONNECT REQUIRED` state this checkpoint's own connection-health
+ * requirement calls for, not a gap.
  */
 export async function refreshProviderOAuthConnectionAction(connectionId: string): Promise<ManageOAuthConnectionResult<IntegrationConnection>> {
   const session = await resolveMemberSessionSnapshot();

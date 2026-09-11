@@ -200,6 +200,28 @@ describe("GET /api/integrations/oauth/callback — provider-aware return path (G
     expect(statusOf(response)).toEqual({ status: "pending_configuration", detail: null });
   });
 
+  it("SOCIAL-02: meta success returns to /settings/integrations/meta", async () => {
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(ACTIVE_SESSION);
+    vi.mocked(getPendingAuthorizationForCaller).mockResolvedValue(pendingFor("meta"));
+    vi.mocked(completeProviderOAuthConnectionAction).mockResolvedValue({ success: true, data: { id: "conn_1" } as never });
+
+    const response = await GET(request("?code=abc&state=xyz") as never);
+
+    expect(pathOf(response)).toBe("/settings/integrations/meta");
+    expect(statusOf(response)).toEqual({ status: "connected", detail: "meta" });
+  });
+
+  it("SOCIAL-02: meta failure (completion_failed) returns to the same safe settings route", async () => {
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(ACTIVE_SESSION);
+    vi.mocked(getPendingAuthorizationForCaller).mockResolvedValue(pendingFor("meta"));
+    vi.mocked(completeProviderOAuthConnectionAction).mockResolvedValue({ success: false, error: "Meta rejected this connection." });
+
+    const response = await GET(request("?code=abc&state=xyz") as never);
+
+    expect(pathOf(response)).toBe("/settings/integrations/meta");
+    expect(statusOf(response)).toEqual({ status: "error", detail: "completion_failed" });
+  });
+
   it("GC02-02R-I:3. Gmail retains its existing /developer return route exactly", async () => {
     vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(ACTIVE_SESSION);
     vi.mocked(getPendingAuthorizationForCaller).mockResolvedValue(pendingFor("gmail"));

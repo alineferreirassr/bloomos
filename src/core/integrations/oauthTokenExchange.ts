@@ -31,6 +31,8 @@ const OAUTH_CLIENT_ENV_VARS: Record<string, { idVar: string; secretVar: string }
   "google-drive": { idVar: "GOOGLE_OAUTH_CLIENT_ID", secretVar: "GOOGLE_OAUTH_CLIENT_SECRET" },
   docusign: { idVar: "DOCUSIGN_OAUTH_CLIENT_ID", secretVar: "DOCUSIGN_OAUTH_CLIENT_SECRET" },
   dropbox: { idVar: "DROPBOX_OAUTH_CLIENT_ID", secretVar: "DROPBOX_OAUTH_CLIENT_SECRET" },
+  // SOCIAL-02 — Meta's own registered app (Facebook Login for Business).
+  meta: { idVar: "META_OAUTH_CLIENT_ID", secretVar: "META_OAUTH_CLIENT_SECRET" },
 };
 
 export function resolveOAuthClientCredentials(providerId: string): OAuthClientCredentials | null {
@@ -77,4 +79,64 @@ export async function refreshOAuthToken(params: { providerId: string; tokenEndpo
   }
   const result = (await response.json()) as { access_token: string; refresh_token?: string; expires_in?: number };
   return { configured: true, accessToken: result.access_token, refreshToken: result.refresh_token ?? params.refreshToken, expiresInSeconds: result.expires_in ?? null };
+}
+
+/**
+ * SOCIAL-02 — Meta's real code-exchange shape does not fit
+ * `exchangeAuthorizationCode`'s generic assumption (a `POST` with a
+ * form-urlencoded body and a `grant_type=authorization_code` value).
+ * Verified against Meta's own current developer documentation (Graph API
+ * v26.0, the latest stable version as of this checkpoint) rather than
+ * assumed from memory:
+ *
+ * 1. `GET {tokenEndpoint}?client_id=...&redirect_uri=...&client_secret=...&code=...`
+ *    — a plain `GET` with querystring params, no `grant_type` at all —
+ *    exchanges the authorization `code` for a short-lived (~1-2 hour)
+ *    user access token.
+ * 2. `GET {tokenEndpoint}?grant_type=fb_exchange_token&client_id=...&client_secret=...&fb_exchange_token=<short-lived token>`
+ *    — immediately exchanges that short-lived token for a long-lived
+ *    (~60 day) user access token. Meta has no separate `refresh_token`
+ *    value at all; the long-lived token itself is what gets re-extended
+ *    later (see `manageOAuthConnectionActions.ts`'s own comment on why
+ *    Meta's `refreshProviderOAuthConnectionAction` path is left to report
+ *    "reconnect" honestly rather than faking a refresh-token flow that
+ *    doesn't exist for this provider).
+ *
+ * Only the long-lived token is ever returned/persisted — the short-lived
+ * token exists only for the duration of this one function call. This
+ * still returns the exact same `TokenExchangeResult` shape every other
+ * provider's exchange does, so no caller-side type ever needs to know
+ * this happened in two HTTP calls instead of one.
+ */
+export async function exchangeMetaAuthorizationCode(params: { tokenEndpoint: string; code: string; redirectUri: string }): Promise<TokenExchangeResult> {
+  const credentials = resolveOAuthClientCredentials("meta");
+  if (!credentials) return { configured: false, reason: 'No OAuth client is configured for "meta" in this environment.' };
+
+  const codeExchangeUrl = new URL(params.tokenEndpoint);
+  codeExchangeUrl.searchParams.set("client_id", credentials.clientId);
+  codeExchangeUrl.searchParams.set("redirect_uri", params.redirectUri);
+  codeExchangeUrl.searchParams.set("client_secret", credentials.clientSecret);
+  codeExchangeUrl.searchParams.set("code", params.code);
+
+  const codeResponse = await fetch(codeExchangeUrl, { method: "GET" });
+  if (!codeResponse.ok) {
+    const errorBody = await codeResponse.text().catch(() => "");
+    throw new Error(`OAuth token exchange failed for "meta": ${codeResponse.status} ${errorBody.slice(0, 200)}`);
+  }
+  const shortLived = (await codeResponse.json()) as { access_token: string };
+
+  const longLivedUrl = new URL(params.tokenEndpoint);
+  longLivedUrl.searchParams.set("grant_type", "fb_exchange_token");
+  longLivedUrl.searchParams.set("client_id", credentials.clientId);
+  longLivedUrl.searchParams.set("client_secret", credentials.clientSecret);
+  longLivedUrl.searchParams.set("fb_exchange_token", shortLived.access_token);
+
+  const longLivedResponse = await fetch(longLivedUrl, { method: "GET" });
+  if (!longLivedResponse.ok) {
+    const errorBody = await longLivedResponse.text().catch(() => "");
+    throw new Error(`Long-lived token exchange failed for "meta": ${longLivedResponse.status} ${errorBody.slice(0, 200)}`);
+  }
+  const longLived = (await longLivedResponse.json()) as { access_token: string; expires_in?: number };
+
+  return { configured: true, accessToken: longLived.access_token, refreshToken: null, expiresInSeconds: longLived.expires_in ?? null };
 }

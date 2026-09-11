@@ -8,7 +8,7 @@ vi.mock("@/lib/auth/memberSessionSnapshot", () => ({
 
 vi.mock("@/core/integrations/oauthTokenExchange", async () => {
   const actual = await vi.importActual<typeof import("@/core/integrations/oauthTokenExchange")>("@/core/integrations/oauthTokenExchange");
-  return { ...actual, exchangeAuthorizationCode: vi.fn(), refreshOAuthToken: vi.fn() };
+  return { ...actual, exchangeAuthorizationCode: vi.fn(), refreshOAuthToken: vi.fn(), exchangeMetaAuthorizationCode: vi.fn() };
 });
 
 vi.mock("@/core/integrations/providerFactory", async () => {
@@ -17,7 +17,7 @@ vi.mock("@/core/integrations/providerFactory", async () => {
 });
 
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
-import { exchangeAuthorizationCode, refreshOAuthToken } from "@/core/integrations/oauthTokenExchange";
+import { exchangeAuthorizationCode, exchangeMetaAuthorizationCode, refreshOAuthToken } from "@/core/integrations/oauthTokenExchange";
 import { createProviderInstance } from "@/core/integrations/providerFactory";
 import {
   beginProviderOAuthConnectionAction,
@@ -130,6 +130,16 @@ function mockConfiguredExchange(overrides: Partial<{ accessToken: string; refres
     refreshToken: overrides.refreshToken ?? "real-refresh-token",
     expiresInSeconds: overrides.expiresInSeconds ?? 3600,
   });
+  // SOCIAL-02 — Meta's own exchange function is a distinct mock (never a
+  // refresh token; see the real implementation's own doc comment), stubbed
+  // here too so `it.each` provider-list tests that include "meta" don't
+  // need their own special-cased setup.
+  vi.mocked(exchangeMetaAuthorizationCode).mockResolvedValue({
+    configured: true,
+    accessToken: overrides.accessToken ?? "real-meta-access-token",
+    refreshToken: null,
+    expiresInSeconds: overrides.expiresInSeconds ?? 5184000,
+  });
 }
 
 function mockPingOk() {
@@ -207,7 +217,7 @@ describe("GMAIL-03R2-FIX1 — shared connect_requested → connecting → connec
     expect(result.success).toBe(false);
   });
 
-  it.each(["google-calendar", "google-drive", "docusign", "dropbox"] as const)(
+  it.each(["google-calendar", "google-drive", "docusign", "dropbox", "meta"] as const)(
     "%s's existing first-time OAuth semantics are otherwise unchanged — workspace-owned, connecting then connected, no ownership/scope change",
     async (providerId) => {
       const { complete } = await beginAndComplete(providerId, session);
@@ -218,6 +228,51 @@ describe("GMAIL-03R2-FIX1 — shared connect_requested → connecting → connec
       expect(own.success && own.data?.installed_by).toBe("member_1");
     },
   );
+});
+
+describe("Meta connection lifecycle (SOCIAL-02)", () => {
+  it("uses exchangeMetaAuthorizationCode, never the generic exchangeAuthorizationCode, for the meta provider", async () => {
+    const { complete } = await beginAndComplete("meta", session);
+    expect(complete.success).toBe(true);
+    expect(exchangeMetaAuthorizationCode).toHaveBeenCalledTimes(1);
+    expect(exchangeAuthorizationCode).not.toHaveBeenCalled();
+  });
+
+  it("is workspace-owned, not member-owned — connecting as one member is visible to another member of the same workspace", async () => {
+    await beginAndComplete("meta", session);
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(otherMemberSession);
+    const own = await getOwnProviderConnectionAction("meta");
+    expect(own.success && own.data).not.toBeNull();
+  });
+
+  it("persists no refresh token — Meta's long-lived token is the only credential value stored", async () => {
+    await beginAndComplete("meta", session);
+    const own = await getOwnProviderConnectionAction("meta");
+    const connectionId = own.success ? own.data?.id : undefined;
+    expect(connectionId).toBeTruthy();
+    const credential = await getCredentialForConnection(connectionId!);
+    expect(credential?.refresh_token_ref).toBeNull();
+  });
+
+  it("refreshProviderOAuthConnectionAction honestly reports 'no refresh token on file — reconnect' for Meta, never fabricating a refresh", async () => {
+    const { complete } = await beginAndComplete("meta", session);
+    if (!complete.success || "pendingConfiguration" in complete.data) throw new Error("setup failed");
+    const connectionId = complete.data.id;
+
+    const result = await refreshProviderOAuthConnectionAction(connectionId);
+    expect(result.success).toBe(false);
+    expect(result.success ? "" : result.error).toMatch(/reconnect/i);
+  });
+
+  it("a cross-workspace caller cannot see or act on another workspace's Meta connection", async () => {
+    const { complete } = await beginAndComplete("meta", session);
+    if (!complete.success || "pendingConfiguration" in complete.data) throw new Error("setup failed");
+    const connectionId = complete.data.id;
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(crossTenantSession);
+    const disconnect = await disconnectOAuthProviderAction(connectionId);
+    expect(disconnect.success).toBe(false);
+  });
 });
 
 describe("Gmail member-owned connection lifecycle (GMAIL-03R2)", () => {
