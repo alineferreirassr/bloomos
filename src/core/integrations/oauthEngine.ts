@@ -1,6 +1,7 @@
 import { getProvider } from "@/core/integrations/providerRegistry";
 import { issueOAuthCredential, InMemoryEncryptionProvider, type EncryptionProvider } from "@/core/integrations/credentialManager";
 import { SupabasePendingOAuthVaultProvider } from "@/core/integrations/pendingAuthorizationVaultProvider";
+import { resolveOAuthClientCredentials } from "@/core/integrations/oauthTokenExchange";
 import { getDataMode } from "@/lib/data/provider";
 import {
   deletePendingAuthorization,
@@ -123,11 +124,33 @@ export interface BeginAuthorizationResult {
   state: string;
 }
 
-/** Builds the exact URL a real handshake would redirect the browser to — never fetched or navigated to by this engine itself. Throws if the provider isn't registered or doesn't declare `oauth` metadata, since there's nothing to build a URL from. */
+/**
+ * Builds the exact URL a real handshake would redirect the browser to —
+ * never fetched or navigated to by this engine itself. Throws if the
+ * provider isn't registered, doesn't declare `oauth` metadata, or has no
+ * OAuth client configured in this environment, since there's nothing to
+ * build a real authorization URL from in any of those cases.
+ *
+ * GMAIL-OAUTH-FIX-01 — `client_id` is a mandatory parameter on every real
+ * OAuth 2.0 authorization-code request (Google's own authorization
+ * endpoint rejects its absence with "Missing required parameter:
+ * client_id", confirmed live); this resolves it via the same
+ * `resolveOAuthClientCredentials()` `oauthTokenExchange.ts` already uses
+ * for token exchange, so every OAuth-capable provider registered through
+ * that one shared map is fixed identically — never a per-provider special
+ * case. Checked before any pending-authorization work below, so a missing
+ * client never leaves behind an orphaned pending-authorization row (or a
+ * Vault secret) for a request that could never complete anyway.
+ * `client_secret` is resolved by that same call but deliberately never
+ * read here — it has no place in a public authorization-request URL.
+ */
 export async function beginAuthorization(params: BeginAuthorizationParams): Promise<BeginAuthorizationResult> {
   const provider = getProvider(params.providerId);
   if (!provider) throw new Error(`No provider is registered for "${params.providerId}".`);
   if (!provider.capabilities.includes("oauth") || !provider.oauth) throw new Error(`Provider "${params.providerId}" does not declare OAuth support.`);
+
+  const credentials = resolveOAuthClientCredentials(params.providerId);
+  if (!credentials) throw new Error(`No OAuth client is configured for "${params.providerId}" in this environment.`);
 
   const state = generateOAuthState();
   const pkce = provider.oauth.supportsPkce ? await generatePkcePair() : null;
@@ -147,6 +170,7 @@ export async function beginAuthorization(params: BeginAuthorizationParams): Prom
   });
 
   const url = new URL(provider.oauth.authorizationEndpoint);
+  url.searchParams.set("client_id", credentials.clientId);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("redirect_uri", params.redirectUri);
   url.searchParams.set("state", state);

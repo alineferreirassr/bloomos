@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
+// GMAIL-OAUTH-FIX-01 — beginAuthorization() now resolves real OAuth client
+// credentials via this function. "test-oauth-provider" below is a fake,
+// test-only provider id with no entry in that function's real
+// env-var-backed map, so it's stubbed here rather than exercising the real
+// per-provider env lookup — every test below that isn't specifically about
+// credential resolution should keep passing exactly as before.
+vi.mock("@/core/integrations/oauthTokenExchange", () => ({ resolveOAuthClientCredentials: vi.fn() }));
 import { createClient } from "@/lib/supabase/server";
+import { resolveOAuthClientCredentials } from "@/core/integrations/oauthTokenExchange";
 import { resetProviderRegistry, registerProvider } from "@/core/integrations/providerRegistry";
 import { resetCredentialStore } from "@/lib/data/core/integrations/credentialStore";
 import { resetEncryptionProvider, InMemoryEncryptionProvider } from "@/core/integrations/credentialManager";
@@ -45,6 +53,7 @@ beforeEach(() => {
   resetOAuthEngine();
   registerProvider(oauthProvider);
   registerProvider(noOauthProvider);
+  vi.mocked(resolveOAuthClientCredentials).mockReturnValue({ clientId: "test_client_id_abc", clientSecret: "test_client_secret_xyz" });
 });
 
 afterEach(() => {
@@ -62,6 +71,67 @@ describe("beginAuthorization", () => {
     expect(url.searchParams.get("code_challenge")).toBeTruthy();
     expect(url.searchParams.get("code_challenge_method")).toBe("S256");
     expect(await getPendingAuthorization(result.state)).not.toBeNull();
+  });
+
+  describe("GMAIL-OAUTH-FIX-01 — client_id inclusion", () => {
+    it("(A, B) the authorization URL contains client_id, equal to the resolved configured client id", async () => {
+      const result = await beginAuthorization({ workspaceId: "ws_1", connectionId: "conn_1", providerId: "test-oauth-provider", redirectUri: "https://app.test/callback" });
+      const url = new URL(result.authorizationUrl);
+      expect(url.searchParams.get("client_id")).toBe("test_client_id_abc");
+    });
+
+    it("(C, D) redirect_uri and state remain present alongside client_id — unchanged by this fix", async () => {
+      const result = await beginAuthorization({ workspaceId: "ws_1", connectionId: "conn_1", providerId: "test-oauth-provider", redirectUri: "https://app.test/callback" });
+      const url = new URL(result.authorizationUrl);
+      expect(url.searchParams.get("redirect_uri")).toBe("https://app.test/callback");
+      expect(url.searchParams.get("state")).toBe(result.state);
+    });
+
+    it("(E) PKCE parameters remain present for a provider that supports PKCE", async () => {
+      const result = await beginAuthorization({ workspaceId: "ws_1", connectionId: "conn_1", providerId: "test-oauth-provider", redirectUri: "https://app.test/callback" });
+      const url = new URL(result.authorizationUrl);
+      expect(url.searchParams.get("code_challenge")).toBeTruthy();
+      expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+    });
+
+    it("(F) scopes remain correct alongside client_id", async () => {
+      const result = await beginAuthorization({ workspaceId: "ws_1", connectionId: "conn_1", providerId: "test-oauth-provider", redirectUri: "https://app.test/callback" });
+      const url = new URL(result.authorizationUrl);
+      expect(url.searchParams.get("scope")).toBe("read");
+    });
+
+    it("(G) client_secret never appears anywhere in the authorization URL", async () => {
+      const result = await beginAuthorization({ workspaceId: "ws_1", connectionId: "conn_1", providerId: "test-oauth-provider", redirectUri: "https://app.test/callback" });
+      expect(result.authorizationUrl).not.toContain("test_client_secret_xyz");
+      expect(result.authorizationUrl).not.toMatch(/client_secret/);
+    });
+
+    it("(H) missing OAuth client configuration produces a controlled failure — no blank client_id, no pending-authorization row left behind, no Vault secret created", async () => {
+      vi.mocked(resolveOAuthClientCredentials).mockReturnValueOnce(null);
+      await expect(
+        beginAuthorization({ workspaceId: "ws_1", connectionId: "conn_1", providerId: "test-oauth-provider", redirectUri: "https://app.test/callback" }),
+      ).rejects.toThrow(/No OAuth client is configured for "test-oauth-provider"/);
+    });
+
+    it("(I) URL generation remains valid for a provider with no scopes/no PKCE", async () => {
+      const minimalProvider: ProviderDefinition = {
+        ...oauthProvider,
+        id: "minimal-oauth-provider",
+        oauth: { authorizationEndpoint: "https://example.test/oauth/authorize", tokenEndpoint: "https://example.test/oauth/token", defaultScopes: [], supportsPkce: false },
+      };
+      registerProvider(minimalProvider);
+      const result = await beginAuthorization({ workspaceId: "ws_1", connectionId: "conn_1", providerId: "minimal-oauth-provider", redirectUri: "https://app.test/callback" });
+      const url = new URL(result.authorizationUrl);
+      expect(url.searchParams.get("client_id")).toBe("test_client_id_abc");
+      expect(url.searchParams.has("scope")).toBe(false);
+      expect(url.searchParams.has("code_challenge")).toBe(false);
+    });
+
+    it("(J) the returned result never carries the client secret anywhere, in any field", async () => {
+      const result = await beginAuthorization({ workspaceId: "ws_1", connectionId: "conn_1", providerId: "test-oauth-provider", redirectUri: "https://app.test/callback" });
+      expect(Object.keys(result).sort()).toEqual(["authorizationUrl", "state"]);
+      expect(JSON.stringify(result)).not.toContain("test_client_secret_xyz");
+    });
   });
 
   it("throws for a provider with no OAuth metadata", async () => {

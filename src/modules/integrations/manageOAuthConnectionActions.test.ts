@@ -8,7 +8,12 @@ vi.mock("@/lib/auth/memberSessionSnapshot", () => ({
 
 vi.mock("@/core/integrations/oauthTokenExchange", async () => {
   const actual = await vi.importActual<typeof import("@/core/integrations/oauthTokenExchange")>("@/core/integrations/oauthTokenExchange");
-  return { ...actual, exchangeAuthorizationCode: vi.fn(), refreshOAuthToken: vi.fn(), exchangeMetaAuthorizationCode: vi.fn() };
+  // GMAIL-OAUTH-FIX-01 — beginAuthorization() now calls resolveOAuthClientCredentials()
+  // too, so it's stubbed here alongside the token-exchange functions this file
+  // already mocked; the real, env-var-backed implementation would otherwise
+  // fail every test in this file (no real OAuth client env vars exist in this
+  // sandbox), regardless of provider id.
+  return { ...actual, exchangeAuthorizationCode: vi.fn(), refreshOAuthToken: vi.fn(), exchangeMetaAuthorizationCode: vi.fn(), resolveOAuthClientCredentials: vi.fn() };
 });
 
 vi.mock("@/core/integrations/providerFactory", async () => {
@@ -19,7 +24,7 @@ vi.mock("@/core/integrations/providerFactory", async () => {
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 import * as connectionStore from "@/lib/data/core/integrations/connectionStore";
 import { setLogger, consoleLogger } from "@/core/observability/logger";
-import { exchangeAuthorizationCode, exchangeMetaAuthorizationCode, refreshOAuthToken } from "@/core/integrations/oauthTokenExchange";
+import { exchangeAuthorizationCode, exchangeMetaAuthorizationCode, refreshOAuthToken, resolveOAuthClientCredentials } from "@/core/integrations/oauthTokenExchange";
 import { createProviderInstance } from "@/core/integrations/providerFactory";
 import {
   beginProviderOAuthConnectionAction,
@@ -66,6 +71,7 @@ beforeEach(() => {
   resetCredentialStore();
   resetEncryptionProvider();
   resetOAuthEngine();
+  vi.mocked(resolveOAuthClientCredentials).mockImplementation((providerId) => ({ clientId: `test_client_id_${providerId}`, clientSecret: `test_client_secret_${providerId}` }));
 });
 
 afterEach(() => {
