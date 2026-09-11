@@ -82,6 +82,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // not-yet-released, unrelated to the Finance release this exact-count
   // assertion describes.
   "20260915100100_social_permissions.sql",
+  // INTEGRATIONS-PERMISSIONS-01 — integrations.* permission seed.
+  // Independently-tracked, not-yet-released, unrelated to the Finance
+  // release this exact-count assertion describes.
+  "20260915100200_integrations_permissions.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {
@@ -4238,5 +4242,67 @@ describe("SOCIAL-03 migration — social.* permission seed", () => {
   it("never grants staff social.publish", () => {
     const code = stripSqlComments(sql());
     expect(code).not.toMatch(/\('staff', 'social\.publish'\)/);
+  });
+});
+
+describe("INTEGRATIONS-PERMISSIONS-01 migration — integrations.* permission seed", () => {
+  function sql(): string {
+    return readMigration("20260915100200_integrations_permissions.sql");
+  }
+
+  const INTEGRATIONS_PERMISSIONS = [
+    "integrations.view",
+    "integrations.manage",
+    "integrations.connect",
+    "integrations.disconnect",
+    "integrations.logs",
+    "integrations.webhooks",
+    "integrations.payments",
+    "integrations.calendar",
+    "integrations.email",
+    "integrations.messaging",
+    "integrations.storage",
+    "integrations.signatures",
+    "integrations.sensitive",
+  ];
+
+  it("inserts exactly the 13 integrations.* permissions defined in the Permission enum", () => {
+    const code = stripSqlComments(sql());
+    for (const id of INTEGRATIONS_PERMISSIONS) {
+      expect(code).toMatch(new RegExp(`\\('${id.replace(".", "\\.")}',`));
+    }
+  });
+
+  it("uses on conflict do nothing for both inserts — safe to replay", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/insert into public\.permissions[\s\S]*?on conflict \(id\) do nothing;/);
+    expect(code).toMatch(/insert into public\.role_permissions[\s\S]*?on conflict do nothing;/);
+  });
+
+  it("grants owner and admin every integrations.* permission — mirroring permissionMatrix.ts's own PERMISSIONS full-array grant", () => {
+    const code = stripSqlComments(sql());
+    for (const role of ["owner", "admin"]) {
+      for (const id of INTEGRATIONS_PERMISSIONS) {
+        expect(code).toMatch(new RegExp(`\\('${role}', '${id.replace(".", "\\.")}'\\)`));
+      }
+    }
+  });
+
+  it("never grants manager or staff any integrations.* permission — permissionMatrix.ts grants them none", () => {
+    const code = stripSqlComments(sql());
+    for (const role of ["manager", "staff"]) {
+      for (const id of INTEGRATIONS_PERMISSIONS) {
+        expect(code).not.toMatch(new RegExp(`\\('${role}', '${id.replace(".", "\\.")}'\\)`));
+      }
+    }
+  });
+
+  it("is additive-only — no create table, alter table, drop, or update statement anywhere", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/\bcreate table\b/i);
+    expect(code).not.toMatch(/\balter table\b/i);
+    expect(code).not.toMatch(/\bdrop\b/i);
+    expect(code).not.toMatch(/\bupdate\b/i);
+    expect(code).not.toMatch(/\bdelete\b/i);
   });
 });
