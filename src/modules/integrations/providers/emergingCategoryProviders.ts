@@ -117,22 +117,34 @@ export function registerEmergingCategoryProviders(): void {
    * checks the connection's own stored `credential.scopes` and reports a
    * truthful "reconnect Meta to enable publishing" rather than assuming
    * readiness (SOCIAL03-Z).
+   *
+   * SOCIAL-05B adds `instagram_manage_insights` to `defaultScopes` —
+   * the one scope real on-demand post analytics needs (verified against
+   * Meta's own live documentation; see SOCIAL-05A/05B's own
+   * architecture-gate reports), following the exact same
+   * only-request-what-is-actually-used discipline as
+   * `instagram_content_publish` above. A SOCIAL-02/03-era connection
+   * does NOT retroactively gain this scope either —
+   * `getSocialPostInsightsAction` checks `credential.scopes` the same
+   * way `publishSocialPostNowAction` already does, and reports a
+   * truthful "reconnect Meta to enable analytics" rather than assuming
+   * readiness.
    */
   registerProvider({
     id: "meta",
     name: "Meta",
     category: "social",
     icon: "Instagram",
-    version: 2,
+    version: 3,
     capabilities: ["oauth"],
-    description: "Connect Amoré Bloom's Facebook Page and its linked Instagram professional account, and publish real Instagram image posts.",
+    description: "Connect Amoré Bloom's Facebook Page and its linked Instagram professional account, publish real Instagram image posts, and view their real performance.",
     requiredPermission: "workspace.manage",
     requiredApiScopes: [],
     subscribedWebhookEvents: [],
     oauth: {
       authorizationEndpoint: "https://www.facebook.com/v26.0/dialog/oauth",
       tokenEndpoint: "https://graph.facebook.com/v26.0/oauth/access_token",
-      defaultScopes: ["pages_show_list", "pages_read_engagement", "instagram_basic", "instagram_content_publish"],
+      defaultScopes: ["pages_show_list", "pages_read_engagement", "instagram_basic", "instagram_content_publish", "instagram_manage_insights"],
       supportsPkce: false,
     },
   } satisfies ProviderDefinition);

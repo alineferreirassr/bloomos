@@ -9,6 +9,7 @@ import {
   createSocialPostAction,
   updateSocialPostDraftAction,
   publishSocialPostNowAction,
+  getSocialPostInsightsAction,
   listSocialPostsAction,
   getSocialPostAction,
 } from "@/modules/socialPosts/socialPostActions";
@@ -23,6 +24,7 @@ import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 
 const PUBLISH_SCOPES = ["pages_show_list", "pages_read_engagement", "instagram_basic", "instagram_content_publish"];
 const DISCOVERY_ONLY_SCOPES = ["pages_show_list", "pages_read_engagement", "instagram_basic"];
+const FULL_SCOPES = [...PUBLISH_SCOPES, "instagram_manage_insights"];
 
 const session: MemberSessionSnapshot = {
   kind: "active",
@@ -323,5 +325,158 @@ describe("listSocialPostsAction / getSocialPostAction", () => {
     vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(crossTenantSession);
     const result = await getSocialPostAction(created.data.id);
     expect(result.success).toBe(false);
+  });
+});
+
+describe("getSocialPostInsightsAction", () => {
+  async function createPublishedPost(scopes: string[] = FULL_SCOPES): Promise<string> {
+    await connectMetaWithSelectedIdentity(scopes);
+    const assetId = await makeApprovedImageAsset();
+    const created = await createSocialPostAction({ caption: "Hi", assetId });
+    if (!created.success) throw new Error("setup failed");
+    stubMetaPublishSuccess();
+    const published = await publishSocialPostNowAction(created.data.id);
+    if (!published.success) throw new Error(`setup failed to publish: ${published.error}`);
+    return created.data.id;
+  }
+
+  function stubMetaInsightsSuccess(fields: Array<{ name: string; value: number }>) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ data: fields.map((f) => ({ name: f.name, total_value: { value: f.value } })) }), { status: 200 })),
+    );
+  }
+
+  it("requires an active session", async () => {
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue({ kind: "unauthenticated" } as unknown as MemberSessionSnapshot);
+    const result = await getSocialPostInsightsAction("nonexistent");
+    expect(result.success).toBe(false);
+  });
+
+  it("denies a member without social.view", async () => {
+    const postId = await createPublishedPost();
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(noPermissionSession);
+    const result = await getSocialPostInsightsAction(postId);
+    expect(result.success).toBe(false);
+  });
+
+  it("denies an unknown post id", async () => {
+    const result = await getSocialPostInsightsAction("nonexistent_post");
+    expect(result.success).toBe(false);
+  });
+
+  it("a cross-workspace caller cannot read another workspace's post insights", async () => {
+    const postId = await createPublishedPost();
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(crossTenantSession);
+    const result = await getSocialPostInsightsAction(postId);
+    expect(result.success).toBe(false);
+  });
+
+  it("reports a truthful 'not eligible' state for a draft post — never a fabricated metric", async () => {
+    await connectMetaWithSelectedIdentity(FULL_SCOPES);
+    const assetId = await makeApprovedImageAsset();
+    const created = await createSocialPostAction({ caption: "Hi", assetId });
+    if (!created.success) throw new Error("setup failed");
+
+    const result = await getSocialPostInsightsAction(created.data.id);
+    expect(result.success).toBe(false);
+  });
+
+  it("reports a truthful 'not eligible' state for a failed post (no provider_post_id ever set)", async () => {
+    await connectMetaWithSelectedIdentity(FULL_SCOPES);
+    const assetId = await makeApprovedImageAsset();
+    const created = await createSocialPostAction({ caption: "Hi", assetId });
+    if (!created.success) throw new Error("setup failed");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("Invalid parameter", { status: 400 })),
+    );
+    const publishAttempt = await publishSocialPostNowAction(created.data.id);
+    expect(publishAttempt.success).toBe(false);
+
+    const result = await getSocialPostInsightsAction(created.data.id);
+    expect(result.success).toBe(false);
+  });
+
+  it("fetches real insights for an eligible published post, using the post's own persisted provider_post_id — never a client-supplied one", async () => {
+    const postId = await createPublishedPost();
+    const fetchMock = vi.fn(async (url: URL) => {
+      void url;
+      return new Response(JSON.stringify({ data: [{ name: "reach", total_value: { value: 120 } }] }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getSocialPostInsightsAction(postId);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.metrics.reach).toBe(120);
+
+    const [url] = fetchMock.mock.calls[0] as [URL];
+    expect(url.pathname).toBe("/v26.0/ig_media_1/insights"); // the real, persisted provider_post_id from stubMetaPublishSuccess() — never the SocialPost's own id
+  });
+
+  it("distinguishes a real zero from a metric Meta did not return", async () => {
+    const postId = await createPublishedPost();
+    stubMetaInsightsSuccess([{ name: "likes", value: 0 }]);
+
+    const result = await getSocialPostInsightsAction(postId);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.metrics.likes).toBe(0);
+    expect("reach" in result.data.metrics).toBe(false);
+    expect("views" in result.data.metrics).toBe(false);
+  });
+
+  it("reports a reconnect-required state (never fabricates readiness) when the connection lacks the analytics scope — SOCIAL-02/03-era connections", async () => {
+    const postId = await createPublishedPost(PUBLISH_SCOPES); // publish-only, no instagram_manage_insights
+    const result = await getSocialPostInsightsAction(postId);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("Reconnect Meta to enable Instagram analytics.");
+  });
+
+  it("reports a reconnect-required state on a Meta auth/token failure", async () => {
+    const postId = await createPublishedPost();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: { message: "Invalid OAuth access token.", code: 190 } }), { status: 401 })),
+    );
+    const result = await getSocialPostInsightsAction(postId);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("Reconnect Meta to enable Instagram analytics.");
+  });
+
+  it("reports a distinct, truthful rate-limit state — never a generic error", async () => {
+    const postId = await createPublishedPost();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: { message: "(#32) Page request limit reached", type: "OAuthException", code: 32 } }), { status: 400 })),
+    );
+    const result = await getSocialPostInsightsAction(postId);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("Instagram is rate-limiting requests right now. Try again in a few minutes.");
+  });
+
+  it("reports a sanitized error, never the raw access token, on a generic provider failure", async () => {
+    const postId = await createPublishedPost();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("Invalid parameter", { status: 400 })),
+    );
+    const result = await getSocialPostInsightsAction(postId);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).not.toContain("real-meta-access-token");
+  });
+
+  it("makes exactly one bounded provider request per call — never a bulk/multi-post fetch", async () => {
+    const postId = await createPublishedPost();
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: [{ name: "reach", total_value: { value: 5 } }] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getSocialPostInsightsAction(postId);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

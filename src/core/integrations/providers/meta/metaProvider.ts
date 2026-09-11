@@ -2,14 +2,17 @@ import type { BaseProvider } from "@/core/integrations/sdk";
 import type { ProviderCapability } from "@/core/integrations/types";
 
 /**
- * SOCIAL-02/03 — a real Meta Graph API adapter (Facebook Login for
+ * SOCIAL-02/03/05B — a real Meta Graph API adapter (Facebook Login for
  * Business flow). SOCIAL-02 added account/Page/Instagram discovery;
- * SOCIAL-03 adds real Instagram image publishing — video is deliberately
+ * SOCIAL-03 added real Instagram image publishing — video is deliberately
  * not implemented (Meta's own video container API requires
  * asynchronous FINISHED-status polling, "once per minute, for no more
  * than 5 minutes," which is not a safe fit for a single synchronous
  * user-triggered publish request — see SOCIAL-03's own architecture-gate
- * report). No Facebook Page publishing, no carousel, no Stories/Reels.
+ * report). SOCIAL-05B adds on-demand IMAGE post insights only — no
+ * account-level insights, no Reel/video/carousel/Story metrics (none of
+ * those media types are publishable through BloomOS yet either). No
+ * Facebook Page publishing, no carousel, no Stories/Reels.
  *
  * Graph API version is pinned to `v26.0`, the current latest stable
  * release (2026-07-29) as of this checkpoint, verified against Meta's own
@@ -45,9 +48,52 @@ interface GraphPagesResponse {
   paging?: { next?: string };
 }
 
-/** True for Meta's own OAuthException shape (expired/invalidated token, revoked permission) — used to report a truthful "reconnect required" state rather than a generic error. */
+interface GraphInsightsResponse {
+  data?: Array<{
+    name: string;
+    total_value?: { value: number };
+    values?: Array<{ value: number }>;
+  }>;
+}
+
+/** One Instagram image-post insight metric this provider currently requests — see `getInstagramMediaInsights`'s own doc comment for why this exact set. */
+export interface InstagramMediaInsight {
+  metric: string;
+  value: number;
+}
+
+/**
+ * True for Meta's own expired/invalidated-token shape (error code `190`,
+ * or a message literally about an access token) — used to report a
+ * truthful "reconnect required" state rather than a generic error.
+ *
+ * Deliberately does NOT match on the bare `OAuthException` type label:
+ * SOCIAL-05B's live-doc research (`developers.facebook.com/docs/graph-api/
+ * guides/error-handling`) found Meta reuses `"type":"OAuthException"` as a
+ * generic wrapper across unrelated error categories — its own documented
+ * rate-limit sample response (`(#32) Page request limit reached`) carries
+ * that same type. Matching on the bare type alone would have misclassified
+ * a rate-limited call as a reconnect-required one; `code 190`/"access
+ * token" are what's actually specific to a real token failure.
+ */
 export function isMetaAuthError(error: unknown): boolean {
-  return error instanceof Error && /\b(190|OAuthException|access token)\b/i.test(error.message);
+  return error instanceof Error && /\b190\b|access token/i.test(error.message);
+}
+
+/**
+ * True for Meta's own documented throttling error codes (live-verified
+ * against `developers.facebook.com/docs/graph-api/overview/rate-limiting`
+ * and `.../guides/error-handling` for SOCIAL-05B: platform codes `4`
+ * "Application request limit reached", `17`/`32` "User/Page request limit
+ * reached", `341` "Application limit reached", and the Instagram-specific
+ * Business Use Case limit `80002`). Matches the same way `isMetaAuthError`
+ * does — against the raw Graph API JSON error body Meta returns, which
+ * `request()` already embeds verbatim (truncated to 200 chars) in the
+ * thrown error's message, so no separate error-class/status-code plumbing
+ * is needed to detect this.
+ */
+export function isMetaRateLimitError(error: unknown): boolean {
+  return error instanceof Error && /"code"\s*:\s*(4|17|32|341|80002)\b/.test(error.message);
 }
 
 export class MetaProvider implements BaseProvider {
@@ -128,5 +174,32 @@ export class MetaProvider implements BaseProvider {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * `GET /{ig-media-id}/insights` — SOCIAL-05B, on-demand only, image posts
+   * only. `metrics` should be a subset of the caller's own approved,
+   * live-verified IMAGE-post metric list (`views`, `reach`, `likes`,
+   * `comments`, `shares`, `saved`, `total_interactions` —
+   * `INSTAGRAM_IMAGE_INSIGHT_METRICS` in `socialPostActions.ts`); this
+   * method itself stays metric-list-agnostic rather than hardcoding that
+   * set twice.
+   *
+   * Critically, this NEVER invents a `0` for a metric Meta didn't actually
+   * return a numeric value for — only entries where Meta itself supplied a
+   * real `total_value`/`values[].value` number are included in the
+   * result. A metric absent from the response (delayed availability,
+   * unsupported for this media, or omitted for any other provider reason)
+   * is simply absent from the returned array; the caller must treat that
+   * as "unavailable," never as a real zero.
+   */
+  async getInstagramMediaInsights(mediaId: string, metrics: string[]): Promise<InstagramMediaInsight[]> {
+    const result = await this.request<GraphInsightsResponse>(`/${mediaId}/insights`, { metric: metrics.join(",") });
+    const insights: InstagramMediaInsight[] = [];
+    for (const entry of result.data ?? []) {
+      const value = entry.total_value?.value ?? entry.values?.[entry.values.length - 1]?.value;
+      if (typeof value === "number") insights.push({ metric: entry.name, value });
+    }
+    return insights;
   }
 }

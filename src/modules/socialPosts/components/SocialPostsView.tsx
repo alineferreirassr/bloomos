@@ -12,6 +12,8 @@ import {
   listSocialPostsAction,
   createSocialPostAction,
   publishSocialPostNowAction,
+  getSocialPostInsightsAction,
+  type SocialPostInsights,
 } from "@/modules/socialPosts/socialPostActions";
 import { getSelectedMetaPublishingIdentityAction, type MetaSelectedIdentity } from "@/modules/integrations/meta/metaAccountActions";
 import { listMediaAssetsForWorkspace, getMediaAssetDownloadUrl } from "@/lib/data";
@@ -19,6 +21,17 @@ import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 import { SOCIAL_POST_STATUS_LABELS, type SocialPostStatus } from "@/core/enums/socialPostStatus";
 import type { SocialPost } from "@/types/socialPost";
 import type { MediaAsset } from "@/types/mediaAsset";
+
+/** SOCIAL-05B — label + display order for the metrics `getSocialPostInsightsAction` may return. A key absent from the fetched result is never rendered — it means Meta didn't return a value for it (most commonly: too soon after publishing), not a real zero. */
+const INSIGHT_METRIC_LABELS: Array<{ key: keyof SocialPostInsights["metrics"]; label: string }> = [
+  { key: "views", label: "Views" },
+  { key: "reach", label: "Reach" },
+  { key: "likes", label: "Likes" },
+  { key: "comments", label: "Comments" },
+  { key: "shares", label: "Shares" },
+  { key: "saved", label: "Saved" },
+  { key: "total_interactions", label: "Interactions" },
+];
 
 type LoadState = { status: "loading" } | { status: "error" } | { status: "ready" };
 
@@ -75,6 +88,9 @@ export function SocialPostsView() {
   const [busy, setBusy] = useState(false);
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<{ id: string; message: string } | null>(null);
+  const [insightsById, setInsightsById] = useState<Record<string, SocialPostInsights>>({});
+  const [insightsLoadingId, setInsightsLoadingId] = useState<string | null>(null);
+  const [insightsError, setInsightsError] = useState<{ id: string; message: string } | null>(null);
 
   function applyPanelData(data: PanelData | null) {
     if (!data) {
@@ -145,6 +161,19 @@ export function SocialPostsView() {
     setPublishingId(null);
     if (!result.success) setPublishError({ id: post.id, message: result.error });
     reload();
+  }
+
+  /** SOCIAL-05B — manual, on-demand, one post at a time. Never fetched automatically for every published post on load, and never batched across posts — a fresh request only when this specific button is clicked. */
+  async function handleFetchInsights(post: SocialPost) {
+    setInsightsLoadingId(post.id);
+    setInsightsError(null);
+    const result = await getSocialPostInsightsAction(post.id);
+    setInsightsLoadingId(null);
+    if (!result.success) {
+      setInsightsError({ id: post.id, message: result.error });
+      return;
+    }
+    setInsightsById((prev) => ({ ...prev, [post.id]: result.data }));
   }
 
   if (state.status === "loading") {
@@ -257,10 +286,36 @@ export function SocialPostsView() {
                       View on Instagram
                     </a>
                   ) : null}
+                  {post.status === "published" ? (
+                    <div className="mt-2">
+                      {insightsError?.id === post.id ? (
+                        <p role="alert" className="text-xs text-rose-600 dark:text-rose-400">
+                          {insightsError.message}
+                        </p>
+                      ) : insightsById[post.id] ? (
+                        Object.keys(insightsById[post.id].metrics).length === 0 ? (
+                          <p className="text-xs text-text-muted">Insights may not be available yet.</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
+                            {INSIGHT_METRIC_LABELS.filter(({ key }) => insightsById[post.id].metrics[key] !== undefined).map(({ key, label }) => (
+                              <span key={key}>
+                                <span className="font-semibold text-text">{insightsById[post.id].metrics[key]}</span> {label}
+                              </span>
+                            ))}
+                          </div>
+                        )
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
                 {(post.status === "draft" || post.status === "failed") && (
                   <Button variant="secondary" onClick={() => handlePublish(post)} disabled={publishingId === post.id}>
                     {publishingId === post.id ? "Publishing…" : post.status === "failed" ? "Retry" : "Publish Now"}
+                  </Button>
+                )}
+                {post.status === "published" && (
+                  <Button variant="secondary" onClick={() => handleFetchInsights(post)} disabled={insightsLoadingId === post.id}>
+                    {insightsLoadingId === post.id ? "Loading…" : "Refresh insights"}
                   </Button>
                 )}
               </li>

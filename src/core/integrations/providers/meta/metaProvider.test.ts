@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MetaProvider, isMetaAuthError } from "@/core/integrations/providers/meta/metaProvider";
+import { MetaProvider, isMetaAuthError, isMetaRateLimitError } from "@/core/integrations/providers/meta/metaProvider";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -152,5 +152,84 @@ describe("isMetaAuthError", () => {
   it("does not misclassify an unrelated error as an auth error", () => {
     expect(isMetaAuthError(new Error("Meta Graph API error 500: internal server error"))).toBe(false);
     expect(isMetaAuthError(new TypeError("network failure"))).toBe(false);
+  });
+});
+
+describe("MetaProvider — SOCIAL-05B Instagram image-post insights", () => {
+  const provider = new MetaProvider("test_access_token");
+
+  it("getInstagramMediaInsights() requests the exact metric list and maps real total_value entries", async () => {
+    const fetchMock = vi.fn(async (url: URL) => {
+      void url;
+      return new Response(
+        JSON.stringify({
+          data: [
+            { name: "reach", total_value: { value: 120 } },
+            { name: "likes", total_value: { value: 0 } },
+            { name: "total_interactions", total_value: { value: 8 } },
+          ],
+        }),
+        { status: 200 },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.getInstagramMediaInsights("ig_media_1", ["reach", "likes", "total_interactions"]);
+    expect(result).toEqual([
+      { metric: "reach", value: 120 },
+      { metric: "likes", value: 0 },
+      { metric: "total_interactions", value: 8 },
+    ]);
+
+    const [url] = fetchMock.mock.calls[0] as [URL];
+    expect(url.pathname).toBe("/v26.0/ig_media_1/insights");
+    expect(url.searchParams.get("metric")).toBe("reach,likes,total_interactions");
+  });
+
+  it("never invents a 0 for a metric Meta did not return a value for", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ data: [{ name: "reach", total_value: { value: 120 } }] }), { status: 200 })),
+    );
+
+    const result = await provider.getInstagramMediaInsights("ig_media_1", ["reach", "views", "saved"]);
+    expect(result).toEqual([{ metric: "reach", value: 120 }]);
+    expect(result.find((entry) => entry.metric === "views")).toBeUndefined();
+    expect(result.find((entry) => entry.metric === "saved")).toBeUndefined();
+  });
+
+  it("returns an empty array (never throws) when Meta returns no insights yet for a recently published post", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ data: [] }), { status: 200 })),
+    );
+    const result = await provider.getInstagramMediaInsights("ig_media_1", ["reach"]);
+    expect(result).toEqual([]);
+  });
+
+  it("falls back to the latest values[] entry when a metric has no total_value", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ data: [{ name: "reach", values: [{ value: 10 }, { value: 42 }] }] }), { status: 200 })),
+    );
+    const result = await provider.getInstagramMediaInsights("ig_media_1", ["reach"]);
+    expect(result).toEqual([{ metric: "reach", value: 42 }]);
+  });
+});
+
+describe("isMetaRateLimitError", () => {
+  it("recognizes Meta's own platform throttling codes (4, 17, 32, 341) as a rate-limit condition", () => {
+    expect(isMetaRateLimitError(new Error('Meta Graph API error 400: {"error":{"message":"(#4) Application request limit reached","type":"OAuthException","code":4}}'))).toBe(true);
+    expect(isMetaRateLimitError(new Error('Meta Graph API error 400: {"error":{"message":"(#32) Page request limit reached","type":"OAuthException","code":32}}'))).toBe(true);
+  });
+
+  it("recognizes Meta's Instagram-specific Business Use Case limit (80002) as a rate-limit condition", () => {
+    expect(isMetaRateLimitError(new Error('Meta Graph API error 400: {"error":{"message":"Calls to this api have exceeded the rate limit.","type":"OAuthException","code":80002}}'))).toBe(true);
+  });
+
+  it("does not misclassify an unrelated error as a rate-limit error", () => {
+    expect(isMetaRateLimitError(new Error("Meta Graph API error 500: internal server error"))).toBe(false);
+    expect(isMetaRateLimitError(new Error("Meta Graph API error 401: (#190) OAuthException — the access token could not be decrypted"))).toBe(false);
+    expect(isMetaRateLimitError(new TypeError("network failure"))).toBe(false);
   });
 });

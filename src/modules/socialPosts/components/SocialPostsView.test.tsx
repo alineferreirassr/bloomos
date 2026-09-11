@@ -6,6 +6,7 @@ vi.mock("@/modules/socialPosts/socialPostActions", () => ({
   listSocialPostsAction: vi.fn(),
   createSocialPostAction: vi.fn(),
   publishSocialPostNowAction: vi.fn(),
+  getSocialPostInsightsAction: vi.fn(),
 }));
 
 vi.mock("@/modules/integrations/meta/metaAccountActions", () => ({
@@ -17,7 +18,7 @@ vi.mock("@/lib/data", () => ({
   getMediaAssetDownloadUrl: vi.fn(),
 }));
 
-import { listSocialPostsAction, createSocialPostAction, publishSocialPostNowAction } from "@/modules/socialPosts/socialPostActions";
+import { listSocialPostsAction, createSocialPostAction, publishSocialPostNowAction, getSocialPostInsightsAction } from "@/modules/socialPosts/socialPostActions";
 import { getSelectedMetaPublishingIdentityAction } from "@/modules/integrations/meta/metaAccountActions";
 import { listMediaAssetsForWorkspace, getMediaAssetDownloadUrl } from "@/lib/data";
 import { SocialPostsView } from "@/modules/socialPosts/components/SocialPostsView";
@@ -213,5 +214,60 @@ describe("SocialPostsView", () => {
     const postsList = screen.getByRole("list");
     expect(within(postsList).queryByRole("button", { name: /publish now/i })).not.toBeInTheDocument();
     expect(within(postsList).queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+  });
+
+  it("shows a 'Refresh insights' control only for a published post, never for draft/failed", async () => {
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ id: "p1", status: "published" }), post({ id: "p2", status: "draft" }), post({ id: "p3", status: "failed" })] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+
+    render(<SocialPostsView />);
+    await screen.findByText("Published");
+
+    expect(screen.getAllByRole("button", { name: "Refresh insights" })).toHaveLength(1);
+  });
+
+  it("fetches and renders real metrics on Refresh insights — never a fabricated value", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ status: "published" })] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(getSocialPostInsightsAction).mockResolvedValue({ success: true, data: { metrics: { reach: 120, likes: 0 } } });
+
+    render(<SocialPostsView />);
+    await user.click(await screen.findByRole("button", { name: "Refresh insights" }));
+
+    expect(await screen.findByText("120")).toBeInTheDocument();
+    expect(screen.getByText("Reach")).toBeInTheDocument();
+    expect(screen.getByText("0")).toBeInTheDocument();
+    expect(screen.getByText("Likes")).toBeInTheDocument();
+    // Never render a metric that wasn't in the result — no fabricated "0 Views".
+    expect(screen.queryByText("Views")).not.toBeInTheDocument();
+  });
+
+  it("shows a truthful 'not available yet' message when the provider returns no metrics at all — never a fabricated zero", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ status: "published" })] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(getSocialPostInsightsAction).mockResolvedValue({ success: true, data: { metrics: {} } });
+
+    render(<SocialPostsView />);
+    await user.click(await screen.findByRole("button", { name: "Refresh insights" }));
+
+    expect(await screen.findByText("Insights may not be available yet.")).toBeInTheDocument();
+  });
+
+  it("shows the exact truthful error (e.g. reconnect-required) when insights fail — never renders stale/fabricated metrics", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ status: "published" })] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(getSocialPostInsightsAction).mockResolvedValue({ success: false, error: "Reconnect Meta to enable Instagram analytics." });
+
+    render(<SocialPostsView />);
+    await user.click(await screen.findByRole("button", { name: "Refresh insights" }));
+
+    expect(await screen.findByText("Reconnect Meta to enable Instagram analytics.")).toBeInTheDocument();
   });
 });
