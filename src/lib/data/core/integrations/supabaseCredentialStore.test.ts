@@ -106,6 +106,24 @@ describe("supabaseCredentialStore", () => {
     expect(result.access_token_ref).toBe("vault_secret_abc");
   });
 
+  it("GMAIL-CONNECTION-FIX-01 — never sends the client-generated placeholder id; integration_credentials.id is a real Postgres uuid column with its own gen_random_uuid() default", async () => {
+    const { calls } = mockSupabase([{ data: credentialRow({ id: "9f2c1a3e-2222-4b2b-8c3d-000000000002" }), error: null }]);
+
+    await insertCredential({ ...CREDENTIAL, id: "integration-credential_not-a-real-uuid" });
+
+    const insertCall = calls.find((c) => c.table === "integration_credentials" && c.method === "insert");
+    const payload = insertCall?.args[0] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty("id");
+  });
+
+  it("GMAIL-CONNECTION-FIX-01 — returns the database-generated uuid, never the client-supplied placeholder", async () => {
+    mockSupabase([{ data: credentialRow({ id: "9f2c1a3e-2222-4b2b-8c3d-000000000002" }), error: null }]);
+
+    const result = await insertCredential({ ...CREDENTIAL, id: "integration-credential_not-a-real-uuid" });
+
+    expect(result.id).toBe("9f2c1a3e-2222-4b2b-8c3d-000000000002");
+  });
+
   it("getCredentialById maps every field, including a null member_id for a workspace-owned credential", async () => {
     mockSupabase([{ data: credentialRow(), error: null }]);
 

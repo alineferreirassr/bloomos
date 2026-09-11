@@ -107,6 +107,24 @@ describe("supabaseConnectionStore", () => {
     expect(result.member_id).toBe("user_2");
   });
 
+  it("GMAIL-CONNECTION-FIX-01 — never sends the client-generated placeholder id; integration_connections.id is a real Postgres uuid column with its own gen_random_uuid() default", async () => {
+    const { calls } = mockSupabase([{ data: connectionRow({ id: "9f2c1a3e-1111-4b2b-8c3d-000000000001" }), error: null }]);
+
+    await insertConnection({ ...CONNECTION, id: "integration-connection_not-a-real-uuid" });
+
+    const insertCall = calls.find((c) => c.table === "integration_connections" && c.method === "insert");
+    const payload = insertCall?.args[0] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty("id");
+  });
+
+  it("GMAIL-CONNECTION-FIX-01 — returns the database-generated uuid, never the client-supplied placeholder", async () => {
+    mockSupabase([{ data: connectionRow({ id: "9f2c1a3e-1111-4b2b-8c3d-000000000001" }), error: null }]);
+
+    const result = await insertConnection({ ...CONNECTION, id: "integration-connection_not-a-real-uuid" });
+
+    expect(result.id).toBe("9f2c1a3e-1111-4b2b-8c3d-000000000001");
+  });
+
   it("getConnectionById maps a workspace-owned row (null member_id) correctly", async () => {
     mockSupabase([{ data: connectionRow(), error: null }]);
 

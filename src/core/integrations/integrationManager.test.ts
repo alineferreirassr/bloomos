@@ -58,6 +58,13 @@ describe("installProvider", () => {
     const memberOwned = await installProvider({ workspaceId: "ws_1", providerId: "test-provider", installedBy: "user_2", memberId: "user_2" });
     expect(memberOwned.member_id).toBe("user_2");
   });
+
+  it("GMAIL-CONNECTION-FIX-01 — mock mode still generates and returns its own id unchanged (installProvider now returns insertConnection's own resolved value, which mock mode's own insert echoes back as-is)", async () => {
+    const connection = await installProvider({ workspaceId: "ws_1", providerId: "test-provider", installedBy: "user_1" });
+    expect(connection.id).toMatch(/^integration-connection_/);
+    const stored = await listConnections("ws_1");
+    expect(stored[0].id).toBe(connection.id);
+  });
 });
 
 describe("applyConnectionEvent", () => {

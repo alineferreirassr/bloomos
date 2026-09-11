@@ -42,12 +42,20 @@ function mapRow(row: CredentialRow): IntegrationCredential {
   };
 }
 
+/**
+ * GMAIL-CONNECTION-FIX-01 — same fix as `supabaseConnectionStore.
+ * insertConnection`: never sends `credential.id` (a mock-mode-only
+ * placeholder from `generateCredentialId()`, not a valid uuid) into a
+ * `uuid primary key default gen_random_uuid()` column. Every caller in
+ * `credentialManager.ts` already correctly returns this function's own
+ * result rather than its input, so no caller-side fix is needed here —
+ * only this insert payload.
+ */
 export async function insertCredential(credential: IntegrationCredential): Promise<IntegrationCredential> {
   const supabase = await createSupabaseClient();
   const { data, error } = await supabase
     .from("integration_credentials")
     .insert({
-      id: credential.id,
       workspace_id: credential.workspace_id,
       member_id: credential.member_id,
       connection_id: credential.connection_id,

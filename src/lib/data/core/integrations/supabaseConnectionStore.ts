@@ -48,12 +48,24 @@ function mapTransitionRow(row: TransitionRow): ConnectionStateTransition {
   };
 }
 
+/**
+ * GMAIL-CONNECTION-FIX-01 — deliberately never sends `connection.id` in the
+ * insert payload. `integrationManager.installProvider()` (the one caller)
+ * still generates a placeholder id via `generateConnectionId()` for mock
+ * mode, where it genuinely becomes the stored id — but `integration_
+ * connections.id` is `uuid primary key default gen_random_uuid()`, and
+ * that placeholder is a prefixed non-uuid string (`integration-connection_
+ * <uuid>`), which Postgres rejects outright. The real, authoritative id is
+ * whatever the database generates; `.select("*").single()` already reads
+ * it back, and the caller must use this function's return value, never its
+ * own input object, as the persisted connection (see `installProvider`'s
+ * own comment).
+ */
 export async function insertConnection(connection: IntegrationConnection): Promise<IntegrationConnection> {
   const supabase = await createSupabaseClient();
   const { data, error } = await supabase
     .from("integration_connections")
     .insert({
-      id: connection.id,
       workspace_id: connection.workspace_id,
       member_id: connection.member_id,
       provider_id: connection.provider_id,

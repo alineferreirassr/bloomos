@@ -93,30 +93,41 @@ export function GmailConnectPanel() {
     };
   }, []);
 
+  /** GMAIL-CONNECTION-FIX-01 — wrapped in try/finally so an unexpected rejected Server Action promise (not just a controlled `{success:false}` result) can never leave `busy` stuck true forever, matching the same discipline `IntegrationsDashboardView`'s own fix already established. Never surfaces the raw rejection's message — a fixed, safe, generic one instead. */
   const connect = async () => {
     setBusy(true);
     setMessage(null);
-    const redirectUri = `${window.location.origin}${CALLBACK_PATH}`;
-    const result = await beginProviderOAuthConnectionAction("gmail", redirectUri);
-    setBusy(false);
-    if (!result.success) {
-      setMessage({ tone: "error", text: result.error });
-      return;
+    try {
+      const redirectUri = `${window.location.origin}${CALLBACK_PATH}`;
+      const result = await beginProviderOAuthConnectionAction("gmail", redirectUri);
+      if (!result.success) {
+        setMessage({ tone: "error", text: result.error });
+        return;
+      }
+      window.location.href = result.data.authorizationUrl;
+    } catch {
+      setMessage({ tone: "error", text: "Could not start the Gmail connection. Try again." });
+    } finally {
+      setBusy(false);
     }
-    window.location.href = result.data.authorizationUrl;
   };
 
   const disconnect = async () => {
     if (!connection) return;
     setBusy(true);
     setMessage(null);
-    const result = await disconnectOAuthProviderAction(connection.id);
-    setBusy(false);
-    if (!result.success) {
-      setMessage({ tone: "error", text: result.error });
-      return;
+    try {
+      const result = await disconnectOAuthProviderAction(connection.id);
+      if (!result.success) {
+        setMessage({ tone: "error", text: result.error });
+        return;
+      }
+      load();
+    } catch {
+      setMessage({ tone: "error", text: "Could not disconnect Gmail. Try again." });
+    } finally {
+      setBusy(false);
     }
-    load();
   };
 
   const refresh = async () => {

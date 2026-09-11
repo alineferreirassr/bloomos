@@ -86,6 +86,22 @@ describe("GmailConnectPanel", () => {
     Object.defineProperty(window, "location", { value: originalLocation, writable: true });
   });
 
+  it("GMAIL-CONNECTION-FIX-01 — a rejected beginProviderOAuthConnectionAction promise never leaves the button stuck on Connecting…, and surfaces a safe, generic message", async () => {
+    vi.mocked(getOwnProviderConnectionAction).mockResolvedValue({ success: true, data: null });
+    vi.mocked(beginProviderOAuthConnectionAction).mockRejectedValue(new Error("invalid input syntax for type uuid: \"integration-connection_abc123\""));
+
+    render(<GmailConnectPanel />);
+    await userEvent.click(await screen.findByRole("button", { name: "Connect Gmail" }));
+
+    const button = await screen.findByRole("button", { name: "Connect Gmail" });
+    expect(button).not.toBeDisabled();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Could not start the Gmail connection. Try again.");
+    // Never expose the raw internal/database error to the browser.
+    expect(alert).not.toHaveTextContent(/uuid/);
+    expect(alert).not.toHaveTextContent(/integration-connection/);
+  });
+
   it("shows Disconnect for a connected connection, and calling it re-loads canonical state on success", async () => {
     vi.mocked(getOwnProviderConnectionAction).mockResolvedValueOnce({ success: true, data: connection({ state: "connected" }) }).mockResolvedValueOnce({ success: true, data: connection({ state: "disabled" }) });
     vi.mocked(disconnectOAuthProviderAction).mockResolvedValue({ success: true, data: connection({ state: "disabled" }) });
@@ -105,6 +121,18 @@ describe("GmailConnectPanel", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Disconnect Gmail" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/isn't available/);
+  });
+
+  it("GMAIL-CONNECTION-FIX-01 — a rejected disconnectOAuthProviderAction promise never leaves the button stuck busy, and surfaces a safe, generic message", async () => {
+    vi.mocked(getOwnProviderConnectionAction).mockResolvedValue({ success: true, data: connection({ state: "connected" }) });
+    vi.mocked(disconnectOAuthProviderAction).mockRejectedValue(new Error("network error"));
+
+    render(<GmailConnectPanel />);
+    await userEvent.click(await screen.findByRole("button", { name: "Disconnect Gmail" }));
+
+    const button = await screen.findByRole("button", { name: "Disconnect Gmail" });
+    expect(button).not.toBeDisabled();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not disconnect Gmail. Try again.");
   });
 
   it("shows Reconnect (via refresh, not a fresh Connect) for an expired connection", async () => {

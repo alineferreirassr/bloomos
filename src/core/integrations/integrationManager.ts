@@ -71,9 +71,15 @@ export async function installProvider(params: InstallProviderParams): Promise<In
     retry_count: 0,
   };
 
-  await insertConnection(connection);
-  await recordConnectionAuditEvent(params.workspaceId, params.installedBy, "connection.installed", connection.id, null, { provider_id: params.providerId, state: connection.state });
-  return connection;
+  // GMAIL-CONNECTION-FIX-01 — must use the row `insertConnection` actually
+  // persisted, never the locally-built `connection` object: in Supabase
+  // mode, the real database-generated uuid (see `supabaseConnectionStore.
+  // insertConnection`'s own doc comment) differs from `connection.id`'s
+  // client-generated placeholder, which is discarded rather than ever
+  // written to the row.
+  const persisted = await insertConnection(connection);
+  await recordConnectionAuditEvent(params.workspaceId, params.installedBy, "connection.installed", persisted.id, null, { provider_id: params.providerId, state: persisted.state });
+  return persisted;
 }
 
 export interface ApplyConnectionEventResult {
