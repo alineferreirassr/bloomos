@@ -62,6 +62,18 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // Independently-tracked, not-yet-released, unrelated to the Finance
   // release this exact-count assertion describes.
   "20260913100100_client_portal_contract_exhibits_rls.sql",
+  // CONTRACTS-03B — docusign_envelope_id uniqueness. Independently-
+  // tracked, not-yet-released, unrelated to the Finance release this
+  // exact-count assertion describes.
+  "20260914100000_contracts_docusign_envelope_id_unique.sql",
+  // CONTRACTS-03B — DocuSign webhook reconciliation idempotency ledger.
+  // Independently-tracked, not-yet-released, unrelated to the Finance
+  // release this exact-count assertion describes.
+  "20260914100100_docusign_webhook_reconciliation_ledger.sql",
+  // CONTRACTS-03B — reconcile_docusign_envelope_status() RPC. Independently-
+  // tracked, not-yet-released, unrelated to the Finance release this
+  // exact-count assertion describes.
+  "20260914100200_reconcile_docusign_envelope_status_function.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {
@@ -4042,5 +4054,110 @@ describe("CONTRACTS-02 migration — client portal contract_exhibits RLS", () =>
     expect(code).not.toMatch(/for insert/i);
     expect(code).not.toMatch(/for update/i);
     expect(code).not.toMatch(/for delete/i);
+  });
+});
+
+describe("CONTRACTS-03B migration — contracts.docusign_envelope_id uniqueness", () => {
+  function sql(): string {
+    return readMigration("20260914100000_contracts_docusign_envelope_id_unique.sql");
+  }
+
+  it("adds a unique partial index on docusign_envelope_id, non-null values only", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create unique index if not exists contracts_docusign_envelope_id_unique_idx\s*\n\s*on public\.contracts \(docusign_envelope_id\)\s*\n\s*where docusign_envelope_id is not null;/);
+  });
+
+  it("is purely additive — no DROP/TRUNCATE/DELETE, no RLS disable, no other table touched", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/drop table/);
+    expect(code).not.toMatch(/drop column/);
+    expect(code).not.toMatch(/truncate/);
+    expect(code).not.toMatch(/\bdelete from\b/);
+    expect(code).not.toMatch(/\balter table\b.*\bdisable row level security\b/);
+    expect(code).not.toMatch(/create policy/);
+    expect(code).not.toMatch(/on public\.(?!contracts\b)\w+/);
+  });
+});
+
+describe("CONTRACTS-03B migration — docusign_webhook_reconciliations idempotency ledger", () => {
+  function sql(): string {
+    return readMigration("20260914100100_docusign_webhook_reconciliation_ledger.sql");
+  }
+
+  it("creates the ledger table with a unique (connection_id, envelope_id, mapped_status) constraint", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create table if not exists public\.docusign_webhook_reconciliations/);
+    expect(code).toMatch(/constraint docusign_webhook_reconciliations_unique unique \(connection_id, envelope_id, mapped_status\)/);
+    expect(code).toMatch(/constraint docusign_webhook_reconciliations_mapped_status_check check \(mapped_status in \('signed', 'declined'\)\)/);
+  });
+
+  it("references integration_connections and contracts, cascading/nulling appropriately", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/connection_id uuid not null references public\.integration_connections \(id\) on delete cascade/);
+    expect(code).toMatch(/contract_id uuid references public\.contracts \(id\) on delete set null/);
+  });
+
+  it("enables RLS with zero policies — internal system infrastructure only, no anon/authenticated/Client Portal access", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/alter table public\.docusign_webhook_reconciliations enable row level security;/);
+    expect(code).not.toMatch(/create policy/);
+  });
+});
+
+describe("CONTRACTS-03B migration — reconcile_docusign_envelope_status() RPC", () => {
+  function sql(): string {
+    return readMigration("20260914100200_reconcile_docusign_envelope_status_function.sql");
+  }
+
+  it("is security definer with a fixed search_path", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/security definer/);
+    expect(code).toMatch(/set search_path = public/);
+  });
+
+  it("accepts only connection id, envelope id, and a constrained mapped status — never a contract id or arbitrary status", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/p_connection_id uuid,\s*\n\s*p_envelope_id text,\s*\n\s*p_mapped_status text/);
+    expect(code).not.toMatch(/p_contract_id/);
+    expect(code).not.toMatch(/p_status\b/);
+    expect(code).toMatch(/if p_mapped_status not in \('signed', 'declined'\) then/);
+  });
+
+  it("derives the Contract from docusign_envelope_id and cross-checks the connection's own workspace_id", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/from public\.contracts\s*\n\s*where docusign_envelope_id = p_envelope_id/);
+    expect(code).toMatch(/v_contract\.workspace_id is distinct from v_connection_workspace_id/);
+  });
+
+  it("enforces the same source-state legality as markSigned/markDeclined — only sent/viewed may transition", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/v_contract\.signature_status not in \('sent', 'viewed'\)/);
+  });
+
+  it("treats a unique-violation on the ledger insert as an idempotent no-op, never a second mutation", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/exception when unique_violation then/);
+    expect(code).toMatch(/v_already_processed := true;/);
+  });
+
+  it("writes exactly one Timeline entry per transition, attributed to docusign-webhook", () => {
+    const code = stripSqlComments(sql());
+    expect(code.match(/insert into public\.timeline_activities/g)).toHaveLength(2);
+    expect(code.match(/'docusign-webhook'/g)).toHaveLength(2);
+  });
+
+  it("is granted only to service_role — never public, anon, or authenticated", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/revoke all on function public\.reconcile_docusign_envelope_status\(uuid, text, text\) from public;/);
+    expect(code).toMatch(/grant execute on function public\.reconcile_docusign_envelope_status\(uuid, text, text\) to service_role;/);
+    expect(code).not.toMatch(/to anon/);
+    expect(code).not.toMatch(/to authenticated/);
+  });
+
+  it("never disables RLS and touches no table besides contracts, timeline_activities, and its own ledger", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/disable row level security/);
+    expect(code).not.toMatch(/drop table/);
+    expect(code).not.toMatch(/\bdelete from\b/);
   });
 });

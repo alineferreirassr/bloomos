@@ -2488,6 +2488,12 @@ export interface Database {
         Update: { id?: string; workspace_id?: string; member_id?: string | null; connection_id?: string; kind?: string; scopes?: string[]; expires_at?: string | null; rotated_at?: string | null; revoked_at?: string | null; key_hash?: string | null; key_prefix?: string | null; access_token_ref?: string | null; refresh_token_ref?: string | null; created_by?: string; created_at?: string; updated_at?: string };
         Relationships: [];
       };
+      docusign_webhook_reconciliations: {
+        Row: { id: string; connection_id: string; envelope_id: string; mapped_status: string; contract_id: string | null; processed_at: string };
+        Insert: { id?: string; connection_id: string; envelope_id: string; mapped_status: string; contract_id?: string | null; processed_at?: string };
+        Update: { id?: string; connection_id?: string; envelope_id?: string; mapped_status?: string; contract_id?: string | null; processed_at?: string };
+        Relationships: [];
+      };
       oauth_pending_authorizations: {
         Row: { state: string; workspace_id: string; member_id: string | null; provider_id: string; connection_id: string; redirect_uri: string; code_verifier_ref: string | null; created_at: string; expires_at: string };
         Insert: { state: string; workspace_id: string; member_id?: string | null; provider_id: string; connection_id: string; redirect_uri: string; code_verifier_ref?: string | null; created_at?: string; expires_at: string };
@@ -2544,6 +2550,10 @@ export interface Database {
       read_pending_oauth_secret: {
         Args: { p_secret_id: string };
         Returns: string | null;
+      };
+      reconcile_docusign_envelope_status: {
+        Args: { p_connection_id: string; p_envelope_id: string; p_mapped_status: string };
+        Returns: { mutated: boolean; contract_id: string | null; workspace_id: string | null; client_id: string | null }[];
       };
       is_workspace_member: {
         Args: { workspace_uuid: string };
