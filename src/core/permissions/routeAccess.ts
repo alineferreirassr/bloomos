@@ -48,6 +48,7 @@ export const ROUTE_ACCESS_MAP: RouteAccessEntry[] = [
   // consistent with the Event Command Center living on /events/[id] itself.
   { prefix: "/operations", requirement: { kind: "permission", permission: "events.view" } },
   { prefix: "/contracts", requirement: { kind: "permission", permission: "contracts.view" } },
+  { prefix: "/social", requirement: { kind: "permission", permission: "social.view" } },
   // Finance F1 gated these on `events.view` (provisional — these two had no
   // entry at all before, closing an open-to-everyone gap was the priority).
   // Finance F1.5 revisits that choice: both pages display real financial

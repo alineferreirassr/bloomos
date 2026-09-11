@@ -88,6 +88,7 @@ describe("getVisibleNavigationModules", () => {
       "client_journeys.view",
       "proposal_builder.view",
       "reports.view",
+      "social.view",
     ]);
     const visible = getVisibleNavigationModules((permission) => staffPermissions.has(permission));
     expect(visible.map((m) => m.id)).toEqual(

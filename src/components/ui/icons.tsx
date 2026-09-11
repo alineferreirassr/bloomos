@@ -34,6 +34,7 @@ import {
   FileBarChart2,
   Terminal,
   Store,
+  Megaphone,
   Bell,
   BellRing,
   Inbox,
@@ -169,6 +170,11 @@ export function MarketplaceIcon(props: IconProps) {
 /** Enterprise Integration Platform (top-level nav module, v2 Checkpoint 22) — the workspace-wide connection health dashboard, distinct from MarketplaceIcon (a Browse/Install catalog) and DeveloperIcon (API Keys/Webhooks/config): this is a read-only health view of installed provider connections. */
 export function IntegrationsIcon(props: IconProps) {
   return <Plug strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** Social Media (top-level nav module, SOCIAL-03) — no real "Instagram" brand icon exists in lucide-react (brand/logo icons were dropped from the package), so this uses the generic, widely-understood "announcement/publishing" icon instead. */
+export function SocialIcon(props: IconProps) {
+  return <Megaphone strokeWidth={2} aria-hidden="true" {...props} />;
 }
 
 /** Expand/collapse affordance for a nav module with nested children — rotates via a CSS transform, never swapped for a separate "collapsed" icon component. */

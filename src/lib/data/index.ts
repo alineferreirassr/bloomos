@@ -12,6 +12,7 @@ import type { MediaAssetStatus } from "@/core/enums/mediaAssetStatus";
 import type { MediaFolder } from "@/types/mediaFolder";
 import type { MediaCollection } from "@/types/mediaCollection";
 import type { Contract } from "@/types/contract";
+import type { SocialPost } from "@/types/socialPost";
 import type { ContractTemplate } from "@/types/contractTemplate";
 import type { ContractExhibit } from "@/types/contractExhibit";
 import type { Invoice } from "@/types/invoice";
@@ -221,6 +222,9 @@ import { supabaseMediaAssetsRepository } from "@/lib/data/media/supabaseReposito
 import type { ContractFilters, ContractTemplateFilters } from "@/lib/data/contracts/repository";
 import { mockContractsRepository } from "@/lib/data/contracts/mockRepository";
 import { supabaseContractsRepository } from "@/lib/data/contracts/supabaseRepository";
+import type { CreateSocialPostInput, UpdateSocialPostDraftInput } from "@/lib/data/socialPosts/repository";
+import { mockSocialPostsRepository } from "@/lib/data/socialPosts/mockRepository";
+import { supabaseSocialPostsRepository } from "@/lib/data/socialPosts/supabaseRepository";
 import type {
   InvoiceFilters,
   PaymentFilters,
@@ -286,6 +290,7 @@ import { resetEventsStore } from "@/lib/data/mock/eventsStore";
 import { resetChecklistStore } from "@/lib/data/mock/checklistStore";
 import { resetScheduleStore } from "@/lib/data/mock/scheduleStore";
 import { resetContractsStore } from "@/lib/data/mock/contractsStore";
+import { resetSocialPostsStore } from "@/lib/data/mock/socialPostsStore";
 import { resetContractTemplatesStore } from "@/lib/data/mock/contractTemplatesStore";
 import { resetContractExhibitsStore } from "@/lib/data/mock/contractExhibitsStore";
 import { resetInvoicesStore } from "@/lib/data/mock/invoicesStore";
@@ -1212,6 +1217,48 @@ export async function duplicateContract(id: string): Promise<DataResult<Contract
 
 export async function getContractNextAction(contractId: string): Promise<string | null> {
   return contractsRepository().getContractNextAction(contractId);
+}
+
+// ---------------------------------------------------------------------------
+// Social Posts (SOCIAL-03) — real, workspace-scoped persistence, dual mock/
+// Supabase repository, same selectRepository() dispatch every other domain
+// uses.
+// ---------------------------------------------------------------------------
+
+function socialPostsRepository() {
+  return selectRepository({ mock: mockSocialPostsRepository, supabase: supabaseSocialPostsRepository });
+}
+
+export async function listSocialPosts(workspaceId: string): Promise<SocialPost[]> {
+  return socialPostsRepository().listSocialPosts(workspaceId);
+}
+
+export async function getSocialPost(id: string): Promise<SocialPost> {
+  return socialPostsRepository().getSocialPost(id);
+}
+
+export async function createSocialPost(input: CreateSocialPostInput): Promise<DataResult<SocialPost>> {
+  return socialPostsRepository().createSocialPost(input);
+}
+
+export async function updateSocialPostDraft(id: string, input: UpdateSocialPostDraftInput): Promise<DataResult<SocialPost>> {
+  return socialPostsRepository().updateSocialPostDraft(id, input);
+}
+
+export async function beginSocialPostPublish(id: string): Promise<DataResult<SocialPost>> {
+  return socialPostsRepository().beginSocialPostPublish(id);
+}
+
+export async function setSocialPostContainerId(id: string, containerId: string): Promise<DataResult<SocialPost>> {
+  return socialPostsRepository().setSocialPostContainerId(id, containerId);
+}
+
+export async function markSocialPostPublished(id: string, result: { providerPostId: string; providerPermalink: string | null }): Promise<DataResult<SocialPost>> {
+  return socialPostsRepository().markSocialPostPublished(id, result);
+}
+
+export async function markSocialPostFailed(id: string, providerError: string): Promise<DataResult<SocialPost>> {
+  return socialPostsRepository().markSocialPostFailed(id, providerError);
 }
 
 // ---------------------------------------------------------------------------
@@ -3514,6 +3561,7 @@ export function resetAllMockData(): void {
   resetContractsStore();
   resetContractTemplatesStore();
   resetContractExhibitsStore();
+  resetSocialPostsStore();
   resetInvoicesStore();
   resetPaymentsStore();
   resetExpensesStore();

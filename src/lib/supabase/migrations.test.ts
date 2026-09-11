@@ -74,6 +74,14 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // tracked, not-yet-released, unrelated to the Finance release this
   // exact-count assertion describes.
   "20260914100200_reconcile_docusign_envelope_status_function.sql",
+  // SOCIAL-03 — social_posts domain table + RLS. Independently-tracked,
+  // not-yet-released, unrelated to the Finance release this exact-count
+  // assertion describes.
+  "20260915100000_social_posts.sql",
+  // SOCIAL-03 — social.* permission seed. Independently-tracked,
+  // not-yet-released, unrelated to the Finance release this exact-count
+  // assertion describes.
+  "20260915100100_social_permissions.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {
@@ -4159,5 +4167,76 @@ describe("CONTRACTS-03B migration — reconcile_docusign_envelope_status() RPC",
     expect(code).not.toMatch(/disable row level security/);
     expect(code).not.toMatch(/drop table/);
     expect(code).not.toMatch(/\bdelete from\b/);
+  });
+});
+
+describe("SOCIAL-03 migration — social_posts", () => {
+  function sql(): string {
+    return readMigration("20260915100000_social_posts.sql");
+  }
+
+  it("creates the table referencing media_assets and integration_connections directly — no parallel Social storage/connection system", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create table if not exists public\.social_posts/);
+    expect(code).toMatch(/asset_id uuid not null references public\.media_assets \(id\)/);
+    expect(code).toMatch(/target_connection_id uuid not null references public\.integration_connections \(id\)/);
+  });
+
+  it("constrains status to the closed draft/publishing/published/failed lifecycle and target_provider to meta only", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/constraint social_posts_status_check check \(status in \('draft', 'publishing', 'published', 'failed'\)\)/);
+    expect(code).toMatch(/constraint social_posts_target_provider_check check \(target_provider = 'meta'\)/);
+  });
+
+  it("enables RLS with workspace-isolated select/insert/update policies, no delete policy, no anonymous access", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/alter table public\.social_posts enable row level security;/);
+    expect(code).toMatch(/create policy "social_posts_select_workspace_member"\s*\n\s*on public\.social_posts for select/);
+    expect(code).toMatch(/create policy "social_posts_insert_workspace_member"\s*\n\s*on public\.social_posts for insert/);
+    expect(code).toMatch(/create policy "social_posts_update_workspace_member"\s*\n\s*on public\.social_posts for update/);
+    expect(code).not.toMatch(/for delete/i);
+    for (const block of code.split(/create policy/i).slice(1)) {
+      expect(block).toMatch(/is_workspace_member/);
+    }
+  });
+
+  it("attaches the shared updated_at trigger, same as every other business-module table", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create trigger trg_social_posts_set_updated_at\s*\n\s*before update on public\.social_posts\s*\n\s*for each row execute function public\.set_updated_at\(\);/);
+  });
+
+  it("does not touch timeline_activities or mutate any other table's own schema/policies besides social_posts", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/timeline_activities/);
+    expect(code).not.toMatch(/alter table public\.(?!social_posts\b)\w+/);
+    expect(code).not.toMatch(/create policy "\w+"\s*\n\s*on public\.(?!social_posts\b)\w+/);
+  });
+});
+
+describe("SOCIAL-03 migration — social.* permission seed", () => {
+  function sql(): string {
+    return readMigration("20260915100100_social_permissions.sql");
+  }
+
+  it("inserts exactly the three social.* permissions", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/\('social\.view', 'View social posts'\)/);
+    expect(code).toMatch(/\('social\.create', 'Create and edit draft social posts'\)/);
+    expect(code).toMatch(/\('social\.publish', 'Publish a social post to a connected provider'\)/);
+  });
+
+  it("explicitly grants all four roles — never assumes the original owner/admin seed auto-inherits a later permission", () => {
+    const code = stripSqlComments(sql());
+    for (const role of ["owner", "admin", "manager", "staff"]) {
+      expect(code).toMatch(new RegExp(`\\('${role}', 'social\\.view'\\)`));
+    }
+    expect(code).toMatch(/\('owner', 'social\.publish'\)/);
+    expect(code).toMatch(/\('admin', 'social\.publish'\)/);
+    expect(code).toMatch(/\('manager', 'social\.publish'\)/);
+  });
+
+  it("never grants staff social.publish", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/\('staff', 'social\.publish'\)/);
   });
 });

@@ -112,6 +112,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<WorkspaceMemberRole, readonly Perm
     "reports.executive",
     "executive_decisions.manage",
     "objectives.manage",
+    "social.view",
+    "social.create",
+    "social.publish",
   ],
   staff: [
     "workspace.view",
@@ -149,6 +152,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<WorkspaceMemberRole, readonly Perm
     "invoice_builder.view",
     "invoice_versions.view",
     "reports.view",
+    "social.view",
+    "social.create",
   ],
 };
 

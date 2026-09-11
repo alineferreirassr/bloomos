@@ -14,6 +14,8 @@ import type { EventScheduleItem } from "@/types/eventScheduleItem";
 import type { Note, NoteAttachment } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
 import type { MediaAsset } from "@/types/mediaAsset";
+import type { SocialPost } from "@/types/socialPost";
+import type { SocialPostStatus } from "@/core/enums/socialPostStatus";
 import type { Contract, ContractVersionSnapshot } from "@/types/contract";
 import type { ContractTemplate } from "@/types/contractTemplate";
 import type { ContractExhibit } from "@/types/contractExhibit";
@@ -122,6 +124,7 @@ type EventRow = Database["public"]["Tables"]["events"]["Row"];
 type ChecklistItemRow = Database["public"]["Tables"]["checklist_items"]["Row"];
 type EventScheduleItemRow = Database["public"]["Tables"]["event_schedule_items"]["Row"];
 type ContractTemplateRow = Database["public"]["Tables"]["contract_templates"]["Row"];
+type SocialPostRow = Database["public"]["Tables"]["social_posts"]["Row"];
 type ContractRow = Database["public"]["Tables"]["contracts"]["Row"];
 type ContractExhibitRow = Database["public"]["Tables"]["contract_exhibits"]["Row"];
 type NoteRow = Database["public"]["Tables"]["notes"]["Row"];
@@ -1280,6 +1283,28 @@ export function mapEventServiceVendorAssignmentRow(row: EventServiceVendorAssign
     vendor_id: row.vendor_id,
     status: row.status as EventServiceVendorAssignmentStatus,
     note: row.note,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapSocialPostRow(row: SocialPostRow): SocialPost {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    created_by: row.created_by,
+    status: row.status as SocialPostStatus,
+    caption: row.caption,
+    asset_id: row.asset_id,
+    target_provider: row.target_provider as "meta",
+    target_connection_id: row.target_connection_id,
+    target_page_id: row.target_page_id,
+    target_instagram_account_id: row.target_instagram_account_id,
+    provider_container_id: row.provider_container_id,
+    provider_post_id: row.provider_post_id,
+    provider_permalink: row.provider_permalink,
+    provider_error: row.provider_error,
+    published_at: row.published_at,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };

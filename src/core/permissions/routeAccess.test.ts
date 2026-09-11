@@ -20,6 +20,7 @@ describe("getRouteAccessRequirement", () => {
     expect(getRouteAccessRequirement("/contracts")).toEqual({ kind: "permission", permission: "contracts.view" });
     expect(getRouteAccessRequirement("/finance")).toEqual({ kind: "permission", permission: "finance.view" });
     expect(getRouteAccessRequirement("/documents")).toEqual({ kind: "permission", permission: "documents.view" });
+    expect(getRouteAccessRequirement("/social")).toEqual({ kind: "permission", permission: "social.view" });
   });
 
   it("requires team.view for the Team page", () => {

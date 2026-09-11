@@ -401,6 +401,14 @@ export const PERMISSIONS = [
   // the audit's own scoped finding — only the mutations were flagged).
   "executive_decisions.manage",
   "objectives.manage",
+  // SOCIAL-03 — the smallest permission set the real Social Post domain
+  // needs today: view, create/edit a draft, and publish. No
+  // "social.schedule"/"social.analytics"/"social.manage_campaigns" —
+  // those features don't exist yet (see permissionMatrix.ts's own
+  // manager/staff grants for the exact default split).
+  "social.view",
+  "social.create",
+  "social.publish",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

@@ -78,6 +78,72 @@ describe("MetaProvider", () => {
   });
 });
 
+describe("MetaProvider — SOCIAL-03 Instagram image publishing", () => {
+  const provider = new MetaProvider("test_access_token");
+
+  it("createInstagramMediaContainer() posts image_url/caption to the container endpoint and returns the real container id", async () => {
+    const fetchMock = vi.fn(async (url: URL, init?: RequestInit) => {
+      void url;
+      void init;
+      return new Response(JSON.stringify({ id: "container_123" }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.createInstagramMediaContainer("ig_1", { imageUrl: "https://signed.example.com/post.jpg", caption: "Hello Instagram" });
+    expect(result).toEqual({ containerId: "container_123" });
+
+    const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    expect(url.pathname).toBe("/v26.0/ig_1/media");
+    expect(init.method).toBe("POST");
+    expect(url.searchParams.get("image_url")).toBe("https://signed.example.com/post.jpg");
+    expect(url.searchParams.get("caption")).toBe("Hello Instagram");
+  });
+
+  it("publishInstagramMedia() posts creation_id to the media_publish endpoint and returns the real published media id", async () => {
+    const fetchMock = vi.fn(async (url: URL, init?: RequestInit) => {
+      void url;
+      void init;
+      return new Response(JSON.stringify({ id: "ig_media_1" }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.publishInstagramMedia("ig_1", "container_123");
+    expect(result).toEqual({ mediaId: "ig_media_1" });
+
+    const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    expect(url.pathname).toBe("/v26.0/ig_1/media_publish");
+    expect(init.method).toBe("POST");
+    expect(url.searchParams.get("creation_id")).toBe("container_123");
+  });
+
+  it("getInstagramMediaPermalink() returns the real permalink when Meta provides one", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ permalink: "https://www.instagram.com/p/abc123/" }), { status: 200 })),
+    );
+    const permalink = await provider.getInstagramMediaPermalink("ig_media_1");
+    expect(permalink).toBe("https://www.instagram.com/p/abc123/");
+  });
+
+  it("getInstagramMediaPermalink() returns null (never throws) when Meta doesn't provide one", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({}), { status: 200 })),
+    );
+    const permalink = await provider.getInstagramMediaPermalink("ig_media_1");
+    expect(permalink).toBeNull();
+  });
+
+  it("getInstagramMediaPermalink() returns null (never throws) when the permalink lookup itself fails — publish already succeeded by this point", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("server error", { status: 500 })),
+    );
+    const permalink = await provider.getInstagramMediaPermalink("ig_media_1");
+    expect(permalink).toBeNull();
+  });
+});
+
 describe("isMetaAuthError", () => {
   it("recognizes Meta's own OAuthException / code 190 shape as a reconnect-required condition", () => {
     expect(isMetaAuthError(new Error("Meta Graph API error 401: (#190) OAuthException — the access token could not be decrypted"))).toBe(true);

@@ -21,6 +21,7 @@ import {
   ReportsIcon,
   SchedulingIcon,
   ServicesIcon,
+  SocialIcon,
   SettingsIcon,
   TeamIcon,
   VendorsIcon,
@@ -158,6 +159,7 @@ export const navigationModules: NavModule[] = [
   { id: "purchases", label: "Purchases", icon: PurchasesIcon, href: "/purchases", group: "business" },
   { id: "finance", label: "Finance", icon: FinanceIcon, href: "/finance", group: "business" },
   { id: "services", label: "Services", icon: ServicesIcon, href: "/services", group: "business" },
+  { id: "social", label: "Social", icon: SocialIcon, href: "/social", group: "business" },
 
   { id: "documents", label: "Documents", icon: DocumentsIcon, href: "/documents", group: "knowledge" },
   { id: "assets", label: "Asset Library", icon: AssetsIcon, href: "/assets", group: "knowledge", keywords: ["dam", "media"] },
