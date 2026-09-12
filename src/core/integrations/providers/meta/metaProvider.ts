@@ -202,4 +202,29 @@ export class MetaProvider implements BaseProvider {
     }
     return insights;
   }
+
+  /**
+   * `GET /{ig-user-id}/insights?period=day` — SOCIAL-05D, account-level.
+   * `metrics` should be a subset of the caller's own approved,
+   * OFFICIAL_META_DOC_PROVEN account metric list (`reach`, `profile_views` —
+   * `INSTAGRAM_ACCOUNT_INSIGHT_METRICS` in `socialAnalyticsSyncExecutor.ts`;
+   * every other candidate account metric stayed UNVERIFIED per SOCIAL-05A's
+   * own audit and must never be requested here). `period=day` is required
+   * for these metrics — unlike a media's lifetime insights, account
+   * metrics are periodic and Meta returns them as a `values` array keyed
+   * by day, not a single `total_value`.
+   *
+   * Same discipline as `getInstagramMediaInsights` exactly: never invents a
+   * `0` for a metric Meta didn't return a real value for — only entries
+   * with an actual numeric `total_value`/`values[].value` are included.
+   */
+  async getInstagramAccountInsights(igUserId: string, metrics: string[]): Promise<InstagramMediaInsight[]> {
+    const result = await this.request<GraphInsightsResponse>(`/${igUserId}/insights`, { metric: metrics.join(","), period: "day" });
+    const insights: InstagramMediaInsight[] = [];
+    for (const entry of result.data ?? []) {
+      const value = entry.total_value?.value ?? entry.values?.[entry.values.length - 1]?.value;
+      if (typeof value === "number") insights.push({ metric: entry.name, value });
+    }
+    return insights;
+  }
 }

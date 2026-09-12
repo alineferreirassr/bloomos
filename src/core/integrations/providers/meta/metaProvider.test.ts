@@ -217,6 +217,56 @@ describe("MetaProvider — SOCIAL-05B Instagram image-post insights", () => {
   });
 });
 
+describe("MetaProvider — SOCIAL-05D Instagram account-level insights", () => {
+  const provider = new MetaProvider("test_access_token");
+
+  it("getInstagramAccountInsights() requests the ig-user-id insights edge with period=day and the exact metric list", async () => {
+    const fetchMock = vi.fn(async (url: URL) => {
+      void url;
+      return new Response(JSON.stringify({ data: [{ name: "reach", values: [{ value: 500 }] }, { name: "profile_views", values: [{ value: 40 }] }] }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.getInstagramAccountInsights("ig_user_1", ["reach", "profile_views"]);
+    expect(result).toEqual([
+      { metric: "reach", value: 500 },
+      { metric: "profile_views", value: 40 },
+    ]);
+
+    const [url] = fetchMock.mock.calls[0] as [URL];
+    expect(url.pathname).toBe("/v26.0/ig_user_1/insights");
+    expect(url.searchParams.get("metric")).toBe("reach,profile_views");
+    expect(url.searchParams.get("period")).toBe("day");
+  });
+
+  it("never invents a 0 for an account metric Meta did not return a value for", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ data: [{ name: "reach", values: [{ value: 500 }] }] }), { status: 200 })),
+    );
+    const result = await provider.getInstagramAccountInsights("ig_user_1", ["reach", "profile_views"]);
+    expect(result).toEqual([{ metric: "reach", value: 500 }]);
+    expect(result.find((entry) => entry.metric === "profile_views")).toBeUndefined();
+  });
+
+  it("preserves a real zero for an account metric", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ data: [{ name: "profile_views", values: [{ value: 0 }] }] }), { status: 200 })),
+    );
+    const result = await provider.getInstagramAccountInsights("ig_user_1", ["profile_views"]);
+    expect(result).toEqual([{ metric: "profile_views", value: 0 }]);
+  });
+
+  it("throws a sanitized error (recognizable by isMetaAuthError/isMetaRateLimitError) on an auth or rate-limit failure, exactly like media insights", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: { message: "Invalid OAuth access token.", code: 190 } }), { status: 401 })),
+    );
+    await expect(provider.getInstagramAccountInsights("ig_user_1", ["reach"])).rejects.toSatisfy((error: unknown) => isMetaAuthError(error));
+  });
+});
+
 describe("isMetaRateLimitError", () => {
   it("recognizes Meta's own platform throttling codes (4, 17, 32, 341) as a rate-limit condition", () => {
     expect(isMetaRateLimitError(new Error('Meta Graph API error 400: {"error":{"message":"(#4) Application request limit reached","type":"OAuthException","code":4}}'))).toBe(true);
