@@ -135,6 +135,10 @@ function mediaAssetRow(overrides: Partial<Record<string, unknown>> = {}) {
     created_at: "2026-07-19T00:00:00Z",
     updated_at: "2026-07-19T00:00:00Z",
     archived_at: null,
+    status: "pending",
+    approved_by: null,
+    approved_at: null,
+    rejection_reason: null,
     ...overrides,
   };
 }
@@ -367,5 +371,161 @@ describe("supabaseMediaAssetsRepository.deleteMediaAsset / restoreMediaAsset", (
 
     const result = await supabaseMediaAssetsRepository.restoreMediaAsset("media_1");
     expect(result.success).toBe(false);
+  });
+});
+
+// SOCIAL-03-FIX-B — closes the exact blind spot SOCIAL-03-FIX-A found: every
+// prior Social test exercised the mock repository's own real
+// setMediaAssetStatus; nothing here ever exercised the Supabase path, which
+// used to throw notMigrated() unconditionally.
+describe("supabaseMediaAssetsRepository — approval status mapping (mapMediaAssetRow)", () => {
+  it.each([
+    ["pending", null, null, null],
+    ["approved", "Amoré Bloom Owner", "2026-09-17T00:00:00Z", null],
+    ["rejected", null, null, "Wrong crop"],
+    ["needs_revision", null, null, "Please retake in landscape"],
+  ] as const)("reads a real persisted %s row instead of hardcoding pending", async (status, approvedBy, approvedAt, rejectionReason) => {
+    const { client } = createMockSupabase([
+      { data: mediaAssetRow({ status, approved_by: approvedBy, approved_at: approvedAt, rejection_reason: rejectionReason }), error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const asset = await supabaseMediaAssetsRepository.getMediaAssetById("media_1");
+    expect(asset.status).toBe(status);
+    expect(asset.approved_by).toBe(approvedBy);
+    expect(asset.approved_at).toBe(approvedAt);
+    expect(asset.rejection_reason).toBe(rejectionReason);
+  });
+});
+
+describe("supabaseMediaAssetsRepository.setMediaAssetStatus", () => {
+  it("no longer throws notMigrated() — the Supabase path is real", async () => {
+    const { client } = createMockSupabase([
+      { data: mediaAssetRow(), error: null }, // fetch
+      { data: mediaAssetRow({ status: "approved", approved_by: "Amoré Bloom Owner", approved_at: "2026-09-17T00:00:00Z" }), error: null }, // update
+      { data: null, error: null }, // timeline insert
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await expect(supabaseMediaAssetsRepository.setMediaAssetStatus("media_1", "approved", "Amoré Bloom Owner")).resolves.not.toThrow();
+  });
+
+  it("approved: sets approved_by/approved_at from this call and clears rejection_reason", async () => {
+    const { client, calls } = createMockSupabase([
+      { data: mediaAssetRow({ status: "rejected", rejection_reason: "old reason" }), error: null }, // fetch
+      { data: mediaAssetRow({ status: "approved", approved_by: "Amoré Bloom Owner", approved_at: "2026-09-17T00:00:00Z" }), error: null }, // update
+      { data: null, error: null }, // timeline insert
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseMediaAssetsRepository.setMediaAssetStatus("media_1", "approved", "Amoré Bloom Owner");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.status).toBe("approved");
+    expect(result.data.approved_by).toBe("Amoré Bloom Owner");
+    expect(result.data.approved_at).not.toBeNull();
+
+    const updateCall = calls.find((c) => c.table === "media_assets" && c.method === "update");
+    const payload = updateCall?.args[0] as { status: string; approved_by: string | null; approved_at: string | null; rejection_reason: string | null };
+    expect(payload.status).toBe("approved");
+    expect(payload.approved_by).toBe("Amoré Bloom Owner");
+    expect(payload.approved_at).not.toBeNull();
+    expect(payload.rejection_reason).toBeNull();
+  });
+
+  it("rejected: sets rejection_reason and leaves approved_by/approved_at untouched", async () => {
+    const { client, calls } = createMockSupabase([
+      { data: mediaAssetRow({ status: "approved", approved_by: "Amoré Bloom Owner", approved_at: "2026-09-16T00:00:00Z" }), error: null }, // fetch
+      { data: mediaAssetRow({ status: "rejected", approved_by: "Amoré Bloom Owner", approved_at: "2026-09-16T00:00:00Z", rejection_reason: "Wrong crop" }), error: null }, // update
+      { data: null, error: null }, // timeline insert
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseMediaAssetsRepository.setMediaAssetStatus("media_1", "rejected", "Amoré Bloom Reviewer", "Wrong crop");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.status).toBe("rejected");
+    expect(result.data.rejection_reason).toBe("Wrong crop");
+
+    const updateCall = calls.find((c) => c.table === "media_assets" && c.method === "update");
+    const payload = updateCall?.args[0] as { status: string; approved_by: string | null; approved_at: string | null; rejection_reason: string | null };
+    expect(payload.status).toBe("rejected");
+    expect(payload.rejection_reason).toBe("Wrong crop");
+    // Untouched — mirrors mockRepository.ts's own transition semantics exactly.
+    expect(payload.approved_by).toBe("Amoré Bloom Owner");
+    expect(payload.approved_at).toBe("2026-09-16T00:00:00Z");
+  });
+
+  it("needs_revision: follows the same untouched-approval-fields rule as rejected", async () => {
+    const { client, calls } = createMockSupabase([
+      { data: mediaAssetRow(), error: null }, // fetch
+      { data: mediaAssetRow({ status: "needs_revision", rejection_reason: "Please retake in landscape" }), error: null }, // update
+      { data: null, error: null }, // timeline insert
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseMediaAssetsRepository.setMediaAssetStatus("media_1", "needs_revision", "Amoré Bloom Reviewer", "Please retake in landscape");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.status).toBe("needs_revision");
+    expect(result.data.rejection_reason).toBe("Please retake in landscape");
+
+    const updateCall = calls.find((c) => c.table === "media_assets" && c.method === "update");
+    const timelineInsert = calls.find((c) => c.table === "timeline_activities" && c.method === "insert");
+    const timelinePayload = timelineInsert?.args[0] as { type: string };
+    expect(timelinePayload.type).toBe("media_asset_needs_revision");
+    expect((updateCall?.args[0] as { status: string }).status).toBe("needs_revision");
+  });
+
+  it("pending: resets approved_by/approved_at/rejection_reason back to null", async () => {
+    const { client, calls } = createMockSupabase([
+      { data: mediaAssetRow({ status: "approved", approved_by: "Amoré Bloom Owner", approved_at: "2026-09-16T00:00:00Z" }), error: null }, // fetch
+      { data: mediaAssetRow({ status: "pending" }), error: null }, // update
+      { data: null, error: null }, // timeline insert
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseMediaAssetsRepository.setMediaAssetStatus("media_1", "pending", "Amoré Bloom Owner");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.status).toBe("pending");
+    expect(result.data.approved_by).toBeNull();
+    expect(result.data.approved_at).toBeNull();
+
+    const updateCall = calls.find((c) => c.table === "media_assets" && c.method === "update");
+    const payload = updateCall?.args[0] as { approved_by: string | null; approved_at: string | null; rejection_reason: string | null };
+    expect(payload.approved_by).toBeNull();
+    expect(payload.approved_at).toBeNull();
+    expect(payload.rejection_reason).toBeNull();
+
+    const timelineInsert = calls.find((c) => c.table === "timeline_activities" && c.method === "insert");
+    const timelinePayload = timelineInsert?.args[0] as { type: string };
+    expect(timelinePayload.type).toBe("media_asset_status_reset");
+  });
+
+  it("fails cleanly when the asset doesn't exist, without touching Supabase update", async () => {
+    const { client, calls } = createMockSupabase([{ data: null, error: null }]); // fetch: not found
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseMediaAssetsRepository.setMediaAssetStatus("nope", "approved", "Amoré Bloom Owner");
+    expect(result.success).toBe(false);
+    expect(calls.some((c) => c.method === "update")).toBe(false);
+  });
+
+  it("scopes the update to the fetched asset's own id, preserving workspace ownership", async () => {
+    const { client, calls } = createMockSupabase([
+      { data: mediaAssetRow({ id: "media_1", workspace_id: "workspace_1" }), error: null },
+      { data: mediaAssetRow({ id: "media_1", workspace_id: "workspace_1", status: "approved" }), error: null },
+      { data: null, error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseMediaAssetsRepository.setMediaAssetStatus("media_1", "approved", "Amoré Bloom Owner");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.workspace_id).toBe("workspace_1");
+
+    const updateEqCall = calls.find((c) => c.table === "media_assets" && c.method === "eq");
+    expect(updateEqCall?.args).toEqual(["id", "media_1"]);
   });
 });

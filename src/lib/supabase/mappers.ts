@@ -14,6 +14,7 @@ import type { EventScheduleItem } from "@/types/eventScheduleItem";
 import type { Note, NoteAttachment } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
 import type { MediaAsset } from "@/types/mediaAsset";
+import type { MediaAssetStatus } from "@/core/enums/mediaAssetStatus";
 import type { SocialPost } from "@/types/socialPost";
 import type { SocialPostStatus } from "@/core/enums/socialPostStatus";
 import type { Contract, ContractVersionSnapshot } from "@/types/contract";
@@ -465,20 +466,22 @@ export function mapMediaAssetRow(row: MediaAssetRow): MediaAsset {
     created_at: row.created_at,
     updated_at: row.updated_at,
     archived_at: row.archived_at,
-    // v2 Checkpoint 25 — additive DAM fields have no column in `media_assets`
-    // yet (no migration applied this session, same precedent as every other
-    // checkpoint's Supabase-mode gaps). Defaulted here so a real row read
-    // through Supabase still type-checks as a complete `MediaAsset`, exactly
-    // as it behaved before these fields existed.
+    // v2 Checkpoint 25 — Folders/Collections/Tags/Metadata still have no
+    // column in `media_assets` (SOCIAL-03-FIX-B only migrated the Approval
+    // Workflow fields below — see that migration's own comment for why the
+    // rest stays out of scope). Defaulted here so a real row read through
+    // Supabase still type-checks as a complete `MediaAsset`.
     folder_id: null,
     tags: [],
     color_label: null,
     priority: null,
     ai_ready: false,
-    status: "pending",
-    approved_by: null,
-    approved_at: null,
-    rejection_reason: null,
+    // SOCIAL-03-FIX-B — real persisted values as of the approval-status
+    // migration; no longer hardcoded to "pending" for every row.
+    status: row.status as MediaAssetStatus,
+    approved_by: row.approved_by,
+    approved_at: row.approved_at,
+    rejection_reason: row.rejection_reason,
     version_notes: null,
     metadata: { pages: null, author: null, license: null, brand: null, colorProfile: null, cameraData: null, location: null, custom: {} },
   };

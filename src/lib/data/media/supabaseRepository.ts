@@ -1,4 +1,5 @@
 import type { MediaAsset } from "@/types/mediaAsset";
+import type { MediaAssetStatus } from "@/core/enums/mediaAssetStatus";
 import type { EntityType } from "@/core/enums/entityType";
 import type { TimelineActivityType } from "@/core/enums/timelineActivityType";
 import { NotFoundError, UnauthorizedError, ForbiddenError } from "@/core/errors";
@@ -434,6 +435,66 @@ async function restoreMediaAsset(id: string): Promise<DataResult<MediaAsset>> {
   return ok(updated);
 }
 
+/**
+ * SOCIAL-03-FIX-B — the real Supabase counterpart to
+ * `mockRepository.ts`'s own `setMediaAssetStatus`, mirroring its exact
+ * field-transition semantics (approved sets approved_by/approved_at from
+ * this call and clears rejection_reason; rejected/needs_revision set
+ * rejection_reason and leave approved_by/approved_at as whatever they
+ * already were; pending clears approved_by/approved_at/rejection_reason
+ * back to their initial state). `approved_by` stores the display-name/
+ * email `actor` string directly — never a foreign key — matching this
+ * codebase's established `approved_by` convention (see the migration's
+ * own comment). `actorMemberId` is accepted for interface parity with the
+ * mock repository but intentionally unused here: the mock's own Knowledge
+ * Graph `approved_by`/`rejected_by` relationship edge is a materially
+ * larger, separate piece of infrastructure this checkpoint's own scope
+ * (status/approved_by/approved_at/rejection_reason only) doesn't include —
+ * a known, reported parity gap, not an oversight.
+ */
+async function setMediaAssetStatus(
+  id: string,
+  status: MediaAssetStatus,
+  actor: string,
+  rejectionReason: string | null = null,
+  _actorMemberId: string | null = null,
+): Promise<DataResult<MediaAsset>> {
+  void _actorMemberId; // interface parity only — see this function's own doc comment for why it's unused here.
+  const existing = await fetchMediaAssetRow(id);
+  if (!existing) {
+    return fail("Media asset not found.");
+  }
+
+  const supabase = createSupabaseClient();
+  const { data, error } = await supabase
+    .from("media_assets")
+    .update({
+      status,
+      approved_by: status === "approved" ? actor : status === "pending" ? null : existing.approved_by,
+      approved_at: status === "approved" ? new Date().toISOString() : status === "pending" ? null : existing.approved_at,
+      rejection_reason: status === "rejected" || status === "needs_revision" ? rejectionReason : null,
+    })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw normalizeSupabaseError(error);
+
+  const updated = mapMediaAssetRow(data);
+  const timelineType: TimelineActivityType =
+    status === "approved" ? "media_asset_approved" : status === "rejected" ? "media_asset_rejected" : status === "needs_revision" ? "media_asset_needs_revision" : "media_asset_status_reset";
+  await insertTimelineActivity(
+    supabase,
+    actor,
+    updated.workspace_id,
+    updated.owner_type,
+    updated.owner_id,
+    timelineType,
+    `"${existing.original_filename}" marked ${status.replace(/_/g, " ")} by ${actor}`,
+  );
+
+  return ok(updated);
+}
+
 async function listMediaAssetsForWorkspace(workspaceId: string, filters: MediaAssetFilters = {}): Promise<MediaAsset[]> {
   const { includeArchived = false } = filters;
   const supabase = createSupabaseClient();
@@ -445,14 +506,15 @@ async function listMediaAssetsForWorkspace(workspaceId: string, filters: MediaAs
 }
 
 /**
- * v2 Checkpoint 25 — Folders/Collections/Tags/Metadata/Approval have no
- * columns on `media_assets` yet (no migration applied this session, same
- * "throw, don't pretend" precedent every other Foundation-phase gap in this
- * codebase already uses — see `lib/data/proposals/supabaseRepository.ts`).
+ * v2 Checkpoint 25 — Folders/Collections/Tags/Metadata still have no
+ * columns on `media_assets` (SOCIAL-03-FIX-B migrated only the Approval
+ * Workflow fields — see `setMediaAssetStatus` above — leaving the rest of
+ * this same "throw, don't pretend" precedent in place; see
+ * `lib/data/proposals/supabaseRepository.ts` for the established pattern).
  * Mock mode is fully functional for all of these; only Supabase mode defers.
  */
 function notMigrated(): never {
-  throw new Error("Digital Asset Management's Folders/Collections/Tags/Metadata/Approval fields have not been migrated to Supabase yet — this phase is mock-only.");
+  throw new Error("Digital Asset Management's Folders/Collections/Tags/Metadata fields have not been migrated to Supabase yet — this phase is mock-only.");
 }
 
 export const supabaseMediaAssetsRepository: MediaAssetsRepository = {
@@ -472,7 +534,7 @@ export const supabaseMediaAssetsRepository: MediaAssetsRepository = {
   setMediaAssetPriority: () => notMigrated(),
   setMediaAssetAiReady: () => notMigrated(),
   updateMediaAssetMetadata: () => notMigrated(),
-  setMediaAssetStatus: () => notMigrated(),
+  setMediaAssetStatus,
   getMediaFolders: () => notMigrated(),
   getMediaFolderById: () => notMigrated(),
   createMediaFolder: () => notMigrated(),

@@ -90,6 +90,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // tracked, not-yet-released, unrelated to the Finance release this
   // exact-count assertion describes.
   "20260916100000_social_posts_scheduling.sql",
+  // SOCIAL-03-FIX-B — media_assets approval-status columns. Independently-
+  // tracked, not-yet-released, unrelated to the Finance release this
+  // exact-count assertion describes.
+  "20260917100000_media_assets_approval_status.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {

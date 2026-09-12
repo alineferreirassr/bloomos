@@ -26,6 +26,7 @@ import { resetMediaAssetsStore } from "@/lib/data/mock/mediaAssetsStore";
 import { uploadMediaAsset, setMediaAssetStatus } from "@/lib/data";
 import * as dataLib from "@/lib/data";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
+import { mapMediaAssetRow } from "@/lib/supabase/mappers";
 
 const PUBLISH_SCOPES = ["pages_show_list", "pages_read_engagement", "instagram_basic", "instagram_content_publish"];
 const DISCOVERY_ONLY_SCOPES = ["pages_show_list", "pages_read_engagement", "instagram_basic"];
@@ -147,6 +148,53 @@ describe("createSocialPostAction", () => {
     vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(noPermissionSession);
     const result = await createSocialPostAction({ caption: "Hi", assetId });
     expect(result.success).toBe(false);
+  });
+
+  // SOCIAL-03-FIX-B — proves the real Supabase repair end to end through
+  // Social's own real validation, not a duplicated implementation: a raw
+  // row shaped exactly like what a real Supabase `media_assets` SELECT
+  // returns is passed through the real mapMediaAssetRow (the same function
+  // supabaseRepository.ts now uses), and the resulting MediaAsset is fed
+  // into the real createSocialPostAction via a spy on the same @/lib/data
+  // facade seam SOCIAL-LIVE-01B's own regression test already established.
+  // Before SOCIAL-03-FIX-B, mapMediaAssetRow hardcoded status: "pending"
+  // for every Supabase row, so this exact scenario could never pass.
+  it("accepts a Supabase-backed approved asset (real mapMediaAssetRow, not mock mode)", async () => {
+    await connectMetaWithSelectedIdentity();
+
+    const supabaseApprovedRow = {
+      id: "supabase_asset_1",
+      workspace_id: CURRENT_WORKSPACE_ID,
+      owner_type: "workspace",
+      owner_id: CURRENT_WORKSPACE_ID,
+      original_filename: "post.jpg",
+      stored_filename: "post.jpg",
+      storage_bucket: "media-assets",
+      storage_path: `${CURRENT_WORKSPACE_ID}/workspace/${CURRENT_WORKSPACE_ID}/supabase_asset_1/v1/post.jpg`,
+      mime_type: "image/jpeg",
+      extension: "jpg",
+      file_size: 1024,
+      checksum: "sha256:abc",
+      width: null,
+      height: null,
+      duration: null,
+      version: 1,
+      uploaded_by: "user_1",
+      created_at: "2026-09-17T00:00:00Z",
+      updated_at: "2026-09-17T00:00:00Z",
+      archived_at: null,
+      status: "approved",
+      approved_by: "Ana Ferreira",
+      approved_at: "2026-09-17T00:00:00Z",
+      rejection_reason: null,
+    };
+    const mappedAsset = mapMediaAssetRow(supabaseApprovedRow as never);
+    expect(mappedAsset.status).toBe("approved");
+
+    vi.spyOn(dataLib, "getMediaAssetById").mockResolvedValueOnce(mappedAsset);
+
+    const result = await createSocialPostAction({ caption: "Real Supabase asset", assetId: "supabase_asset_1" });
+    expect(result.success).toBe(true);
   });
 
   it("staff (social.create but not social.publish) can still create a draft", async () => {

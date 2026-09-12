@@ -1142,6 +1142,10 @@ export interface Database {
           created_at: string;
           updated_at: string;
           archived_at: string | null;
+          status: string;
+          approved_by: string | null;
+          approved_at: string | null;
+          rejection_reason: string | null;
         };
         Insert: {
           id?: string;
@@ -1164,6 +1168,10 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
           archived_at?: string | null;
+          status?: string;
+          approved_by?: string | null;
+          approved_at?: string | null;
+          rejection_reason?: string | null;
         };
         Update: {
           id?: string;
@@ -1186,6 +1194,10 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
           archived_at?: string | null;
+          status?: string;
+          approved_by?: string | null;
+          approved_at?: string | null;
+          rejection_reason?: string | null;
         };
         Relationships: [];
       };

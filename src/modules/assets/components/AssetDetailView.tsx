@@ -49,6 +49,7 @@ export function AssetDetailView({ asset: initialAsset }: { asset: MediaAsset }) 
   const { profile, user, can } = useMemberSession();
   const [asset, setAsset] = useState(initialAsset);
   const [busy, setBusy] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const [knowledge, setKnowledge] = useState<NodeKnowledgeData | null>(null);
   const [relatedResolved, setRelatedResolved] = useState<{ forAssetId: string; entity: RelatedEntity | null } | null>(null);
   const related = relatedResolved?.forAssetId === asset.id ? relatedResolved.entity : null;
@@ -93,11 +94,21 @@ export function AssetDetailView({ asset: initialAsset }: { asset: MediaAsset }) 
   async function handleStatusChange(next: "approved" | "rejected" | "needs_revision") {
     if (!user) return;
     setBusy(true);
+    setStatusError(null);
     const actor = profile?.full_name ?? user.email;
     const reason = next !== "approved" ? window.prompt("Reason (optional)") : null;
-    const result = await setMediaAssetStatus(asset.id, next, actor, reason, user.id);
-    if (result.success) setAsset(result.data);
-    setBusy(false);
+    try {
+      const result = await setMediaAssetStatus(asset.id, next, actor, reason, user.id);
+      if (result.success) {
+        setAsset(result.data);
+      } else {
+        setStatusError(result.error);
+      }
+    } catch {
+      setStatusError("Could not update this file's approval status. Please try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleDownload() {
@@ -244,6 +255,11 @@ export function AssetDetailView({ asset: initialAsset }: { asset: MediaAsset }) 
                   Reject
                 </Button>
               </div>
+              {statusError ? (
+                <p role="alert" className="mt-2 text-xs text-rose-600 dark:text-rose-400">
+                  {statusError}
+                </p>
+              ) : null}
             </Card>
           ) : null}
 
