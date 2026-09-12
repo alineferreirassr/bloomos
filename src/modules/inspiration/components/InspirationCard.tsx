@@ -29,21 +29,22 @@ export function InspirationCard({ item, onOpen }: InspirationCardProps) {
 
   return (
     <button type="button" onClick={() => onOpen(item)} className="block w-full text-left">
-      <Card className="flex h-full flex-col gap-3 p-3">
+      <Card className="flex flex-col gap-3 p-4">
         <InspirationThumbnail mediaAssetId={item.media_asset_id} sourceType={item.source_type} title={item.title} />
 
+        {/* Platform/format/archived stay identifiable but deliberately small and muted-toned — the title below is this card's strongest element, not these badges. */}
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge tone={item.archived_at ? "neutral" : "accent"}>{INSPIRATION_SOURCE_TYPE_LABELS[item.source_type]}</Badge>
+          {item.content_format ? <Badge tone="neutral">{INSPIRATION_CONTENT_FORMAT_LABELS[item.content_format]}</Badge> : null}
           {item.archived_at ? <Badge tone="neutral">Archived</Badge> : null}
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-text" title={item.title}>
+          <p className="truncate font-serif text-base font-semibold text-text" title={item.title}>
             {item.title}
           </p>
-          {creatorLine ? <p className="mt-0.5 truncate text-xs text-text-muted">{creatorLine}</p> : null}
-          {item.content_format ? <p className="mt-0.5 text-xs text-text-muted">{INSPIRATION_CONTENT_FORMAT_LABELS[item.content_format]}</p> : null}
-          {item.hook ? <p className="mt-1.5 line-clamp-2 text-xs text-text/80">{item.hook}</p> : null}
+          {creatorLine ? <p className="mt-1 truncate text-sm text-text-muted">{creatorLine}</p> : null}
+          {item.hook ? <p className="mt-2 line-clamp-2 text-sm text-text/80">{item.hook}</p> : null}
         </div>
 
         <p className="text-[11px] text-text-muted">Saved {formatDateOnly(item.created_at)}</p>

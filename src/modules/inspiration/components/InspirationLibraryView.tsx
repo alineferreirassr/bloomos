@@ -92,7 +92,7 @@ export function InspirationLibraryView() {
   }
 
   const addAction = canCreate ? (
-    <Button variant="primary" onClick={() => setAddOpen(true)}>
+    <Button variant="primary" className="px-5 py-2.5 text-sm" onClick={() => setAddOpen(true)}>
       Add Inspiration
     </Button>
   ) : null;
@@ -127,8 +127,8 @@ export function InspirationLibraryView() {
         actions={addAction}
       />
 
-      <Card className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[180px] flex-1">
+      <Card className="mb-5 flex flex-wrap items-center gap-2 p-2.5">
+        <div className="relative min-w-[160px] flex-1">
           <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
           <Input
             type="search"
@@ -143,7 +143,7 @@ export function InspirationLibraryView() {
           aria-label="Filter by source"
           value={filters.sourceType}
           onChange={(e) => setFilters((prev) => ({ ...prev, sourceType: e.target.value as InspirationSourceType | "all" }))}
-          className="w-auto"
+          className="w-auto shrink-0"
         >
           <option value="all">All sources</option>
           {INSPIRATION_SOURCE_TYPES.map((type) => (
@@ -156,7 +156,7 @@ export function InspirationLibraryView() {
           aria-label="Filter by content format"
           value={filters.contentFormat}
           onChange={(e) => setFilters((prev) => ({ ...prev, contentFormat: e.target.value as InspirationContentFormat | "all" }))}
-          className="w-auto"
+          className="w-auto shrink-0"
         >
           <option value="all">All formats</option>
           {INSPIRATION_CONTENT_FORMATS.map((format) => (
@@ -169,7 +169,7 @@ export function InspirationLibraryView() {
           aria-label="Filter by archive state"
           value={filters.archived}
           onChange={(e) => setFilters((prev) => ({ ...prev, archived: e.target.value as InspirationArchivedFilter }))}
-          className="w-auto"
+          className="w-auto shrink-0"
         >
           <option value="active">Active</option>
           <option value="archived">Archived</option>
@@ -189,7 +189,7 @@ export function InspirationLibraryView() {
           action={canCreate && filtersAreDefault ? <Button variant="primary" onClick={() => setAddOpen(true)}>Add Inspiration</Button> : undefined}
         />
       ) : (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(272px,1fr))] items-start gap-5">
           {items.map((item) => (
             <InspirationCard key={item.id} item={item} onOpen={setSelectedItem} />
           ))}
