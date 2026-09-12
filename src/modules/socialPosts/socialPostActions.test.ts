@@ -12,6 +12,7 @@ import {
   scheduleSocialPostAction,
   rescheduleSocialPostAction,
   cancelSocialPostScheduleAction,
+  listSocialMediaAssetsAction,
   getSocialPostInsightsAction,
   listSocialPostsAction,
   getSocialPostAction,
@@ -23,6 +24,7 @@ import { resetCredentialStore } from "@/lib/data/core/integrations/credentialSto
 import { resetSocialPostsStore } from "@/lib/data/mock/socialPostsStore";
 import { resetMediaAssetsStore } from "@/lib/data/mock/mediaAssetsStore";
 import { uploadMediaAsset, setMediaAssetStatus } from "@/lib/data";
+import * as dataLib from "@/lib/data";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 
 const PUBLISH_SCOPES = ["pages_show_list", "pages_read_engagement", "instagram_basic", "instagram_content_publish"];
@@ -648,5 +650,71 @@ describe("SOCIAL-04B — manual Publish Now on a scheduled post", () => {
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data.status).toBe("published");
+  });
+});
+
+describe("listSocialMediaAssetsAction — SOCIAL-LIVE-01B", () => {
+  it("takes no parameters at all — the workspace id can never be supplied by a caller, only derived server-side from the session", () => {
+    expect(listSocialMediaAssetsAction.length).toBe(0);
+  });
+
+  it("rejects an unauthenticated/no-permission caller, exactly like listSocialPostsAction", async () => {
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(noPermissionSession);
+    const result = await listSocialMediaAssetsAction();
+    expect(result.success).toBe(false);
+  });
+
+  it("returns only approved JPEG images for the caller's own session-derived workspace", async () => {
+    const jpegApproved = await uploadMediaAsset({ ownerType: "workspace", ownerId: CURRENT_WORKSPACE_ID, file: makeFile("bytes", "a.jpg", "image/jpeg"), originalFilename: "a.jpg" });
+    if (!jpegApproved.success) throw new Error("setup failed");
+    await setMediaAssetStatus(jpegApproved.data.id, "approved", "member_1");
+
+    const pngApproved = await uploadMediaAsset({ ownerType: "workspace", ownerId: CURRENT_WORKSPACE_ID, file: makeFile("bytes", "b.png", "image/png"), originalFilename: "b.png" });
+    if (!pngApproved.success) throw new Error("setup failed");
+    await setMediaAssetStatus(pngApproved.data.id, "approved", "member_1");
+
+    const jpegPending = await uploadMediaAsset({ ownerType: "workspace", ownerId: CURRENT_WORKSPACE_ID, file: makeFile("bytes", "c.jpg", "image/jpeg"), originalFilename: "c.jpg" });
+    if (!jpegPending.success) throw new Error("setup failed");
+
+    const result = await listSocialMediaAssetsAction();
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.map((a) => a.id)).toEqual([jpegApproved.data.id]);
+  });
+
+  it("SOCIAL-LIVE-01A regression — passes the real session-derived workspace id to the repository, never a hard-coded constant", async () => {
+    const spy = vi.spyOn(dataLib, "listMediaAssetsForWorkspace");
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session);
+    await listSocialMediaAssetsAction();
+    expect(spy).toHaveBeenLastCalledWith(session.workspace.id);
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(crossTenantSession);
+    await listSocialMediaAssetsAction();
+    expect(spy).toHaveBeenLastCalledWith(crossTenantSession.workspace.id);
+    expect(spy).toHaveBeenLastCalledWith("ws_other_tenant");
+
+    spy.mockRestore();
+  });
+
+  it("SOCIAL-LIVE-01A regression — never sends CURRENT_WORKSPACE_ID's literal value for a session whose real workspace id differs from it", async () => {
+    const spy = vi.spyOn(dataLib, "listMediaAssetsForWorkspace");
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(crossTenantSession);
+
+    await listSocialMediaAssetsAction();
+
+    expect(spy).not.toHaveBeenCalledWith(CURRENT_WORKSPACE_ID);
+    spy.mockRestore();
+  });
+
+  it("SOCIAL-LIVE-01A regression — an unexpected rejection from the repository is caught and returned as a controlled Result, never an uncaught rejection", async () => {
+    const spy = vi.spyOn(dataLib, "listMediaAssetsForWorkspace").mockRejectedValueOnce(new Error("invalid input syntax for type uuid"));
+
+    const result = await listSocialMediaAssetsAction();
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).not.toMatch(/uuid|invalid input syntax/i); // never a raw Postgres error surfaced to the caller
+    spy.mockRestore();
   });
 });

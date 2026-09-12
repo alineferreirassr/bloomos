@@ -15,12 +15,12 @@ import {
   scheduleSocialPostAction,
   rescheduleSocialPostAction,
   cancelSocialPostScheduleAction,
+  listSocialMediaAssetsAction,
   getSocialPostInsightsAction,
   type SocialPostInsights,
 } from "@/modules/socialPosts/socialPostActions";
 import { getSelectedMetaPublishingIdentityAction, type MetaSelectedIdentity } from "@/modules/integrations/meta/metaAccountActions";
-import { listMediaAssetsForWorkspace, getMediaAssetDownloadUrl } from "@/lib/data";
-import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
+import { getMediaAssetDownloadUrl } from "@/lib/data";
 import { SOCIAL_POST_STATUS_LABELS, type SocialPostStatus } from "@/core/enums/socialPostStatus";
 import { SocialScheduleDialog, type ScheduleSubmitInput } from "@/modules/socialPosts/components/SocialScheduleDialog";
 import type { SocialPost } from "@/types/socialPost";
@@ -47,28 +47,46 @@ const STATUS_TONE: Record<SocialPostStatus, BadgeTone> = {
   failed: "danger",
 };
 
-const SUPPORTED_IMAGE_MIME_TYPE = "image/jpeg";
-
 interface PanelData {
   posts: SocialPost[];
   identity: MetaSelectedIdentity | null;
   images: MediaAsset[];
 }
 
-/** Pure, module-level fetcher — no closure over component state setters — mirrors `MetaSettingsPanel.tsx`'s own established split so the mount effect never trips `react-hooks/set-state-in-effect`. */
+/**
+ * Pure, module-level fetcher — no closure over component state setters —
+ * mirrors `MetaSettingsPanel.tsx`'s own established split so the mount
+ * effect never trips `react-hooks/set-state-in-effect`.
+ *
+ * SOCIAL-LIVE-01B — asset loading now goes through `listSocialMediaAssetsAction`
+ * (session-derived workspace id, resolved entirely server-side — this
+ * component never sees or supplies a workspace id) instead of the removed
+ * `listMediaAssetsForWorkspace(CURRENT_WORKSPACE_ID)` call, which sent a
+ * mock-mode placeholder string into a live `uuid` column and threw a raw,
+ * uncaught 400. The whole body is also now wrapped in try/catch: every
+ * individual action already returns a `Result` and never throws, but this
+ * is the one place that guards against ANY future rejection (a change to
+ * one of the three actions, a transient framework-level throw) leaving the
+ * panel stuck in `{status: "loading"}` forever instead of reaching the
+ * existing controlled `ErrorState`.
+ */
 async function fetchPanelData(): Promise<PanelData | null> {
-  const [postsResult, identityResult, assets] = await Promise.all([
-    listSocialPostsAction(),
-    getSelectedMetaPublishingIdentityAction(),
-    listMediaAssetsForWorkspace(CURRENT_WORKSPACE_ID),
-  ]);
-  if (!postsResult.success) return null;
+  try {
+    const [postsResult, identityResult, assetsResult] = await Promise.all([
+      listSocialPostsAction(),
+      getSelectedMetaPublishingIdentityAction(),
+      listSocialMediaAssetsAction(),
+    ]);
+    if (!postsResult.success) return null;
 
-  return {
-    posts: postsResult.data,
-    identity: identityResult.success ? identityResult.data : null,
-    images: assets.filter((asset) => asset.mime_type === SUPPORTED_IMAGE_MIME_TYPE && asset.status === "approved" && !asset.archived_at),
-  };
+    return {
+      posts: postsResult.data,
+      identity: identityResult.success ? identityResult.data : null,
+      images: assetsResult.success ? assetsResult.data : [],
+    };
+  } catch {
+    return null;
+  }
 }
 
 function assetLabel(asset: MediaAsset): string {

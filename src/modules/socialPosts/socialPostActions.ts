@@ -15,6 +15,7 @@ import {
   getSocialPost,
   getMediaAssetById,
   getMediaAssetDownloadUrl,
+  listMediaAssetsForWorkspace,
 } from "@/lib/data";
 import { getOwnProviderConnectionAction } from "@/modules/integrations/manageOAuthConnectionActions";
 import { getCredential, resolveAccessToken } from "@/core/integrations/credentialManager";
@@ -25,6 +26,7 @@ import { executeSocialPostPublish } from "@/core/social/socialPublishExecution";
 import { RECONNECT_ERROR } from "@/core/social/socialSchedulingPolicy";
 import { socialPostScheduleSchema } from "@/modules/socialPosts/schema";
 import type { SocialPost } from "@/types/socialPost";
+import type { MediaAsset } from "@/types/mediaAsset";
 import type { IntegrationConnection } from "@/core/integrations/types";
 
 /**
@@ -124,6 +126,37 @@ export async function listSocialPostsAction(): Promise<Result<SocialPost[]>> {
   const resolved = await requireActiveSession("social.view");
   if (!resolved.success) return resolved;
   return { success: true, data: await listSocialPosts(resolved.session.workspace.id) };
+}
+
+/**
+ * SOCIAL-LIVE-01B — the Social composer's own image picker needs the
+ * workspace's approved JPEGs, but has no session of its own to derive a
+ * workspace id from (the caller, `SocialPostsView.tsx`, is a client
+ * component). Previously it called `listMediaAssetsForWorkspace` directly
+ * with the mock-mode placeholder `CURRENT_WORKSPACE_ID` — a live 400 in
+ * Supabase mode, since that string is never a valid `media_assets.workspace_id`
+ * UUID (see SOCIAL-LIVE-01A's own root-cause audit). This action closes that
+ * gap the same way every other Social read already does: resolves the real
+ * session-derived workspace id entirely server-side, so the browser never
+ * carries — and could never tamper with — a workspace id at all (a strictly
+ * narrower trust boundary than merely returning the id to the client for a
+ * second round-trip). Filtering to approved JPEGs also moves here, so the
+ * response is already exactly what the composer needs. Never throws —
+ * `listMediaAssetsForWorkspace` itself throws on a Supabase error, so that's
+ * caught and converted to the same `Result<T>` shape every other Social
+ * action already returns, closing the second, compounding defect 01A found
+ * (an uncaught rejection from this call left `SocialPostsView`'s panel-data
+ * load permanently stuck in a loading state).
+ */
+export async function listSocialMediaAssetsAction(): Promise<Result<MediaAsset[]>> {
+  const resolved = await requireActiveSession("social.view");
+  if (!resolved.success) return resolved;
+  try {
+    const assets = await listMediaAssetsForWorkspace(resolved.session.workspace.id);
+    return { success: true, data: assets.filter((asset) => asset.mime_type === SUPPORTED_IMAGE_MIME_TYPE && asset.status === "approved") };
+  } catch {
+    return { success: false, error: "Could not load images." };
+  }
 }
 
 export async function getSocialPostAction(id: string): Promise<Result<SocialPost>> {

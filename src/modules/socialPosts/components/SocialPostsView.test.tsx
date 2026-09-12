@@ -9,6 +9,7 @@ vi.mock("@/modules/socialPosts/socialPostActions", () => ({
   scheduleSocialPostAction: vi.fn(),
   rescheduleSocialPostAction: vi.fn(),
   cancelSocialPostScheduleAction: vi.fn(),
+  listSocialMediaAssetsAction: vi.fn(),
   getSocialPostInsightsAction: vi.fn(),
 }));
 
@@ -17,7 +18,6 @@ vi.mock("@/modules/integrations/meta/metaAccountActions", () => ({
 }));
 
 vi.mock("@/lib/data", () => ({
-  listMediaAssetsForWorkspace: vi.fn(),
   getMediaAssetDownloadUrl: vi.fn(),
 }));
 
@@ -28,10 +28,11 @@ import {
   scheduleSocialPostAction,
   rescheduleSocialPostAction,
   cancelSocialPostScheduleAction,
+  listSocialMediaAssetsAction,
   getSocialPostInsightsAction,
 } from "@/modules/socialPosts/socialPostActions";
 import { getSelectedMetaPublishingIdentityAction } from "@/modules/integrations/meta/metaAccountActions";
-import { listMediaAssetsForWorkspace, getMediaAssetDownloadUrl } from "@/lib/data";
+import { getMediaAssetDownloadUrl } from "@/lib/data";
 import { SocialPostsView } from "@/modules/socialPosts/components/SocialPostsView";
 import type { SocialPost } from "@/types/socialPost";
 import type { MediaAsset } from "@/types/mediaAsset";
@@ -110,7 +111,7 @@ describe("SocialPostsView", () => {
   it("prompts to connect Meta when no publishing identity is selected", async () => {
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: null });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
 
     render(<SocialPostsView />);
 
@@ -121,7 +122,7 @@ describe("SocialPostsView", () => {
   it("shows the create panel with the real destination once an identity is selected", async () => {
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([image()]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [image()] });
     vi.mocked(getMediaAssetDownloadUrl).mockResolvedValue({ success: true, data: { url: "https://signed.example.com/post.jpg", expiresAt: "2026-01-01T00:05:00Z" } });
 
     render(<SocialPostsView />);
@@ -130,14 +131,10 @@ describe("SocialPostsView", () => {
     expect(screen.getByText("Publishing to Instagram: @amorebloom")).toBeInTheDocument();
   });
 
-  it("only shows approved JPEG images in the picker — never a non-JPEG or unapproved asset", async () => {
+  it("renders exactly the images listSocialMediaAssetsAction returns — approved-JPEG filtering is now that action's own responsibility (see socialPostActions.test.ts), not this view's", async () => {
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([
-      image({ id: "jpeg_approved", mime_type: "image/jpeg", status: "approved" }),
-      image({ id: "png_approved", mime_type: "image/png", status: "approved" }),
-      image({ id: "jpeg_pending", mime_type: "image/jpeg", status: "pending" }),
-    ]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [image({ id: "jpeg_approved" })] });
     vi.mocked(getMediaAssetDownloadUrl).mockResolvedValue({ success: true, data: { url: "https://signed.example.com/x.jpg", expiresAt: "2026-01-01T00:05:00Z" } });
 
     render(<SocialPostsView />);
@@ -150,7 +147,7 @@ describe("SocialPostsView", () => {
     const user = userEvent.setup();
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([image()]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [image()] });
     vi.mocked(getMediaAssetDownloadUrl).mockResolvedValue({ success: true, data: { url: "https://signed.example.com/post.jpg", expiresAt: "2026-01-01T00:05:00Z" } });
     vi.mocked(createSocialPostAction).mockResolvedValue({ success: true, data: post() });
 
@@ -166,7 +163,7 @@ describe("SocialPostsView", () => {
     const user = userEvent.setup();
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([image()]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [image()] });
     vi.mocked(getMediaAssetDownloadUrl).mockResolvedValue({ success: true, data: { url: "https://signed.example.com/post.jpg", expiresAt: "2026-01-01T00:05:00Z" } });
     vi.mocked(createSocialPostAction).mockResolvedValue({ success: true, data: post() });
     vi.mocked(publishSocialPostNowAction).mockResolvedValue({ success: true, data: post({ status: "published" }) });
@@ -185,7 +182,7 @@ describe("SocialPostsView", () => {
       data: [post({ status: "published", provider_permalink: "https://www.instagram.com/p/abc123/" })],
     });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
 
     render(<SocialPostsView />);
 
@@ -197,7 +194,7 @@ describe("SocialPostsView", () => {
   it("never shows a permalink link when one isn't available", async () => {
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ status: "published", provider_permalink: null })] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
 
     render(<SocialPostsView />);
 
@@ -208,7 +205,7 @@ describe("SocialPostsView", () => {
   it("shows a Retry button and the sanitized error for a failed post", async () => {
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ status: "failed", provider_error: "Reconnect Meta to enable publishing." })] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
 
     render(<SocialPostsView />);
 
@@ -219,7 +216,7 @@ describe("SocialPostsView", () => {
   it("never shows a Publish Now/Retry button for an already-published post", async () => {
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ status: "published" })] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
 
     render(<SocialPostsView />);
 
@@ -234,7 +231,7 @@ describe("SocialPostsView", () => {
   it("shows a 'Refresh insights' control only for a published post, never for draft/failed", async () => {
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ id: "p1", status: "published" }), post({ id: "p2", status: "draft" }), post({ id: "p3", status: "failed" })] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
 
     render(<SocialPostsView />);
     await screen.findByText("Published");
@@ -246,7 +243,7 @@ describe("SocialPostsView", () => {
     const user = userEvent.setup();
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ status: "published" })] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
     vi.mocked(getSocialPostInsightsAction).mockResolvedValue({ success: true, data: { metrics: { reach: 120, likes: 0 } } });
 
     render(<SocialPostsView />);
@@ -264,7 +261,7 @@ describe("SocialPostsView", () => {
     const user = userEvent.setup();
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ status: "published" })] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
     vi.mocked(getSocialPostInsightsAction).mockResolvedValue({ success: true, data: { metrics: {} } });
 
     render(<SocialPostsView />);
@@ -277,7 +274,7 @@ describe("SocialPostsView", () => {
     const user = userEvent.setup();
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ status: "published" })] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
     vi.mocked(getSocialPostInsightsAction).mockResolvedValue({ success: false, error: "Reconnect Meta to enable Instagram analytics." });
 
     render(<SocialPostsView />);
@@ -297,7 +294,7 @@ describe("SocialPostsView — SOCIAL-04C scheduling", () => {
   it("shows a Schedule control for a draft post, adjacent to Publish Now", async () => {
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ status: "draft" })] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
 
     render(<SocialPostsView />);
     const postsList = await screen.findByRole("list");
@@ -309,7 +306,7 @@ describe("SocialPostsView — SOCIAL-04C scheduling", () => {
     const user = userEvent.setup();
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ id: "p1", status: "draft" })] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
     vi.mocked(scheduleSocialPostAction).mockResolvedValue({ success: true, data: post({ id: "p1", status: "scheduled", scheduled_at: "2099-06-01T19:00:00.000Z", scheduled_timezone: "UTC" }) });
 
     render(<SocialPostsView />);
@@ -331,7 +328,7 @@ describe("SocialPostsView — SOCIAL-04C scheduling", () => {
     const user = userEvent.setup();
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([image()]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [image()] });
     vi.mocked(getMediaAssetDownloadUrl).mockResolvedValue({ success: true, data: { url: "https://signed.example.com/post.jpg", expiresAt: "2026-01-01T00:05:00Z" } });
     vi.mocked(createSocialPostAction).mockResolvedValue({ success: true, data: post({ id: "new_post" }) });
     vi.mocked(scheduleSocialPostAction).mockResolvedValue({ success: true, data: post({ id: "new_post", status: "scheduled" }) });
@@ -356,7 +353,7 @@ describe("SocialPostsView — SOCIAL-04C scheduling", () => {
       data: [post({ status: "scheduled", scheduled_at: "2099-06-01T19:00:00.000Z", scheduled_timezone: "UTC" })],
     });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
 
     render(<SocialPostsView />);
 
@@ -369,7 +366,7 @@ describe("SocialPostsView — SOCIAL-04C scheduling", () => {
     const user = userEvent.setup();
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ id: "p1", status: "draft" })] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
     vi.mocked(scheduleSocialPostAction).mockResolvedValue({ success: false, error: "Only an approved image can be published." });
 
     render(<SocialPostsView />);
@@ -390,7 +387,7 @@ describe("SocialPostsView — SOCIAL-04C scheduling", () => {
       data: [post({ id: "p1", status: "scheduled", scheduled_at: "2099-06-01T15:00:00.000Z", scheduled_timezone: "UTC" })],
     });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
     vi.mocked(rescheduleSocialPostAction).mockResolvedValue({ success: true, data: post({ id: "p1", status: "scheduled", scheduled_at: "2099-07-01T15:00:00.000Z" }) });
 
     render(<SocialPostsView />);
@@ -414,7 +411,7 @@ describe("SocialPostsView — SOCIAL-04C scheduling", () => {
     const user = userEvent.setup();
     vi.mocked(listSocialPostsAction).mockResolvedValueOnce({ success: true, data: [post({ id: "p1", status: "scheduled", scheduled_at: "2099-06-01T15:00:00.000Z" })] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
     vi.mocked(cancelSocialPostScheduleAction).mockResolvedValue({ success: true, data: post({ id: "p1", status: "draft" }) });
     vi.mocked(listSocialPostsAction).mockResolvedValueOnce({ success: true, data: [post({ id: "p1", status: "draft" })] });
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
@@ -433,7 +430,7 @@ describe("SocialPostsView — SOCIAL-04C scheduling", () => {
     const user = userEvent.setup();
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ id: "p1", status: "scheduled", scheduled_at: "2099-06-01T15:00:00.000Z" })] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
 
     render(<SocialPostsView />);
@@ -447,7 +444,7 @@ describe("SocialPostsView — SOCIAL-04C scheduling", () => {
   it("never labels schedule cancellation as Delete", async () => {
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ status: "scheduled", scheduled_at: "2099-06-01T15:00:00.000Z" })] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
 
     render(<SocialPostsView />);
     const postsList = await screen.findByRole("list");
@@ -458,7 +455,7 @@ describe("SocialPostsView — SOCIAL-04C scheduling", () => {
     const user = userEvent.setup();
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ id: "p1", status: "scheduled", scheduled_at: "2099-06-01T15:00:00.000Z" })] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
     vi.mocked(publishSocialPostNowAction).mockResolvedValue({ success: true, data: post({ id: "p1", status: "published" }) });
 
     render(<SocialPostsView />);
@@ -472,7 +469,7 @@ describe("SocialPostsView — SOCIAL-04C scheduling", () => {
     const user = userEvent.setup();
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ id: "p1", status: "scheduled", scheduled_at: "2099-06-01T15:00:00.000Z" })] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
     vi.mocked(publishSocialPostNowAction).mockResolvedValue({ success: false, error: "This post is already publishing." });
 
     render(<SocialPostsView />);
@@ -486,7 +483,7 @@ describe("SocialPostsView — SOCIAL-04C scheduling", () => {
   it("Publishing state hides Schedule/Reschedule/Cancel and shows a clear 'Publishing…' indicator, never implying cancellation is still possible", async () => {
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ status: "publishing" })] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
 
     render(<SocialPostsView />);
     const postsList = await screen.findByRole("list");
@@ -501,7 +498,7 @@ describe("SocialPostsView — SOCIAL-04C scheduling", () => {
   it("Published state never shows Schedule/Reschedule/Cancel schedule controls", async () => {
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ status: "published" })] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
 
     render(<SocialPostsView />);
     const postsList = await screen.findByRole("list");
@@ -518,7 +515,7 @@ describe("SocialPostsView — SOCIAL-04C scheduling", () => {
       data: [post({ status: "failed", provider_error: "Instagram is rate-limiting requests right now. Try again in a few minutes.", next_attempt_at: "2099-06-01T15:05:00.000Z", scheduled_timezone: "UTC", publish_attempts: 2 })],
     });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
 
     render(<SocialPostsView />);
 
@@ -530,7 +527,7 @@ describe("SocialPostsView — SOCIAL-04C scheduling", () => {
   it("a failed post still offers Schedule to explicitly re-enter the scheduling flow", async () => {
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ status: "failed", provider_error: "Reconnect Meta to enable publishing." })] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
 
     render(<SocialPostsView />);
     const postsList = await screen.findByRole("list");
@@ -542,7 +539,7 @@ describe("SocialPostsView — SOCIAL-04C scheduling", () => {
     const user = userEvent.setup();
     vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ id: "p1", status: "scheduled", scheduled_at: "2099-06-01T15:00:00.000Z" })] });
     vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
-    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
     let resolveCancel: (value: { success: true; data: SocialPost }) => void = () => {};
     vi.mocked(cancelSocialPostScheduleAction).mockReturnValue(new Promise((resolve) => (resolveCancel = resolve)));
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
@@ -556,5 +553,57 @@ describe("SocialPostsView — SOCIAL-04C scheduling", () => {
     resolveCancel({ success: true, data: post({ id: "p1", status: "draft" }) });
     await waitFor(() => expect(screen.queryByRole("button", { name: "Cancelling…" })).not.toBeInTheDocument());
     confirmSpy.mockRestore();
+  });
+});
+
+describe("SocialPostsView — SOCIAL-LIVE-01B load-failure handling", () => {
+  it("an unexpected rejection during the initial load exits the loading state and renders the existing controlled ErrorState, with no unhandled rejection", async () => {
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: null });
+    vi.mocked(listSocialMediaAssetsAction).mockRejectedValue(new Error("invalid input syntax for type uuid"));
+
+    render(<SocialPostsView />);
+
+    expect(await screen.findByText("Could not load Social Posts.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    // Getting here at all (Vitest fails the run on an unhandled rejection)
+    // is itself proof the rejection was caught, not just left to reject.
+  });
+
+  it("reload() (the ErrorState's own Try again) also handles a rejection safely, staying in the controlled ErrorState rather than hanging", async () => {
+    const user = userEvent.setup();
+    // First load: a controlled (non-throwing) failure, reaching the existing ErrorState via its own established path.
+    vi.mocked(listSocialPostsAction).mockResolvedValueOnce({ success: false, error: "Something went wrong. Please try again." });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: null });
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
+
+    render(<SocialPostsView />);
+    await screen.findByText("Could not load Social Posts.");
+
+    // Second load, triggered by the ErrorState's own "Try again" (== reload()): this time the previously-defective call rejects unexpectedly.
+    vi.mocked(listSocialPostsAction).mockResolvedValueOnce({ success: true, data: [] });
+    vi.mocked(listSocialMediaAssetsAction).mockRejectedValueOnce(new Error("invalid input syntax for type uuid"));
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByText("Could not load Social Posts.")).toBeInTheDocument();
+  });
+});
+
+describe("SocialPostsView — SOCIAL-LIVE-01A static regression guard", () => {
+  it("never imports CURRENT_WORKSPACE_ID — the Social panel's own asset load must derive its workspace id entirely server-side via listSocialMediaAssetsAction, never a mock-mode placeholder constant", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const source = await fs.readFile(path.resolve(__dirname, "SocialPostsView.tsx"), "utf-8");
+    // Checks the actual `import ... from "@/lib/data"` statement's own
+    // named-import list, not prose mentioning either identifier by name
+    // (this file's own doc comments explain the historical bug using those
+    // exact names, which is legitimate and not a regression). TypeScript
+    // itself already proves a bare, unimported call/reference couldn't
+    // compile, so checking the import statement is both necessary and
+    // sufficient.
+    const dataImportMatch = /import\s*\{([^}]*)\}\s*from\s*["']@\/lib\/data["']/.exec(source);
+    expect(dataImportMatch).not.toBeNull();
+    expect(dataImportMatch?.[1]).not.toMatch(/\blistMediaAssetsForWorkspace\b/);
+    expect(source).not.toMatch(/from ["']@\/core\/constants\/workspace["']/);
   });
 });
