@@ -11,6 +11,7 @@ import {
   listInspirationItemsAction,
   archiveInspirationItemAction,
   unarchiveInspirationItemAction,
+  listInspirationMediaAssetOptionsAction,
   type InspirationItemActionInput,
 } from "@/modules/inspiration/inspirationActions";
 import { resetInspirationItemsStore } from "@/lib/data/mock/inspirationItemsStore";
@@ -376,5 +377,63 @@ describe("Inspiration actions — update / archive / unarchive lifecycle", () =>
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data).toHaveLength(0);
+  });
+});
+
+describe("SOCIAL-06E — updateInspirationItemAction archived-edit gate", () => {
+  it("rejects an update against an archived item — matches the Workflow/Template/Service/MediaAsset 'restore first' precedent", async () => {
+    const created = await createInspirationItemAction(baseInput({ title: "Will archive" }));
+    if (!created.success) throw new Error("setup failed");
+    await archiveInspirationItemAction(created.data.id);
+
+    const result = await updateInspirationItemAction(created.data.id, { title: "Should not apply" });
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toMatch(/restore it first/i);
+
+    const stillArchived = await getInspirationItemAction(created.data.id);
+    expect(stillArchived.success).toBe(true);
+    if (stillArchived.success) expect(stillArchived.data.title).toBe("Will archive");
+  });
+
+  it("allows a normal edit again once the item is restored", async () => {
+    const created = await createInspirationItemAction(baseInput({ title: "Will archive" }));
+    if (!created.success) throw new Error("setup failed");
+    await archiveInspirationItemAction(created.data.id);
+    await unarchiveInspirationItemAction(created.data.id);
+
+    const result = await updateInspirationItemAction(created.data.id, { title: "Updated after restore" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.title).toBe("Updated after restore");
+  });
+});
+
+describe("SOCIAL-06E — listInspirationMediaAssetOptionsAction", () => {
+  it("requires social.create", async () => {
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(viewOnlySession);
+    const result = await listInspirationMediaAssetOptionsAction();
+    expect(result.success).toBe(false);
+  });
+
+  it("returns the caller's own workspace assets regardless of status — no approval gate", async () => {
+    writeMediaAssets([
+      mediaAsset({ id: "asset_pending", status: "pending" }),
+      mediaAsset({ id: "asset_approved", status: "approved" }),
+      mediaAsset({ id: "asset_rejected", status: "rejected" }),
+    ]);
+
+    const result = await listInspirationMediaAssetOptionsAction();
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.map((a) => a.id).sort()).toEqual(["asset_approved", "asset_pending", "asset_rejected"]);
+  });
+
+  it("never returns another workspace's assets", async () => {
+    writeMediaAssets([mediaAsset({ id: "asset_mine" }), mediaAsset({ id: "asset_theirs", workspace_id: OTHER_WORKSPACE })]);
+
+    const result = await listInspirationMediaAssetOptionsAction();
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.map((a) => a.id)).toEqual(["asset_mine"]);
   });
 });

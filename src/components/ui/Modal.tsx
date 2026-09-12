@@ -45,7 +45,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
             <CloseIcon className="h-4 w-4" />
           </button>
         </div>
-        <div className="text-sm text-text/85">{children}</div>
+        <div className="max-h-[75vh] overflow-y-auto text-sm text-text/85">{children}</div>
       </div>
     </div>
   );

@@ -7,15 +7,25 @@ import { Badge } from "@/components/ui/Badge";
 import { formatDateOnly } from "@/lib/dateFormat";
 import { archiveInspirationItemAction, unarchiveInspirationItemAction } from "@/modules/inspiration/inspirationActions";
 import { INSPIRATION_SOURCE_TYPE_LABELS, INSPIRATION_CONTENT_FORMAT_LABELS } from "@/modules/inspiration/labels";
+import { InspirationThumbnail } from "@/modules/inspiration/components/InspirationThumbnail";
 import type { InspirationItem } from "@/types/inspirationItem";
 
 interface InspirationDetailDialogProps {
   /** null closes the dialog (mirrors Modal's own `open` boolean, just keyed off the selected record instead of a separate flag). */
   item: InspirationItem | null;
   onClose: () => void;
-  /** Whether the caller holds social.create — Archive/Unarchive are hidden, not merely disabled, for a read-only viewer. The Server Actions themselves are still the real enforcement boundary. */
+  /** Whether the caller holds social.create — Edit/Archive/Unarchive are hidden, not merely disabled, for a read-only viewer. The Server Actions themselves are still the real enforcement boundary. */
   canManage: boolean;
   onChanged: (item: InspirationItem) => void;
+  /** SOCIAL-06E — opens the richer Edit dialog for this item. Absent entirely for an archived item (Edit is blocked server-side until restored — see `ARCHIVED_EDIT_ERROR`), so this prop is optional rather than always rendering a control that would just fail on click. */
+  onEdit?: (item: InspirationItem) => void;
+}
+
+function formatDuration(seconds: number): string {
+  const total = Math.round(seconds);
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  return `${minutes}:${rest.toString().padStart(2, "0")}`;
 }
 
 /** Phase 19 — only ever render a validated http/https link; the migration/SOCIAL-06C server-side validation already guarantees this for a persisted row, but this stays defensive rather than trusting that implicitly. */
@@ -35,7 +45,7 @@ function formatCreatorLine(item: InspirationItem): string | null {
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-export function InspirationDetailDialog({ item, onClose, canManage, onChanged }: InspirationDetailDialogProps) {
+export function InspirationDetailDialog({ item, onClose, canManage, onChanged, onEdit }: InspirationDetailDialogProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,6 +74,10 @@ export function InspirationDetailDialog({ item, onClose, canManage, onChanged }:
   return (
     <Modal open={item !== null} onClose={onClose} title={item.title}>
       <div className="flex flex-col gap-3">
+        {item.media_asset_id ? (
+          <InspirationThumbnail mediaAssetId={item.media_asset_id} sourceType={item.source_type} title={item.title} className="mx-auto max-w-[220px]" />
+        ) : null}
+
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge tone="accent">{INSPIRATION_SOURCE_TYPE_LABELS[item.source_type]}</Badge>
           {item.content_format ? <Badge tone="neutral">{INSPIRATION_CONTENT_FORMAT_LABELS[item.content_format]}</Badge> : null}
@@ -74,6 +88,10 @@ export function InspirationDetailDialog({ item, onClose, canManage, onChanged }:
           <a href={item.source_url} target="_blank" rel="noopener noreferrer" className="text-sm text-accent underline">
             Open source link
           </a>
+        ) : null}
+
+        {item.platform_content_id ? (
+          <p className="text-xs text-text-muted">Content ID: {item.platform_content_id}</p>
         ) : null}
 
         {creatorLine ? <p className="text-sm text-text">{creatorLine}</p> : null}
@@ -107,6 +125,7 @@ export function InspirationDetailDialog({ item, onClose, canManage, onChanged }:
         ) : null}
 
         <p className="text-xs text-text-muted">
+          {item.duration_seconds !== null ? `${formatDuration(item.duration_seconds)} · ` : ""}
           {item.published_at ? `Published ${formatDateOnly(item.published_at)} · ` : ""}
           Saved {formatDateOnly(item.created_at)}
         </p>
@@ -121,6 +140,11 @@ export function InspirationDetailDialog({ item, onClose, canManage, onChanged }:
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             Close
           </Button>
+          {canManage && !item.archived_at && onEdit ? (
+            <Button variant="secondary" onClick={() => onEdit(item)} disabled={busy}>
+              Edit
+            </Button>
+          ) : null}
           {canManage ? (
             <Button onClick={handleArchiveToggle} disabled={busy} aria-busy={busy}>
               {busy ? "Saving…" : item.archived_at ? "Restore" : "Archive"}

@@ -6,8 +6,12 @@ vi.mock("@/modules/inspiration/inspirationActions", () => ({
   archiveInspirationItemAction: vi.fn(),
   unarchiveInspirationItemAction: vi.fn(),
 }));
+vi.mock("@/lib/data", () => ({
+  getMediaAssetDownloadUrl: vi.fn(),
+}));
 
 import { archiveInspirationItemAction, unarchiveInspirationItemAction } from "@/modules/inspiration/inspirationActions";
+import { getMediaAssetDownloadUrl } from "@/lib/data";
 import { InspirationDetailDialog } from "@/modules/inspiration/components/InspirationDetailDialog";
 import type { InspirationItem } from "@/types/inspirationItem";
 
@@ -126,5 +130,61 @@ describe("InspirationDetailDialog", () => {
     render(<InspirationDetailDialog item={item()} onClose={onClose} canManage onChanged={vi.fn()} />);
     await user.click(screen.getByRole("button", { name: "Close" }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("shows the platform content ID when present, and suppresses it when null", () => {
+    const { rerender } = render(<InspirationDetailDialog item={item({ platform_content_id: "reel_abc123" })} onClose={vi.fn()} canManage onChanged={vi.fn()} />);
+    expect(screen.getByText("Content ID: reel_abc123")).toBeInTheDocument();
+
+    rerender(<InspirationDetailDialog item={item({ platform_content_id: null })} onClose={vi.fn()} canManage onChanged={vi.fn()} />);
+    expect(screen.queryByText(/Content ID/)).not.toBeInTheDocument();
+  });
+
+  it("shows duration when present, and suppresses it when null", () => {
+    const { rerender } = render(<InspirationDetailDialog item={item({ duration_seconds: 95 })} onClose={vi.fn()} canManage onChanged={vi.fn()} />);
+    expect(screen.getByText(/1:35/)).toBeInTheDocument();
+
+    rerender(<InspirationDetailDialog item={item({ duration_seconds: null })} onClose={vi.fn()} canManage onChanged={vi.fn()} />);
+    expect(screen.queryByText(/^\d+:\d{2}/)).not.toBeInTheDocument();
+  });
+
+  it("renders a MediaAsset preview when media_asset_id is present", async () => {
+    vi.mocked(getMediaAssetDownloadUrl).mockResolvedValue({ success: true, data: { url: "https://signed.example.com/photo.jpg", expiresAt: "2026-01-01T00:00:00Z" } });
+    render(<InspirationDetailDialog item={item({ media_asset_id: "asset_1" })} onClose={vi.fn()} canManage onChanged={vi.fn()} />);
+    const img = await screen.findByRole("img");
+    expect(img).toHaveAttribute("src", "https://signed.example.com/photo.jpg");
+  });
+
+  it("shows the placeholder fallback, never a broken image, when there is no MediaAsset", () => {
+    render(<InspirationDetailDialog item={item({ media_asset_id: null })} onClose={vi.fn()} canManage onChanged={vi.fn()} />);
+    expect(document.querySelector("img")).not.toBeInTheDocument();
+  });
+
+  it("shows an Edit action for an active item when canManage and onEdit are provided", () => {
+    render(<InspirationDetailDialog item={item({ archived_at: null })} onClose={vi.fn()} canManage onChanged={vi.fn()} onEdit={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+  });
+
+  it("calls onEdit with the current item when Edit is clicked", async () => {
+    const onEdit = vi.fn();
+    const user = userEvent.setup();
+    render(<InspirationDetailDialog item={item()} onClose={vi.fn()} canManage onChanged={vi.fn()} onEdit={onEdit} />);
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: "insp_1" }));
+  });
+
+  it("hides Edit for an archived item — editing is blocked server-side until restored", () => {
+    render(<InspirationDetailDialog item={item({ archived_at: "2026-09-05T00:00:00Z" })} onClose={vi.fn()} canManage onChanged={vi.fn()} onEdit={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+  });
+
+  it("hides Edit for a read-only viewer even when onEdit is provided", () => {
+    render(<InspirationDetailDialog item={item()} onClose={vi.fn()} canManage={false} onChanged={vi.fn()} onEdit={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+  });
+
+  it("hides Edit entirely when no onEdit callback is supplied", () => {
+    render(<InspirationDetailDialog item={item()} onClose={vi.fn()} canManage onChanged={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
   });
 });

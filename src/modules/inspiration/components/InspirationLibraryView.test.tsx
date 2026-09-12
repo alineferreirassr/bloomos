@@ -10,12 +10,15 @@ vi.mock("@/modules/inspiration/inspirationActions", () => ({
   createInspirationItemAction: vi.fn(),
   archiveInspirationItemAction: vi.fn(),
   unarchiveInspirationItemAction: vi.fn(),
+  updateInspirationItemAction: vi.fn(),
+  listInspirationMediaAssetOptionsAction: vi.fn(),
 }));
 
 import {
   listInspirationItemsAction,
   createInspirationItemAction,
   archiveInspirationItemAction,
+  updateInspirationItemAction,
 } from "@/modules/inspiration/inspirationActions";
 import { InspirationLibraryView } from "@/modules/inspiration/components/InspirationLibraryView";
 import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
@@ -227,5 +230,49 @@ describe("InspirationLibraryView — card open and archive", () => {
     await user.click(screen.getByRole("button", { name: "Archive" }));
     expect(archiveInspirationItemAction).toHaveBeenCalledWith("insp_1");
     await waitFor(() => expect(vi.mocked(listInspirationItemsAction).mock.calls.length).toBeGreaterThan(callsBeforeOpen));
+  });
+});
+
+describe("SOCIAL-06E — Library → Detail → Edit → Save → Detail refreshed → Library refreshed", () => {
+  it("opens Edit from Detail, closing Detail while Edit is open", async () => {
+    vi.mocked(listInspirationItemsAction).mockResolvedValue({ success: true, data: [item()] });
+    const user = userEvent.setup();
+    renderView();
+
+    await screen.findByText("Behind the Scenes at a Wedding");
+    await user.click(screen.getByRole("button", { name: /Behind the Scenes at a Wedding/ }));
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    expect(screen.queryByRole("dialog", { name: "Behind the Scenes at a Wedding" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Edit Behind the Scenes at a Wedding" })).toBeInTheDocument();
+  });
+
+  it("returns to a refreshed Detail and reloads the Library after a successful save", async () => {
+    const updated = item({ title: "Updated title" });
+    vi.mocked(listInspirationItemsAction).mockResolvedValue({ success: true, data: [item()] });
+    vi.mocked(updateInspirationItemAction).mockResolvedValue({ success: true, data: updated });
+    const user = userEvent.setup();
+    renderView();
+
+    await screen.findByText("Behind the Scenes at a Wedding");
+    await user.click(screen.getByRole("button", { name: /Behind the Scenes at a Wedding/ }));
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const callsBeforeSave = vi.mocked(listInspirationItemsAction).mock.calls.length;
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.queryByRole("dialog", { name: /^Edit /})).not.toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Updated title" })).toBeInTheDocument();
+    await waitFor(() => expect(vi.mocked(listInspirationItemsAction).mock.calls.length).toBeGreaterThan(callsBeforeSave));
+  });
+
+  it("hides Edit for a read-only member", async () => {
+    vi.mocked(listInspirationItemsAction).mockResolvedValue({ success: true, data: [item()] });
+    const user = userEvent.setup();
+    renderView(readOnlySnapshot);
+
+    await screen.findByText("Behind the Scenes at a Wedding");
+    await user.click(screen.getByRole("button", { name: /Behind the Scenes at a Wedding/ }));
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
   });
 });

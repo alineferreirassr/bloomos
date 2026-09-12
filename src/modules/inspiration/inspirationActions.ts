@@ -9,11 +9,13 @@ import {
   archiveInspirationItem,
   unarchiveInspirationItem,
   getMediaAssetById,
+  listMediaAssetsForWorkspace,
 } from "@/lib/data";
 import { validateInspirationSourceUrl, normalizeInspirationSourceUrl } from "@/lib/inspiration/normalizeUrl";
 import { inspirationItemInputSchema, inspirationItemUpdateSchema } from "@/modules/inspiration/schema";
 import type { InspirationItem, InspirationSourceType, InspirationContentFormat } from "@/types/inspirationItem";
 import type { InspirationArchivedFilter } from "@/lib/data/inspiration/repository";
+import type { MediaAsset } from "@/types/mediaAsset";
 
 /**
  * SOCIAL-06C — the production data-access/action layer for Inspiration &
@@ -28,6 +30,14 @@ import type { InspirationArchivedFilter } from "@/lib/data/inspiration/repositor
 const GENERIC_ACCESS_ERROR = "That isn't available. You may not have access to it.";
 const NOT_FOUND_ERROR = "This Inspiration item could not be found.";
 const VALIDATION_ERROR = "Please fix the highlighted fields.";
+/**
+ * SOCIAL-06E — matches the established, repeated precedent across every
+ * other archive-capable domain checked (Workflows, Document Templates,
+ * Services, Media Assets): editing an archived record is blocked, not
+ * silently allowed — restore it first. `updateInspirationItemAction` below
+ * already loads `existing` for ownership; this reuses that same fetch.
+ */
+const ARCHIVED_EDIT_ERROR = "An archived Inspiration item cannot be edited — restore it first.";
 
 type Result<T> = { success: true; data: T } | { success: false; error: string };
 
@@ -128,6 +138,7 @@ export async function updateInspirationItemAction(id: string, input: Inspiration
 
   const existing = await loadOwnedInspirationItem(id, resolved.session.workspace.id);
   if (!existing) return { success: false, error: NOT_FOUND_ERROR };
+  if (existing.archived_at) return { success: false, error: ARCHIVED_EDIT_ERROR };
 
   const parsed = inspirationItemUpdateSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: VALIDATION_ERROR };
@@ -205,6 +216,30 @@ export async function listInspirationItemsAction(filters: ListInspirationItemsAc
     return { success: true, data: items };
   } catch {
     return { success: false, error: "Could not load Inspiration items." };
+  }
+}
+
+/**
+ * SOCIAL-06E — the Edit dialog's own MediaAsset picker feed. Mirrors
+ * `listSocialMediaAssetsAction`'s exact shape (`socialPostActions.ts`):
+ * gated on this module's own permission (`social.create`, since the picker
+ * only ever renders inside the write-gated Edit flow), workspace id
+ * resolved server-side, never trusted from the browser. Deliberately no
+ * status/mime-type filter — Phase 12's own instruction that Inspiration
+ * attachment is not the Social publish-approval gate, and Inspiration may
+ * reference any file type, not just publishable JPEGs. Excludes archived
+ * assets by default (the repository's own `listMediaAssetsForWorkspace`
+ * default), matching the same "don't offer a stale/withdrawn file" logic
+ * `AssetLibraryView` already assumes.
+ */
+export async function listInspirationMediaAssetOptionsAction(): Promise<Result<MediaAsset[]>> {
+  const resolved = await requireActiveSession("social.create");
+  if (!resolved.success) return resolved;
+  try {
+    const assets = await listMediaAssetsForWorkspace(resolved.session.workspace.id);
+    return { success: true, data: assets };
+  } catch {
+    return { success: false, error: "Could not load files." };
   }
 }
 

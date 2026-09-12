@@ -16,6 +16,7 @@ import { InspirationIcon, SearchIcon } from "@/components/ui/icons";
 import { InspirationCard } from "@/modules/inspiration/components/InspirationCard";
 import { AddInspirationDialog } from "@/modules/inspiration/components/AddInspirationDialog";
 import { InspirationDetailDialog } from "@/modules/inspiration/components/InspirationDetailDialog";
+import { EditInspirationDialog } from "@/modules/inspiration/components/EditInspirationDialog";
 import { INSPIRATION_SOURCE_TYPE_LABELS, INSPIRATION_CONTENT_FORMAT_LABELS } from "@/modules/inspiration/labels";
 import { INSPIRATION_SOURCE_TYPES, INSPIRATION_CONTENT_FORMATS } from "@/types/inspirationItem";
 import type { InspirationItem, InspirationSourceType, InspirationContentFormat } from "@/types/inspirationItem";
@@ -67,6 +68,7 @@ export function InspirationLibraryView() {
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [addOpen, setAddOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InspirationItem | null>(null);
+  const [editingItem, setEditingItem] = useState<InspirationItem | null>(null);
 
   function load(next: FilterState) {
     listInspirationItemsAction(toActionFilters(next)).then((result) => {
@@ -87,6 +89,19 @@ export function InspirationLibraryView() {
   }
 
   function handleChanged(item: InspirationItem) {
+    setSelectedItem(item);
+    reload();
+  }
+
+  /** Library → Detail → Edit — closes Detail while Edit is open (only one dialog visible at a time), rather than stacking two Modals. */
+  function handleEdit(item: InspirationItem) {
+    setEditingItem(item);
+    setSelectedItem(null);
+  }
+
+  /** Edit → Save → Detail refreshed → Library refreshed, per the checkpoint's own UX phase. */
+  function handleSaved(item: InspirationItem) {
+    setEditingItem(null);
     setSelectedItem(item);
     reload();
   }
@@ -197,7 +212,14 @@ export function InspirationLibraryView() {
       )}
 
       <AddInspirationDialog open={addOpen} onClose={() => setAddOpen(false)} onCreated={handleCreated} />
-      <InspirationDetailDialog item={selectedItem} onClose={() => setSelectedItem(null)} canManage={canCreate} onChanged={handleChanged} />
+      <InspirationDetailDialog
+        item={selectedItem}
+        onClose={() => setSelectedItem(null)}
+        canManage={canCreate}
+        onChanged={handleChanged}
+        onEdit={canCreate ? handleEdit : undefined}
+      />
+      <EditInspirationDialog item={editingItem} onClose={() => setEditingItem(null)} onSaved={handleSaved} />
     </div>
   );
 }
