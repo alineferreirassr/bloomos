@@ -10,6 +10,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Tabs, TabList, Tab, TabPanel } from "@/components/ui/Tabs";
 import { SocialFeedPreview } from "@/modules/socialPosts/components/SocialFeedPreview";
+import { SocialAnalyticsView } from "@/modules/socialPosts/components/SocialAnalyticsView";
 import {
   listSocialPostsAction,
   createSocialPostAction,
@@ -126,7 +127,7 @@ export function SocialPostsView() {
   const [scheduleDialog, setScheduleDialog] = useState<ScheduleDialogState | null>(null);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<{ id: string; message: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<"posts" | "feed">("posts");
+  const [activeTab, setActiveTab] = useState<"posts" | "feed" | "analytics">("posts");
 
   function applyPanelData(data: PanelData | null) {
     if (!data) {
@@ -272,10 +273,11 @@ export function SocialPostsView() {
     <div className="flex flex-col gap-4">
       <PageHeader title="Social" subtitle="Publish Instagram posts using Amoré Bloom's connected Meta account." />
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "posts" | "feed")}>
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "posts" | "feed" | "analytics")}>
         <TabList aria-label="Social views">
           <Tab value="posts">Posts</Tab>
           <Tab value="feed">Feed Preview</Tab>
+          <Tab value="analytics">Analytics</Tab>
         </TabList>
 
         <TabPanel value="posts" className="mt-4 flex flex-col gap-4">
@@ -458,6 +460,10 @@ export function SocialPostsView() {
             publishingId={publishingId}
             cancelingId={cancelingId}
           />
+        </TabPanel>
+
+        <TabPanel value="analytics" className="mt-4">
+          <SocialAnalyticsView />
         </TabPanel>
       </Tabs>
 

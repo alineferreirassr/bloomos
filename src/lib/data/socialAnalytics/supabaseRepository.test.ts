@@ -27,6 +27,7 @@ function createMockSupabase(responses: QueryResult[]) {
       };
     b.select = chain("select");
     b.eq = chain("eq");
+    b.in = chain("in");
     b.order = chain("order");
     b.upsert = chain("upsert");
     b.maybeSingle = async () => {
@@ -197,6 +198,42 @@ describe("supabaseSocialAnalyticsRepository — post snapshot list/latest", () =
     vi.mocked(createClient).mockReturnValue(client as never);
     const latest = await supabaseSocialAnalyticsRepository.getLatestSocialPostMetricSnapshot("workspace_1", "social_post_1");
     expect(latest).toBeNull();
+  });
+
+  describe("listLatestSocialPostMetricSnapshotsForWorkspace — SOCIAL-05E batch read", () => {
+    it("reduces to exactly one (latest) row per post from a single query — no N+1", async () => {
+      const { client, calls } = createMockSupabase([
+        {
+          data: [
+            postSnapshotRow({ id: "snap_p1_new", social_post_id: "social_post_1", snapshot_date: "2026-09-17" }),
+            postSnapshotRow({ id: "snap_p1_old", social_post_id: "social_post_1", snapshot_date: "2026-09-15" }),
+            postSnapshotRow({ id: "snap_p2", social_post_id: "social_post_2", snapshot_date: "2026-09-16", reach: 99 }),
+          ],
+          error: null,
+        },
+      ]);
+      vi.mocked(createClient).mockReturnValue(client as never);
+
+      const results = await supabaseSocialAnalyticsRepository.listLatestSocialPostMetricSnapshotsForWorkspace("workspace_1", ["social_post_1", "social_post_2"]);
+      expect(results).toHaveLength(2);
+      const byPost = new Map(results.map((r) => [r.social_post_id, r]));
+      expect(byPost.get("social_post_1")?.id).toBe("snap_p1_new");
+      expect(byPost.get("social_post_2")?.reach).toBe(99);
+
+      const inCall = calls.find((c) => c.method === "in");
+      expect(inCall?.args).toEqual(["social_post_id", ["social_post_1", "social_post_2"]]);
+      // Exactly one query for the whole batch — the harness would throw
+      // "no mock response queued" on a second call, which itself proves no N+1.
+      expect(calls.filter((c) => c.method === "then")).toHaveLength(1);
+    });
+
+    it("returns an empty array without querying Supabase at all when given no post ids", async () => {
+      const { client, calls } = createMockSupabase([]);
+      vi.mocked(createClient).mockReturnValue(client as never);
+      const results = await supabaseSocialAnalyticsRepository.listLatestSocialPostMetricSnapshotsForWorkspace("workspace_1", []);
+      expect(results).toEqual([]);
+      expect(calls).toHaveLength(0);
+    });
   });
 });
 

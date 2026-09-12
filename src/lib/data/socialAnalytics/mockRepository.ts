@@ -66,6 +66,17 @@ async function getLatestSocialPostMetricSnapshot(workspaceId: string, socialPost
   return history[0] ?? null;
 }
 
+async function listLatestSocialPostMetricSnapshotsForWorkspace(workspaceId: string, socialPostIds: string[]): Promise<SocialPostMetricSnapshot[]> {
+  const idSet = new Set(socialPostIds);
+  const latestByPost = new Map<string, SocialPostMetricSnapshot>();
+  for (const snapshot of readPostMetricSnapshots()) {
+    if (snapshot.workspace_id !== workspaceId || !idSet.has(snapshot.social_post_id)) continue;
+    const current = latestByPost.get(snapshot.social_post_id);
+    if (!current || snapshot.snapshot_date > current.snapshot_date) latestByPost.set(snapshot.social_post_id, snapshot);
+  }
+  return [...latestByPost.values()];
+}
+
 async function upsertSocialAccountMetricSnapshot(input: UpsertSocialAccountMetricSnapshotInput): Promise<DataResult<SocialAccountMetricSnapshot>> {
   const existing = readAccountMetricSnapshots().find(
     (s) => s.workspace_id === input.workspaceId && s.instagram_account_id === input.instagramAccountId && s.metric_date === input.metricDate,
@@ -102,6 +113,7 @@ export const mockSocialAnalyticsRepository: SocialAnalyticsRepository = {
   upsertSocialPostMetricSnapshot,
   listSocialPostMetricSnapshots,
   getLatestSocialPostMetricSnapshot,
+  listLatestSocialPostMetricSnapshotsForWorkspace,
   upsertSocialAccountMetricSnapshot,
   listSocialAccountMetricSnapshots,
   getLatestSocialAccountMetricSnapshot,

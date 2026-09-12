@@ -1299,6 +1299,10 @@ export async function getLatestSocialPostMetricSnapshot(workspaceId: string, soc
   return socialAnalyticsRepository().getLatestSocialPostMetricSnapshot(workspaceId, socialPostId);
 }
 
+export async function listLatestSocialPostMetricSnapshotsForWorkspace(workspaceId: string, socialPostIds: string[]): Promise<SocialPostMetricSnapshot[]> {
+  return socialAnalyticsRepository().listLatestSocialPostMetricSnapshotsForWorkspace(workspaceId, socialPostIds);
+}
+
 export async function upsertSocialAccountMetricSnapshot(input: UpsertSocialAccountMetricSnapshotInput): Promise<DataResult<SocialAccountMetricSnapshot>> {
   return socialAnalyticsRepository().upsertSocialAccountMetricSnapshot(input);
 }

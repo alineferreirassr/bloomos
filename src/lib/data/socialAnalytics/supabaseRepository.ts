@@ -91,6 +91,32 @@ async function getLatestSocialPostMetricSnapshot(workspaceId: string, socialPost
   return history[0] ?? null;
 }
 
+/**
+ * SOCIAL-05E — one bounded query for the dashboard's own post-performance
+ * table (Phase 18's own explicit N+1 prohibition). Fetches every snapshot
+ * for the given posts ordered by snapshot_date descending, then reduces in
+ * application code to the first (= latest) row per social_post_id —
+ * avoids a `DISTINCT ON` the Supabase query builder has no direct
+ * equivalent for, without resorting to raw SQL.
+ */
+async function listLatestSocialPostMetricSnapshotsForWorkspace(workspaceId: string, socialPostIds: string[]): Promise<SocialPostMetricSnapshot[]> {
+  if (socialPostIds.length === 0) return [];
+  const supabase = createSupabaseClient();
+  const { data, error } = await supabase
+    .from("social_post_metric_snapshots")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .in("social_post_id", socialPostIds)
+    .order("snapshot_date", { ascending: false });
+  if (error) throw normalizeSupabaseError(error);
+
+  const latestByPost = new Map<string, SocialPostMetricSnapshot>();
+  for (const row of data ?? []) {
+    if (!latestByPost.has(row.social_post_id)) latestByPost.set(row.social_post_id, mapSocialPostMetricSnapshotRow(row));
+  }
+  return [...latestByPost.values()];
+}
+
 async function upsertSocialAccountMetricSnapshot(input: UpsertSocialAccountMetricSnapshotInput): Promise<DataResult<SocialAccountMetricSnapshot>> {
   const supabase = createSupabaseClient();
   const { data, error } = await supabase
@@ -134,6 +160,7 @@ export const supabaseSocialAnalyticsRepository: SocialAnalyticsRepository = {
   upsertSocialPostMetricSnapshot,
   listSocialPostMetricSnapshots,
   getLatestSocialPostMetricSnapshot,
+  listLatestSocialPostMetricSnapshotsForWorkspace,
   upsertSocialAccountMetricSnapshot,
   listSocialAccountMetricSnapshots,
   getLatestSocialAccountMetricSnapshot,

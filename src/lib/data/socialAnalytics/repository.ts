@@ -49,6 +49,16 @@ export interface SocialAnalyticsRepository {
   upsertSocialPostMetricSnapshot(input: UpsertSocialPostMetricSnapshotInput): Promise<DataResult<SocialPostMetricSnapshot>>;
   listSocialPostMetricSnapshots(workspaceId: string, socialPostId: string): Promise<SocialPostMetricSnapshot[]>;
   getLatestSocialPostMetricSnapshot(workspaceId: string, socialPostId: string): Promise<SocialPostMetricSnapshot | null>;
+  /**
+   * SOCIAL-05E — one bounded query for the dashboard's own post-performance
+   * table, never one `getLatestSocialPostMetricSnapshot` call per post
+   * (Phase 18's own explicit N+1 prohibition). Returns at most one row per
+   * `socialPostId` — the latest by `snapshot_date`, the same logical
+   * time-series axis every other read here already uses, never
+   * `captured_at`. A post with no snapshot yet is simply absent from the
+   * result — the caller must treat that as "no data," never synthesize one.
+   */
+  listLatestSocialPostMetricSnapshotsForWorkspace(workspaceId: string, socialPostIds: string[]): Promise<SocialPostMetricSnapshot[]>;
 
   upsertSocialAccountMetricSnapshot(input: UpsertSocialAccountMetricSnapshotInput): Promise<DataResult<SocialAccountMetricSnapshot>>;
   listSocialAccountMetricSnapshots(workspaceId: string, instagramAccountId: string): Promise<SocialAccountMetricSnapshot[]>;

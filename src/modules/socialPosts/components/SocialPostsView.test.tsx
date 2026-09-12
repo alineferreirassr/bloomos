@@ -21,6 +21,16 @@ vi.mock("@/lib/data", () => ({
   getMediaAssetDownloadUrl: vi.fn(),
 }));
 
+// SOCIAL-05E — pulls in "use server" actions of its own (a separate
+// server/client boundary jsdom can't cross) and is independently tested in
+// SocialAnalyticsView.test.tsx — stubbed here to isolate exactly the
+// Posts/Feed Preview/tab-switching behavior this file actually exercises,
+// matching AssetDetailView.test.tsx's own established "detail view
+// composes independently-tested panels" precedent.
+vi.mock("@/modules/socialPosts/components/SocialAnalyticsView", () => ({
+  SocialAnalyticsView: () => <div data-testid="social-analytics-view-stub" />,
+}));
+
 import {
   listSocialPostsAction,
   createSocialPostAction,
@@ -657,5 +667,28 @@ describe("SocialPostsView — SOCIAL-04D Feed Preview", () => {
     await waitFor(() => expect(publishSocialPostNowAction).toHaveBeenCalledWith("p1"));
     await user.click(screen.getByRole("tab", { name: "Posts" }));
     expect(await screen.findByText("Published")).toBeInTheDocument();
+  });
+});
+
+describe("SocialPostsView — SOCIAL-05E Analytics tab", () => {
+  it("shows an Analytics tab alongside Posts and Feed Preview, and switching to it renders the (stubbed, independently-tested) analytics view", async () => {
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: null });
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
+
+    const user = userEvent.setup();
+    render(<SocialPostsView />);
+    await screen.findByText("No social posts yet.");
+
+    expect(screen.getByRole("tab", { name: "Posts" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Feed Preview" })).toBeInTheDocument();
+    const analyticsTab = screen.getByRole("tab", { name: "Analytics" });
+    expect(analyticsTab).toBeInTheDocument();
+
+    await user.click(analyticsTab);
+    expect(screen.getByTestId("social-analytics-view-stub")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Posts" }));
+    expect(screen.queryByTestId("social-analytics-view-stub")).not.toBeInTheDocument();
   });
 });

@@ -193,6 +193,39 @@ describe("mockSocialAnalyticsRepository — post snapshot history/latest/workspa
   });
 });
 
+describe("mockSocialAnalyticsRepository.listLatestSocialPostMetricSnapshotsForWorkspace — SOCIAL-05E batch read", () => {
+  it("returns exactly one (latest) row per requested post, in a single bounded read — no N+1", async () => {
+    writeSocialPosts([seedPost(), seedPost({ id: "social_post_2", provider_post_id: "17900000000000002" })]);
+    await mockSocialAnalyticsRepository.upsertSocialPostMetricSnapshot({ workspaceId: WORKSPACE_ID, socialPostId: "social_post_1", providerMediaId: "p1", snapshotDate: "2026-09-15", metrics: { reach: 10 }, rawMetrics: {} });
+    await mockSocialAnalyticsRepository.upsertSocialPostMetricSnapshot({ workspaceId: WORKSPACE_ID, socialPostId: "social_post_1", providerMediaId: "p1", snapshotDate: "2026-09-17", metrics: { reach: 30 }, rawMetrics: {} });
+    await mockSocialAnalyticsRepository.upsertSocialPostMetricSnapshot({ workspaceId: WORKSPACE_ID, socialPostId: "social_post_2", providerMediaId: "p2", snapshotDate: "2026-09-16", metrics: { reach: 99 }, rawMetrics: {} });
+
+    const results = await mockSocialAnalyticsRepository.listLatestSocialPostMetricSnapshotsForWorkspace(WORKSPACE_ID, ["social_post_1", "social_post_2"]);
+    expect(results).toHaveLength(2);
+    const byPost = new Map(results.map((r) => [r.social_post_id, r]));
+    expect(byPost.get("social_post_1")?.snapshot_date).toBe("2026-09-17");
+    expect(byPost.get("social_post_1")?.reach).toBe(30);
+    expect(byPost.get("social_post_2")?.reach).toBe(99);
+  });
+
+  it("a post with no snapshot yet is simply absent from the result — never synthesized", async () => {
+    writeSocialPosts([seedPost(), seedPost({ id: "social_post_2", provider_post_id: "17900000000000002" })]);
+    await mockSocialAnalyticsRepository.upsertSocialPostMetricSnapshot({ workspaceId: WORKSPACE_ID, socialPostId: "social_post_1", providerMediaId: "p1", metrics: { reach: 10 }, rawMetrics: {} });
+
+    const results = await mockSocialAnalyticsRepository.listLatestSocialPostMetricSnapshotsForWorkspace(WORKSPACE_ID, ["social_post_1", "social_post_2"]);
+    expect(results).toHaveLength(1);
+    expect(results[0].social_post_id).toBe("social_post_1");
+  });
+
+  it("never returns another workspace's snapshot, even for a requested post id", async () => {
+    seedPost({ workspace_id: OTHER_WORKSPACE_ID });
+    await mockSocialAnalyticsRepository.upsertSocialPostMetricSnapshot({ workspaceId: OTHER_WORKSPACE_ID, socialPostId: "social_post_1", providerMediaId: "p1", metrics: { reach: 999 }, rawMetrics: {} });
+
+    const results = await mockSocialAnalyticsRepository.listLatestSocialPostMetricSnapshotsForWorkspace(WORKSPACE_ID, ["social_post_1"]);
+    expect(results).toHaveLength(0);
+  });
+});
+
 describe("mockSocialAnalyticsRepository — account snapshots", () => {
   it("inserts and preserves nullable metrics and raw_metrics", async () => {
     const result = await mockSocialAnalyticsRepository.upsertSocialAccountMetricSnapshot({
