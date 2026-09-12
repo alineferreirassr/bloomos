@@ -45,6 +45,7 @@ import {
   AlarmClock,
   Pin,
   CalendarClock,
+  Lightbulb,
 } from "lucide-react";
 
 type IconProps = SVGProps<SVGSVGElement>;
@@ -257,4 +258,9 @@ export function PinIcon(props: IconProps) {
 /** Enterprise Scheduling Platform (top-level nav module, relocated from `/calendar` to `/scheduling` during the Advanced Calendar phase) — availability windows/reservations/buffers/capacity, distinct from EventsIcon's plain Calendar (now the Advanced Calendar's own icon). */
 export function SchedulingIcon(props: IconProps) {
   return <CalendarClock strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** SOCIAL-06D — Inspiration & Reference Library. `Sparkles` is already BloomAiIcon's own mark, so this uses a distinct glyph (a literal "idea" lightbulb) rather than reusing it. */
+export function InspirationIcon(props: IconProps) {
+  return <Lightbulb strokeWidth={2} aria-hidden="true" {...props} />;
 }

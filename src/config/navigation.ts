@@ -13,6 +13,7 @@ import {
   FinanceIcon,
   GridViewIcon,
   InboxIcon,
+  InspirationIcon,
   IntegrationsIcon,
   InventoryIcon,
   MarketplaceIcon,
@@ -164,6 +165,10 @@ export const navigationModules: NavModule[] = [
   { id: "documents", label: "Documents", icon: DocumentsIcon, href: "/documents", group: "knowledge" },
   { id: "assets", label: "Asset Library", icon: AssetsIcon, href: "/assets", group: "knowledge", keywords: ["dam", "media"] },
   { id: "document-templates", label: "Document Templates", icon: DocumentTemplatesIcon, href: "/document-templates", group: "knowledge" },
+  // SOCIAL-06D — a saved-reference library (like Documents/Assets), not a
+  // Social publishing surface, hence "knowledge" rather than "business"
+  // (where Social itself lives).
+  { id: "inspiration", label: "Inspiration", icon: InspirationIcon, href: "/inspiration", group: "knowledge", keywords: ["reference", "swipe file", "content ideas"] },
 
   { id: "team", label: "Team", icon: TeamIcon, href: "/team", group: "team" },
   { id: "team-operations", label: "Team Operations", icon: TeamIcon, href: "/team/operations", group: "team" },

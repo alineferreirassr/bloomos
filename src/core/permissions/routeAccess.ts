@@ -49,6 +49,12 @@ export const ROUTE_ACCESS_MAP: RouteAccessEntry[] = [
   { prefix: "/operations", requirement: { kind: "permission", permission: "events.view" } },
   { prefix: "/contracts", requirement: { kind: "permission", permission: "contracts.view" } },
   { prefix: "/social", requirement: { kind: "permission", permission: "social.view" } },
+  // SOCIAL-06D — Inspiration & Reference Library. A dedicated route, not a
+  // /social tab (the creative pipeline it serves is broader than Social
+  // publishing) — same social.view/social.create split SOCIAL-06C's own
+  // repository/action layer already enforces (read here, write inside each
+  // Server Action). No new permission.
+  { prefix: "/inspiration", requirement: { kind: "permission", permission: "social.view" } },
   // Finance F1 gated these on `events.view` (provisional — these two had no
   // entry at all before, closing an open-to-everyone gap was the priority).
   // Finance F1.5 revisits that choice: both pages display real financial
