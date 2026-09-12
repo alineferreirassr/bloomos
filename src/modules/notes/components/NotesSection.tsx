@@ -58,6 +58,7 @@ const OWNER_LABEL: Record<EntityType, string> = {
   resource_bundle: "Resource Bundle",
   report: "Report",
   document_bundle: "Document Bundle",
+  inspiration_item: "Inspiration",
 };
 
 /**

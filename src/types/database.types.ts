@@ -2524,6 +2524,12 @@ export interface Database {
         Update: { id?: string; workspace_id?: string; instagram_account_id?: string; metric_date?: string; reach?: number | null; profile_views?: number | null; raw_metrics?: Json; created_at?: string };
         Relationships: [];
       };
+      inspiration_items: {
+        Row: { id: string; workspace_id: string; title: string; source_type: string; source_url: string | null; normalized_source_url: string | null; creator_name: string | null; creator_handle: string | null; platform_content_id: string | null; content_format: string | null; hook: string | null; cta: string | null; why_it_works: string | null; notes: string | null; duration_seconds: number | null; published_at: string | null; media_asset_id: string | null; archived_at: string | null; created_by: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; title: string; source_type: string; source_url?: string | null; normalized_source_url?: string | null; creator_name?: string | null; creator_handle?: string | null; platform_content_id?: string | null; content_format?: string | null; hook?: string | null; cta?: string | null; why_it_works?: string | null; notes?: string | null; duration_seconds?: number | null; published_at?: string | null; media_asset_id?: string | null; archived_at?: string | null; created_by?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; title?: string; source_type?: string; source_url?: string | null; normalized_source_url?: string | null; creator_name?: string | null; creator_handle?: string | null; platform_content_id?: string | null; content_format?: string | null; hook?: string | null; cta?: string | null; why_it_works?: string | null; notes?: string | null; duration_seconds?: number | null; published_at?: string | null; media_asset_id?: string | null; archived_at?: string | null; created_by?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
       oauth_pending_authorizations: {
         Row: { state: string; workspace_id: string; member_id: string | null; provider_id: string; connection_id: string; redirect_uri: string; code_verifier_ref: string | null; created_at: string; expires_at: string };
         Insert: { state: string; workspace_id: string; member_id?: string | null; provider_id: string; connection_id: string; redirect_uri: string; code_verifier_ref?: string | null; created_at?: string; expires_at: string };

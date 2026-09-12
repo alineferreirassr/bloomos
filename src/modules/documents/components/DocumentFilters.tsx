@@ -70,6 +70,7 @@ export const OWNER_TYPE_LABELS: Record<EntityType, string> = {
   resource_bundle: "Resource Bundle",
   report: "Report",
   document_bundle: "Document Bundle",
+  inspiration_item: "Inspiration",
 };
 
 export type DocumentSortField = "title" | "uploaded_at" | "updated_at" | "size_bytes" | "expires_at" | "version";

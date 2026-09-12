@@ -98,6 +98,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // tracked, not-yet-released, unrelated to the Finance release this
   // exact-count assertion describes.
   "20260918100000_social_analytics_snapshot_foundation.sql",
+  // SOCIAL-06B — Inspiration & Reference Library data foundation.
+  // Independently-tracked, not-yet-released, unrelated to the Finance
+  // release this exact-count assertion describes.
+  "20260919100000_inspiration_items_foundation.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {
@@ -4509,5 +4513,144 @@ describe("SOCIAL-05C migration — Instagram analytics snapshot foundation", () 
     const code = stripSqlComments(sql()).toLowerCase();
     expect(code).not.toMatch(/cron/);
     expect(code).not.toMatch(/graph\.facebook\.com/);
+  });
+});
+
+describe("SOCIAL-06B migration — Inspiration & Reference Library data foundation", () => {
+  function sql(): string {
+    return readMigration("20260919100000_inspiration_items_foundation.sql");
+  }
+
+  it("creates exactly one new table: inspiration_items", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create table if not exists public\.inspiration_items/);
+    const createTableMatches = code.match(/create table/gi) ?? [];
+    expect(createTableMatches).toHaveLength(1);
+  });
+
+  it("requires workspace_id, title, source_type, created_at, updated_at — every other column is nullable", () => {
+    const code = stripSqlComments(sql());
+    const table = code.slice(code.indexOf("create table if not exists public.inspiration_items"), code.indexOf("comment on table public.inspiration_items"));
+    expect(table).toMatch(/workspace_id uuid not null references public\.workspaces \(id\) on delete cascade/);
+    expect(table).toMatch(/title text not null/);
+    expect(table).toMatch(/source_type text not null/);
+    expect(table).toMatch(/created_at timestamptz not null default now\(\)/);
+    expect(table).toMatch(/updated_at timestamptz not null default now\(\)/);
+
+    for (const nullableColumn of [
+      "source_url text",
+      "normalized_source_url text",
+      "creator_name text",
+      "creator_handle text",
+      "platform_content_id text",
+      "content_format text",
+      "hook text",
+      "cta text",
+      "why_it_works text",
+      "notes text",
+      "duration_seconds integer",
+      "published_at timestamptz",
+      "archived_at timestamptz",
+    ]) {
+      const line = table.split("\n").find((l) => l.trim().startsWith(nullableColumn));
+      expect(line, `expected a nullable "${nullableColumn}" column`).toBeDefined();
+      expect(line).not.toMatch(/not null/);
+    }
+  });
+
+  it("media_asset_id is a nullable FK to media_assets with on delete set null — an optional reference, never a duplicated upload", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/media_asset_id uuid references public\.media_assets \(id\) on delete set null/);
+  });
+
+  it("created_by is a nullable FK to auth.users with on delete set null, mirroring social_posts' own exact convention", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/created_by uuid references auth\.users \(id\) on delete set null/);
+  });
+
+  it("constrains source_type, content_format (nullable), and duration_seconds to the exact expected values", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/constraint inspiration_items_source_type_check\s*\n\s*check \(source_type in \('instagram', 'tiktok', 'youtube', 'pinterest', 'website', 'manual', 'other'\)\)/);
+    expect(code).toMatch(/constraint inspiration_items_content_format_check\s*\n\s*check \(content_format is null or content_format in \('reel', 'carousel', 'story', 'static', 'video', 'other'\)\)/);
+    expect(code).toMatch(/constraint inspiration_items_duration_seconds_check\s*\n\s*check \(duration_seconds is null or duration_seconds >= 0\)/);
+  });
+
+  it("never adds platform_caption, status, is_archived, used_at, timeline, AI, or collection/idea/script columns", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    for (const forbidden of [
+      "platform_caption",
+      "full_caption",
+      "original_caption",
+      "transcript",
+      "original_text",
+      "source_text",
+      "verbatim_content",
+      " status ",
+      "is_archived",
+      "used_at",
+      "timeline_breakdown",
+      "collection_id",
+      "idea_id",
+      "script_id",
+    ]) {
+      expect(code).not.toContain(forbidden);
+    }
+  });
+
+  it("creates exactly the two partial unique indexes for duplicate protection — manual references remain unrestricted", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create unique index if not exists inspiration_items_workspace_normalized_url_unique\s*\n\s*on public\.inspiration_items \(workspace_id, normalized_source_url\)\s*\n\s*where normalized_source_url is not null;/);
+    expect(code).toMatch(/create unique index if not exists inspiration_items_workspace_source_content_id_unique\s*\n\s*on public\.inspiration_items \(workspace_id, source_type, platform_content_id\)\s*\n\s*where platform_content_id is not null;/);
+  });
+
+  it("creates exactly the three query indexes — no full-text, no creator index, no speculative index", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create index if not exists inspiration_items_workspace_source_type_idx\s*\n\s*on public\.inspiration_items \(workspace_id, source_type\);/);
+    expect(code).toMatch(/create index if not exists inspiration_items_workspace_archived_idx\s*\n\s*on public\.inspiration_items \(workspace_id, archived_at\);/);
+    expect(code).toMatch(/create index if not exists inspiration_items_workspace_created_idx\s*\n\s*on public\.inspiration_items \(workspace_id, created_at desc\);/);
+    // 3 plain query indexes here + the 2 partial unique indexes asserted in
+    // the duplicate-protection test above = 5 index-creation statements total.
+    const indexMatches = code.match(/create (?:unique )?index/gi) ?? [];
+    expect(indexMatches).toHaveLength(5);
+  });
+
+  it("reuses the existing set_updated_at() trigger function, mirroring social_posts' own exact pattern", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create trigger trg_inspiration_items_set_updated_at\s*\n\s*before update on public\.inspiration_items\s*\n\s*for each row execute function public\.set_updated_at\(\);/);
+  });
+
+  it("enables RLS with SELECT/INSERT/UPDATE-only workspace-member policies — explicitly no DELETE policy and no service-role grant", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/alter table public\.inspiration_items enable row level security;/);
+    expect(code).toMatch(/create policy "inspiration_items_select_workspace_member"\s*\n\s*on public\.inspiration_items for select\s*\n\s*to authenticated\s*\n\s*using \(public\.is_workspace_member\(workspace_id\)\);/);
+    expect(code).toMatch(/create policy "inspiration_items_insert_workspace_member"\s*\n\s*on public\.inspiration_items for insert\s*\n\s*to authenticated\s*\n\s*with check \(public\.is_workspace_member\(workspace_id\)\);/);
+    expect(code).toMatch(/create policy "inspiration_items_update_workspace_member"\s*\n\s*on public\.inspiration_items for update\s*\n\s*to authenticated\s*\n\s*using \(public\.is_workspace_member\(workspace_id\)\)\s*\n\s*with check \(public\.is_workspace_member\(workspace_id\)\);/);
+
+    const policyMatches = code.match(/create policy/gi) ?? [];
+    expect(policyMatches).toHaveLength(3);
+    expect(code).not.toMatch(/for delete/i);
+    expect(code).not.toMatch(/to service_role/i);
+    expect(code).not.toMatch(/grant execute/i);
+  });
+
+  it("never touches media_assets, social_posts, media_folders, media_collections, or any other existing table", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    for (const line of code.split("\n")) {
+      if (/^alter table/.test(line.trim())) {
+        expect(line).toMatch(/public\.inspiration_items/);
+      }
+    }
+    expect(code).not.toMatch(/create table.*media_folders/);
+    expect(code).not.toMatch(/create table.*media_collections/);
+    expect(code).not.toMatch(/alter table public\.social_posts/);
+    expect(code).not.toMatch(/alter table public\.media_assets/);
+  });
+
+  it("never disables RLS or drops a table, and creates no AI/collection/idea/script table", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/disable row level security/);
+    expect(code).not.toMatch(/drop table/);
+    expect(code).not.toMatch(/\bdelete from\b/);
+    expect(code).not.toMatch(/create table.*(ai_|collection|idea|script)/);
   });
 });

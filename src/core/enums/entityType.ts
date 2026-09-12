@@ -168,6 +168,19 @@ export const ENTITY_TYPES = [
   // not something this checkpoint's own new Bundle entity should be
   // blocked on.
   "document_bundle",
+  // SOCIAL-06B — Inspiration & Reference Library. An `InspirationItem`
+  // (`types/inspirationItem.ts`) is a real, persisted, workspace-scoped
+  // entity with its own `id` — the same bar `report`/`document_bundle` met
+  // above — so it can be tagged via the existing `Tag`/`TagAssignment`
+  // system (`types/tag.ts`) without inventing a parallel tagging
+  // mechanism. Being a real `EntityType` also makes it a
+  // `KnowledgeNodeType` for free (`types/knowledgeGraph.ts` spreads
+  // `ENTITY_TYPES`) — no separate Knowledge Graph addition needed. Neither
+  // the Tag/TagAssignment system nor the Knowledge Graph has a live
+  // Supabase migration today (both remain mock-only — confirmed fresh
+  // this checkpoint), so this is a pure TypeScript-only widening with zero
+  // database impact.
+  "inspiration_item",
 ] as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[number];
