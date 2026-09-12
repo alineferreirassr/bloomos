@@ -13,3 +13,47 @@ export const socialPostDraftSchema = z.object({
 });
 
 export type SocialPostDraftInput = z.infer<typeof socialPostDraftSchema>;
+
+/**
+ * SOCIAL-04B — validates a `Date` is parseable and genuinely in the future
+ * (a schedule for "now or the past" would be immediately due, which is
+ * confusing UX rather than a real use case) without pinning an arbitrary
+ * minimum lead time SOCIAL-04A's own audit never proved necessary.
+ */
+const futureInstant = z
+  .string()
+  .trim()
+  .min(1, "Choose a date and time")
+  .refine((value) => !Number.isNaN(Date.parse(value)), "That date and time isn't valid")
+  .refine((value) => Date.parse(value) > Date.now(), "Choose a time in the future");
+
+/**
+ * IANA timezone identifiers have no practical schema to validate against
+ * directly (SOCIAL-04A's own audit found no workspace-level timezone
+ * convention to reuse) — `Intl.DateTimeFormat` throws a `RangeError` for
+ * anything that isn't a real IANA zone, which is the standard, dependency-free
+ * way to validate one in JS without hand-maintaining IANA's own zone list.
+ */
+function isValidIanaTimezone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat(undefined, { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const timezoneField = z
+  .string()
+  .trim()
+  .min(1)
+  .refine(isValidIanaTimezone, "That timezone isn't recognized")
+  .nullable()
+  .optional();
+
+export const socialPostScheduleSchema = z.object({
+  scheduled_at: futureInstant,
+  scheduled_timezone: timezoneField,
+});
+
+export type SocialPostScheduleInput = z.infer<typeof socialPostScheduleSchema>;

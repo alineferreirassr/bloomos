@@ -1305,6 +1305,10 @@ export function mapSocialPostRow(row: SocialPostRow): SocialPost {
     provider_permalink: row.provider_permalink,
     provider_error: row.provider_error,
     published_at: row.published_at,
+    scheduled_at: row.scheduled_at,
+    scheduled_timezone: row.scheduled_timezone,
+    publish_attempts: row.publish_attempts,
+    next_attempt_at: row.next_attempt_at,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };

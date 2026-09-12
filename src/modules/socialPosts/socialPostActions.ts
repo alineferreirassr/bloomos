@@ -8,6 +8,9 @@ import {
   setSocialPostContainerId,
   markSocialPostPublished,
   markSocialPostFailed,
+  scheduleSocialPost,
+  rescheduleSocialPost,
+  cancelSocialPostSchedule,
   listSocialPosts,
   getSocialPost,
   getMediaAssetById,
@@ -18,6 +21,9 @@ import { getCredential, resolveAccessToken } from "@/core/integrations/credentia
 import { MetaProvider, isMetaAuthError, isMetaRateLimitError } from "@/core/integrations/providers/meta/metaProvider";
 import { sanitizeIntegrationError } from "@/core/integrations/errorSanitizer";
 import { insertErrorRecord } from "@/lib/data/core/integrations/errorRecordStore";
+import { executeSocialPostPublish } from "@/core/social/socialPublishExecution";
+import { RECONNECT_ERROR } from "@/core/social/socialSchedulingPolicy";
+import { socialPostScheduleSchema } from "@/modules/socialPosts/schema";
 import type { SocialPost } from "@/types/socialPost";
 import type { IntegrationConnection } from "@/core/integrations/types";
 
@@ -34,7 +40,6 @@ import type { IntegrationConnection } from "@/core/integrations/types";
 
 const GENERIC_ACCESS_ERROR = "That isn't available. You may not have access to it.";
 const NOT_FOUND_ERROR = "This social post could not be found.";
-const RECONNECT_ERROR = "Reconnect Meta to enable publishing.";
 const RECONNECT_ANALYTICS_ERROR = "Reconnect Meta to enable Instagram analytics.";
 const NOT_ELIGIBLE_FOR_INSIGHTS_ERROR = "Insights are only available for a post BloomOS has published to Instagram.";
 const RATE_LIMITED_ERROR = "Instagram is rate-limiting requests right now. Try again in a few minutes.";
@@ -193,9 +198,13 @@ export async function publishSocialPostNowAction(id: string): Promise<Result<Soc
   const existing = await loadOwnedPost(id, resolved.session.workspace.id);
   if (!existing) return { success: false, error: NOT_FOUND_ERROR };
 
+  // The real idempotency guard, and (SOCIAL-04B) the manual-vs-scheduler
+  // race resolver: this same atomic status transition is exactly what
+  // `claim_due_social_posts()` also competes on — whichever commits first
+  // wins, the other gets this exact deterministic `fail()`.
   const begun = await beginSocialPostPublish(id);
   if (!begun.success) return { success: false, error: begun.error };
-  let post = begun.data;
+  const post = begun.data;
 
   const own = await getOwnProviderConnectionAction("meta");
   if (!own.success || !own.data || own.data.id !== post.target_connection_id || own.data.state !== "connected" || !own.data.credential_id) {
@@ -221,36 +230,78 @@ export async function publishSocialPostNowAction(id: string): Promise<Result<Soc
     return assetCheck;
   }
 
-  try {
-    const provider = new MetaProvider(accessToken);
-    const urlResult = await getMediaAssetDownloadUrl(post.asset_id, 3600);
-    if (!urlResult.success) throw new Error(urlResult.error);
-
-    let containerId = post.provider_container_id;
-    if (!containerId) {
-      const container = await provider.createInstagramMediaContainer(post.target_instagram_account_id, { imageUrl: urlResult.data.url, caption: post.caption });
-      containerId = container.containerId;
-      const withContainer = await setSocialPostContainerId(id, containerId);
-      if (!withContainer.success) throw new Error(withContainer.error);
-      post = withContainer.data;
-    }
-
-    const published = await provider.publishInstagramMedia(post.target_instagram_account_id, containerId);
-    const permalink = await provider.getInstagramMediaPermalink(published.mediaId);
-
-    const result = await markSocialPostPublished(id, { providerPostId: published.mediaId, providerPermalink: permalink });
-    if (!result.success) return { success: false, error: result.error };
-    return { success: true, data: result.data };
-  } catch (error) {
-    if (isMetaAuthError(error)) {
-      const failed = await markSocialPostFailed(id, RECONNECT_ERROR);
-      return { success: false, error: failed.success ? RECONNECT_ERROR : failed.error };
-    }
-    const record = sanitizeIntegrationError({ connectionId: own.data.id, providerId: "meta", rawMessage: error instanceof Error ? error.message : "Unknown Meta publishing error" });
-    insertErrorRecord(record);
-    const failed = await markSocialPostFailed(id, record.message);
-    return { success: false, error: failed.success ? record.message : failed.error };
+  const urlResult = await getMediaAssetDownloadUrl(post.asset_id, 3600);
+  if (!urlResult.success) {
+    await markSocialPostFailed(id, urlResult.error);
+    return urlResult;
   }
+
+  // SOCIAL-04B — the actual Meta publication mechanics (container
+  // create-or-refuse-to-reuse, publish, permalink, persist) are shared with
+  // the background scheduler via `executeSocialPostPublish` (SOCIAL-04A
+  // Phase 17) — this interactive path just ignores the retry/backoff half
+  // of its failure classification (no scheduling concept here).
+  const result = await executeSocialPostPublish({
+    post,
+    accessToken,
+    imageUrl: urlResult.data.url,
+    persistence: {
+      setContainerId: (containerId) => setSocialPostContainerId(id, containerId),
+      markPublished: (published) => markSocialPostPublished(id, published),
+      markFailed: ({ message }) => markSocialPostFailed(id, message),
+    },
+  });
+
+  if (!result.success) return { success: false, error: result.failure.message };
+  return { success: true, data: result.post };
+}
+
+/**
+ * SOCIAL-04B — `draft`/`failed` -> `scheduled`. Legal from `failed` too
+ * (explicitly supports rescheduling a post whose earlier publish attempt
+ * failed, rather than leaving that only reachable via a fresh draft).
+ * Never generates or stores a signed asset URL — that's resolved fresh,
+ * by the scheduler itself, at execution time (SOCIAL-04A Phase 11).
+ */
+export async function scheduleSocialPostAction(id: string, input: { scheduledAt: string; scheduledTimezone: string | null }): Promise<Result<SocialPost>> {
+  const resolved = await requireActiveSession("social.publish");
+  if (!resolved.success) return resolved;
+
+  const existing = await loadOwnedPost(id, resolved.session.workspace.id);
+  if (!existing) return { success: false, error: NOT_FOUND_ERROR };
+
+  const parsed = socialPostScheduleSchema.safeParse({ scheduled_at: input.scheduledAt, scheduled_timezone: input.scheduledTimezone });
+  if (!parsed.success) return { success: false, error: "Please fix the highlighted fields." };
+
+  const assetCheck = await validateOwnedApprovedImageAsset(existing.asset_id, resolved.session.workspace.id);
+  if (!assetCheck.success) return assetCheck;
+
+  return scheduleSocialPost(id, { scheduledAt: parsed.data.scheduled_at, scheduledTimezone: parsed.data.scheduled_timezone ?? null });
+}
+
+/** SOCIAL-04B — `scheduled` -> `scheduled` only; rejects (atomically) once a worker or manual Publish Now has already claimed the post. */
+export async function rescheduleSocialPostAction(id: string, input: { scheduledAt: string; scheduledTimezone: string | null }): Promise<Result<SocialPost>> {
+  const resolved = await requireActiveSession("social.publish");
+  if (!resolved.success) return resolved;
+
+  const existing = await loadOwnedPost(id, resolved.session.workspace.id);
+  if (!existing) return { success: false, error: NOT_FOUND_ERROR };
+
+  const parsed = socialPostScheduleSchema.safeParse({ scheduled_at: input.scheduledAt, scheduled_timezone: input.scheduledTimezone });
+  if (!parsed.success) return { success: false, error: "Please fix the highlighted fields." };
+
+  return rescheduleSocialPost(id, { scheduledAt: parsed.data.scheduled_at, scheduledTimezone: parsed.data.scheduled_timezone ?? null });
+}
+
+/** SOCIAL-04B — `scheduled` -> `draft`, atomically. Never touches caption/asset/destination. Rejects (atomically) once claimed. */
+export async function cancelSocialPostScheduleAction(id: string): Promise<Result<SocialPost>> {
+  const resolved = await requireActiveSession("social.publish");
+  if (!resolved.success) return resolved;
+
+  const existing = await loadOwnedPost(id, resolved.session.workspace.id);
+  if (!existing) return { success: false, error: NOT_FOUND_ERROR };
+
+  return cancelSocialPostSchedule(id);
 }
 
 /**

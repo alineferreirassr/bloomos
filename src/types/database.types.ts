@@ -2495,9 +2495,9 @@ export interface Database {
         Relationships: [];
       };
       social_posts: {
-        Row: { id: string; workspace_id: string; created_by: string | null; status: string; caption: string; asset_id: string; target_provider: string; target_connection_id: string; target_page_id: string; target_instagram_account_id: string; provider_container_id: string | null; provider_post_id: string | null; provider_permalink: string | null; provider_error: string | null; published_at: string | null; created_at: string; updated_at: string };
-        Insert: { id?: string; workspace_id: string; created_by?: string | null; status?: string; caption?: string; asset_id: string; target_provider?: string; target_connection_id: string; target_page_id: string; target_instagram_account_id: string; provider_container_id?: string | null; provider_post_id?: string | null; provider_permalink?: string | null; provider_error?: string | null; published_at?: string | null; created_at?: string; updated_at?: string };
-        Update: { id?: string; workspace_id?: string; created_by?: string | null; status?: string; caption?: string; asset_id?: string; target_provider?: string; target_connection_id?: string; target_page_id?: string; target_instagram_account_id?: string; provider_container_id?: string | null; provider_post_id?: string | null; provider_permalink?: string | null; provider_error?: string | null; published_at?: string | null; created_at?: string; updated_at?: string };
+        Row: { id: string; workspace_id: string; created_by: string | null; status: string; caption: string; asset_id: string; target_provider: string; target_connection_id: string; target_page_id: string; target_instagram_account_id: string; provider_container_id: string | null; provider_post_id: string | null; provider_permalink: string | null; provider_error: string | null; published_at: string | null; scheduled_at: string | null; scheduled_timezone: string | null; publish_attempts: number; next_attempt_at: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; created_by?: string | null; status?: string; caption?: string; asset_id: string; target_provider?: string; target_connection_id: string; target_page_id: string; target_instagram_account_id: string; provider_container_id?: string | null; provider_post_id?: string | null; provider_permalink?: string | null; provider_error?: string | null; published_at?: string | null; scheduled_at?: string | null; scheduled_timezone?: string | null; publish_attempts?: number; next_attempt_at?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; created_by?: string | null; status?: string; caption?: string; asset_id?: string; target_provider?: string; target_connection_id?: string; target_page_id?: string; target_instagram_account_id?: string; provider_container_id?: string | null; provider_post_id?: string | null; provider_permalink?: string | null; provider_error?: string | null; published_at?: string | null; scheduled_at?: string | null; scheduled_timezone?: string | null; publish_attempts?: number; next_attempt_at?: string | null; created_at?: string; updated_at?: string };
         Relationships: [];
       };
       oauth_pending_authorizations: {
@@ -2560,6 +2560,14 @@ export interface Database {
       reconcile_docusign_envelope_status: {
         Args: { p_connection_id: string; p_envelope_id: string; p_mapped_status: string };
         Returns: { mutated: boolean; contract_id: string | null; workspace_id: string | null; client_id: string | null }[];
+      };
+      claim_due_social_posts: {
+        Args: { p_limit?: number };
+        Returns: Database["public"]["Tables"]["social_posts"]["Row"][];
+      };
+      reclaim_abandoned_social_posts: {
+        Args: { p_lease_seconds?: number };
+        Returns: number;
       };
       is_workspace_member: {
         Args: { workspace_uuid: string };

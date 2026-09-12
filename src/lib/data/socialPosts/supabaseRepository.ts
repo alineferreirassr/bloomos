@@ -6,7 +6,7 @@ import { normalizeSupabaseError } from "@/lib/supabase/errors";
 import { mapSocialPostRow } from "@/lib/supabase/mappers";
 import { UnauthorizedError, ForbiddenError } from "@/core/errors";
 import { getClientWorkspaceSession, type WorkspaceSession } from "@/lib/auth/workspaceSessionClient";
-import type { CreateSocialPostInput, SocialPostsRepository, UpdateSocialPostDraftInput } from "@/lib/data/socialPosts/repository";
+import type { CreateSocialPostInput, ScheduleSocialPostInput, SocialPostsRepository, UpdateSocialPostDraftInput } from "@/lib/data/socialPosts/repository";
 
 type SupabaseClient = ReturnType<typeof createSupabaseClient>;
 
@@ -113,13 +113,85 @@ async function beginSocialPostPublish(id: string): Promise<DataResult<SocialPost
     .from("social_posts")
     .update({ status: "publishing", provider_error: null })
     .eq("id", id)
-    .in("status", ["draft", "failed"])
+    .in("status", ["draft", "scheduled", "failed"])
     .select("*")
     .maybeSingle();
   if (error) throw normalizeSupabaseError(error);
   if (!data) {
     return fail(existing.status === "publishing" ? "This post is already publishing." : "This post has already been published.");
   }
+
+  return ok(mapSocialPostRow(data));
+}
+
+/** Atomic `draft`/`failed` -> `scheduled`. See `SocialPostsRepository.scheduleSocialPost`'s own doc comment for why `failed` is a legal source and why attempts reset. */
+async function scheduleSocialPost(id: string, input: ScheduleSocialPostInput): Promise<DataResult<SocialPost>> {
+  await requireWorkspaceSession();
+  const supabase = createSupabaseClient();
+
+  const existing = await fetchSocialPostRow(supabase, id);
+  if (!existing) return fail("Social post not found.");
+
+  const { data, error } = await supabase
+    .from("social_posts")
+    .update({
+      status: "scheduled",
+      scheduled_at: input.scheduledAt,
+      scheduled_timezone: input.scheduledTimezone,
+      publish_attempts: 0,
+      next_attempt_at: null,
+      provider_error: null,
+    })
+    .eq("id", id)
+    .in("status", ["draft", "failed"])
+    .select("*")
+    .maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  if (!data) {
+    return fail(existing.status === "scheduled" ? "This post is already scheduled." : "This post cannot be scheduled from its current state.");
+  }
+
+  return ok(mapSocialPostRow(data));
+}
+
+/** Atomic `scheduled` -> `scheduled` only — rejects (zero rows matched) once a worker or manual Publish Now has already claimed the post. */
+async function rescheduleSocialPost(id: string, input: ScheduleSocialPostInput): Promise<DataResult<SocialPost>> {
+  await requireWorkspaceSession();
+  const supabase = createSupabaseClient();
+
+  const existing = await fetchSocialPostRow(supabase, id);
+  if (!existing) return fail("Social post not found.");
+
+  const { data, error } = await supabase
+    .from("social_posts")
+    .update({ scheduled_at: input.scheduledAt, scheduled_timezone: input.scheduledTimezone, next_attempt_at: null })
+    .eq("id", id)
+    .eq("status", "scheduled")
+    .select("*")
+    .maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  if (!data) return fail("This post can no longer be rescheduled — it may already be publishing or published.");
+
+  return ok(mapSocialPostRow(data));
+}
+
+/** Atomic `scheduled` -> `draft`. Clears scheduling-only fields; never touches caption/asset_id/target_*. */
+async function cancelSocialPostSchedule(id: string): Promise<DataResult<SocialPost>> {
+  await requireWorkspaceSession();
+  const supabase = createSupabaseClient();
+
+  const existing = await fetchSocialPostRow(supabase, id);
+  if (!existing) return fail("Social post not found.");
+
+  const { data, error } = await supabase
+    .from("social_posts")
+    .update({ status: "draft", scheduled_at: null, scheduled_timezone: null, next_attempt_at: null })
+    .eq("id", id)
+    .eq("status", "scheduled")
+    .select("*")
+    .maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  if (!data) return fail("This post can no longer be cancelled — it may already be publishing or published.");
 
   return ok(mapSocialPostRow(data));
 }
@@ -163,4 +235,7 @@ export const supabaseSocialPostsRepository: SocialPostsRepository = {
   setSocialPostContainerId,
   markSocialPostPublished,
   markSocialPostFailed,
+  scheduleSocialPost,
+  rescheduleSocialPost,
+  cancelSocialPostSchedule,
 };

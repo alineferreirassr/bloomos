@@ -3,7 +3,7 @@ import { socialPostDraftSchema } from "@/modules/socialPosts/schema";
 import { generateId, nowIso } from "@/lib/data/utils";
 import { type DataResult, ok, fail } from "@/lib/data/result";
 import { readSocialPosts, writeSocialPosts } from "@/lib/data/mock/socialPostsStore";
-import type { CreateSocialPostInput, SocialPostsRepository, UpdateSocialPostDraftInput } from "@/lib/data/socialPosts/repository";
+import type { CreateSocialPostInput, ScheduleSocialPostInput, SocialPostsRepository, UpdateSocialPostDraftInput } from "@/lib/data/socialPosts/repository";
 
 function fieldErrorsFromZod(error: { issues: { path: PropertyKey[]; message: string }[] }): Partial<Record<string, string>> {
   const fieldErrors: Partial<Record<string, string>> = {};
@@ -47,6 +47,10 @@ async function createSocialPost(input: CreateSocialPostInput): Promise<DataResul
     provider_permalink: null,
     provider_error: null,
     published_at: null,
+    scheduled_at: null,
+    scheduled_timezone: null,
+    publish_attempts: 0,
+    next_attempt_at: null,
     created_at: timestamp,
     updated_at: timestamp,
   };
@@ -73,11 +77,69 @@ async function updateSocialPostDraft(id: string, input: UpdateSocialPostDraftInp
 async function beginSocialPostPublish(id: string): Promise<DataResult<SocialPost>> {
   const existing = readSocialPosts().find((p) => p.id === id);
   if (!existing) return fail("Social post not found.");
-  if (existing.status !== "draft" && existing.status !== "failed") {
+  if (existing.status !== "draft" && existing.status !== "scheduled" && existing.status !== "failed") {
     return fail(existing.status === "publishing" ? "This post is already publishing." : "This post has already been published.");
   }
 
   const updated: SocialPost = { ...existing, status: "publishing", provider_error: null, updated_at: nowIso() };
+  writeSocialPosts(readSocialPosts().map((p) => (p.id === id ? updated : p)));
+  return ok(updated);
+}
+
+async function scheduleSocialPost(id: string, input: ScheduleSocialPostInput): Promise<DataResult<SocialPost>> {
+  const existing = readSocialPosts().find((p) => p.id === id);
+  if (!existing) return fail("Social post not found.");
+  if (existing.status !== "draft" && existing.status !== "failed") {
+    return fail(existing.status === "scheduled" ? "This post is already scheduled." : "This post cannot be scheduled from its current state.");
+  }
+
+  const updated: SocialPost = {
+    ...existing,
+    status: "scheduled",
+    scheduled_at: input.scheduledAt,
+    scheduled_timezone: input.scheduledTimezone,
+    publish_attempts: 0,
+    next_attempt_at: null,
+    provider_error: null,
+    updated_at: nowIso(),
+  };
+  writeSocialPosts(readSocialPosts().map((p) => (p.id === id ? updated : p)));
+  return ok(updated);
+}
+
+async function rescheduleSocialPost(id: string, input: ScheduleSocialPostInput): Promise<DataResult<SocialPost>> {
+  const existing = readSocialPosts().find((p) => p.id === id);
+  if (!existing) return fail("Social post not found.");
+  if (existing.status !== "scheduled") {
+    return fail("This post can no longer be rescheduled — it may already be publishing or published.");
+  }
+
+  const updated: SocialPost = {
+    ...existing,
+    scheduled_at: input.scheduledAt,
+    scheduled_timezone: input.scheduledTimezone,
+    next_attempt_at: null,
+    updated_at: nowIso(),
+  };
+  writeSocialPosts(readSocialPosts().map((p) => (p.id === id ? updated : p)));
+  return ok(updated);
+}
+
+async function cancelSocialPostSchedule(id: string): Promise<DataResult<SocialPost>> {
+  const existing = readSocialPosts().find((p) => p.id === id);
+  if (!existing) return fail("Social post not found.");
+  if (existing.status !== "scheduled") {
+    return fail("This post can no longer be cancelled — it may already be publishing or published.");
+  }
+
+  const updated: SocialPost = {
+    ...existing,
+    status: "draft",
+    scheduled_at: null,
+    scheduled_timezone: null,
+    next_attempt_at: null,
+    updated_at: nowIso(),
+  };
   writeSocialPosts(readSocialPosts().map((p) => (p.id === id ? updated : p)));
   return ok(updated);
 }
@@ -127,4 +189,7 @@ export const mockSocialPostsRepository: SocialPostsRepository = {
   setSocialPostContainerId,
   markSocialPostPublished,
   markSocialPostFailed,
+  scheduleSocialPost,
+  rescheduleSocialPost,
+  cancelSocialPostSchedule,
 };

@@ -222,7 +222,7 @@ import { supabaseMediaAssetsRepository } from "@/lib/data/media/supabaseReposito
 import type { ContractFilters, ContractTemplateFilters } from "@/lib/data/contracts/repository";
 import { mockContractsRepository } from "@/lib/data/contracts/mockRepository";
 import { supabaseContractsRepository } from "@/lib/data/contracts/supabaseRepository";
-import type { CreateSocialPostInput, UpdateSocialPostDraftInput } from "@/lib/data/socialPosts/repository";
+import type { CreateSocialPostInput, ScheduleSocialPostInput, UpdateSocialPostDraftInput } from "@/lib/data/socialPosts/repository";
 import { mockSocialPostsRepository } from "@/lib/data/socialPosts/mockRepository";
 import { supabaseSocialPostsRepository } from "@/lib/data/socialPosts/supabaseRepository";
 import type {
@@ -1259,6 +1259,18 @@ export async function markSocialPostPublished(id: string, result: { providerPost
 
 export async function markSocialPostFailed(id: string, providerError: string): Promise<DataResult<SocialPost>> {
   return socialPostsRepository().markSocialPostFailed(id, providerError);
+}
+
+export async function scheduleSocialPost(id: string, input: ScheduleSocialPostInput): Promise<DataResult<SocialPost>> {
+  return socialPostsRepository().scheduleSocialPost(id, input);
+}
+
+export async function rescheduleSocialPost(id: string, input: ScheduleSocialPostInput): Promise<DataResult<SocialPost>> {
+  return socialPostsRepository().rescheduleSocialPost(id, input);
+}
+
+export async function cancelSocialPostSchedule(id: string): Promise<DataResult<SocialPost>> {
+  return socialPostsRepository().cancelSocialPostSchedule(id);
 }
 
 // ---------------------------------------------------------------------------

@@ -86,6 +86,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // Independently-tracked, not-yet-released, unrelated to the Finance
   // release this exact-count assertion describes.
   "20260915100200_integrations_permissions.sql",
+  // SOCIAL-04B — durable Social post scheduling foundation. Independently-
+  // tracked, not-yet-released, unrelated to the Finance release this
+  // exact-count assertion describes.
+  "20260916100000_social_posts_scheduling.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {
@@ -4304,5 +4308,91 @@ describe("INTEGRATIONS-PERMISSIONS-01 migration — integrations.* permission se
     expect(code).not.toMatch(/\bdrop\b/i);
     expect(code).not.toMatch(/\bupdate\b/i);
     expect(code).not.toMatch(/\bdelete\b/i);
+  });
+});
+
+describe("SOCIAL-04B migration — social_posts scheduling foundation", () => {
+  function sql(): string {
+    return readMigration("20260916100000_social_posts_scheduling.sql");
+  }
+
+  it("extends the existing social_posts table only — never creates a parallel scheduling table", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/create table/i);
+    expect(code).toMatch(/alter table public\.social_posts\s*\n\s*add column if not exists scheduled_at timestamptz,\s*\n\s*add column if not exists scheduled_timezone text,\s*\n\s*add column if not exists publish_attempts integer not null default 0,\s*\n\s*add column if not exists next_attempt_at timestamptz;/);
+  });
+
+  it("widens the status constraint to add scheduled, preserving every existing status", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/drop constraint if exists social_posts_status_check/);
+    expect(code).toMatch(/check \(status in \('draft', 'scheduled', 'publishing', 'published', 'failed'\)\)/);
+  });
+
+  it("enforces scheduled requires scheduled_at and a non-negative attempt count, without constraining any other status", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/constraint social_posts_scheduled_requires_scheduled_at\s*\n\s*check \(status <> 'scheduled' or scheduled_at is not null\)/);
+    expect(code).toMatch(/constraint social_posts_publish_attempts_check\s*\n\s*check \(publish_attempts >= 0\)/);
+  });
+
+  it("creates a partial due-post index scoped to exactly scheduled/failed", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create index if not exists social_posts_due_idx\s*\n\s*on public\.social_posts \(status, scheduled_at\)\s*\n\s*where status in \('scheduled', 'failed'\);/);
+  });
+
+  it("claim_due_social_posts is security definer, search_path-pinned, and uses FOR UPDATE SKIP LOCKED for atomic multi-row claiming", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create or replace function public\.claim_due_social_posts\(p_limit integer default 10\)/);
+    expect(code).toMatch(/security definer/);
+    expect(code).toMatch(/set search_path = public/);
+    expect(code).toMatch(/for update skip locked/);
+  });
+
+  it("claim_due_social_posts selects only due, retry-eligible, under-the-attempt-limit rows and claims by transitioning to publishing", () => {
+    const code = stripSqlComments(sql());
+    const fn = code.slice(code.indexOf("function public.claim_due_social_posts"), code.indexOf("$$;\n\ncomment on function public.claim_due_social_posts"));
+    expect(fn).toMatch(/where status in \('scheduled', 'failed'\)/);
+    expect(fn).toMatch(/and scheduled_at is not null/);
+    expect(fn).toMatch(/and scheduled_at <= now\(\)/);
+    expect(fn).toMatch(/and \(next_attempt_at is null or next_attempt_at <= now\(\)\)/);
+    expect(fn).toMatch(/and publish_attempts < 3/);
+    expect(fn).toMatch(/set status = 'publishing',\s*\n\s*publish_attempts = publish_attempts \+ 1/);
+  });
+
+  it("claim_due_social_posts is granted only to service_role, with anon and authenticated explicitly revoked (not just `from public`)", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/revoke all on function public\.claim_due_social_posts\(integer\) from public;/);
+    expect(code).toMatch(/revoke execute on function public\.claim_due_social_posts\(integer\) from anon;/);
+    expect(code).toMatch(/revoke execute on function public\.claim_due_social_posts\(integer\) from authenticated;/);
+    expect(code).toMatch(/grant execute on function public\.claim_due_social_posts\(integer\) to service_role;/);
+  });
+
+  it("reclaim_abandoned_social_posts reverts only stale publishing rows to failed, clearing next_attempt_at, never touching provider_container_id or publish_attempts", () => {
+    const code = stripSqlComments(sql());
+    const fn = code.slice(code.indexOf("function public.reclaim_abandoned_social_posts"), code.indexOf("$$;\n\ncomment on function public.reclaim_abandoned_social_posts"));
+    expect(fn).toMatch(/where status = 'publishing'/);
+    expect(fn).toMatch(/and updated_at <= now\(\) - make_interval\(secs => greatest\(p_lease_seconds, 0\)\)/);
+    expect(fn).toMatch(/set status = 'failed', next_attempt_at = null, updated_at = now\(\)/);
+    expect(fn).not.toMatch(/provider_container_id/);
+    expect(fn).not.toMatch(/publish_attempts/);
+  });
+
+  it("reclaim_abandoned_social_posts is also security definer, search_path-pinned, and service_role-only", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create or replace function public\.reclaim_abandoned_social_posts\(p_lease_seconds integer default 600\)/);
+    expect(code).toMatch(/revoke all on function public\.reclaim_abandoned_social_posts\(integer\) from public;/);
+    expect(code).toMatch(/revoke execute on function public\.reclaim_abandoned_social_posts\(integer\) from anon;/);
+    expect(code).toMatch(/revoke execute on function public\.reclaim_abandoned_social_posts\(integer\) from authenticated;/);
+    expect(code).toMatch(/grant execute on function public\.reclaim_abandoned_social_posts\(integer\) to service_role;/);
+  });
+
+  it("never disables RLS, drops a table, or touches any table besides social_posts", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/disable row level security/);
+    expect(code).not.toMatch(/drop table/);
+    expect(code).not.toMatch(/\bdelete from\b/);
+    expect(code).not.toMatch(/create policy/);
+    for (const line of code.split("\n")) {
+      if (/^alter table/.test(line.trim())) expect(line).toMatch(/public\.social_posts/);
+    }
   });
 });

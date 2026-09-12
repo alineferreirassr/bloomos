@@ -6,6 +6,9 @@ import {
   setSocialPostContainerId,
   markSocialPostPublished,
   markSocialPostFailed,
+  scheduleSocialPost,
+  rescheduleSocialPost,
+  cancelSocialPostSchedule,
   listSocialPosts,
   getSocialPost,
   uploadMediaAsset,
@@ -136,6 +139,121 @@ describe("beginSocialPostPublish — idempotency guard", () => {
     await markSocialPostPublished(post.id, { providerPostId: "ig_media_1", providerPermalink: "https://instagram.com/p/abc123" });
 
     const result = await beginSocialPostPublish(post.id);
+    expect(result.success).toBe(false);
+  });
+
+  it("SOCIAL-04B — claims a scheduled post exactly like a draft/failed one (scheduled -> publishing)", async () => {
+    const post = await makePost();
+    await scheduleSocialPost(post.id, { scheduledAt: "2099-01-01T00:00:00.000Z", scheduledTimezone: "UTC" });
+
+    const result = await beginSocialPostPublish(post.id);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.status).toBe("publishing");
+  });
+
+  it("SOCIAL-04B — manual-vs-scheduled race: two concurrent claims on the same post, exactly one wins", async () => {
+    const post = await makePost();
+    await scheduleSocialPost(post.id, { scheduledAt: "2099-01-01T00:00:00.000Z", scheduledTimezone: "UTC" });
+
+    const [first, second] = await Promise.all([beginSocialPostPublish(post.id), beginSocialPostPublish(post.id)]);
+    const outcomes = [first.success, second.success];
+    expect(outcomes.filter(Boolean)).toHaveLength(1);
+    expect(outcomes.filter((success) => !success)).toHaveLength(1);
+  });
+});
+
+describe("scheduleSocialPost", () => {
+  it("schedules a draft post, capturing the execution instant and display timezone", async () => {
+    const post = await makePost();
+    const result = await scheduleSocialPost(post.id, { scheduledAt: "2099-06-01T15:00:00.000Z", scheduledTimezone: "America/New_York" });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.status).toBe("scheduled");
+    expect(result.data.scheduled_at).toBe("2099-06-01T15:00:00.000Z");
+    expect(result.data.scheduled_timezone).toBe("America/New_York");
+  });
+
+  it("never generates or stores a signed asset URL", async () => {
+    const post = await makePost();
+    const result = await scheduleSocialPost(post.id, { scheduledAt: "2099-06-01T15:00:00.000Z", scheduledTimezone: null });
+    expect(result.success).toBe(true);
+    expect(JSON.stringify(result)).not.toMatch(/signed|token=/i);
+  });
+
+  it("schedules a failed post too, resetting publish_attempts and clearing provider_error for a fresh attempt cycle", async () => {
+    const post = await makePost();
+    await beginSocialPostPublish(post.id);
+    await markSocialPostFailed(post.id, "Reconnect Meta to enable publishing.");
+
+    const result = await scheduleSocialPost(post.id, { scheduledAt: "2099-06-01T15:00:00.000Z", scheduledTimezone: null });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.status).toBe("scheduled");
+    expect(result.data.publish_attempts).toBe(0);
+    expect(result.data.provider_error).toBeNull();
+  });
+
+  it("refuses to schedule a post that is already scheduled, publishing, or published", async () => {
+    const post = await makePost();
+    await scheduleSocialPost(post.id, { scheduledAt: "2099-06-01T15:00:00.000Z", scheduledTimezone: null });
+
+    const result = await scheduleSocialPost(post.id, { scheduledAt: "2099-07-01T15:00:00.000Z", scheduledTimezone: null });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("rescheduleSocialPost", () => {
+  it("updates scheduled_at/scheduled_timezone while still scheduled", async () => {
+    const post = await makePost();
+    await scheduleSocialPost(post.id, { scheduledAt: "2099-06-01T15:00:00.000Z", scheduledTimezone: "UTC" });
+
+    const result = await rescheduleSocialPost(post.id, { scheduledAt: "2099-08-01T09:00:00.000Z", scheduledTimezone: "America/Los_Angeles" });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.status).toBe("scheduled");
+    expect(result.data.scheduled_at).toBe("2099-08-01T09:00:00.000Z");
+    expect(result.data.scheduled_timezone).toBe("America/Los_Angeles");
+  });
+
+  it("rejects rescheduling once a worker or manual Publish Now has claimed the post", async () => {
+    const post = await makePost();
+    await scheduleSocialPost(post.id, { scheduledAt: "2099-06-01T15:00:00.000Z", scheduledTimezone: null });
+    await beginSocialPostPublish(post.id);
+
+    const result = await rescheduleSocialPost(post.id, { scheduledAt: "2099-08-01T09:00:00.000Z", scheduledTimezone: null });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects rescheduling a plain draft (never scheduled)", async () => {
+    const post = await makePost();
+    const result = await rescheduleSocialPost(post.id, { scheduledAt: "2099-08-01T09:00:00.000Z", scheduledTimezone: null });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("cancelSocialPostSchedule", () => {
+  it("returns a scheduled post to draft, clearing only scheduling fields", async () => {
+    const post = await makePost({ caption: "Keep me." });
+    await scheduleSocialPost(post.id, { scheduledAt: "2099-06-01T15:00:00.000Z", scheduledTimezone: "UTC" });
+
+    const result = await cancelSocialPostSchedule(post.id);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.status).toBe("draft");
+    expect(result.data.scheduled_at).toBeNull();
+    expect(result.data.scheduled_timezone).toBeNull();
+    expect(result.data.caption).toBe("Keep me.");
+    expect(result.data.asset_id).toBe(post.asset_id);
+    expect(result.data.target_page_id).toBe(post.target_page_id);
+  });
+
+  it("rejects cancellation once the worker has claimed the post", async () => {
+    const post = await makePost();
+    await scheduleSocialPost(post.id, { scheduledAt: "2099-06-01T15:00:00.000Z", scheduledTimezone: null });
+    await beginSocialPostPublish(post.id);
+
+    const result = await cancelSocialPostSchedule(post.id);
     expect(result.success).toBe(false);
   });
 });

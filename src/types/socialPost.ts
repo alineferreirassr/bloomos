@@ -36,6 +36,14 @@ export interface SocialPost {
   /** A short, sanitized failure classification — never a raw provider response, token, or stack trace. */
   provider_error: string | null;
   published_at: string | null;
+  /** SOCIAL-04B — UTC execution instant. Null for a post that has never been scheduled. */
+  scheduled_at: string | null;
+  /** SOCIAL-04B — IANA identifier captured at scheduling time, display-only (mirrors `CalendarEvent.timezone`) — never read by execution logic. */
+  scheduled_timezone: string | null;
+  /** SOCIAL-04B — incremented once per `claim_due_social_posts()` claim; stays 0 for a post that's only ever been published manually. */
+  publish_attempts: number;
+  /** SOCIAL-04B — earliest instant a failed, still-retryable scheduled post becomes claimable again. Null once terminal or never scheduled. */
+  next_attempt_at: string | null;
   created_at: string;
   updated_at: string;
 }

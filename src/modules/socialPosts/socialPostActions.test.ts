@@ -9,6 +9,9 @@ import {
   createSocialPostAction,
   updateSocialPostDraftAction,
   publishSocialPostNowAction,
+  scheduleSocialPostAction,
+  rescheduleSocialPostAction,
+  cancelSocialPostScheduleAction,
   getSocialPostInsightsAction,
   listSocialPostsAction,
   getSocialPostAction,
@@ -263,7 +266,7 @@ describe("publishSocialPostNowAction", () => {
     expect(JSON.stringify(failed)).not.toContain("real-meta-access-token");
   });
 
-  it("retrying a failed post reuses the already-created container instead of creating a duplicate", async () => {
+  it("SOCIAL-04B — retrying a failed post that already created a container refuses to republish, to avoid a duplicate Instagram publication", async () => {
     await connectMetaWithSelectedIdentity();
     const assetId = await makeApprovedImageAsset();
     const created = await createSocialPostAction({ caption: "Hi", assetId });
@@ -281,8 +284,7 @@ describe("publishSocialPostNowAction", () => {
         }
         if (path.endsWith("/media_publish")) {
           publishCalls += 1;
-          if (publishCalls === 1) return new Response("temporary provider error", { status: 500 });
-          return new Response(JSON.stringify({ id: "ig_media_1" }), { status: 200 });
+          return new Response("temporary provider error", { status: 500 });
         }
         return new Response(JSON.stringify({ permalink: null }), { status: 200 });
       }),
@@ -290,11 +292,22 @@ describe("publishSocialPostNowAction", () => {
 
     const firstAttempt = await publishSocialPostNowAction(created.data.id);
     expect(firstAttempt.success).toBe(false);
+    expect(containerCalls).toBe(1);
+    expect(publishCalls).toBe(1);
 
+    // SOCIAL-04A Phase 18's proven gap: the current MetaProvider abstraction
+    // has no way to prove whether the first attempt's media_publish call
+    // actually reached Meta before the 500 was observed — a second call
+    // with the same container id risks a real duplicate Instagram post.
+    // The retry must therefore refuse to call either Graph endpoint again.
     const retry = await publishSocialPostNowAction(created.data.id);
-    expect(retry.success).toBe(true);
-    expect(containerCalls).toBe(1); // container creation happened exactly once across both attempts
-    expect(publishCalls).toBe(2);
+    expect(retry.success).toBe(false);
+    if (!retry.success) expect(retry.error).toMatch(/manual review/i);
+    expect(containerCalls).toBe(1); // never created a second container
+    expect(publishCalls).toBe(1); // never attempted media_publish again
+
+    const finalState = await getSocialPostAction(created.data.id);
+    expect(finalState.success && finalState.data.status).toBe("failed");
   });
 
   it("a cross-workspace caller cannot publish another workspace's post", async () => {
@@ -478,5 +491,162 @@ describe("getSocialPostInsightsAction", () => {
 
     await getSocialPostInsightsAction(postId);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+const FUTURE_ISO = "2099-01-01T12:00:00.000Z";
+
+describe("scheduleSocialPostAction", () => {
+  it("schedules a draft post with a valid future instant and timezone", async () => {
+    await connectMetaWithSelectedIdentity();
+    const assetId = await makeApprovedImageAsset();
+    const created = await createSocialPostAction({ caption: "Hi", assetId });
+    if (!created.success) throw new Error("setup failed");
+
+    const result = await scheduleSocialPostAction(created.data.id, { scheduledAt: FUTURE_ISO, scheduledTimezone: "America/New_York" });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.status).toBe("scheduled");
+    expect(result.data.scheduled_at).toBe(FUTURE_ISO);
+    expect(result.data.scheduled_timezone).toBe("America/New_York");
+  });
+
+  it("rejects a past or invalid scheduled_at", async () => {
+    await connectMetaWithSelectedIdentity();
+    const assetId = await makeApprovedImageAsset();
+    const created = await createSocialPostAction({ caption: "Hi", assetId });
+    if (!created.success) throw new Error("setup failed");
+
+    const past = await scheduleSocialPostAction(created.data.id, { scheduledAt: "2020-01-01T00:00:00.000Z", scheduledTimezone: null });
+    expect(past.success).toBe(false);
+
+    const invalid = await scheduleSocialPostAction(created.data.id, { scheduledAt: "not-a-date", scheduledTimezone: null });
+    expect(invalid.success).toBe(false);
+  });
+
+  it("rejects an unrecognized timezone identifier", async () => {
+    await connectMetaWithSelectedIdentity();
+    const assetId = await makeApprovedImageAsset();
+    const created = await createSocialPostAction({ caption: "Hi", assetId });
+    if (!created.success) throw new Error("setup failed");
+
+    const result = await scheduleSocialPostAction(created.data.id, { scheduledAt: FUTURE_ISO, scheduledTimezone: "Not/A_Real_Zone" });
+    expect(result.success).toBe(false);
+  });
+
+  it("SOCIAL-04A Phase 25 — a member with social.create but not social.publish cannot schedule (schedule authorizes an eventual unattended publish, so it requires the stricter permission)", async () => {
+    await connectMetaWithSelectedIdentity();
+    const assetId = await makeApprovedImageAsset();
+    const created = await createSocialPostAction({ caption: "Hi", assetId });
+    if (!created.success) throw new Error("setup failed");
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(staffSession);
+    const result = await scheduleSocialPostAction(created.data.id, { scheduledAt: FUTURE_ISO, scheduledTimezone: null });
+    expect(result.success).toBe(false);
+  });
+
+  it("re-validates the asset is still an approved image at schedule time", async () => {
+    await connectMetaWithSelectedIdentity();
+    const assetId = await makeApprovedImageAsset();
+    const created = await createSocialPostAction({ caption: "Hi", assetId });
+    if (!created.success) throw new Error("setup failed");
+    await setMediaAssetStatus(assetId, "pending", "member_1");
+
+    const result = await scheduleSocialPostAction(created.data.id, { scheduledAt: FUTURE_ISO, scheduledTimezone: null });
+    expect(result.success).toBe(false);
+  });
+
+  it("never generates or stores a signed asset URL when scheduling", async () => {
+    await connectMetaWithSelectedIdentity();
+    const assetId = await makeApprovedImageAsset();
+    const created = await createSocialPostAction({ caption: "Hi", assetId });
+    if (!created.success) throw new Error("setup failed");
+
+    const result = await scheduleSocialPostAction(created.data.id, { scheduledAt: FUTURE_ISO, scheduledTimezone: null });
+    expect(JSON.stringify(result)).not.toMatch(/signed|token=/i);
+  });
+
+  it("a cross-workspace caller cannot schedule another workspace's post", async () => {
+    await connectMetaWithSelectedIdentity();
+    const assetId = await makeApprovedImageAsset();
+    const created = await createSocialPostAction({ caption: "Hi", assetId });
+    if (!created.success) throw new Error("setup failed");
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(crossTenantSession);
+    const result = await scheduleSocialPostAction(created.data.id, { scheduledAt: FUTURE_ISO, scheduledTimezone: null });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("rescheduleSocialPostAction / cancelSocialPostScheduleAction", () => {
+  it("reschedules a still-scheduled post", async () => {
+    await connectMetaWithSelectedIdentity();
+    const assetId = await makeApprovedImageAsset();
+    const created = await createSocialPostAction({ caption: "Hi", assetId });
+    if (!created.success) throw new Error("setup failed");
+    await scheduleSocialPostAction(created.data.id, { scheduledAt: FUTURE_ISO, scheduledTimezone: null });
+
+    const laterIso = "2099-02-01T12:00:00.000Z";
+    const result = await rescheduleSocialPostAction(created.data.id, { scheduledAt: laterIso, scheduledTimezone: "UTC" });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.scheduled_at).toBe(laterIso);
+  });
+
+  it("cannot reschedule once claimed for publishing", async () => {
+    await connectMetaWithSelectedIdentity();
+    const assetId = await makeApprovedImageAsset();
+    const created = await createSocialPostAction({ caption: "Hi", assetId });
+    if (!created.success) throw new Error("setup failed");
+    await scheduleSocialPostAction(created.data.id, { scheduledAt: FUTURE_ISO, scheduledTimezone: null });
+    stubMetaPublishSuccess();
+    await publishSocialPostNowAction(created.data.id);
+
+    const result = await rescheduleSocialPostAction(created.data.id, { scheduledAt: "2099-02-01T12:00:00.000Z", scheduledTimezone: null });
+    expect(result.success).toBe(false);
+  });
+
+  it("cancels a schedule back to draft, preserving caption/asset/destination", async () => {
+    await connectMetaWithSelectedIdentity();
+    const assetId = await makeApprovedImageAsset();
+    const created = await createSocialPostAction({ caption: "Keep this caption.", assetId });
+    if (!created.success) throw new Error("setup failed");
+    await scheduleSocialPostAction(created.data.id, { scheduledAt: FUTURE_ISO, scheduledTimezone: null });
+
+    const result = await cancelSocialPostScheduleAction(created.data.id);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.status).toBe("draft");
+    expect(result.data.caption).toBe("Keep this caption.");
+    expect(result.data.asset_id).toBe(assetId);
+  });
+
+  it("cannot cancel once the worker has claimed the post", async () => {
+    await connectMetaWithSelectedIdentity();
+    const assetId = await makeApprovedImageAsset();
+    const created = await createSocialPostAction({ caption: "Hi", assetId });
+    if (!created.success) throw new Error("setup failed");
+    await scheduleSocialPostAction(created.data.id, { scheduledAt: FUTURE_ISO, scheduledTimezone: null });
+    stubMetaPublishSuccess();
+    await publishSocialPostNowAction(created.data.id);
+
+    const result = await cancelSocialPostScheduleAction(created.data.id);
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("SOCIAL-04B — manual Publish Now on a scheduled post", () => {
+  it("publishes a scheduled post immediately via the same claim/execution path as a draft", async () => {
+    await connectMetaWithSelectedIdentity();
+    const assetId = await makeApprovedImageAsset();
+    const created = await createSocialPostAction({ caption: "Hi", assetId });
+    if (!created.success) throw new Error("setup failed");
+    await scheduleSocialPostAction(created.data.id, { scheduledAt: FUTURE_ISO, scheduledTimezone: null });
+    stubMetaPublishSuccess();
+
+    const result = await publishSocialPostNowAction(created.data.id);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.status).toBe("published");
   });
 });

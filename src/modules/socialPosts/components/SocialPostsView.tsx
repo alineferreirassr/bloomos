@@ -37,6 +37,7 @@ type LoadState = { status: "loading" } | { status: "error" } | { status: "ready"
 
 const STATUS_TONE: Record<SocialPostStatus, BadgeTone> = {
   draft: "neutral",
+  scheduled: "accent",
   publishing: "warning",
   published: "success",
   failed: "danger",
