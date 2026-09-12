@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { Tabs, TabList, Tab, TabPanel } from "@/components/ui/Tabs";
+import { SocialFeedPreview } from "@/modules/socialPosts/components/SocialFeedPreview";
 import {
   listSocialPostsAction,
   createSocialPostAction,
@@ -124,6 +126,7 @@ export function SocialPostsView() {
   const [scheduleDialog, setScheduleDialog] = useState<ScheduleDialogState | null>(null);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<{ id: string; message: string } | null>(null);
+  const [activeTab, setActiveTab] = useState<"posts" | "feed">("posts");
 
   function applyPanelData(data: PanelData | null) {
     if (!data) {
@@ -269,7 +272,14 @@ export function SocialPostsView() {
     <div className="flex flex-col gap-4">
       <PageHeader title="Social" subtitle="Publish Instagram posts using Amoré Bloom's connected Meta account." />
 
-      {!identity ? (
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "posts" | "feed")}>
+        <TabList aria-label="Social views">
+          <Tab value="posts">Posts</Tab>
+          <Tab value="feed">Feed Preview</Tab>
+        </TabList>
+
+        <TabPanel value="posts" className="mt-4 flex flex-col gap-4">
+          {!identity ? (
         <Card>
           <p className="text-sm text-text-muted">
             No Instagram publishing identity is selected yet.{" "}
@@ -435,6 +445,21 @@ export function SocialPostsView() {
           </ul>
         )}
       </Card>
+        </TabPanel>
+
+        <TabPanel value="feed" className="mt-4">
+          <SocialFeedPreview
+            posts={posts}
+            onCreatePost={() => setActiveTab("posts")}
+            onSchedule={(post) => setScheduleDialog({ kind: "schedule", post })}
+            onReschedule={(post) => setScheduleDialog({ kind: "reschedule", post })}
+            onCancelSchedule={handleCancelSchedule}
+            onPublishNow={handlePublish}
+            publishingId={publishingId}
+            cancelingId={cancelingId}
+          />
+        </TabPanel>
+      </Tabs>
 
       <SocialScheduleDialog
         open={scheduleDialog !== null}

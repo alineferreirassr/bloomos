@@ -607,3 +607,55 @@ describe("SocialPostsView — SOCIAL-LIVE-01A static regression guard", () => {
     expect(source).not.toMatch(/from ["']@\/core\/constants\/workspace["']/);
   });
 });
+
+describe("SocialPostsView — SOCIAL-04D Feed Preview", () => {
+  it("shows a Feed Preview tab alongside Posts", async () => {
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: null });
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
+
+    render(<SocialPostsView />);
+    await screen.findByText("No social posts yet.");
+
+    expect(screen.getByRole("tab", { name: "Posts" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Feed Preview" })).toBeInTheDocument();
+  });
+
+  it("switches from Posts to Feed Preview and back, rendering the same underlying posts either way", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ id: "p1", status: "draft", caption: "Shared caption" })] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: null });
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
+
+    render(<SocialPostsView />);
+    const postsPanel = await screen.findByRole("tabpanel");
+    expect(within(postsPanel).getByText("Shared caption")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Feed Preview" }));
+    const feedPanel = screen.getByRole("tabpanel");
+    expect(within(feedPanel).getByRole("button", { name: /draft: shared caption/i })).toBeInTheDocument();
+    expect(within(feedPanel).queryByText("No social posts yet.")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Posts" }));
+    expect(screen.getByText("Shared caption")).toBeInTheDocument();
+  });
+
+  it("an action taken from the Feed Preview detail refreshes both views through the same reload mechanism — no duplicated canonical state", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listSocialPostsAction)
+      .mockResolvedValueOnce({ success: true, data: [post({ id: "p1", status: "draft" })] })
+      .mockResolvedValue({ success: true, data: [post({ id: "p1", status: "published" })] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: null });
+    vi.mocked(listSocialMediaAssetsAction).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(publishSocialPostNowAction).mockResolvedValue({ success: true, data: post({ id: "p1", status: "published" }) });
+
+    render(<SocialPostsView />);
+    await user.click(await screen.findByRole("tab", { name: "Feed Preview" }));
+    await user.click(screen.getByRole("button", { name: /draft/i }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Publish Now" }));
+
+    await waitFor(() => expect(publishSocialPostNowAction).toHaveBeenCalledWith("p1"));
+    await user.click(screen.getByRole("tab", { name: "Posts" }));
+    expect(await screen.findByText("Published")).toBeInTheDocument();
+  });
+});
