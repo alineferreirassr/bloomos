@@ -94,6 +94,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // tracked, not-yet-released, unrelated to the Finance release this
   // exact-count assertion describes.
   "20260917100000_media_assets_approval_status.sql",
+  // SOCIAL-05C — Instagram analytics snapshot foundation. Independently-
+  // tracked, not-yet-released, unrelated to the Finance release this
+  // exact-count assertion describes.
+  "20260918100000_social_analytics_snapshot_foundation.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {
@@ -4398,5 +4402,112 @@ describe("SOCIAL-04B migration — social_posts scheduling foundation", () => {
     for (const line of code.split("\n")) {
       if (/^alter table/.test(line.trim())) expect(line).toMatch(/public\.social_posts/);
     }
+  });
+});
+
+describe("SOCIAL-05C migration — Instagram analytics snapshot foundation", () => {
+  function sql(): string {
+    return readMigration("20260918100000_social_analytics_snapshot_foundation.sql");
+  }
+
+  it("creates both snapshot tables, and nothing else — every alter table only enables RLS on one of the two new tables", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create table if not exists public\.social_post_metric_snapshots/);
+    expect(code).toMatch(/create table if not exists public\.social_account_metric_snapshots/);
+    const createTableMatches = code.match(/create table/gi) ?? [];
+    expect(createTableMatches).toHaveLength(2);
+    expect(code).not.toMatch(/\bdrop table\b/i);
+    for (const line of code.split("\n")) {
+      if (/^alter table/.test(line.trim())) {
+        expect(line).toMatch(/public\.social_(post|account)_metric_snapshots enable row level security;/);
+      }
+    }
+  });
+
+  it("social_post_metric_snapshots has workspace_id, social_post_id, provider_media_id, snapshot_date all required (not null, no default hiding a required value except snapshot_date/captured_at)", () => {
+    const code = stripSqlComments(sql());
+    const table = code.slice(code.indexOf("create table if not exists public.social_post_metric_snapshots"), code.indexOf("comment on table public.social_post_metric_snapshots"));
+    expect(table).toMatch(/workspace_id uuid not null references public\.workspaces \(id\) on delete cascade/);
+    expect(table).toMatch(/social_post_id uuid not null references public\.social_posts \(id\) on delete cascade/);
+    expect(table).toMatch(/provider_media_id text not null/);
+    expect(table).toMatch(/captured_at timestamptz not null default now\(\)/);
+    expect(table).toMatch(/snapshot_date date not null default current_date/);
+  });
+
+  it("social_post_metric_snapshots metric columns are all nullable — a missing provider metric is never coerced to a stored zero", () => {
+    const code = stripSqlComments(sql());
+    const table = code.slice(code.indexOf("create table if not exists public.social_post_metric_snapshots"), code.indexOf("comment on table public.social_post_metric_snapshots"));
+    for (const metric of ["views", "reach", "likes", "comments", "shares", "saved", "total_interactions"]) {
+      const line = table.split("\n").find((l) => l.trim().startsWith(`${metric} integer`));
+      expect(line, `expected a nullable ${metric} column`).toBeDefined();
+      expect(line).not.toMatch(/not null/);
+    }
+    // Deliberately excluded — the existing, live INSTAGRAM_IMAGE_INSIGHT_METRICS set never requests it (deprecated post 2024-07-02).
+    expect(table).not.toMatch(/\bimpressions\b/);
+  });
+
+  it("social_post_metric_snapshots raw_metrics defaults to an empty jsonb object, never null", () => {
+    const code = stripSqlComments(sql());
+    const table = code.slice(code.indexOf("create table if not exists public.social_post_metric_snapshots"), code.indexOf("comment on table public.social_post_metric_snapshots"));
+    expect(table).toMatch(/raw_metrics jsonb not null default '\{\}'::jsonb/);
+  });
+
+  it("social_post_metric_snapshots is unique per (social_post_id, snapshot_date) — the real idempotency key, never captured_at", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/constraint social_post_metric_snapshots_unique_per_day unique \(social_post_id, snapshot_date\)/);
+  });
+
+  it("social_account_metric_snapshots requires workspace_id/instagram_account_id/metric_date and only types reach/profile_views", () => {
+    const code = stripSqlComments(sql());
+    const table = code.slice(code.indexOf("create table if not exists public.social_account_metric_snapshots"), code.indexOf("comment on table public.social_account_metric_snapshots"));
+    expect(table).toMatch(/workspace_id uuid not null references public\.workspaces \(id\) on delete cascade/);
+    expect(table).toMatch(/instagram_account_id text not null/);
+    expect(table).toMatch(/metric_date date not null/);
+    expect(table).toMatch(/reach integer/);
+    expect(table).toMatch(/profile_views integer/);
+    // Conservatism (SOCIAL-05A Phase 5): every other candidate account metric stayed UNVERIFIED and must not get a typed column.
+    for (const unverified of ["follower_count", "accounts_engaged", "total_interactions", "reposts", "impressions"]) {
+      expect(table).not.toMatch(new RegExp(`\\b${unverified}\\b`));
+    }
+  });
+
+  it("social_account_metric_snapshots is unique per (workspace_id, instagram_account_id, metric_date)", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/constraint social_account_metric_snapshots_unique_per_day unique \(workspace_id, instagram_account_id, metric_date\)/);
+  });
+
+  it("enables RLS on both tables with a select-only workspace-member policy — no insert/update/delete policy", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/alter table public\.social_post_metric_snapshots enable row level security;/);
+    expect(code).toMatch(/alter table public\.social_account_metric_snapshots enable row level security;/);
+
+    expect(code).toMatch(/create policy "social_post_metric_snapshots_select_workspace_member"\s*\n\s*on public\.social_post_metric_snapshots for select\s*\n\s*to authenticated\s*\n\s*using \(public\.is_workspace_member\(workspace_id\)\);/);
+    expect(code).toMatch(/create policy "social_account_metric_snapshots_select_workspace_member"\s*\n\s*on public\.social_account_metric_snapshots for select\s*\n\s*to authenticated\s*\n\s*using \(public\.is_workspace_member\(workspace_id\)\);/);
+
+    const policyMatches = code.match(/create policy/gi) ?? [];
+    expect(policyMatches).toHaveLength(2);
+    expect(code).not.toMatch(/for insert/i);
+    expect(code).not.toMatch(/for update/i);
+    expect(code).not.toMatch(/for delete/i);
+  });
+
+  it("never disables RLS, drops a table, grants to anon, or touches any table besides the two new ones", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/disable row level security/);
+    expect(code).not.toMatch(/drop table/);
+    expect(code).not.toMatch(/\bdelete from\b/);
+    expect(code).not.toMatch(/\bto anon\b/);
+    expect(code).not.toMatch(/grant/);
+    for (const line of code.split("\n")) {
+      if (/^alter table/.test(line.trim())) {
+        expect(line).toMatch(/public\.social_(post|account)_metric_snapshots/);
+      }
+    }
+  });
+
+  it("never touches Meta, cron, or vercel.json-adjacent concerns — this is schema only", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/cron/);
+    expect(code).not.toMatch(/graph\.facebook\.com/);
   });
 });

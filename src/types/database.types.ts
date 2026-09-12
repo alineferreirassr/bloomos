@@ -2512,6 +2512,18 @@ export interface Database {
         Update: { id?: string; workspace_id?: string; created_by?: string | null; status?: string; caption?: string; asset_id?: string; target_provider?: string; target_connection_id?: string; target_page_id?: string; target_instagram_account_id?: string; provider_container_id?: string | null; provider_post_id?: string | null; provider_permalink?: string | null; provider_error?: string | null; published_at?: string | null; scheduled_at?: string | null; scheduled_timezone?: string | null; publish_attempts?: number; next_attempt_at?: string | null; created_at?: string; updated_at?: string };
         Relationships: [];
       };
+      social_post_metric_snapshots: {
+        Row: { id: string; workspace_id: string; social_post_id: string; provider_media_id: string; captured_at: string; snapshot_date: string; views: number | null; reach: number | null; likes: number | null; comments: number | null; shares: number | null; saved: number | null; total_interactions: number | null; raw_metrics: Json; created_at: string };
+        Insert: { id?: string; workspace_id: string; social_post_id: string; provider_media_id: string; captured_at?: string; snapshot_date?: string; views?: number | null; reach?: number | null; likes?: number | null; comments?: number | null; shares?: number | null; saved?: number | null; total_interactions?: number | null; raw_metrics?: Json; created_at?: string };
+        Update: { id?: string; workspace_id?: string; social_post_id?: string; provider_media_id?: string; captured_at?: string; snapshot_date?: string; views?: number | null; reach?: number | null; likes?: number | null; comments?: number | null; shares?: number | null; saved?: number | null; total_interactions?: number | null; raw_metrics?: Json; created_at?: string };
+        Relationships: [];
+      };
+      social_account_metric_snapshots: {
+        Row: { id: string; workspace_id: string; instagram_account_id: string; metric_date: string; reach: number | null; profile_views: number | null; raw_metrics: Json; created_at: string };
+        Insert: { id?: string; workspace_id: string; instagram_account_id: string; metric_date: string; reach?: number | null; profile_views?: number | null; raw_metrics?: Json; created_at?: string };
+        Update: { id?: string; workspace_id?: string; instagram_account_id?: string; metric_date?: string; reach?: number | null; profile_views?: number | null; raw_metrics?: Json; created_at?: string };
+        Relationships: [];
+      };
       oauth_pending_authorizations: {
         Row: { state: string; workspace_id: string; member_id: string | null; provider_id: string; connection_id: string; redirect_uri: string; code_verifier_ref: string | null; created_at: string; expires_at: string };
         Insert: { state: string; workspace_id: string; member_id?: string | null; provider_id: string; connection_id: string; redirect_uri: string; code_verifier_ref?: string | null; created_at?: string; expires_at: string };

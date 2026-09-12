@@ -13,6 +13,7 @@ import type { MediaFolder } from "@/types/mediaFolder";
 import type { MediaCollection } from "@/types/mediaCollection";
 import type { Contract } from "@/types/contract";
 import type { SocialPost } from "@/types/socialPost";
+import type { SocialAccountMetricSnapshot, SocialPostMetricSnapshot } from "@/types/socialMetricSnapshot";
 import type { ContractTemplate } from "@/types/contractTemplate";
 import type { ContractExhibit } from "@/types/contractExhibit";
 import type { Invoice } from "@/types/invoice";
@@ -225,6 +226,9 @@ import { supabaseContractsRepository } from "@/lib/data/contracts/supabaseReposi
 import type { CreateSocialPostInput, ScheduleSocialPostInput, UpdateSocialPostDraftInput } from "@/lib/data/socialPosts/repository";
 import { mockSocialPostsRepository } from "@/lib/data/socialPosts/mockRepository";
 import { supabaseSocialPostsRepository } from "@/lib/data/socialPosts/supabaseRepository";
+import type { UpsertSocialAccountMetricSnapshotInput, UpsertSocialPostMetricSnapshotInput } from "@/lib/data/socialAnalytics/repository";
+import { mockSocialAnalyticsRepository } from "@/lib/data/socialAnalytics/mockRepository";
+import { supabaseSocialAnalyticsRepository } from "@/lib/data/socialAnalytics/supabaseRepository";
 import type {
   InvoiceFilters,
   PaymentFilters,
@@ -291,6 +295,7 @@ import { resetChecklistStore } from "@/lib/data/mock/checklistStore";
 import { resetScheduleStore } from "@/lib/data/mock/scheduleStore";
 import { resetContractsStore } from "@/lib/data/mock/contractsStore";
 import { resetSocialPostsStore } from "@/lib/data/mock/socialPostsStore";
+import { resetSocialAnalyticsStore } from "@/lib/data/mock/socialAnalyticsStore";
 import { resetContractTemplatesStore } from "@/lib/data/mock/contractTemplatesStore";
 import { resetContractExhibitsStore } from "@/lib/data/mock/contractExhibitsStore";
 import { resetInvoicesStore } from "@/lib/data/mock/invoicesStore";
@@ -1271,6 +1276,39 @@ export async function rescheduleSocialPost(id: string, input: ScheduleSocialPost
 
 export async function cancelSocialPostSchedule(id: string): Promise<DataResult<SocialPost>> {
   return socialPostsRepository().cancelSocialPostSchedule(id);
+}
+
+// ---------------------------------------------------------------------------
+// SOCIAL-05C — Instagram analytics snapshot persistence foundation. Nothing
+// in the app calls these yet; SOCIAL-05D owns the sync engine that will.
+// ---------------------------------------------------------------------------
+
+function socialAnalyticsRepository() {
+  return selectRepository({ mock: mockSocialAnalyticsRepository, supabase: supabaseSocialAnalyticsRepository });
+}
+
+export async function upsertSocialPostMetricSnapshot(input: UpsertSocialPostMetricSnapshotInput): Promise<DataResult<SocialPostMetricSnapshot>> {
+  return socialAnalyticsRepository().upsertSocialPostMetricSnapshot(input);
+}
+
+export async function listSocialPostMetricSnapshots(workspaceId: string, socialPostId: string): Promise<SocialPostMetricSnapshot[]> {
+  return socialAnalyticsRepository().listSocialPostMetricSnapshots(workspaceId, socialPostId);
+}
+
+export async function getLatestSocialPostMetricSnapshot(workspaceId: string, socialPostId: string): Promise<SocialPostMetricSnapshot | null> {
+  return socialAnalyticsRepository().getLatestSocialPostMetricSnapshot(workspaceId, socialPostId);
+}
+
+export async function upsertSocialAccountMetricSnapshot(input: UpsertSocialAccountMetricSnapshotInput): Promise<DataResult<SocialAccountMetricSnapshot>> {
+  return socialAnalyticsRepository().upsertSocialAccountMetricSnapshot(input);
+}
+
+export async function listSocialAccountMetricSnapshots(workspaceId: string, instagramAccountId: string): Promise<SocialAccountMetricSnapshot[]> {
+  return socialAnalyticsRepository().listSocialAccountMetricSnapshots(workspaceId, instagramAccountId);
+}
+
+export async function getLatestSocialAccountMetricSnapshot(workspaceId: string, instagramAccountId: string): Promise<SocialAccountMetricSnapshot | null> {
+  return socialAnalyticsRepository().getLatestSocialAccountMetricSnapshot(workspaceId, instagramAccountId);
 }
 
 // ---------------------------------------------------------------------------
@@ -3574,6 +3612,7 @@ export function resetAllMockData(): void {
   resetContractTemplatesStore();
   resetContractExhibitsStore();
   resetSocialPostsStore();
+  resetSocialAnalyticsStore();
   resetInvoicesStore();
   resetPaymentsStore();
   resetExpensesStore();

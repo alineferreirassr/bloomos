@@ -16,6 +16,7 @@ import type { TimelineActivity } from "@/types/timelineActivity";
 import type { MediaAsset } from "@/types/mediaAsset";
 import type { MediaAssetStatus } from "@/core/enums/mediaAssetStatus";
 import type { SocialPost } from "@/types/socialPost";
+import type { SocialAccountMetricSnapshot, SocialPostMetricSnapshot, RawMetrics } from "@/types/socialMetricSnapshot";
 import type { SocialPostStatus } from "@/core/enums/socialPostStatus";
 import type { Contract, ContractVersionSnapshot } from "@/types/contract";
 import type { ContractTemplate } from "@/types/contractTemplate";
@@ -126,6 +127,8 @@ type ChecklistItemRow = Database["public"]["Tables"]["checklist_items"]["Row"];
 type EventScheduleItemRow = Database["public"]["Tables"]["event_schedule_items"]["Row"];
 type ContractTemplateRow = Database["public"]["Tables"]["contract_templates"]["Row"];
 type SocialPostRow = Database["public"]["Tables"]["social_posts"]["Row"];
+type SocialPostMetricSnapshotRow = Database["public"]["Tables"]["social_post_metric_snapshots"]["Row"];
+type SocialAccountMetricSnapshotRow = Database["public"]["Tables"]["social_account_metric_snapshots"]["Row"];
 type ContractRow = Database["public"]["Tables"]["contracts"]["Row"];
 type ContractExhibitRow = Database["public"]["Tables"]["contract_exhibits"]["Row"];
 type NoteRow = Database["public"]["Tables"]["notes"]["Row"];
@@ -1314,6 +1317,40 @@ export function mapSocialPostRow(row: SocialPostRow): SocialPost {
     next_attempt_at: row.next_attempt_at,
     created_at: row.created_at,
     updated_at: row.updated_at,
+  };
+}
+
+/** SOCIAL-05C — `raw_metrics` is stored as `Json` (Supabase's generic column type); this narrows it to the plain `Record<string, number>` shape the repository/domain layer actually writes and reads, never anything else (see the migration's own "Meta metric values only" comment). */
+export function mapSocialPostMetricSnapshotRow(row: SocialPostMetricSnapshotRow): SocialPostMetricSnapshot {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    social_post_id: row.social_post_id,
+    provider_media_id: row.provider_media_id,
+    captured_at: row.captured_at,
+    snapshot_date: row.snapshot_date,
+    views: row.views,
+    reach: row.reach,
+    likes: row.likes,
+    comments: row.comments,
+    shares: row.shares,
+    saved: row.saved,
+    total_interactions: row.total_interactions,
+    raw_metrics: (row.raw_metrics ?? {}) as RawMetrics,
+    created_at: row.created_at,
+  };
+}
+
+export function mapSocialAccountMetricSnapshotRow(row: SocialAccountMetricSnapshotRow): SocialAccountMetricSnapshot {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    instagram_account_id: row.instagram_account_id,
+    metric_date: row.metric_date,
+    reach: row.reach,
+    profile_views: row.profile_views,
+    raw_metrics: (row.raw_metrics ?? {}) as RawMetrics,
+    created_at: row.created_at,
   };
 }
 
