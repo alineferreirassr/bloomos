@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("@/modules/socialPosts/socialPostActions", () => ({
   listSocialPostsAction: vi.fn(),
   createSocialPostAction: vi.fn(),
   publishSocialPostNowAction: vi.fn(),
+  scheduleSocialPostAction: vi.fn(),
+  rescheduleSocialPostAction: vi.fn(),
+  cancelSocialPostScheduleAction: vi.fn(),
   getSocialPostInsightsAction: vi.fn(),
 }));
 
@@ -18,7 +21,15 @@ vi.mock("@/lib/data", () => ({
   getMediaAssetDownloadUrl: vi.fn(),
 }));
 
-import { listSocialPostsAction, createSocialPostAction, publishSocialPostNowAction, getSocialPostInsightsAction } from "@/modules/socialPosts/socialPostActions";
+import {
+  listSocialPostsAction,
+  createSocialPostAction,
+  publishSocialPostNowAction,
+  scheduleSocialPostAction,
+  rescheduleSocialPostAction,
+  cancelSocialPostScheduleAction,
+  getSocialPostInsightsAction,
+} from "@/modules/socialPosts/socialPostActions";
 import { getSelectedMetaPublishingIdentityAction } from "@/modules/integrations/meta/metaAccountActions";
 import { listMediaAssetsForWorkspace, getMediaAssetDownloadUrl } from "@/lib/data";
 import { SocialPostsView } from "@/modules/socialPosts/components/SocialPostsView";
@@ -273,5 +284,277 @@ describe("SocialPostsView", () => {
     await user.click(await screen.findByRole("button", { name: "Refresh insights" }));
 
     expect(await screen.findByText("Reconnect Meta to enable Instagram analytics.")).toBeInTheDocument();
+  });
+});
+
+function setDialogDateTime(dateValue: string, timeValue: string) {
+  const dialog = screen.getByRole("dialog");
+  fireEvent.change(within(dialog).getByLabelText("Date"), { target: { value: dateValue } });
+  fireEvent.change(within(dialog).getByLabelText("Time"), { target: { value: timeValue } });
+}
+
+describe("SocialPostsView — SOCIAL-04C scheduling", () => {
+  it("shows a Schedule control for a draft post, adjacent to Publish Now", async () => {
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ status: "draft" })] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+
+    render(<SocialPostsView />);
+    const postsList = await screen.findByRole("list");
+    expect(within(postsList).getByRole("button", { name: "Schedule" })).toBeInTheDocument();
+    expect(within(postsList).getByRole("button", { name: /publish now/i })).toBeInTheDocument();
+  });
+
+  it("opens the schedule dialog for an existing draft and calls scheduleSocialPostAction with a real UTC instant + resolved timezone", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ id: "p1", status: "draft" })] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(scheduleSocialPostAction).mockResolvedValue({ success: true, data: post({ id: "p1", status: "scheduled", scheduled_at: "2099-06-01T19:00:00.000Z", scheduled_timezone: "UTC" }) });
+
+    render(<SocialPostsView />);
+    const postsList = await screen.findByRole("list");
+    await user.click(within(postsList).getByRole("button", { name: "Schedule" }));
+
+    expect(screen.getByRole("dialog", { name: "Schedule post" })).toBeInTheDocument();
+    setDialogDateTime("2099-06-01", "15:00");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Schedule" }));
+
+    await waitFor(() => expect(scheduleSocialPostAction).toHaveBeenCalledTimes(1));
+    const [id, input] = vi.mocked(scheduleSocialPostAction).mock.calls[0];
+    expect(id).toBe("p1");
+    expect(input.scheduledAt).toBe(new Date(2099, 5, 1, 15, 0, 0, 0).toISOString());
+    expect(input.scheduledTimezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  });
+
+  it("schedules a brand-new post from the composer without a separate creation flow — createSocialPostAction then scheduleSocialPostAction, exactly once each", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([image()]);
+    vi.mocked(getMediaAssetDownloadUrl).mockResolvedValue({ success: true, data: { url: "https://signed.example.com/post.jpg", expiresAt: "2026-01-01T00:05:00Z" } });
+    vi.mocked(createSocialPostAction).mockResolvedValue({ success: true, data: post({ id: "new_post" }) });
+    vi.mocked(scheduleSocialPostAction).mockResolvedValue({ success: true, data: post({ id: "new_post", status: "scheduled" }) });
+
+    render(<SocialPostsView />);
+    await user.click(await screen.findByRole("button", { name: "post.jpg" }));
+    await user.click(screen.getByRole("button", { name: "Schedule" }));
+
+    setDialogDateTime("2099-06-01", "15:00");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Schedule" }));
+
+    await waitFor(() => expect(createSocialPostAction).toHaveBeenCalledWith({ caption: "", assetId: "asset_1" }));
+    await waitFor(() => expect(scheduleSocialPostAction).toHaveBeenCalledWith("new_post", expect.any(Object)));
+    expect(createSocialPostAction).toHaveBeenCalledTimes(1);
+    expect(scheduleSocialPostAction).toHaveBeenCalledTimes(1);
+    expect(publishSocialPostNowAction).not.toHaveBeenCalled();
+  });
+
+  it("displays 'Scheduled' with a humanized (never raw ISO) date/time after a successful schedule", async () => {
+    vi.mocked(listSocialPostsAction).mockResolvedValue({
+      success: true,
+      data: [post({ status: "scheduled", scheduled_at: "2099-06-01T19:00:00.000Z", scheduled_timezone: "UTC" })],
+    });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+
+    render(<SocialPostsView />);
+
+    expect(await screen.findByText("Scheduled")).toBeInTheDocument();
+    expect(screen.getByText(/Scheduled for/)).toBeInTheDocument();
+    expect(screen.queryByText(/2099-06-01T19:00:00/)).not.toBeInTheDocument();
+  });
+
+  it("a controlled schedule failure releases the busy state and shows the exact error, without closing the dialog", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ id: "p1", status: "draft" })] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(scheduleSocialPostAction).mockResolvedValue({ success: false, error: "Only an approved image can be published." });
+
+    render(<SocialPostsView />);
+    const postsList = await screen.findByRole("list");
+    await user.click(within(postsList).getByRole("button", { name: "Schedule" }));
+    setDialogDateTime("2099-06-01", "15:00");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Schedule" }));
+
+    expect(await screen.findByText("Only an approved image can be published.")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Schedule" })).not.toBeDisabled();
+  });
+
+  it("Reschedule pre-populates the existing schedule and submits an updated UTC instant via rescheduleSocialPostAction", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listSocialPostsAction).mockResolvedValue({
+      success: true,
+      data: [post({ id: "p1", status: "scheduled", scheduled_at: "2099-06-01T15:00:00.000Z", scheduled_timezone: "UTC" })],
+    });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(rescheduleSocialPostAction).mockResolvedValue({ success: true, data: post({ id: "p1", status: "scheduled", scheduled_at: "2099-07-01T15:00:00.000Z" }) });
+
+    render(<SocialPostsView />);
+    const postsList = await screen.findByRole("list");
+    await user.click(within(postsList).getByRole("button", { name: "Reschedule" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Reschedule post" });
+    expect((within(dialog).getByLabelText("Date") as HTMLInputElement).value).toBe("2099-06-01");
+    expect((within(dialog).getByLabelText("Time") as HTMLInputElement).value).toBe("15:00");
+
+    setDialogDateTime("2099-07-01", "15:00");
+    await user.click(within(dialog).getByRole("button", { name: "Reschedule" }));
+
+    await waitFor(() => expect(rescheduleSocialPostAction).toHaveBeenCalledTimes(1));
+    const [id, input] = vi.mocked(rescheduleSocialPostAction).mock.calls[0];
+    expect(id).toBe("p1");
+    expect(input.scheduledAt).toBe(new Date(2099, 6, 1, 15, 0, 0, 0).toISOString());
+  });
+
+  it("Cancel schedule confirms, calls cancelSocialPostScheduleAction, and returns the post to Draft", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listSocialPostsAction).mockResolvedValueOnce({ success: true, data: [post({ id: "p1", status: "scheduled", scheduled_at: "2099-06-01T15:00:00.000Z" })] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(cancelSocialPostScheduleAction).mockResolvedValue({ success: true, data: post({ id: "p1", status: "draft" }) });
+    vi.mocked(listSocialPostsAction).mockResolvedValueOnce({ success: true, data: [post({ id: "p1", status: "draft" })] });
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(<SocialPostsView />);
+    const postsList = await screen.findByRole("list");
+    await user.click(within(postsList).getByRole("button", { name: "Cancel schedule" }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    await waitFor(() => expect(cancelSocialPostScheduleAction).toHaveBeenCalledWith("p1"));
+    expect(await screen.findByText("Draft")).toBeInTheDocument();
+    confirmSpy.mockRestore();
+  });
+
+  it("Cancel schedule does nothing if the confirmation is declined — never calls the action", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ id: "p1", status: "scheduled", scheduled_at: "2099-06-01T15:00:00.000Z" })] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    render(<SocialPostsView />);
+    const postsList = await screen.findByRole("list");
+    await user.click(within(postsList).getByRole("button", { name: "Cancel schedule" }));
+
+    expect(cancelSocialPostScheduleAction).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("never labels schedule cancellation as Delete", async () => {
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ status: "scheduled", scheduled_at: "2099-06-01T15:00:00.000Z" })] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+
+    render(<SocialPostsView />);
+    const postsList = await screen.findByRole("list");
+    expect(within(postsList).queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
+  });
+
+  it("Publish Now remains available on a scheduled post and calls the same publishSocialPostNowAction", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ id: "p1", status: "scheduled", scheduled_at: "2099-06-01T15:00:00.000Z" })] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(publishSocialPostNowAction).mockResolvedValue({ success: true, data: post({ id: "p1", status: "published" }) });
+
+    render(<SocialPostsView />);
+    const postsList = await screen.findByRole("list");
+    await user.click(within(postsList).getByRole("button", { name: /publish now/i }));
+
+    await waitFor(() => expect(publishSocialPostNowAction).toHaveBeenCalledWith("p1"));
+  });
+
+  it("shows the deterministic result when the scheduler has already claimed a scheduled post — never an automatic client retry", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ id: "p1", status: "scheduled", scheduled_at: "2099-06-01T15:00:00.000Z" })] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    vi.mocked(publishSocialPostNowAction).mockResolvedValue({ success: false, error: "This post is already publishing." });
+
+    render(<SocialPostsView />);
+    const postsList = await screen.findByRole("list");
+    await user.click(within(postsList).getByRole("button", { name: /publish now/i }));
+
+    expect(await screen.findByText("This post is already publishing.")).toBeInTheDocument();
+    expect(publishSocialPostNowAction).toHaveBeenCalledTimes(1); // no automatic retry
+  });
+
+  it("Publishing state hides Schedule/Reschedule/Cancel and shows a clear 'Publishing…' indicator, never implying cancellation is still possible", async () => {
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ status: "publishing" })] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+
+    render(<SocialPostsView />);
+    const postsList = await screen.findByRole("list");
+
+    expect(within(postsList).getByText("Publishing…")).toBeInTheDocument();
+    expect(within(postsList).queryByRole("button", { name: "Schedule" })).not.toBeInTheDocument();
+    expect(within(postsList).queryByRole("button", { name: "Reschedule" })).not.toBeInTheDocument();
+    expect(within(postsList).queryByRole("button", { name: "Cancel schedule" })).not.toBeInTheDocument();
+    expect(within(postsList).queryByRole("button", { name: /publish now/i })).not.toBeInTheDocument();
+  });
+
+  it("Published state never shows Schedule/Reschedule/Cancel schedule controls", async () => {
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ status: "published" })] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+
+    render(<SocialPostsView />);
+    const postsList = await screen.findByRole("list");
+    await screen.findByText("Published");
+
+    expect(within(postsList).queryByRole("button", { name: "Schedule" })).not.toBeInTheDocument();
+    expect(within(postsList).queryByRole("button", { name: "Reschedule" })).not.toBeInTheDocument();
+    expect(within(postsList).queryByRole("button", { name: "Cancel schedule" })).not.toBeInTheDocument();
+  });
+
+  it("a failed post with a pending durable retry shows a humanized 'Retry scheduled' hint, never a raw next_attempt_at timestamp or an attempt count", async () => {
+    vi.mocked(listSocialPostsAction).mockResolvedValue({
+      success: true,
+      data: [post({ status: "failed", provider_error: "Instagram is rate-limiting requests right now. Try again in a few minutes.", next_attempt_at: "2099-06-01T15:05:00.000Z", scheduled_timezone: "UTC", publish_attempts: 2 })],
+    });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+
+    render(<SocialPostsView />);
+
+    expect(await screen.findByText(/Retry scheduled for/)).toBeInTheDocument();
+    expect(screen.queryByText(/attempt #?2/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/2099-06-01T15:05:00/)).not.toBeInTheDocument();
+  });
+
+  it("a failed post still offers Schedule to explicitly re-enter the scheduling flow", async () => {
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ status: "failed", provider_error: "Reconnect Meta to enable publishing." })] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+
+    render(<SocialPostsView />);
+    const postsList = await screen.findByRole("list");
+    expect(within(postsList).getByRole("button", { name: "Schedule" })).toBeInTheDocument();
+    expect(within(postsList).getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+
+  it("cancel schedule is protected against double submission — the button disables immediately", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listSocialPostsAction).mockResolvedValue({ success: true, data: [post({ id: "p1", status: "scheduled", scheduled_at: "2099-06-01T15:00:00.000Z" })] });
+    vi.mocked(getSelectedMetaPublishingIdentityAction).mockResolvedValue({ success: true, data: IDENTITY });
+    vi.mocked(listMediaAssetsForWorkspace).mockResolvedValue([]);
+    let resolveCancel: (value: { success: true; data: SocialPost }) => void = () => {};
+    vi.mocked(cancelSocialPostScheduleAction).mockReturnValue(new Promise((resolve) => (resolveCancel = resolve)));
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(<SocialPostsView />);
+    const postsList = await screen.findByRole("list");
+    await user.click(within(postsList).getByRole("button", { name: "Cancel schedule" }));
+
+    expect(within(postsList).getByRole("button", { name: "Cancelling…" })).toBeDisabled();
+
+    resolveCancel({ success: true, data: post({ id: "p1", status: "draft" }) });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Cancelling…" })).not.toBeInTheDocument());
+    confirmSpy.mockRestore();
   });
 });

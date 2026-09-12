@@ -12,6 +12,9 @@ import {
   listSocialPostsAction,
   createSocialPostAction,
   publishSocialPostNowAction,
+  scheduleSocialPostAction,
+  rescheduleSocialPostAction,
+  cancelSocialPostScheduleAction,
   getSocialPostInsightsAction,
   type SocialPostInsights,
 } from "@/modules/socialPosts/socialPostActions";
@@ -19,6 +22,7 @@ import { getSelectedMetaPublishingIdentityAction, type MetaSelectedIdentity } fr
 import { listMediaAssetsForWorkspace, getMediaAssetDownloadUrl } from "@/lib/data";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 import { SOCIAL_POST_STATUS_LABELS, type SocialPostStatus } from "@/core/enums/socialPostStatus";
+import { SocialScheduleDialog, type ScheduleSubmitInput } from "@/modules/socialPosts/components/SocialScheduleDialog";
 import type { SocialPost } from "@/types/socialPost";
 import type { MediaAsset } from "@/types/mediaAsset";
 
@@ -71,6 +75,13 @@ function assetLabel(asset: MediaAsset): string {
   return asset.original_filename;
 }
 
+/** SOCIAL-04C — never a raw ISO string: a humanized date/time, rendered back in the timezone the post was actually scheduled for (never the current browser timezone, which may differ from that). No precision-guarantee language — the real scheduler cadence isn't platform-verified (SOCIAL-04B's own honest disclosure). */
+function formatScheduledInstant(iso: string, timezone: string | null): string {
+  return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: timezone ?? undefined });
+}
+
+type ScheduleDialogState = { kind: "new" } | { kind: "schedule"; post: SocialPost } | { kind: "reschedule"; post: SocialPost };
+
 /**
  * SOCIAL-03 — the smallest useful Social UI: a list of real, persisted
  * Social Posts plus an inline Create Post panel (caption + an Asset
@@ -92,6 +103,9 @@ export function SocialPostsView() {
   const [insightsById, setInsightsById] = useState<Record<string, SocialPostInsights>>({});
   const [insightsLoadingId, setInsightsLoadingId] = useState<string | null>(null);
   const [insightsError, setInsightsError] = useState<{ id: string; message: string } | null>(null);
+  const [scheduleDialog, setScheduleDialog] = useState<ScheduleDialogState | null>(null);
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<{ id: string; message: string } | null>(null);
 
   function applyPanelData(data: PanelData | null) {
     if (!data) {
@@ -161,6 +175,49 @@ export function SocialPostsView() {
     const result = await publishSocialPostNowAction(post.id);
     setPublishingId(null);
     if (!result.success) setPublishError({ id: post.id, message: result.error });
+    reload();
+  }
+
+  /**
+   * SOCIAL-04C — the one submit handler behind every dialog opening
+   * (`new`/`schedule`/`reschedule`), matching Phase 3's "use the existing
+   * composer, never a second one" requirement: scheduling a brand-new post
+   * is still exactly one `createSocialPostAction` call, immediately
+   * followed by `scheduleSocialPostAction` — never a separate creation
+   * flow. The dialog itself owns date/time/timezone collection and
+   * future-time validation; this only ever forwards an already-validated
+   * UTC instant + IANA timezone to the real backend action, which remains
+   * the authoritative validator.
+   */
+  async function handleScheduleSubmit(input: ScheduleSubmitInput): Promise<{ success: boolean; error?: string }> {
+    if (!scheduleDialog) return { success: false, error: "Something went wrong. Please try again." };
+
+    if (scheduleDialog.kind === "new") {
+      if (!selectedAssetId) return { success: false, error: "Select an image to publish." };
+      const created = await createSocialPostAction({ caption, assetId: selectedAssetId });
+      if (!created.success) return { success: false, error: created.error };
+      const scheduled = await scheduleSocialPostAction(created.data.id, input);
+      if (!scheduled.success) return { success: false, error: scheduled.error };
+      setCaption("");
+      setSelectedAssetId(null);
+      reload();
+      return { success: true };
+    }
+
+    const action = scheduleDialog.kind === "schedule" ? scheduleSocialPostAction : rescheduleSocialPostAction;
+    const result = await action(scheduleDialog.post.id, input);
+    if (!result.success) return { success: false, error: result.error };
+    reload();
+    return { success: true };
+  }
+
+  async function handleCancelSchedule(post: SocialPost) {
+    if (!window.confirm("Cancel this scheduled post? It will return to Draft — your caption and image stay exactly as they are.")) return;
+    setCancelingId(post.id);
+    setActionError(null);
+    const result = await cancelSocialPostScheduleAction(post.id);
+    setCancelingId(null);
+    if (!result.success) setActionError({ id: post.id, message: result.error });
     reload();
   }
 
@@ -247,9 +304,12 @@ export function SocialPostsView() {
             </p>
           ) : null}
 
-          <div className="mt-4 flex items-center gap-3">
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             <Button variant="secondary" onClick={() => handleCreate(false)} disabled={busy || !selectedAssetId}>
               {busy ? "Saving…" : "Save Draft"}
+            </Button>
+            <Button variant="secondary" onClick={() => setScheduleDialog({ kind: "new" })} disabled={busy || !selectedAssetId}>
+              Schedule
             </Button>
             <Button onClick={() => handleCreate(true)} disabled={busy || !selectedAssetId}>
               {busy ? "Publishing…" : "Publish Now"}
@@ -272,14 +332,25 @@ export function SocialPostsView() {
                     <span className="text-xs text-text-muted">{new Date(post.created_at).toLocaleString()}</span>
                   </div>
                   <p className="mt-1 truncate text-sm text-text">{post.caption || "(no caption)"}</p>
+                  {post.status === "scheduled" && post.scheduled_at ? (
+                    <p className="mt-1 text-xs text-text-muted">Scheduled for {formatScheduledInstant(post.scheduled_at, post.scheduled_timezone)}</p>
+                  ) : null}
                   {post.status === "failed" && post.provider_error ? (
                     <p role="alert" className="mt-1 text-xs text-rose-600 dark:text-rose-400">
                       {post.provider_error}
                     </p>
                   ) : null}
+                  {post.status === "failed" && post.next_attempt_at ? (
+                    <p className="mt-1 text-xs text-text-muted">Retry scheduled for {formatScheduledInstant(post.next_attempt_at, post.scheduled_timezone)}</p>
+                  ) : null}
                   {publishError?.id === post.id ? (
                     <p role="alert" className="mt-1 text-xs text-rose-600 dark:text-rose-400">
                       {publishError.message}
+                    </p>
+                  ) : null}
+                  {actionError?.id === post.id ? (
+                    <p role="alert" className="mt-1 text-xs text-rose-600 dark:text-rose-400">
+                      {actionError.message}
                     </p>
                   ) : null}
                   {post.status === "published" && post.provider_permalink ? (
@@ -309,21 +380,53 @@ export function SocialPostsView() {
                     </div>
                   ) : null}
                 </div>
-                {(post.status === "draft" || post.status === "failed") && (
-                  <Button variant="secondary" onClick={() => handlePublish(post)} disabled={publishingId === post.id}>
-                    {publishingId === post.id ? "Publishing…" : post.status === "failed" ? "Retry" : "Publish Now"}
-                  </Button>
-                )}
-                {post.status === "published" && (
-                  <Button variant="secondary" onClick={() => handleFetchInsights(post)} disabled={insightsLoadingId === post.id}>
-                    {insightsLoadingId === post.id ? "Loading…" : "Refresh insights"}
-                  </Button>
-                )}
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  {(post.status === "draft" || post.status === "failed") && (
+                    <Button variant="secondary" onClick={() => setScheduleDialog({ kind: "schedule", post })}>
+                      Schedule
+                    </Button>
+                  )}
+                  {(post.status === "draft" || post.status === "failed" || post.status === "scheduled") && (
+                    <Button variant="secondary" onClick={() => handlePublish(post)} disabled={publishingId === post.id}>
+                      {publishingId === post.id ? "Publishing…" : post.status === "failed" ? "Retry" : "Publish Now"}
+                    </Button>
+                  )}
+                  {post.status === "scheduled" && (
+                    <>
+                      <Button variant="secondary" onClick={() => setScheduleDialog({ kind: "reschedule", post })} disabled={publishingId === post.id}>
+                        Reschedule
+                      </Button>
+                      <Button variant="secondary" onClick={() => handleCancelSchedule(post)} disabled={cancelingId === post.id || publishingId === post.id}>
+                        {cancelingId === post.id ? "Cancelling…" : "Cancel schedule"}
+                      </Button>
+                    </>
+                  )}
+                  {post.status === "publishing" && (
+                    <span aria-live="polite" className="text-xs font-medium text-text-muted">
+                      Publishing…
+                    </span>
+                  )}
+                  {post.status === "published" && (
+                    <Button variant="secondary" onClick={() => handleFetchInsights(post)} disabled={insightsLoadingId === post.id}>
+                      {insightsLoadingId === post.id ? "Loading…" : "Refresh insights"}
+                    </Button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
         )}
       </Card>
+
+      <SocialScheduleDialog
+        open={scheduleDialog !== null}
+        onClose={() => setScheduleDialog(null)}
+        title={scheduleDialog?.kind === "reschedule" ? "Reschedule post" : "Schedule post"}
+        submitLabel={scheduleDialog?.kind === "reschedule" ? "Reschedule" : "Schedule"}
+        initialScheduledAt={scheduleDialog?.kind === "reschedule" ? scheduleDialog.post.scheduled_at : null}
+        initialScheduledTimezone={scheduleDialog?.kind === "reschedule" ? scheduleDialog.post.scheduled_timezone : null}
+        onSubmit={handleScheduleSubmit}
+      />
     </div>
   );
 }
