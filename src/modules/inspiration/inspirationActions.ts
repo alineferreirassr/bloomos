@@ -220,17 +220,24 @@ export async function listInspirationItemsAction(filters: ListInspirationItemsAc
 }
 
 /**
- * SOCIAL-06E — the Edit dialog's own MediaAsset picker feed. Mirrors
- * `listSocialMediaAssetsAction`'s exact shape (`socialPostActions.ts`):
- * gated on this module's own permission (`social.create`, since the picker
- * only ever renders inside the write-gated Edit flow), workspace id
- * resolved server-side, never trusted from the browser. Deliberately no
- * status/mime-type filter — Phase 12's own instruction that Inspiration
- * attachment is not the Social publish-approval gate, and Inspiration may
- * reference any file type, not just publishable JPEGs. Excludes archived
- * assets by default (the repository's own `listMediaAssetsForWorkspace`
- * default), matching the same "don't offer a stale/withdrawn file" logic
- * `AssetLibraryView` already assumes.
+ * SOCIAL-06E — the Edit dialog's own MediaAsset picker feed. Structurally
+ * mirrors `listSocialMediaAssetsAction`'s shape (`socialPostActions.ts`) —
+ * same "resolve session, call `listMediaAssetsForWorkspace`, catch and
+ * return a generic error" skeleton — but deliberately does NOT mirror its
+ * *permission*: that action gates on `social.view` because it's a pure read
+ * (populating a read-only composer preview), while this one gates on
+ * `social.create` because listing options only ever serves the attach/
+ * replace flow, which Phase 3's own permission model places under
+ * `social.create` alongside archive/restore/attach/remove/replace — a
+ * `social.view`-only member has no reachable UI that would ever call this,
+ * and gating it as a read would be a real (if inert today) inconsistency
+ * with that model. Workspace id is resolved server-side, never trusted from
+ * the browser. Deliberately no status/mime-type filter — Phase 12's own
+ * instruction that Inspiration attachment is not the Social publish-
+ * approval gate, and Inspiration may reference any file type, not just
+ * publishable JPEGs. Excludes archived assets by default (the repository's
+ * own `listMediaAssetsForWorkspace` default), matching the same "don't
+ * offer a stale/withdrawn file" logic `AssetLibraryView` already assumes.
  */
 export async function listInspirationMediaAssetOptionsAction(): Promise<Result<MediaAsset[]>> {
   const resolved = await requireActiveSession("social.create");

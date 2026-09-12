@@ -105,4 +105,16 @@ describe("Modal", () => {
     );
     expect(document.body.style.overflow).not.toBe("hidden");
   });
+
+  it("makes the content wrapper independently scrollable, so a tall form (e.g. SOCIAL-06E's Edit dialog) never becomes inaccessible while page scroll is locked", () => {
+    render(
+      <Modal open={true} onClose={vi.fn()} title="Confirm">
+        <p>content</p>
+      </Modal>,
+    );
+    const dialog = screen.getByRole("dialog");
+    const contentWrapper = dialog.querySelector("p")?.parentElement;
+    expect(contentWrapper?.className).toContain("overflow-y-auto");
+    expect(contentWrapper?.className).toMatch(/max-h-\[/);
+  });
 });

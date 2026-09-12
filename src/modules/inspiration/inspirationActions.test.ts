@@ -420,12 +420,13 @@ describe("SOCIAL-06E — listInspirationMediaAssetOptionsAction", () => {
       mediaAsset({ id: "asset_pending", status: "pending" }),
       mediaAsset({ id: "asset_approved", status: "approved" }),
       mediaAsset({ id: "asset_rejected", status: "rejected" }),
+      mediaAsset({ id: "asset_needs_revision", status: "needs_revision" }),
     ]);
 
     const result = await listInspirationMediaAssetOptionsAction();
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect(result.data.map((a) => a.id).sort()).toEqual(["asset_approved", "asset_pending", "asset_rejected"]);
+    expect(result.data.map((a) => a.id).sort()).toEqual(["asset_approved", "asset_needs_revision", "asset_pending", "asset_rejected"]);
   });
 
   it("never returns another workspace's assets", async () => {

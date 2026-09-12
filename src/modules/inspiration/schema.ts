@@ -34,8 +34,12 @@ const inspirationItemBaseSchema = z.object({
   media_asset_id: z.string().trim().nullable(),
 });
 
+// SOCIAL-06F — the inferred `z.infer` types this schema would naturally
+// export are deliberately absent: `inspirationActions.ts` defines its own
+// hand-written `InspirationItemActionInput`/`InspirationItemActionUpdateInput`
+// (the actual public contract, snake_case matching the browser payload) and
+// never imported these, so keeping both around was dead, unreachable surface
+// area that could silently drift from the real contract. Only the schema
+// values themselves are exported — they're what the action file actually uses.
 export const inspirationItemInputSchema = inspirationItemBaseSchema;
-export type InspirationItemInput = z.infer<typeof inspirationItemInputSchema>;
-
 export const inspirationItemUpdateSchema = inspirationItemBaseSchema.partial();
-export type InspirationItemUpdateInput = z.infer<typeof inspirationItemUpdateSchema>;

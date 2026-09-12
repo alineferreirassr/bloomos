@@ -77,6 +77,11 @@ describe("InspirationDetailDialog", () => {
     expect(screen.queryByRole("link", { name: "Open source link" })).not.toBeInTheDocument();
   });
 
+  it("defense-in-depth: never renders a link for an unsafe scheme, even if one somehow reached this component", () => {
+    render(<InspirationDetailDialog item={item({ source_url: "javascript:alert(1)" })} onClose={vi.fn()} canManage onChanged={vi.fn()} />);
+    expect(screen.queryByRole("link", { name: "Open source link" })).not.toBeInTheDocument();
+  });
+
   it("shows Archive for an active item and Restore for an archived item, only when canManage", () => {
     const { rerender } = render(<InspirationDetailDialog item={item({ archived_at: null })} onClose={vi.fn()} canManage onChanged={vi.fn()} />);
     expect(screen.getByRole("button", { name: "Archive" })).toBeInTheDocument();

@@ -212,12 +212,14 @@ describe("EditInspirationDialog", () => {
       expect(screen.getByRole("button", { name: "Remove attachment" })).toBeInTheDocument();
     });
 
-    it("opens the picker and lists same-workspace assets of any status (pending/approved/rejected) — no publish-approval gate", async () => {
+    it("opens the picker and lists same-workspace assets of any status (pending/approved/rejected/needs_revision) — no publish-approval gate", async () => {
       vi.mocked(listInspirationMediaAssetOptionsAction).mockResolvedValue({
         success: true,
         data: [
           mediaAsset({ id: "a_pending", status: "pending", original_filename: "pending.jpg" }),
           mediaAsset({ id: "a_approved", status: "approved", original_filename: "approved.jpg" }),
+          mediaAsset({ id: "a_rejected", status: "rejected", original_filename: "rejected.jpg" }),
+          mediaAsset({ id: "a_needs_revision", status: "needs_revision", original_filename: "needsrevision.jpg" }),
         ],
       });
       vi.mocked(getMediaAssetDownloadUrl).mockResolvedValue({ success: true, data: { url: "https://signed.example.com/x.jpg", expiresAt: "2026-01-01T00:00:00Z" } });
@@ -227,6 +229,8 @@ describe("EditInspirationDialog", () => {
       await user.click(screen.getByRole("button", { name: "Attach a file" }));
       expect(await screen.findByRole("button", { name: "pending.jpg" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "approved.jpg" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "rejected.jpg" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "needsrevision.jpg" })).toBeInTheDocument();
       expect(listInspirationMediaAssetOptionsAction).toHaveBeenCalled();
     });
 
