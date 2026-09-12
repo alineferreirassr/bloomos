@@ -13,6 +13,7 @@ import type { MediaFolder } from "@/types/mediaFolder";
 import type { MediaCollection } from "@/types/mediaCollection";
 import type { Contract } from "@/types/contract";
 import type { SocialPost } from "@/types/socialPost";
+import type { InspirationItem } from "@/types/inspirationItem";
 import type { SocialAccountMetricSnapshot, SocialPostMetricSnapshot } from "@/types/socialMetricSnapshot";
 import type { ContractTemplate } from "@/types/contractTemplate";
 import type { ContractExhibit } from "@/types/contractExhibit";
@@ -229,6 +230,9 @@ import { supabaseSocialPostsRepository } from "@/lib/data/socialPosts/supabaseRe
 import type { UpsertSocialAccountMetricSnapshotInput, UpsertSocialPostMetricSnapshotInput } from "@/lib/data/socialAnalytics/repository";
 import { mockSocialAnalyticsRepository } from "@/lib/data/socialAnalytics/mockRepository";
 import { supabaseSocialAnalyticsRepository } from "@/lib/data/socialAnalytics/supabaseRepository";
+import type { CreateInspirationItemInput, UpdateInspirationItemInput, ListInspirationItemsFilters } from "@/lib/data/inspiration/repository";
+import { mockInspirationItemsRepository } from "@/lib/data/inspiration/mockRepository";
+import { supabaseInspirationItemsRepository } from "@/lib/data/inspiration/supabaseRepository";
 import type {
   InvoiceFilters,
   PaymentFilters,
@@ -296,6 +300,7 @@ import { resetScheduleStore } from "@/lib/data/mock/scheduleStore";
 import { resetContractsStore } from "@/lib/data/mock/contractsStore";
 import { resetSocialPostsStore } from "@/lib/data/mock/socialPostsStore";
 import { resetSocialAnalyticsStore } from "@/lib/data/mock/socialAnalyticsStore";
+import { resetInspirationItemsStore } from "@/lib/data/mock/inspirationItemsStore";
 import { resetContractTemplatesStore } from "@/lib/data/mock/contractTemplatesStore";
 import { resetContractExhibitsStore } from "@/lib/data/mock/contractExhibitsStore";
 import { resetInvoicesStore } from "@/lib/data/mock/invoicesStore";
@@ -1313,6 +1318,40 @@ export async function listSocialAccountMetricSnapshots(workspaceId: string, inst
 
 export async function getLatestSocialAccountMetricSnapshot(workspaceId: string, instagramAccountId: string): Promise<SocialAccountMetricSnapshot | null> {
   return socialAnalyticsRepository().getLatestSocialAccountMetricSnapshot(workspaceId, instagramAccountId);
+}
+
+// ---------------------------------------------------------------------------
+// SOCIAL-06C — Inspiration & Reference Library repository/action layer.
+// Same selectRepository() dispatch every other domain uses. No UI reads
+// these yet (SOCIAL-06C's own scope is repository + Server Actions only).
+// ---------------------------------------------------------------------------
+
+function inspirationItemsRepository() {
+  return selectRepository({ mock: mockInspirationItemsRepository, supabase: supabaseInspirationItemsRepository });
+}
+
+export async function createInspirationItem(input: CreateInspirationItemInput): Promise<DataResult<InspirationItem>> {
+  return inspirationItemsRepository().createInspirationItem(input);
+}
+
+export async function getInspirationItemById(id: string): Promise<InspirationItem> {
+  return inspirationItemsRepository().getInspirationItemById(id);
+}
+
+export async function listInspirationItems(workspaceId: string, filters?: ListInspirationItemsFilters): Promise<InspirationItem[]> {
+  return inspirationItemsRepository().listInspirationItems(workspaceId, filters);
+}
+
+export async function updateInspirationItem(id: string, input: UpdateInspirationItemInput): Promise<DataResult<InspirationItem>> {
+  return inspirationItemsRepository().updateInspirationItem(id, input);
+}
+
+export async function archiveInspirationItem(id: string): Promise<DataResult<InspirationItem>> {
+  return inspirationItemsRepository().archiveInspirationItem(id);
+}
+
+export async function unarchiveInspirationItem(id: string): Promise<DataResult<InspirationItem>> {
+  return inspirationItemsRepository().unarchiveInspirationItem(id);
 }
 
 // ---------------------------------------------------------------------------
@@ -3617,6 +3656,7 @@ export function resetAllMockData(): void {
   resetContractExhibitsStore();
   resetSocialPostsStore();
   resetSocialAnalyticsStore();
+  resetInspirationItemsStore();
   resetInvoicesStore();
   resetPaymentsStore();
   resetExpensesStore();

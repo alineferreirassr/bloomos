@@ -18,6 +18,7 @@ import type { MediaAssetStatus } from "@/core/enums/mediaAssetStatus";
 import type { SocialPost } from "@/types/socialPost";
 import type { SocialAccountMetricSnapshot, SocialPostMetricSnapshot, RawMetrics } from "@/types/socialMetricSnapshot";
 import type { SocialPostStatus } from "@/core/enums/socialPostStatus";
+import type { InspirationItem, InspirationSourceType, InspirationContentFormat } from "@/types/inspirationItem";
 import type { Contract, ContractVersionSnapshot } from "@/types/contract";
 import type { ContractTemplate } from "@/types/contractTemplate";
 import type { ContractExhibit } from "@/types/contractExhibit";
@@ -174,6 +175,7 @@ type EventServiceBudgetLineRow = Database["public"]["Tables"]["event_service_bud
 type EventServiceTeamRequirementRow = Database["public"]["Tables"]["event_service_team_requirements"]["Row"];
 type EventServiceVendorAssignmentRow = Database["public"]["Tables"]["event_service_vendor_assignments"]["Row"];
 type EventServiceQuestionnaireResponseRow = Database["public"]["Tables"]["event_service_questionnaire_responses"]["Row"];
+type InspirationItemRow = Database["public"]["Tables"]["inspiration_items"]["Row"];
 
 /**
  * Deliberate seam between raw database rows and domain types, even though
@@ -1351,6 +1353,33 @@ export function mapSocialAccountMetricSnapshotRow(row: SocialAccountMetricSnapsh
     profile_views: row.profile_views,
     raw_metrics: (row.raw_metrics ?? {}) as RawMetrics,
     created_at: row.created_at,
+  };
+}
+
+/** SOCIAL-06C — direct 1:1 passthrough, matching `mapSocialPostRow`'s own style exactly. `source_type`/`content_format` are untyped `text` columns in Postgres (narrowed by a CHECK constraint, not a real enum type), so they're cast at this boundary like every other text-backed enum column (`row.status as MediaAssetStatus`, `row.target_provider as "meta"`). */
+export function mapInspirationItemRow(row: InspirationItemRow): InspirationItem {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    title: row.title,
+    source_type: row.source_type as InspirationSourceType,
+    source_url: row.source_url,
+    normalized_source_url: row.normalized_source_url,
+    creator_name: row.creator_name,
+    creator_handle: row.creator_handle,
+    platform_content_id: row.platform_content_id,
+    content_format: row.content_format as InspirationContentFormat | null,
+    hook: row.hook,
+    cta: row.cta,
+    why_it_works: row.why_it_works,
+    notes: row.notes,
+    duration_seconds: row.duration_seconds,
+    published_at: row.published_at,
+    media_asset_id: row.media_asset_id,
+    archived_at: row.archived_at,
+    created_by: row.created_by,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   };
 }
 
