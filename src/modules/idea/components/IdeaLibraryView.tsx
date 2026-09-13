@@ -16,6 +16,7 @@ import { IdeaIcon, SearchIcon } from "@/components/ui/icons";
 import { IdeaCard } from "@/modules/idea/components/IdeaCard";
 import { AddIdeaDialog } from "@/modules/idea/components/AddIdeaDialog";
 import { IdeaDetailDialog } from "@/modules/idea/components/IdeaDetailDialog";
+import { EditIdeaDialog } from "@/modules/idea/components/EditIdeaDialog";
 import type { IdeaItem } from "@/types/ideaItem";
 import type { IdeaArchivedFilter } from "@/lib/data/idea/repository";
 
@@ -40,15 +41,15 @@ function isDefaultFilters(filters: FilterState): boolean {
 }
 
 /**
- * SOCIAL-07D — the Ideas Library's own read model, mirroring
- * `InspirationLibraryView.tsx`'s own SOCIAL-06D shape exactly. Search/filter
- * are backend-authoritative — this never filters an already-loaded list
+ * SOCIAL-07D/07E — the Ideas Library's own read model, mirroring
+ * `InspirationLibraryView.tsx`'s own shape exactly. Search/filter are
+ * backend-authoritative — this never filters an already-loaded list
  * client-side; the whole `filters` object is debounced as one unit and
  * every change re-calls `listIdeaItemsAction`. Only a single archive-state
  * filter exists (active/archived/all) — the approved 07B/07C status model
- * has no other filterable dimension in this checkpoint's scope. No Edit
- * dialog is wired here — editing an existing Idea is SOCIAL-07E's own
- * scope; this view only creates, views, archives, and restores.
+ * has no other filterable dimension in this checkpoint's scope. Library →
+ * Detail → Edit → Save → Detail refreshed → Library refreshed (SOCIAL-07E),
+ * mirroring `InspirationLibraryView.tsx`'s own SOCIAL-06E flow exactly.
  */
 export function IdeaLibraryView() {
   const { can } = useMemberSession();
@@ -59,6 +60,7 @@ export function IdeaLibraryView() {
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [addOpen, setAddOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<IdeaItem | null>(null);
+  const [editingItem, setEditingItem] = useState<IdeaItem | null>(null);
 
   function load(next: FilterState) {
     listIdeaItemsAction(toActionFilters(next)).then((result) => {
@@ -79,6 +81,19 @@ export function IdeaLibraryView() {
   }
 
   function handleChanged(item: IdeaItem) {
+    setSelectedItem(item);
+    reload();
+  }
+
+  /** Library → Detail → Edit — closes Detail while Edit is open (only one dialog visible at a time), rather than stacking two Modals. Mirrors `InspirationLibraryView.tsx`'s own `handleEdit` exactly. */
+  function handleEdit(item: IdeaItem) {
+    setEditingItem(item);
+    setSelectedItem(null);
+  }
+
+  /** Edit → Save → Detail refreshed → Library refreshed. */
+  function handleSaved(item: IdeaItem) {
+    setEditingItem(null);
     setSelectedItem(item);
     reload();
   }
@@ -158,7 +173,14 @@ export function IdeaLibraryView() {
       )}
 
       <AddIdeaDialog open={addOpen} onClose={() => setAddOpen(false)} onCreated={handleCreated} />
-      <IdeaDetailDialog item={selectedItem} onClose={() => setSelectedItem(null)} canManage={canCreate} onChanged={handleChanged} />
+      <IdeaDetailDialog
+        item={selectedItem}
+        onClose={() => setSelectedItem(null)}
+        canManage={canCreate}
+        onChanged={handleChanged}
+        onEdit={canCreate ? handleEdit : undefined}
+      />
+      <EditIdeaDialog item={editingItem} onClose={() => setEditingItem(null)} onSaved={handleSaved} />
     </div>
   );
 }

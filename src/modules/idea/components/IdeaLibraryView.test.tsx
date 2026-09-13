@@ -7,9 +7,18 @@ vi.mock("@/modules/idea/ideaActions", () => ({
   createIdeaItemAction: vi.fn(),
   archiveIdeaItemAction: vi.fn(),
   unarchiveIdeaItemAction: vi.fn(),
+  updateIdeaItemAction: vi.fn(),
+  listIdeaMediaAssetOptionsAction: vi.fn(),
+}));
+vi.mock("@/modules/inspiration/inspirationActions", () => ({
+  getInspirationItemAction: vi.fn(),
+  listInspirationItemsAction: vi.fn(),
+}));
+vi.mock("@/lib/data", () => ({
+  getMediaAssetDownloadUrl: vi.fn(),
 }));
 
-import { listIdeaItemsAction, createIdeaItemAction, archiveIdeaItemAction } from "@/modules/idea/ideaActions";
+import { listIdeaItemsAction, createIdeaItemAction, archiveIdeaItemAction, updateIdeaItemAction } from "@/modules/idea/ideaActions";
 import { IdeaLibraryView } from "@/modules/idea/components/IdeaLibraryView";
 import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
 import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
@@ -209,13 +218,63 @@ describe("IdeaLibraryView — card open and archive", () => {
     await waitFor(() => expect(vi.mocked(listIdeaItemsAction).mock.calls.length).toBeGreaterThan(callsBeforeOpen));
   });
 
-  it("has no Edit entry point from the card or detail dialog in this checkpoint", async () => {
+});
+
+describe("SOCIAL-07E — Library → Detail → Edit → Save → Detail refreshed → Library refreshed", () => {
+  it("opens Edit from Detail, closing Detail while Edit is open", async () => {
     vi.mocked(listIdeaItemsAction).mockResolvedValue({ success: true, data: [item()] });
     const user = userEvent.setup();
     renderView();
 
     await screen.findByText("Behind the scenes at a spring wedding");
     await user.click(screen.getByRole("button", { name: /Behind the scenes at a spring wedding/ }));
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    expect(screen.queryByRole("dialog", { name: "Behind the scenes at a spring wedding" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Edit Behind the scenes at a spring wedding" })).toBeInTheDocument();
+  });
+
+  it("returns to a refreshed Detail and reloads the Library after a successful save", async () => {
+    const updated = item({ title: "Updated title" });
+    vi.mocked(listIdeaItemsAction).mockResolvedValue({ success: true, data: [item()] });
+    vi.mocked(updateIdeaItemAction).mockResolvedValue({ success: true, data: updated });
+    const user = userEvent.setup();
+    renderView();
+
+    await screen.findByText("Behind the scenes at a spring wedding");
+    await user.click(screen.getByRole("button", { name: /Behind the scenes at a spring wedding/ }));
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const callsBeforeSave = vi.mocked(listIdeaItemsAction).mock.calls.length;
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.queryByRole("dialog", { name: /^Edit /})).not.toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Updated title" })).toBeInTheDocument();
+    await waitFor(() => expect(vi.mocked(listIdeaItemsAction).mock.calls.length).toBeGreaterThan(callsBeforeSave));
+  });
+
+  it("hides Edit for a read-only member", async () => {
+    vi.mocked(listIdeaItemsAction).mockResolvedValue({ success: true, data: [item()] });
+    const user = userEvent.setup();
+    renderView(readOnlySnapshot);
+
+    await screen.findByText("Behind the scenes at a spring wedding");
+    await user.click(screen.getByRole("button", { name: /Behind the scenes at a spring wedding/ }));
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+  });
+
+  it("hides Edit for an archived item — archiving from Detail immediately removes the Edit action", async () => {
+    const archived = item({ archived_at: "2026-09-21T00:00:00Z", status: "archived" });
+    vi.mocked(listIdeaItemsAction).mockResolvedValue({ success: true, data: [item()] });
+    vi.mocked(archiveIdeaItemAction).mockResolvedValue({ success: true, data: archived });
+    const user = userEvent.setup();
+    renderView();
+
+    await screen.findByText("Behind the scenes at a spring wedding");
+    await user.click(screen.getByRole("button", { name: /Behind the scenes at a spring wedding/ }));
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Archive" }));
     expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
   });
 });
