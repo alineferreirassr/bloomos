@@ -55,6 +55,10 @@ export const ROUTE_ACCESS_MAP: RouteAccessEntry[] = [
   // repository/action layer already enforces (read here, write inside each
   // Server Action). No new permission.
   { prefix: "/inspiration", requirement: { kind: "permission", permission: "social.view" } },
+  // SOCIAL-07D — Ideas Library. Same social.view/social.create split as
+  // Inspiration's own route (read here, write inside each Server Action).
+  // No new permission.
+  { prefix: "/ideas", requirement: { kind: "permission", permission: "social.view" } },
   // Finance F1 gated these on `events.view` (provisional — these two had no
   // entry at all before, closing an open-to-everyone gap was the priority).
   // Finance F1.5 revisits that choice: both pages display real financial

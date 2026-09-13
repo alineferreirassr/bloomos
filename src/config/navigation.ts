@@ -14,6 +14,7 @@ import {
   GridViewIcon,
   InboxIcon,
   InspirationIcon,
+  IdeaIcon,
   IntegrationsIcon,
   InventoryIcon,
   MarketplaceIcon,
@@ -169,6 +170,11 @@ export const navigationModules: NavModule[] = [
   // Social publishing surface, hence "knowledge" rather than "business"
   // (where Social itself lives).
   { id: "inspiration", label: "Inspiration", icon: InspirationIcon, href: "/inspiration", group: "knowledge", keywords: ["reference", "swipe file", "content ideas"] },
+  // SOCIAL-07D — an original Amoré Bloom content concept, adjacent to
+  // Inspiration in the same "knowledge" group: it's the next stage of the
+  // same content-planning lineage (Inspiration → Idea → future Script), not
+  // a Social publishing surface itself.
+  { id: "ideas", label: "Ideas", icon: IdeaIcon, href: "/ideas", group: "knowledge", keywords: ["concept", "content idea", "brainstorm"] },
 
   { id: "team", label: "Team", icon: TeamIcon, href: "/team", group: "team" },
   { id: "team-operations", label: "Team Operations", icon: TeamIcon, href: "/team/operations", group: "team" },

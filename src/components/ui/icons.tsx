@@ -46,6 +46,7 @@ import {
   Pin,
   CalendarClock,
   Lightbulb,
+  NotebookPen,
 } from "lucide-react";
 
 type IconProps = SVGProps<SVGSVGElement>;
@@ -263,4 +264,9 @@ export function SchedulingIcon(props: IconProps) {
 /** SOCIAL-06D — Inspiration & Reference Library. `Sparkles` is already BloomAiIcon's own mark, so this uses a distinct glyph (a literal "idea" lightbulb) rather than reusing it. */
 export function InspirationIcon(props: IconProps) {
   return <Lightbulb strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** SOCIAL-07D — Ideas Library. Deliberately distinct from `InspirationIcon`'s `Lightbulb` (a saved external reference) — an Idea is Amoré Bloom's own not-yet-created concept, so this uses a "writing it down" glyph instead. */
+export function IdeaIcon(props: IconProps) {
+  return <NotebookPen strokeWidth={2} aria-hidden="true" {...props} />;
 }
