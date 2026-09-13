@@ -15,6 +15,9 @@ import type { Contract } from "@/types/contract";
 import type { SocialPost } from "@/types/socialPost";
 import type { InspirationItem } from "@/types/inspirationItem";
 import type { IdeaItem } from "@/types/ideaItem";
+import type { ScriptItem } from "@/types/scriptItem";
+import type { ScriptVersion } from "@/types/scriptVersion";
+import type { ScriptBlock } from "@/types/scriptBlock";
 import type { SocialAccountMetricSnapshot, SocialPostMetricSnapshot } from "@/types/socialMetricSnapshot";
 import type { ContractTemplate } from "@/types/contractTemplate";
 import type { ContractExhibit } from "@/types/contractExhibit";
@@ -238,6 +241,16 @@ import type { CreateIdeaItemInput, UpdateIdeaItemInput, ListIdeaItemsFilters } f
 import { mockIdeaItemsRepository } from "@/lib/data/idea/mockRepository";
 import { supabaseIdeaItemsRepository } from "@/lib/data/idea/supabaseRepository";
 import type {
+  CreateScriptItemInput,
+  UpdateScriptItemInput,
+  ListScriptItemsFilters,
+  CreateScriptVersionInput,
+  CreateScriptBlockInput,
+  UpdateScriptBlockInput,
+} from "@/lib/data/script/repository";
+import { mockScriptRepository } from "@/lib/data/script/mockRepository";
+import { supabaseScriptRepository } from "@/lib/data/script/supabaseRepository";
+import type {
   InvoiceFilters,
   PaymentFilters,
   ExpenseFilters,
@@ -306,6 +319,9 @@ import { resetSocialPostsStore } from "@/lib/data/mock/socialPostsStore";
 import { resetSocialAnalyticsStore } from "@/lib/data/mock/socialAnalyticsStore";
 import { resetInspirationItemsStore } from "@/lib/data/mock/inspirationItemsStore";
 import { resetIdeaItemsStore } from "@/lib/data/mock/ideaItemsStore";
+import { resetScriptItemsStore } from "@/lib/data/mock/scriptItemsStore";
+import { resetScriptVersionsStore } from "@/lib/data/mock/scriptVersionsStore";
+import { resetScriptBlocksStore } from "@/lib/data/mock/scriptBlocksStore";
 import { resetContractTemplatesStore } from "@/lib/data/mock/contractTemplatesStore";
 import { resetContractExhibitsStore } from "@/lib/data/mock/contractExhibitsStore";
 import { resetInvoicesStore } from "@/lib/data/mock/invoicesStore";
@@ -1392,6 +1408,67 @@ export async function archiveIdeaItem(id: string): Promise<DataResult<IdeaItem>>
 
 export async function unarchiveIdeaItem(id: string): Promise<DataResult<IdeaItem>> {
   return ideaItemsRepository().unarchiveIdeaItem(id);
+}
+
+// ---------------------------------------------------------------------------
+// SOCIAL-08C — Script Studio repository/action layer. Same selectRepository()
+// dispatch every other domain uses, mirroring Idea's own shape. One combined
+// repository covers script_items/script_versions/script_blocks, mirroring
+// ServicesRepository's own combined-domain shape rather than Idea's
+// single-table shape. No UI reads these yet (SOCIAL-08C's own scope is
+// repository + Server Actions only).
+// ---------------------------------------------------------------------------
+
+function scriptRepository() {
+  return selectRepository({ mock: mockScriptRepository, supabase: supabaseScriptRepository });
+}
+
+export async function createScriptItem(input: CreateScriptItemInput): Promise<DataResult<ScriptItem>> {
+  return scriptRepository().createScriptItem(input);
+}
+
+export async function getScriptItemById(id: string): Promise<ScriptItem> {
+  return scriptRepository().getScriptItemById(id);
+}
+
+export async function listScriptItems(workspaceId: string, filters?: ListScriptItemsFilters): Promise<ScriptItem[]> {
+  return scriptRepository().listScriptItems(workspaceId, filters);
+}
+
+export async function updateScriptItem(id: string, input: UpdateScriptItemInput): Promise<DataResult<ScriptItem>> {
+  return scriptRepository().updateScriptItem(id, input);
+}
+
+export async function archiveScriptItem(id: string): Promise<DataResult<ScriptItem>> {
+  return scriptRepository().archiveScriptItem(id);
+}
+
+export async function unarchiveScriptItem(id: string): Promise<DataResult<ScriptItem>> {
+  return scriptRepository().unarchiveScriptItem(id);
+}
+
+export async function createScriptVersion(input: CreateScriptVersionInput): Promise<DataResult<ScriptVersion>> {
+  return scriptRepository().createScriptVersion(input);
+}
+
+export async function getScriptVersionById(id: string): Promise<ScriptVersion> {
+  return scriptRepository().getScriptVersionById(id);
+}
+
+export async function listScriptVersions(scriptId: string): Promise<ScriptVersion[]> {
+  return scriptRepository().listScriptVersions(scriptId);
+}
+
+export async function createScriptBlock(input: CreateScriptBlockInput): Promise<DataResult<ScriptBlock>> {
+  return scriptRepository().createScriptBlock(input);
+}
+
+export async function listScriptBlocks(scriptVersionId: string): Promise<ScriptBlock[]> {
+  return scriptRepository().listScriptBlocks(scriptVersionId);
+}
+
+export async function updateScriptBlock(id: string, input: UpdateScriptBlockInput): Promise<DataResult<ScriptBlock>> {
+  return scriptRepository().updateScriptBlock(id, input);
 }
 
 // ---------------------------------------------------------------------------
@@ -3698,6 +3775,9 @@ export function resetAllMockData(): void {
   resetSocialAnalyticsStore();
   resetInspirationItemsStore();
   resetIdeaItemsStore();
+  resetScriptItemsStore();
+  resetScriptVersionsStore();
+  resetScriptBlocksStore();
   resetInvoicesStore();
   resetPaymentsStore();
   resetExpensesStore();

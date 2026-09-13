@@ -20,6 +20,9 @@ import type { SocialAccountMetricSnapshot, SocialPostMetricSnapshot, RawMetrics 
 import type { SocialPostStatus } from "@/core/enums/socialPostStatus";
 import type { InspirationItem, InspirationSourceType, InspirationContentFormat } from "@/types/inspirationItem";
 import type { IdeaItem, IdeaStatus, IdeaPriority } from "@/types/ideaItem";
+import type { ScriptItem, ScriptStatus } from "@/types/scriptItem";
+import type { ScriptVersion, ScriptVersionStatus } from "@/types/scriptVersion";
+import type { ScriptBlock } from "@/types/scriptBlock";
 import type { Contract, ContractVersionSnapshot } from "@/types/contract";
 import type { ContractTemplate } from "@/types/contractTemplate";
 import type { ContractExhibit } from "@/types/contractExhibit";
@@ -178,6 +181,9 @@ type EventServiceVendorAssignmentRow = Database["public"]["Tables"]["event_servi
 type EventServiceQuestionnaireResponseRow = Database["public"]["Tables"]["event_service_questionnaire_responses"]["Row"];
 type InspirationItemRow = Database["public"]["Tables"]["inspiration_items"]["Row"];
 type IdeaItemRow = Database["public"]["Tables"]["idea_items"]["Row"];
+type ScriptItemRow = Database["public"]["Tables"]["script_items"]["Row"];
+type ScriptVersionRow = Database["public"]["Tables"]["script_versions"]["Row"];
+type ScriptBlockRow = Database["public"]["Tables"]["script_blocks"]["Row"];
 
 /**
  * Deliberate seam between raw database rows and domain types, even though
@@ -1380,6 +1386,47 @@ export function mapInspirationItemRow(row: InspirationItemRow): InspirationItem 
     media_asset_id: row.media_asset_id,
     archived_at: row.archived_at,
     created_by: row.created_by,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapScriptItemRow(row: ScriptItemRow): ScriptItem {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    title: row.title,
+    status: row.status as ScriptStatus,
+    source_idea_id: row.source_idea_id,
+    archived_at: row.archived_at,
+    created_by: row.created_by,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapScriptVersionRow(row: ScriptVersionRow): ScriptVersion {
+  return {
+    id: row.id,
+    script_id: row.script_id,
+    workspace_id: row.workspace_id,
+    status: row.status as ScriptVersionStatus,
+    version_number: row.version_number,
+    published_at: row.published_at,
+    published_by: row.published_by,
+    created_by: row.created_by,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapScriptBlockRow(row: ScriptBlockRow): ScriptBlock {
+  return {
+    id: row.id,
+    script_version_id: row.script_version_id,
+    workspace_id: row.workspace_id,
+    content: row.content,
+    sort_order: row.sort_order,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
