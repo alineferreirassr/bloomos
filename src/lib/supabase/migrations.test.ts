@@ -106,6 +106,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // released, unrelated to the Finance release this exact-count assertion
   // describes.
   "20260920100000_idea_items_foundation.sql",
+  // SOCIAL-08B — Script Studio data foundation. Independently-tracked,
+  // not-yet-released, unrelated to the Finance release this exact-count
+  // assertion describes.
+  "20260921100000_script_items_foundation.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {
@@ -4793,5 +4797,219 @@ describe("SOCIAL-07B migration — Ideas data foundation", () => {
     expect(code).not.toMatch(/disable row level security/);
     expect(code).not.toMatch(/drop table/);
     expect(code).not.toMatch(/\bdelete from\b/);
+  });
+});
+
+describe("SOCIAL-08B migration — Script Studio data foundation", () => {
+  function sql(): string {
+    return readMigration("20260921100000_script_items_foundation.sql");
+  }
+
+  it("creates exactly three new tables: script_items, script_versions, script_blocks", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create table if not exists public\.script_items/);
+    expect(code).toMatch(/create table if not exists public\.script_versions/);
+    expect(code).toMatch(/create table if not exists public\.script_blocks/);
+    const createTableMatches = code.match(/create table/gi) ?? [];
+    expect(createTableMatches).toHaveLength(3);
+  });
+
+  describe("script_items", () => {
+    it("requires workspace_id, title, status, created_at, updated_at — every other column is nullable", () => {
+      const code = stripSqlComments(sql());
+      const table = code.slice(code.indexOf("create table if not exists public.script_items"), code.indexOf("comment on table public.script_items"));
+      expect(table).toMatch(/workspace_id uuid not null references public\.workspaces \(id\) on delete cascade/);
+      expect(table).toMatch(/title text not null/);
+      expect(table).toMatch(/status text not null default 'active'/);
+      expect(table).toMatch(/created_at timestamptz not null default now\(\)/);
+      expect(table).toMatch(/updated_at timestamptz not null default now\(\)/);
+
+      for (const nullableColumn of ["source_idea_id uuid", "archived_at timestamptz"]) {
+        const line = table.split("\n").find((l) => l.trim().startsWith(nullableColumn));
+        expect(line, `expected a nullable "${nullableColumn}" column`).toBeDefined();
+        expect(line).not.toMatch(/not null/);
+      }
+    });
+
+    it("source_idea_id is a nullable FK to idea_items with on delete set null — never a copy of Idea content", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/source_idea_id uuid references public\.idea_items \(id\) on delete set null/);
+    });
+
+    it("created_by is a nullable FK to auth.users with on delete set null", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/created_by uuid references auth\.users \(id\) on delete set null/);
+    });
+
+    it("constrains status to active/archived only", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/constraint script_items_status_check\s*\n\s*check \(status in \('active', 'archived'\)\)/);
+    });
+
+    it("imposes no title uniqueness — Scripts may legitimately share a title", () => {
+      const code = stripSqlComments(sql());
+      const table = code.slice(code.indexOf("create table if not exists public.script_items"), code.indexOf("comment on table public.script_items"));
+      expect(table).not.toMatch(/unique/i);
+    });
+
+    it("creates exactly the three approved indexes", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create index if not exists script_items_workspace_archived_idx\s*\n\s*on public\.script_items \(workspace_id, archived_at\);/);
+      expect(code).toMatch(/create index if not exists script_items_workspace_created_idx\s*\n\s*on public\.script_items \(workspace_id, created_at desc\);/);
+      expect(code).toMatch(/create index if not exists script_items_workspace_status_idx\s*\n\s*on public\.script_items \(workspace_id, status\);/);
+    });
+
+    it("reuses the existing set_updated_at() trigger function", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create trigger trg_script_items_set_updated_at\s*\n\s*before update on public\.script_items\s*\n\s*for each row execute function public\.set_updated_at\(\);/);
+    });
+
+    it("enables RLS with SELECT/INSERT/UPDATE-only workspace-member policies — explicitly no DELETE policy", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/alter table public\.script_items enable row level security;/);
+      expect(code).toMatch(/create policy "script_items_select_workspace_member"\s*\n\s*on public\.script_items for select\s*\n\s*to authenticated\s*\n\s*using \(public\.is_workspace_member\(workspace_id\)\);/);
+      expect(code).toMatch(/create policy "script_items_insert_workspace_member"\s*\n\s*on public\.script_items for insert\s*\n\s*to authenticated\s*\n\s*with check \(public\.is_workspace_member\(workspace_id\)\);/);
+      expect(code).toMatch(/create policy "script_items_update_workspace_member"\s*\n\s*on public\.script_items for update\s*\n\s*to authenticated\s*\n\s*using \(public\.is_workspace_member\(workspace_id\)\)\s*\n\s*with check \(public\.is_workspace_member\(workspace_id\)\);/);
+    });
+  });
+
+  describe("script_versions", () => {
+    it("requires script_id, workspace_id, status, created_at, updated_at — version_number/published_at/published_by are nullable", () => {
+      const code = stripSqlComments(sql());
+      const table = code.slice(code.indexOf("create table if not exists public.script_versions"), code.indexOf("comment on table public.script_versions"));
+      expect(table).toMatch(/script_id uuid not null references public\.script_items \(id\) on delete cascade/);
+      expect(table).toMatch(/workspace_id uuid not null references public\.workspaces \(id\) on delete cascade/);
+      expect(table).toMatch(/status text not null default 'draft'/);
+
+      for (const nullableColumn of ["version_number integer", "published_at timestamptz", "published_by uuid"]) {
+        const line = table.split("\n").find((l) => l.trim().startsWith(nullableColumn));
+        expect(line, `expected a nullable "${nullableColumn}" column`).toBeDefined();
+        expect(line).not.toMatch(/not null/);
+      }
+    });
+
+    it("published_by is a nullable FK to auth.users with on delete set null", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/published_by uuid references auth\.users \(id\) on delete set null/);
+    });
+
+    it("constrains status to draft/published and version_number to a positive integer or null", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/constraint script_versions_status_check\s*\n\s*check \(status in \('draft', 'published'\)\)/);
+      expect(code).toMatch(/constraint script_versions_version_number_check\s*\n\s*check \(version_number is null or version_number > 0\)/);
+    });
+
+    it("enforces published-fields consistency: a draft has none of version_number/published_at/published_by set, a published version has all of them set", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(
+        /constraint script_versions_published_fields_consistency_check check \(\s*\(status = 'draft' and version_number is null and published_at is null and published_by is null\)\s*or\s*\(status = 'published' and version_number is not null and published_at is not null and published_by is not null\)\s*\)/,
+      );
+    });
+
+    it("creates exactly one plain index plus the two partial unique concurrency-safety indexes", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create index if not exists script_versions_script_created_idx\s*\n\s*on public\.script_versions \(script_id, created_at desc\);/);
+      expect(code).toMatch(
+        /create unique index if not exists script_versions_script_number_unique\s*\n\s*on public\.script_versions \(script_id, version_number\)\s*\n\s*where version_number is not null;/,
+      );
+      expect(code).toMatch(
+        /create unique index if not exists script_versions_one_draft_per_script\s*\n\s*on public\.script_versions \(script_id\)\s*\n\s*where status = 'draft';/,
+      );
+    });
+
+    it("reuses the existing set_updated_at() trigger function", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create trigger trg_script_versions_set_updated_at\s*\n\s*before update on public\.script_versions\s*\n\s*for each row execute function public\.set_updated_at\(\);/);
+    });
+
+    it("enables RLS with SELECT/INSERT/UPDATE-only workspace-member policies — explicitly no DELETE policy", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/alter table public\.script_versions enable row level security;/);
+      expect(code).toMatch(/create policy "script_versions_select_workspace_member"/);
+      expect(code).toMatch(/create policy "script_versions_insert_workspace_member"/);
+      expect(code).toMatch(/create policy "script_versions_update_workspace_member"/);
+    });
+  });
+
+  describe("script_blocks", () => {
+    it("requires script_version_id, workspace_id, content, sort_order, created_at, updated_at", () => {
+      const code = stripSqlComments(sql());
+      const table = code.slice(code.indexOf("create table if not exists public.script_blocks"), code.indexOf("comment on table public.script_blocks"));
+      expect(table).toMatch(/script_version_id uuid not null references public\.script_versions \(id\) on delete cascade/);
+      expect(table).toMatch(/workspace_id uuid not null references public\.workspaces \(id\) on delete cascade/);
+      expect(table).toMatch(/content text not null default ''/);
+      expect(table).toMatch(/sort_order integer not null default 0/);
+    });
+
+    it("constrains sort_order to a non-negative value", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/constraint script_blocks_sort_order_check\s*\n\s*check \(sort_order >= 0\)/);
+    });
+
+    it("has no block-type column — no established precedent to mirror and no editing UI in this checkpoint's scope", () => {
+      const code = stripSqlComments(sql()).toLowerCase();
+      const table = code.slice(code.indexOf("create table if not exists public.script_blocks"), code.indexOf("comment on table public.script_blocks"));
+      for (const forbidden of ["block_type", "scene_type", "\"type\"", " type ", "dialogue", "voiceover"]) {
+        expect(table).not.toContain(forbidden);
+      }
+    });
+
+    it("creates exactly one index, ordering blocks within a version", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create index if not exists script_blocks_version_sort_idx\s*\n\s*on public\.script_blocks \(script_version_id, sort_order\);/);
+    });
+
+    it("reuses the existing set_updated_at() trigger function", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create trigger trg_script_blocks_set_updated_at\s*\n\s*before update on public\.script_blocks\s*\n\s*for each row execute function public\.set_updated_at\(\);/);
+    });
+
+    it("enables RLS with SELECT/INSERT/UPDATE-only workspace-member policies — explicitly no DELETE policy", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/alter table public\.script_blocks enable row level security;/);
+      expect(code).toMatch(/create policy "script_blocks_select_workspace_member"/);
+      expect(code).toMatch(/create policy "script_blocks_insert_workspace_member"/);
+      expect(code).toMatch(/create policy "script_blocks_update_workspace_member"/);
+    });
+  });
+
+  it("creates no DELETE policy anywhere in this migration", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/for delete/i);
+    expect(code).not.toMatch(/to service_role/i);
+    expect(code).not.toMatch(/grant execute/i);
+    const policyMatches = code.match(/create policy/gi) ?? [];
+    expect(policyMatches).toHaveLength(9);
+  });
+
+  it("never touches idea_items, inspiration_items, media_assets, social_posts, workspaces, or any other existing table", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    for (const line of code.split("\n")) {
+      if (/^alter table/.test(line.trim())) {
+        expect(line).toMatch(/public\.script_(items|versions|blocks)/);
+      }
+    }
+    expect(code).not.toMatch(/create table.*idea_items/);
+    expect(code).not.toMatch(/create table.*inspiration_items/);
+    expect(code).not.toMatch(/create table.*media_assets/);
+    expect(code).not.toMatch(/alter table public\.idea_items/);
+    expect(code).not.toMatch(/alter table public\.inspiration_items/);
+    expect(code).not.toMatch(/alter table public\.media_assets/);
+    expect(code).not.toMatch(/alter table public\.social_posts/);
+    expect(code).not.toMatch(/alter table public\.workspaces/);
+  });
+
+  it("never disables RLS, drops a table, or deletes rows", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/disable row level security/);
+    expect(code).not.toMatch(/drop table/);
+    expect(code).not.toMatch(/\bdelete from\b/);
+  });
+
+  it("never adds a MediaAsset relation, AI fields, analytics fields, or a media_asset_id column", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    for (const forbidden of ["media_asset_id", "ai_score", "ai_generated", "analytics", "engagement", "reach"]) {
+      expect(code).not.toContain(forbidden);
+    }
   });
 });

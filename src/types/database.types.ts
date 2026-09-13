@@ -2536,6 +2536,24 @@ export interface Database {
         Update: { id?: string; workspace_id?: string; title?: string; description?: string; status?: string; source_inspiration_id?: string | null; content_format?: string | null; hook?: string | null; cta?: string | null; audience?: string | null; notes?: string | null; media_asset_id?: string | null; priority?: string | null; archived_at?: string | null; created_by?: string | null; created_at?: string; updated_at?: string };
         Relationships: [];
       };
+      script_items: {
+        Row: { id: string; workspace_id: string; title: string; status: string; source_idea_id: string | null; archived_at: string | null; created_by: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; title: string; status?: string; source_idea_id?: string | null; archived_at?: string | null; created_by?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; title?: string; status?: string; source_idea_id?: string | null; archived_at?: string | null; created_by?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      script_versions: {
+        Row: { id: string; script_id: string; workspace_id: string; status: string; version_number: number | null; published_at: string | null; published_by: string | null; created_by: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; script_id: string; workspace_id: string; status?: string; version_number?: number | null; published_at?: string | null; published_by?: string | null; created_by?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; script_id?: string; workspace_id?: string; status?: string; version_number?: number | null; published_at?: string | null; published_by?: string | null; created_by?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      script_blocks: {
+        Row: { id: string; script_version_id: string; workspace_id: string; content: string; sort_order: number; created_at: string; updated_at: string };
+        Insert: { id?: string; script_version_id: string; workspace_id: string; content?: string; sort_order?: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; script_version_id?: string; workspace_id?: string; content?: string; sort_order?: number; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
       oauth_pending_authorizations: {
         Row: { state: string; workspace_id: string; member_id: string | null; provider_id: string; connection_id: string; redirect_uri: string; code_verifier_ref: string | null; created_at: string; expires_at: string };
         Insert: { state: string; workspace_id: string; member_id?: string | null; provider_id: string; connection_id: string; redirect_uri: string; code_verifier_ref?: string | null; created_at?: string; expires_at: string };
