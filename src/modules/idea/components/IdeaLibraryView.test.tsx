@@ -278,3 +278,44 @@ describe("SOCIAL-07E — Library → Detail → Edit → Save → Detail refresh
     expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
   });
 });
+
+describe("SOCIAL-07F hardening — out-of-order response protection", () => {
+  it("never lets an older, slower request overwrite a newer request's result", async () => {
+    type ListResult = Awaited<ReturnType<typeof listIdeaItemsAction>>;
+    let resolveFirst!: (value: ListResult) => void;
+    let resolveSecond!: (value: ListResult) => void;
+    const firstRequest = new Promise<ListResult>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondRequest = new Promise<ListResult>((resolve) => {
+      resolveSecond = resolve;
+    });
+
+    vi.mocked(listIdeaItemsAction)
+      .mockResolvedValueOnce({ success: true, data: [] })
+      .mockReturnValueOnce(firstRequest)
+      .mockReturnValueOnce(secondRequest);
+    const user = userEvent.setup();
+    renderView();
+    await screen.findByText("No Ideas yet");
+    expect(listIdeaItemsAction).toHaveBeenCalledTimes(1);
+
+    await user.type(screen.getByLabelText("Search Ideas"), "x");
+    await waitFor(() => expect(listIdeaItemsAction).toHaveBeenCalledTimes(2), { timeout: 2000 });
+
+    await user.clear(screen.getByLabelText("Search Ideas"));
+    await user.type(screen.getByLabelText("Search Ideas"), "y");
+    await waitFor(() => expect(listIdeaItemsAction).toHaveBeenCalledTimes(3), { timeout: 2000 });
+
+    // Resolve the newer (second) request first, then the older (first) one
+    // afterward — the older result must never be allowed to apply.
+    resolveSecond({ success: true, data: [item({ id: "idea_2", title: "Second, newer result" })] });
+    await screen.findByText("Second, newer result");
+
+    resolveFirst({ success: true, data: [item({ id: "idea_1", title: "First, stale result" })] });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.queryByText("First, stale result")).not.toBeInTheDocument();
+    expect(screen.getByText("Second, newer result")).toBeInTheDocument();
+  });
+});

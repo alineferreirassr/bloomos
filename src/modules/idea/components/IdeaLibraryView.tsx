@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listIdeaItemsAction, type ListIdeaItemsActionFilters } from "@/modules/idea/ideaActions";
 import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
@@ -61,9 +61,13 @@ export function IdeaLibraryView() {
   const [addOpen, setAddOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<IdeaItem | null>(null);
   const [editingItem, setEditingItem] = useState<IdeaItem | null>(null);
+  /** SOCIAL-07F hardening — guards against an older, slower request overwriting a newer one's result (e.g. a stale debounced search response arriving after a manual `reload()`). Only the result matching the most recently *started* request is ever applied. */
+  const latestRequestIdRef = useRef(0);
 
   function load(next: FilterState) {
+    const requestId = ++latestRequestIdRef.current;
     listIdeaItemsAction(toActionFilters(next)).then((result) => {
+      if (requestId !== latestRequestIdRef.current) return;
       setState(result.success ? { status: "ready", items: result.data } : { status: "error" });
     });
   }

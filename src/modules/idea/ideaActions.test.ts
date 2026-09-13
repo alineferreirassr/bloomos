@@ -292,6 +292,22 @@ describe("Idea actions — Inspiration reference validation", () => {
     const updated = await updateIdeaItemAction(created.data.id, { source_inspiration_id: otherInspirationId });
     expect(updated.success).toBe(false);
   });
+
+  it("SOCIAL-07F hardening — normalizes an empty-string source_inspiration_id to null on create, rather than persisting an unvalidated non-null reference", async () => {
+    const result = await createIdeaItemAction(baseInput({ source_inspiration_id: "" as never }));
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.source_inspiration_id).toBeNull();
+  });
+
+  it("SOCIAL-07F hardening — normalizes an empty-string source_inspiration_id to null on update", async () => {
+    const created = await createIdeaItemAction(baseInput());
+    if (!created.success) throw new Error("setup failed");
+
+    const updated = await updateIdeaItemAction(created.data.id, { source_inspiration_id: "" as never });
+    expect(updated.success).toBe(true);
+    if (updated.success) expect(updated.data.source_inspiration_id).toBeNull();
+  });
 });
 
 describe("Idea actions — MediaAsset reference validation", () => {
@@ -351,6 +367,22 @@ describe("Idea actions — MediaAsset reference validation", () => {
 
     const updated = await updateIdeaItemAction(created.data.id, { media_asset_id: "asset_other_ws" });
     expect(updated.success).toBe(false);
+  });
+
+  it("SOCIAL-07F hardening — normalizes an empty-string media_asset_id to null on create, rather than persisting an unvalidated non-null reference", async () => {
+    const result = await createIdeaItemAction(baseInput({ media_asset_id: "" as never }));
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.media_asset_id).toBeNull();
+  });
+
+  it("SOCIAL-07F hardening — normalizes an empty-string media_asset_id to null on update", async () => {
+    const created = await createIdeaItemAction(baseInput());
+    if (!created.success) throw new Error("setup failed");
+
+    const updated = await updateIdeaItemAction(created.data.id, { media_asset_id: "" as never });
+    expect(updated.success).toBe(true);
+    if (updated.success) expect(updated.data.media_asset_id).toBeNull();
   });
 });
 

@@ -293,6 +293,21 @@ describe("EditIdeaDialog", () => {
       await user.click(screen.getByRole("button", { name: "Link Inspiration" }));
       expect(await screen.findByText("Could not load Inspiration items.")).toBeInTheDocument();
     });
+
+    it("SOCIAL-07F hardening — switching directly between two different Ideas never shows the previous Idea's linked title as if it belonged to the new one", async () => {
+      vi.mocked(getInspirationItemAction).mockImplementation((id: string) =>
+        Promise.resolve(id === "insp_1" ? { success: true, data: inspirationItem({ id: "insp_1", title: "First reference" }) } : { success: true, data: inspirationItem({ id: "insp_2", title: "Second reference" }) }),
+      );
+      const { rerender } = render(<EditIdeaDialog item={item({ id: "idea_1", source_inspiration_id: "insp_1" })} onClose={vi.fn()} onSaved={vi.fn()} />);
+      expect(await screen.findByText("First reference")).toBeInTheDocument();
+
+      // Switch directly to a different Idea, linked to a different Inspiration, without unmounting.
+      rerender(<EditIdeaDialog item={item({ id: "idea_2", source_inspiration_id: "insp_2" })} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+      // The stale "First reference" must never be shown as this Idea's own link — either "Loading…" or the correct new title, never the old one.
+      expect(screen.queryByText("First reference")).not.toBeInTheDocument();
+      expect(await screen.findByText("Second reference")).toBeInTheDocument();
+    });
   });
 
   describe("MediaAsset attachment", () => {
