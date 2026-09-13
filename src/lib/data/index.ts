@@ -14,6 +14,7 @@ import type { MediaCollection } from "@/types/mediaCollection";
 import type { Contract } from "@/types/contract";
 import type { SocialPost } from "@/types/socialPost";
 import type { InspirationItem } from "@/types/inspirationItem";
+import type { IdeaItem } from "@/types/ideaItem";
 import type { SocialAccountMetricSnapshot, SocialPostMetricSnapshot } from "@/types/socialMetricSnapshot";
 import type { ContractTemplate } from "@/types/contractTemplate";
 import type { ContractExhibit } from "@/types/contractExhibit";
@@ -233,6 +234,9 @@ import { supabaseSocialAnalyticsRepository } from "@/lib/data/socialAnalytics/su
 import type { CreateInspirationItemInput, UpdateInspirationItemInput, ListInspirationItemsFilters } from "@/lib/data/inspiration/repository";
 import { mockInspirationItemsRepository } from "@/lib/data/inspiration/mockRepository";
 import { supabaseInspirationItemsRepository } from "@/lib/data/inspiration/supabaseRepository";
+import type { CreateIdeaItemInput, UpdateIdeaItemInput, ListIdeaItemsFilters } from "@/lib/data/idea/repository";
+import { mockIdeaItemsRepository } from "@/lib/data/idea/mockRepository";
+import { supabaseIdeaItemsRepository } from "@/lib/data/idea/supabaseRepository";
 import type {
   InvoiceFilters,
   PaymentFilters,
@@ -301,6 +305,7 @@ import { resetContractsStore } from "@/lib/data/mock/contractsStore";
 import { resetSocialPostsStore } from "@/lib/data/mock/socialPostsStore";
 import { resetSocialAnalyticsStore } from "@/lib/data/mock/socialAnalyticsStore";
 import { resetInspirationItemsStore } from "@/lib/data/mock/inspirationItemsStore";
+import { resetIdeaItemsStore } from "@/lib/data/mock/ideaItemsStore";
 import { resetContractTemplatesStore } from "@/lib/data/mock/contractTemplatesStore";
 import { resetContractExhibitsStore } from "@/lib/data/mock/contractExhibitsStore";
 import { resetInvoicesStore } from "@/lib/data/mock/invoicesStore";
@@ -1352,6 +1357,41 @@ export async function archiveInspirationItem(id: string): Promise<DataResult<Ins
 
 export async function unarchiveInspirationItem(id: string): Promise<DataResult<InspirationItem>> {
   return inspirationItemsRepository().unarchiveInspirationItem(id);
+}
+
+// ---------------------------------------------------------------------------
+// SOCIAL-07C — Ideas Library repository/action layer. Same selectRepository()
+// dispatch every other domain uses, mirroring Inspiration's own shape
+// exactly. No UI reads these yet (SOCIAL-07C's own scope is repository +
+// Server Actions only).
+// ---------------------------------------------------------------------------
+
+function ideaItemsRepository() {
+  return selectRepository({ mock: mockIdeaItemsRepository, supabase: supabaseIdeaItemsRepository });
+}
+
+export async function createIdeaItem(input: CreateIdeaItemInput): Promise<DataResult<IdeaItem>> {
+  return ideaItemsRepository().createIdeaItem(input);
+}
+
+export async function getIdeaItemById(id: string): Promise<IdeaItem> {
+  return ideaItemsRepository().getIdeaItemById(id);
+}
+
+export async function listIdeaItems(workspaceId: string, filters?: ListIdeaItemsFilters): Promise<IdeaItem[]> {
+  return ideaItemsRepository().listIdeaItems(workspaceId, filters);
+}
+
+export async function updateIdeaItem(id: string, input: UpdateIdeaItemInput): Promise<DataResult<IdeaItem>> {
+  return ideaItemsRepository().updateIdeaItem(id, input);
+}
+
+export async function archiveIdeaItem(id: string): Promise<DataResult<IdeaItem>> {
+  return ideaItemsRepository().archiveIdeaItem(id);
+}
+
+export async function unarchiveIdeaItem(id: string): Promise<DataResult<IdeaItem>> {
+  return ideaItemsRepository().unarchiveIdeaItem(id);
 }
 
 // ---------------------------------------------------------------------------
@@ -3657,6 +3697,7 @@ export function resetAllMockData(): void {
   resetSocialPostsStore();
   resetSocialAnalyticsStore();
   resetInspirationItemsStore();
+  resetIdeaItemsStore();
   resetInvoicesStore();
   resetPaymentsStore();
   resetExpensesStore();

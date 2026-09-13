@@ -19,6 +19,7 @@ import type { SocialPost } from "@/types/socialPost";
 import type { SocialAccountMetricSnapshot, SocialPostMetricSnapshot, RawMetrics } from "@/types/socialMetricSnapshot";
 import type { SocialPostStatus } from "@/core/enums/socialPostStatus";
 import type { InspirationItem, InspirationSourceType, InspirationContentFormat } from "@/types/inspirationItem";
+import type { IdeaItem, IdeaStatus, IdeaPriority } from "@/types/ideaItem";
 import type { Contract, ContractVersionSnapshot } from "@/types/contract";
 import type { ContractTemplate } from "@/types/contractTemplate";
 import type { ContractExhibit } from "@/types/contractExhibit";
@@ -176,6 +177,7 @@ type EventServiceTeamRequirementRow = Database["public"]["Tables"]["event_servic
 type EventServiceVendorAssignmentRow = Database["public"]["Tables"]["event_service_vendor_assignments"]["Row"];
 type EventServiceQuestionnaireResponseRow = Database["public"]["Tables"]["event_service_questionnaire_responses"]["Row"];
 type InspirationItemRow = Database["public"]["Tables"]["inspiration_items"]["Row"];
+type IdeaItemRow = Database["public"]["Tables"]["idea_items"]["Row"];
 
 /**
  * Deliberate seam between raw database rows and domain types, even though
@@ -1376,6 +1378,28 @@ export function mapInspirationItemRow(row: InspirationItemRow): InspirationItem 
     duration_seconds: row.duration_seconds,
     published_at: row.published_at,
     media_asset_id: row.media_asset_id,
+    archived_at: row.archived_at,
+    created_by: row.created_by,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapIdeaItemRow(row: IdeaItemRow): IdeaItem {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    title: row.title,
+    description: row.description,
+    status: row.status as IdeaStatus,
+    source_inspiration_id: row.source_inspiration_id,
+    content_format: row.content_format as InspirationContentFormat | null,
+    hook: row.hook,
+    cta: row.cta,
+    audience: row.audience,
+    notes: row.notes,
+    media_asset_id: row.media_asset_id,
+    priority: row.priority as IdeaPriority | null,
     archived_at: row.archived_at,
     created_by: row.created_by,
     created_at: row.created_at,
