@@ -8,6 +8,7 @@ import { formatDateOnly } from "@/lib/dateFormat";
 import { archiveInspirationItemAction, unarchiveInspirationItemAction } from "@/modules/inspiration/inspirationActions";
 import { INSPIRATION_SOURCE_TYPE_LABELS, INSPIRATION_CONTENT_FORMAT_LABELS } from "@/modules/inspiration/labels";
 import { InspirationThumbnail } from "@/modules/inspiration/components/InspirationThumbnail";
+import { ContentIntelligencePanel } from "@/modules/ai/contentIntelligence/components/ContentIntelligencePanel";
 import type { InspirationItem } from "@/types/inspirationItem";
 
 interface InspirationDetailDialogProps {
@@ -129,6 +130,8 @@ export function InspirationDetailDialog({ item, onClose, canManage, onChanged, o
           {item.published_at ? `Published ${formatDateOnly(item.published_at)} · ` : ""}
           Saved {formatDateOnly(item.created_at)}
         </p>
+
+        <ContentIntelligencePanel sourceEntityType="inspiration_item" sourceEntityId={item.id} canManage={canManage} sourceArchived={!!item.archived_at} />
 
         {error ? (
           <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">

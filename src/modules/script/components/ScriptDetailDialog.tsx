@@ -16,6 +16,7 @@ import {
 import { getIdeaItemAction, listIdeaItemsAction } from "@/modules/idea/ideaActions";
 import { SCRIPT_VERSION_STATUS_LABELS } from "@/modules/script/labels";
 import { ScriptBlockEditor } from "@/modules/script/components/ScriptBlockEditor";
+import { ContentIntelligencePanel } from "@/modules/ai/contentIntelligence/components/ContentIntelligencePanel";
 import type { ScriptItem } from "@/types/scriptItem";
 import type { ScriptVersion } from "@/types/scriptVersion";
 import type { IdeaItem } from "@/types/ideaItem";
@@ -276,6 +277,8 @@ export function ScriptDetailDialog({ item, onClose, canManage, onChanged }: Scri
             </div>
           </div>
         ) : null}
+
+        <ContentIntelligencePanel sourceEntityType="script_item" sourceEntityId={item.id} canManage={canManage} sourceArchived={isArchived} />
       </div>
     </Modal>
   );

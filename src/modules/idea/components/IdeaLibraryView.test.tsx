@@ -17,6 +17,14 @@ vi.mock("@/modules/inspiration/inspirationActions", () => ({
 vi.mock("@/lib/data", () => ({
   getMediaAssetDownloadUrl: vi.fn(),
 }));
+vi.mock("@/modules/aiGeneration/aiGenerationActions", () => ({
+  listAIGenerationsAction: vi.fn().mockResolvedValue({ success: true, data: [] }),
+  approveAIGenerationAction: vi.fn(),
+  rejectAIGenerationAction: vi.fn(),
+}));
+vi.mock("@/modules/ai/contentIntelligence/analyzeContentAction", () => ({
+  analyzeContentAction: vi.fn(),
+}));
 
 import { listIdeaItemsAction, createIdeaItemAction, archiveIdeaItemAction, updateIdeaItemAction } from "@/modules/idea/ideaActions";
 import { IdeaLibraryView } from "@/modules/idea/components/IdeaLibraryView";

@@ -17,6 +17,14 @@ vi.mock("@/modules/idea/ideaActions", () => ({
   getIdeaItemAction: vi.fn(),
   listIdeaItemsAction: vi.fn(),
 }));
+vi.mock("@/modules/aiGeneration/aiGenerationActions", () => ({
+  listAIGenerationsAction: vi.fn().mockResolvedValue({ success: true, data: [] }),
+  approveAIGenerationAction: vi.fn(),
+  rejectAIGenerationAction: vi.fn(),
+}));
+vi.mock("@/modules/ai/contentIntelligence/analyzeContentAction", () => ({
+  analyzeContentAction: vi.fn(),
+}));
 
 import {
   updateScriptItemAction,

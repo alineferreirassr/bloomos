@@ -10,6 +10,7 @@ import { getInspirationItemAction } from "@/modules/inspiration/inspirationActio
 import { IDEA_PRIORITY_LABELS } from "@/modules/idea/labels";
 import { INSPIRATION_CONTENT_FORMAT_LABELS } from "@/modules/inspiration/labels";
 import { IdeaMediaAssetPreview } from "@/modules/idea/components/IdeaMediaAssetPreview";
+import { ContentIntelligencePanel } from "@/modules/ai/contentIntelligence/components/ContentIntelligencePanel";
 import type { IdeaItem } from "@/types/ideaItem";
 
 interface IdeaDetailDialogProps {
@@ -120,6 +121,8 @@ export function IdeaDetailDialog({ item, onClose, canManage, onChanged, onEdit }
         ) : null}
 
         <p className="text-xs text-text-muted">Created {formatDateOnly(item.created_at)}</p>
+
+        <ContentIntelligencePanel sourceEntityType="idea_item" sourceEntityId={item.id} canManage={canManage} sourceArchived={!!item.archived_at} />
 
         {error ? (
           <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">

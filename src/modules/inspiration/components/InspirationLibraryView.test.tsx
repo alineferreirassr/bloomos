@@ -5,6 +5,14 @@ import userEvent from "@testing-library/user-event";
 vi.mock("@/lib/data", () => ({
   getMediaAssetDownloadUrl: vi.fn(),
 }));
+vi.mock("@/modules/aiGeneration/aiGenerationActions", () => ({
+  listAIGenerationsAction: vi.fn().mockResolvedValue({ success: true, data: [] }),
+  approveAIGenerationAction: vi.fn(),
+  rejectAIGenerationAction: vi.fn(),
+}));
+vi.mock("@/modules/ai/contentIntelligence/analyzeContentAction", () => ({
+  analyzeContentAction: vi.fn(),
+}));
 vi.mock("@/modules/inspiration/inspirationActions", () => ({
   listInspirationItemsAction: vi.fn(),
   createInspirationItemAction: vi.fn(),
