@@ -114,6 +114,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // not-yet-released, unrelated to the Finance release this exact-count
   // assertion describes.
   "20260922100000_script_blocks_delete_policy.sql",
+  // SOCIAL-09B — AI Content Intelligence data foundation. Independently-
+  // tracked, not-yet-released, unrelated to the Finance release this
+  // exact-count assertion describes.
+  "20260923100000_ai_generations_foundation.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {
@@ -5051,5 +5055,163 @@ describe("SOCIAL-08D migration — script_blocks DELETE policy", () => {
     expect(code).not.toMatch(/drop table/);
     expect(code).not.toMatch(/to service_role/);
     expect(code).not.toMatch(/grant execute/);
+  });
+});
+
+describe("SOCIAL-09B migration — AI data foundation", () => {
+  function sql(): string {
+    return readMigration("20260923100000_ai_generations_foundation.sql");
+  }
+
+  it("creates exactly one new table: ai_generations", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create table if not exists public\.ai_generations/);
+    const createTableMatches = code.match(/create table/gi) ?? [];
+    expect(createTableMatches).toHaveLength(1);
+  });
+
+  it("requires workspace_id, source_entity_type, source_entity_id, use_case_id, generation_number, provider_id, model, prompt_version, latency_ms, created_at, updated_at — every other column is nullable or has a default", () => {
+    const code = stripSqlComments(sql());
+    const table = code.slice(code.indexOf("create table if not exists public.ai_generations"), code.indexOf("comment on table public.ai_generations"));
+    expect(table).toMatch(/workspace_id uuid not null references public\.workspaces \(id\) on delete cascade/);
+    expect(table).toMatch(/source_entity_type text not null/);
+    expect(table).toMatch(/source_entity_id uuid not null/);
+    expect(table).toMatch(/use_case_id text not null/);
+    expect(table).toMatch(/generation_number integer not null/);
+    expect(table).toMatch(/provider_id text not null/);
+    expect(table).toMatch(/model text not null/);
+    expect(table).toMatch(/prompt_version text not null/);
+    expect(table).toMatch(/latency_ms integer not null/);
+    expect(table).toMatch(/created_at timestamptz not null default now\(\)/);
+    expect(table).toMatch(/updated_at timestamptz not null default now\(\)/);
+
+    for (const nullableColumn of ["skill_id text", "confidence smallint", "reviewed_by uuid", "reviewed_at timestamptz", "archived_at timestamptz"]) {
+      const line = table.split("\n").find((l) => l.trim().startsWith(nullableColumn));
+      expect(line, `expected a nullable "${nullableColumn}" column`).toBeDefined();
+      expect(line).not.toMatch(/not null/);
+    }
+  });
+
+  it("input/output are the one documented JSONB exception — not null, defaulting to an empty object", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/input jsonb not null default '\{\}'::jsonb/);
+    expect(code).toMatch(/output jsonb not null default '\{\}'::jsonb/);
+  });
+
+  it("has no embedding/vector column anywhere", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toContain("vector(");
+    expect(code).not.toContain("embedding");
+  });
+
+  it("stores no provider credential — no api key/secret/token column", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    for (const forbidden of ["api_key", "secret", "credential", " token "]) {
+      expect(code).not.toContain(forbidden);
+    }
+  });
+
+  it("created_by/reviewed_by are nullable FKs to auth.users with on delete set null", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/created_by uuid references auth\.users \(id\) on delete set null/);
+    expect(code).toMatch(/reviewed_by uuid references auth\.users \(id\) on delete set null/);
+  });
+
+  it("constrains source_entity_type to exactly idea_item/inspiration_item/script_item", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(
+      /constraint ai_generations_source_entity_type_check\s*\n\s*check \(source_entity_type in \('idea_item', 'inspiration_item', 'script_item'\)\)/,
+    );
+  });
+
+  it("constrains generation_number to a positive integer", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/constraint ai_generations_generation_number_check\s*\n\s*check \(generation_number > 0\)/);
+  });
+
+  it("constrains latency_ms to a non-negative value", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/constraint ai_generations_latency_ms_check\s*\n\s*check \(latency_ms >= 0\)/);
+  });
+
+  it("constrains confidence to null or 0-100", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/constraint ai_generations_confidence_check\s*\n\s*check \(confidence is null or \(confidence >= 0 and confidence <= 100\)\)/);
+  });
+
+  it("constrains approval_status to exactly proposed/approved/rejected", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/constraint ai_generations_approval_status_check\s*\n\s*check \(approval_status in \('proposed', 'approved', 'rejected'\)\)/);
+  });
+
+  it("enforces reviewed_by/reviewed_at consistency with approval_status", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(
+      /constraint ai_generations_review_fields_consistency_check check \(\s*\(approval_status = 'proposed' and reviewed_by is null and reviewed_at is null\)\s*or\s*\(approval_status in \('approved', 'rejected'\) and reviewed_by is not null and reviewed_at is not null\)\s*\)/,
+    );
+  });
+
+  it("creates the expected two plain indexes plus one unique concurrency-safety index", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create index if not exists ai_generations_workspace_created_idx\s*\n\s*on public\.ai_generations \(workspace_id, created_at desc\);/);
+    expect(code).toMatch(
+      /create index if not exists ai_generations_source_entity_idx\s*\n\s*on public\.ai_generations \(workspace_id, source_entity_type, source_entity_id, generation_number desc\);/,
+    );
+    expect(code).toMatch(
+      /create unique index if not exists ai_generations_source_use_case_number_unique\s*\n\s*on public\.ai_generations \(source_entity_type, source_entity_id, use_case_id, generation_number\);/,
+    );
+  });
+
+  it("reuses the existing set_updated_at() trigger function", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create trigger trg_ai_generations_set_updated_at\s*\n\s*before update on public\.ai_generations\s*\n\s*for each row execute function public\.set_updated_at\(\);/);
+  });
+
+  it("adds a dedicated immutability trigger rejecting any update to content/provider-metadata columns", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create or replace function public\.reject_ai_generation_content_mutation\(\)/);
+    expect(code).toMatch(/create trigger trg_ai_generations_reject_content_mutation\s*\n\s*before update on public\.ai_generations\s*\n\s*for each row execute function public\.reject_ai_generation_content_mutation\(\);/);
+    // The trigger's own guard must reference every immutable column.
+    const fn = code.slice(code.indexOf("create or replace function public.reject_ai_generation_content_mutation"), code.indexOf("comment on function"));
+    for (const column of ["source_entity_type", "source_entity_id", "use_case_id", "input", "output", "provider_id", "model", "generation_number"]) {
+      expect(fn).toContain(`new.${column} is distinct from old.${column}`);
+    }
+    // approval_status/reviewed_by/reviewed_at/archived_at/updated_at must never be checked — those are exactly what's allowed to change.
+    for (const mutableColumn of ["approval_status", "reviewed_by", "reviewed_at", "archived_at", "updated_at"]) {
+      expect(fn).not.toContain(`new.${mutableColumn} is distinct from old.${mutableColumn}`);
+    }
+  });
+
+  it("enables RLS with SELECT/INSERT/UPDATE-only workspace-member policies — explicitly no DELETE policy", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/alter table public\.ai_generations enable row level security;/);
+    expect(code).toMatch(/create policy "ai_generations_select_workspace_member"\s*\n\s*on public\.ai_generations for select\s*\n\s*to authenticated\s*\n\s*using \(public\.is_workspace_member\(workspace_id\)\);/);
+    expect(code).toMatch(/create policy "ai_generations_insert_workspace_member"\s*\n\s*on public\.ai_generations for insert\s*\n\s*to authenticated\s*\n\s*with check \(public\.is_workspace_member\(workspace_id\)\);/);
+    expect(code).toMatch(/create policy "ai_generations_update_workspace_member"\s*\n\s*on public\.ai_generations for update\s*\n\s*to authenticated\s*\n\s*using \(public\.is_workspace_member\(workspace_id\)\)\s*\n\s*with check \(public\.is_workspace_member\(workspace_id\)\);/);
+    expect(code).not.toMatch(/for delete/i);
+    const policyMatches = code.match(/create policy/gi) ?? [];
+    expect(policyMatches).toHaveLength(3);
+  });
+
+  it("never touches idea_items, inspiration_items, script_items, script_versions, script_blocks, social_posts, or workspaces", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    for (const line of code.split("\n")) {
+      if (/^alter table/.test(line.trim())) {
+        expect(line).toMatch(/public\.ai_generations/);
+      }
+    }
+    expect(code).not.toMatch(/create table.*(idea_items|inspiration_items|script_items|script_versions|script_blocks|social_posts)/);
+    expect(code).not.toMatch(/alter table public\.(idea_items|inspiration_items|script_items|script_versions|script_blocks|social_posts|workspaces)/);
+  });
+
+  it("never disables RLS, drops a table, deletes rows, grants to service_role, or references a provider API key", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/disable row level security/);
+    expect(code).not.toMatch(/drop table/);
+    expect(code).not.toMatch(/\bdelete from\b/);
+    expect(code).not.toMatch(/to service_role/);
+    expect(code).not.toMatch(/grant execute/);
+    expect(code).not.toContain("openai");
+    expect(code).not.toContain("anthropic");
   });
 });

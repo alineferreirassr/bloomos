@@ -250,6 +250,9 @@ import type {
 } from "@/lib/data/script/repository";
 import { mockScriptRepository } from "@/lib/data/script/mockRepository";
 import { supabaseScriptRepository } from "@/lib/data/script/supabaseRepository";
+import type { AIGeneration, CreateAIGenerationInput, ListAIGenerationsFilters } from "@/types/aiGeneration";
+import { mockAIGenerationRepository } from "@/lib/data/aiGeneration/mockRepository";
+import { supabaseAIGenerationRepository } from "@/lib/data/aiGeneration/supabaseRepository";
 import type {
   InvoiceFilters,
   PaymentFilters,
@@ -322,6 +325,7 @@ import { resetIdeaItemsStore } from "@/lib/data/mock/ideaItemsStore";
 import { resetScriptItemsStore } from "@/lib/data/mock/scriptItemsStore";
 import { resetScriptVersionsStore } from "@/lib/data/mock/scriptVersionsStore";
 import { resetScriptBlocksStore } from "@/lib/data/mock/scriptBlocksStore";
+import { resetAIGenerationsStore } from "@/lib/data/mock/aiGenerationsStore";
 import { resetContractTemplatesStore } from "@/lib/data/mock/contractTemplatesStore";
 import { resetContractExhibitsStore } from "@/lib/data/mock/contractExhibitsStore";
 import { resetInvoicesStore } from "@/lib/data/mock/invoicesStore";
@@ -1473,6 +1477,45 @@ export async function updateScriptBlock(id: string, input: UpdateScriptBlockInpu
 
 export async function removeScriptBlock(id: string): Promise<DataResult<null>> {
   return scriptRepository().removeScriptBlock(id);
+}
+
+// ---------------------------------------------------------------------------
+// SOCIAL-09B — AI Content Intelligence's own generation-record repository.
+// Same selectRepository() dispatch every other domain uses. No Server
+// Action calls any AI provider — this layer only persists/retrieves
+// already-computed generation records (see aiGenerationActions.ts).
+// ---------------------------------------------------------------------------
+
+function aiGenerationRepository() {
+  return selectRepository({ mock: mockAIGenerationRepository, supabase: supabaseAIGenerationRepository });
+}
+
+export async function createAIGeneration(input: CreateAIGenerationInput): Promise<DataResult<AIGeneration>> {
+  return aiGenerationRepository().createAIGeneration(input);
+}
+
+export async function getAIGenerationById(id: string): Promise<AIGeneration> {
+  return aiGenerationRepository().getAIGenerationById(id);
+}
+
+export async function listAIGenerations(workspaceId: string, filters?: ListAIGenerationsFilters): Promise<AIGeneration[]> {
+  return aiGenerationRepository().listAIGenerations(workspaceId, filters);
+}
+
+export async function approveAIGeneration(id: string, reviewerId: string): Promise<DataResult<AIGeneration>> {
+  return aiGenerationRepository().approveAIGeneration(id, reviewerId);
+}
+
+export async function rejectAIGeneration(id: string, reviewerId: string): Promise<DataResult<AIGeneration>> {
+  return aiGenerationRepository().rejectAIGeneration(id, reviewerId);
+}
+
+export async function archiveAIGeneration(id: string): Promise<DataResult<AIGeneration>> {
+  return aiGenerationRepository().archiveAIGeneration(id);
+}
+
+export async function unarchiveAIGeneration(id: string): Promise<DataResult<AIGeneration>> {
+  return aiGenerationRepository().unarchiveAIGeneration(id);
 }
 
 // ---------------------------------------------------------------------------
@@ -3782,6 +3825,7 @@ export function resetAllMockData(): void {
   resetScriptItemsStore();
   resetScriptVersionsStore();
   resetScriptBlocksStore();
+  resetAIGenerationsStore();
   resetInvoicesStore();
   resetPaymentsStore();
   resetExpensesStore();

@@ -88,3 +88,6 @@ export type { ListSkillsForWorkspaceParams } from "@/core/ai/skills/discovery";
 export { registerSkillRunner, unregisterSkillRunner, getSkillRunner, resetSkillRunnerRegistry } from "@/core/ai/skills/runnerRegistry";
 export { mapSkillErrorToMessage } from "@/core/ai/skills/errorMapping";
 export type { SkillErrorMessages } from "@/core/ai/skills/errorMapping";
+
+export { wrapUntrustedSourceContent, buildBoundedPrompt } from "@/core/ai/promptBoundary";
+export type { UntrustedSourceContent } from "@/core/ai/promptBoundary";

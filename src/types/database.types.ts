@@ -2596,6 +2596,12 @@ export interface Database {
         Update: { id?: string; workspace_id?: string; member_id?: string; calendar_id?: string; provider_event_id?: string; i_cal_uid?: string | null; recurring_event_id?: string | null; original_start_time?: string | null; summary?: string | null; description?: string | null; location?: string | null; status?: string | null; all_day?: boolean; start_date?: string | null; end_date?: string | null; start_date_time?: string | null; end_date_time?: string | null; time_zone?: string | null; organizer?: Record<string, unknown> | null; attendees?: Record<string, unknown>[]; html_link?: string | null; hangout_link?: string | null; cancelled_at?: string | null; created_at?: string; updated_at?: string };
         Relationships: [];
       };
+      ai_generations: {
+        Row: { id: string; workspace_id: string; source_entity_type: string; source_entity_id: string; use_case_id: string; skill_id: string | null; generation_number: number; input: Record<string, unknown>; output: Record<string, unknown>; provider_id: string; model: string; prompt_version: string; is_mock: boolean; latency_ms: number; confidence: number | null; approval_status: string; reviewed_by: string | null; reviewed_at: string | null; archived_at: string | null; created_by: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; source_entity_type: string; source_entity_id: string; use_case_id: string; skill_id?: string | null; generation_number: number; input?: Record<string, unknown>; output?: Record<string, unknown>; provider_id: string; model: string; prompt_version: string; is_mock?: boolean; latency_ms: number; confidence?: number | null; approval_status?: string; reviewed_by?: string | null; reviewed_at?: string | null; archived_at?: string | null; created_by?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; source_entity_type?: string; source_entity_id?: string; use_case_id?: string; skill_id?: string | null; generation_number?: number; input?: Record<string, unknown>; output?: Record<string, unknown>; provider_id?: string; model?: string; prompt_version?: string; is_mock?: boolean; latency_ms?: number; confidence?: number | null; approval_status?: string; reviewed_by?: string | null; reviewed_at?: string | null; archived_at?: string | null; created_by?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

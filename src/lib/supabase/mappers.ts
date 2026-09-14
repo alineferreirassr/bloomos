@@ -23,6 +23,7 @@ import type { IdeaItem, IdeaStatus, IdeaPriority } from "@/types/ideaItem";
 import type { ScriptItem, ScriptStatus } from "@/types/scriptItem";
 import type { ScriptVersion, ScriptVersionStatus } from "@/types/scriptVersion";
 import type { ScriptBlock } from "@/types/scriptBlock";
+import type { AIGeneration, AIGenerationSourceEntityType, AIGenerationApprovalStatus } from "@/types/aiGeneration";
 import type { Contract, ContractVersionSnapshot } from "@/types/contract";
 import type { ContractTemplate } from "@/types/contractTemplate";
 import type { ContractExhibit } from "@/types/contractExhibit";
@@ -184,6 +185,7 @@ type IdeaItemRow = Database["public"]["Tables"]["idea_items"]["Row"];
 type ScriptItemRow = Database["public"]["Tables"]["script_items"]["Row"];
 type ScriptVersionRow = Database["public"]["Tables"]["script_versions"]["Row"];
 type ScriptBlockRow = Database["public"]["Tables"]["script_blocks"]["Row"];
+type AIGenerationRow = Database["public"]["Tables"]["ai_generations"]["Row"];
 
 /**
  * Deliberate seam between raw database rows and domain types, even though
@@ -1427,6 +1429,33 @@ export function mapScriptBlockRow(row: ScriptBlockRow): ScriptBlock {
     workspace_id: row.workspace_id,
     content: row.content,
     sort_order: row.sort_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapAIGenerationRow(row: AIGenerationRow): AIGeneration {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    source_entity_type: row.source_entity_type as AIGenerationSourceEntityType,
+    source_entity_id: row.source_entity_id,
+    use_case_id: row.use_case_id,
+    skill_id: row.skill_id,
+    generation_number: row.generation_number,
+    input: row.input,
+    output: row.output,
+    provider_id: row.provider_id,
+    model: row.model,
+    prompt_version: row.prompt_version,
+    is_mock: row.is_mock,
+    latency_ms: row.latency_ms,
+    confidence: row.confidence,
+    approval_status: row.approval_status as AIGenerationApprovalStatus,
+    reviewed_by: row.reviewed_by,
+    reviewed_at: row.reviewed_at,
+    archived_at: row.archived_at,
+    created_by: row.created_by,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
