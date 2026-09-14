@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("@/modules/script/scriptActions", () => ({
@@ -88,6 +88,28 @@ describe("ScriptBlockEditor — add / save / remove", () => {
     await user.click(screen.getByRole("button", { name: "Add Block" }));
 
     expect(createScriptBlockAction).toHaveBeenCalledWith("version_1", { content: "", sort_order: 4 });
+  });
+
+  it("SOCIAL-08E hardening — disables Add Block while a create request is in flight, preventing a duplicate sort_order from a double-click", async () => {
+    vi.mocked(listScriptBlocksAction).mockResolvedValue({ success: true, data: [] });
+    let resolveCreate!: (value: Awaited<ReturnType<typeof createScriptBlockAction>>) => void;
+    vi.mocked(createScriptBlockAction).mockReturnValue(
+      new Promise((resolve) => {
+        resolveCreate = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    render(<ScriptBlockEditor scriptVersionId="version_1" canManage />);
+
+    await screen.findByText("No blocks yet.");
+    const addButton = screen.getByRole("button", { name: "Add Block" });
+    await user.click(addButton);
+
+    expect(addButton).toBeDisabled();
+    expect(createScriptBlockAction).toHaveBeenCalledTimes(1);
+
+    resolveCreate({ success: true, data: block({ id: "block_new", content: "" }) });
+    await waitFor(() => expect(addButton).not.toBeDisabled());
   });
 
   it("saves edited content and position for a block", async () => {

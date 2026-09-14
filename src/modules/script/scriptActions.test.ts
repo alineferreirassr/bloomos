@@ -594,3 +594,68 @@ describe("Script actions — block lifecycle", () => {
     });
   });
 });
+
+describe("Script actions — SOCIAL-08E hardening: block mutation on an archived Script's draft", () => {
+  async function setupArchivedDraft(): Promise<{ scriptId: string; versionId: string; blockId: string }> {
+    const script = await createScriptItemAction(baseInput());
+    if (!script.success) throw new Error("setup failed");
+    const version = await createScriptVersionAction(script.data.id);
+    if (!version.success) throw new Error("setup failed");
+    const block = await createScriptBlockAction(version.data.id, { content: "Original", sort_order: 0 });
+    if (!block.success) throw new Error("setup failed");
+
+    const archived = await archiveScriptItemAction(script.data.id);
+    if (!archived.success) throw new Error("setup failed");
+
+    return { scriptId: script.data.id, versionId: version.data.id, blockId: block.data.id };
+  }
+
+  it("rejects createScriptBlockAction on a draft belonging to an archived Script", async () => {
+    const { versionId } = await setupArchivedDraft();
+    const result = await createScriptBlockAction(versionId, { content: "New block", sort_order: 1 });
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toMatch(/restore it first/i);
+  });
+
+  it("rejects updateScriptBlockAction on a draft belonging to an archived Script, leaving the block unchanged", async () => {
+    const { versionId, blockId } = await setupArchivedDraft();
+    const result = await updateScriptBlockAction(versionId, blockId, { content: "Hijacked" });
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toMatch(/restore it first/i);
+
+    const list = await listScriptBlocksAction(versionId);
+    expect(list.success).toBe(true);
+    if (list.success) expect(list.data[0].content).toBe("Original");
+  });
+
+  it("rejects removeScriptBlockAction on a draft belonging to an archived Script, leaving the block in place", async () => {
+    const { versionId, blockId } = await setupArchivedDraft();
+    const result = await removeScriptBlockAction(versionId, blockId);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toMatch(/restore it first/i);
+
+    const list = await listScriptBlocksAction(versionId);
+    expect(list.success).toBe(true);
+    if (list.success) expect(list.data).toHaveLength(1);
+  });
+
+  it("allows block mutation again once the Script is restored", async () => {
+    const { scriptId, versionId, blockId } = await setupArchivedDraft();
+    const restored = await unarchiveScriptItemAction(scriptId);
+    expect(restored.success).toBe(true);
+
+    const result = await updateScriptBlockAction(versionId, blockId, { content: "Now editable" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.content).toBe("Now editable");
+  });
+
+  it("still allows reading blocks from an archived Script's draft — only writes are blocked", async () => {
+    const { versionId } = await setupArchivedDraft();
+    const result = await listScriptBlocksAction(versionId);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).toHaveLength(1);
+  });
+});

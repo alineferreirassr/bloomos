@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -53,6 +53,8 @@ export function ScriptDetailDialog({ item, onClose, canManage, onChanged }: Scri
   const [versionsState, setVersionsState] = useState<VersionsState>({ status: "loading" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** SOCIAL-08E hardening — guards against an older, slower `loadVersions` call resolving after a newer one (e.g. switching Scripts quickly), mirroring `ScriptLibraryView.tsx`'s own `latestRequestIdRef` pattern. Without this, a stale response could overwrite the currently-open Script's version/draft state. */
+  const latestVersionsRequestIdRef = useRef(0);
 
   const currentItemId = item?.id ?? null;
   if (currentItemId !== wasItemId) {
@@ -81,7 +83,9 @@ export function ScriptDetailDialog({ item, onClose, canManage, onChanged }: Scri
   }, [sourceIdeaId]);
 
   function loadVersions(scriptId: string) {
+    const requestId = ++latestVersionsRequestIdRef.current;
     listScriptVersionsAction(scriptId).then((result) => {
+      if (requestId !== latestVersionsRequestIdRef.current) return;
       setVersionsState(result.success ? { status: "ready", versions: result.data } : { status: "error" });
     });
   }

@@ -28,6 +28,7 @@ interface ScriptBlockEditorProps {
  */
 export function ScriptBlockEditor({ scriptVersionId, canManage }: ScriptBlockEditorProps) {
   const [state, setState] = useState<BlocksState>({ status: "loading" });
+  const [addingBlock, setAddingBlock] = useState(false);
 
   function load() {
     listScriptBlocksAction(scriptVersionId).then((result) => {
@@ -51,9 +52,14 @@ export function ScriptBlockEditor({ scriptVersionId, canManage }: ScriptBlockEdi
   }
 
   async function handleAddBlock() {
-    const nextOrder = state.status === "ready" && state.blocks.length > 0 ? Math.max(...state.blocks.map((b) => b.sort_order)) + 1 : 0;
-    const result = await createScriptBlockAction(scriptVersionId, { content: "", sort_order: nextOrder });
-    if (result.success) load();
+    setAddingBlock(true);
+    try {
+      const nextOrder = state.status === "ready" && state.blocks.length > 0 ? Math.max(...state.blocks.map((b) => b.sort_order)) + 1 : 0;
+      const result = await createScriptBlockAction(scriptVersionId, { content: "", sort_order: nextOrder });
+      if (result.success) load();
+    } finally {
+      setAddingBlock(false);
+    }
   }
 
   if (state.status === "loading") {
@@ -78,8 +84,8 @@ export function ScriptBlockEditor({ scriptVersionId, canManage }: ScriptBlockEdi
         />
       ))}
       {canManage ? (
-        <Button type="button" variant="secondary" onClick={handleAddBlock}>
-          Add Block
+        <Button type="button" variant="secondary" onClick={handleAddBlock} disabled={addingBlock} aria-busy={addingBlock}>
+          {addingBlock ? "Adding…" : "Add Block"}
         </Button>
       ) : null}
     </div>

@@ -298,5 +298,38 @@ describe("ScriptDetailDialog", () => {
       await screen.findByText("No blocks yet.");
       expect(screen.queryByRole("button", { name: /publish/i })).not.toBeInTheDocument();
     });
+
+    it("SOCIAL-08E hardening — an older, slower version-list request never overwrites a newer Script's version state after switching quickly", async () => {
+      type ListVersionsResult = Awaited<ReturnType<typeof listScriptVersionsAction>>;
+      let resolveFirst!: (value: ListVersionsResult) => void;
+      const firstRequest = new Promise<ListVersionsResult>((resolve) => {
+        resolveFirst = resolve;
+      });
+
+      // The stale (first) Script has NO draft — if it were incorrectly
+      // applied after switching, the dialog would show "no draft yet"
+      // instead of the second Script's own real draft editor.
+      vi.mocked(listScriptVersionsAction)
+        .mockReturnValueOnce(firstRequest)
+        .mockResolvedValueOnce({ success: true, data: [version({ id: "version_2", script_id: "script_2", status: "published", version_number: 1, published_at: "2026-09-20T00:00:00Z", published_by: "user_1" })] });
+      vi.mocked(listScriptBlocksAction).mockResolvedValue({ success: true, data: [] });
+
+      const { rerender } = render(<ScriptDetailDialog item={item({ id: "script_1", title: "First script" })} onClose={vi.fn()} canManage onChanged={vi.fn()} />);
+
+      // Switch to a different Script before the first request resolves.
+      rerender(<ScriptDetailDialog item={item({ id: "script_2", title: "Second script" })} onClose={vi.fn()} canManage onChanged={vi.fn()} />);
+      await screen.findByText("This Script has no draft yet.");
+
+      // Now the stale first request resolves with a DRAFT version — if it
+      // were wrongly applied, the "no draft" message would flip to the
+      // block editor even though this is still Script 2 (which has no
+      // draft of its own).
+      resolveFirst({ success: true, data: [version({ id: "version_1", script_id: "script_1", status: "draft" })] });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(screen.getByRole("dialog", { name: "Second script" })).toBeInTheDocument();
+      expect(screen.getByText("This Script has no draft yet.")).toBeInTheDocument();
+      expect(screen.queryByText("No blocks yet.")).not.toBeInTheDocument();
+    });
   });
 });

@@ -77,6 +77,22 @@ async function loadOwnedScriptVersion(id: string, workspaceId: string): Promise<
   return version;
 }
 
+/**
+ * SOCIAL-08E hardening — verifies the version's grandparent Script is not
+ * archived, mirroring `updateScriptItemAction`'s own "restore it first"
+ * rule. Every block-mutation action below only ever checked the version's
+ * own workspace ownership, never this — meaning a direct Server Action
+ * call (bypassing the UI, which only hides its controls via
+ * `canManage={canManage && !isArchived}`) could still create/edit/remove
+ * blocks on an archived Script's draft. Block mutation is a form of
+ * editing the Script, so it must be blocked the same way.
+ */
+async function verifyScriptNotArchivedForVersion(version: ScriptVersion): Promise<ReferenceValidationResult> {
+  const script = await getScriptItemById(version.script_id).catch(() => null);
+  if (script?.status === "archived") return { success: false, error: ARCHIVED_EDIT_ERROR };
+  return { success: true };
+}
+
 type ReferenceValidationResult = { success: true } | { success: false; error: string };
 
 /**
@@ -275,6 +291,8 @@ export async function createScriptBlockAction(scriptVersionId: string, input: Sc
 
   const version = await loadOwnedScriptVersion(scriptVersionId, resolved.session.workspace.id);
   if (!version) return { success: false, error: SCRIPT_VERSION_NOT_FOUND_ERROR };
+  const archivedCheck = await verifyScriptNotArchivedForVersion(version);
+  if (!archivedCheck.success) return archivedCheck;
 
   const parsed = scriptBlockInputSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: VALIDATION_ERROR };
@@ -316,6 +334,8 @@ export async function updateScriptBlockAction(scriptVersionId: string, id: strin
 
   const version = await loadOwnedScriptVersion(scriptVersionId, resolved.session.workspace.id);
   if (!version) return { success: false, error: SCRIPT_VERSION_NOT_FOUND_ERROR };
+  const archivedCheck = await verifyScriptNotArchivedForVersion(version);
+  if (!archivedCheck.success) return archivedCheck;
 
   const blocks = await listScriptBlocks(scriptVersionId).catch(() => []);
   const existing = blocks.find((b) => b.id === id);
@@ -345,6 +365,8 @@ export async function removeScriptBlockAction(scriptVersionId: string, id: strin
 
   const version = await loadOwnedScriptVersion(scriptVersionId, resolved.session.workspace.id);
   if (!version) return { success: false, error: SCRIPT_VERSION_NOT_FOUND_ERROR };
+  const archivedCheck = await verifyScriptNotArchivedForVersion(version);
+  if (!archivedCheck.success) return archivedCheck;
 
   const blocks = await listScriptBlocks(scriptVersionId).catch(() => []);
   const existing = blocks.find((b) => b.id === id);
