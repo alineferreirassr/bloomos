@@ -118,6 +118,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // tracked, not-yet-released, unrelated to the Finance release this
   // exact-count assertion describes.
   "20260923100000_ai_generations_foundation.sql",
+  // SOCIAL-10C — Carousel Studio data foundation. Independently-tracked,
+  // not-yet-released, unrelated to the Finance release this exact-count
+  // assertion describes.
+  "20260924100000_carousel_items_foundation.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {
@@ -5213,5 +5217,176 @@ describe("SOCIAL-09B migration — AI data foundation", () => {
     expect(code).not.toMatch(/grant execute/);
     expect(code).not.toContain("openai");
     expect(code).not.toContain("anthropic");
+  });
+});
+
+describe("SOCIAL-10C migration — Carousel Studio data foundation", () => {
+  function sql(): string {
+    return readMigration("20260924100000_carousel_items_foundation.sql");
+  }
+
+  it("creates exactly two new tables: carousel_items, carousel_slides", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create table if not exists public\.carousel_items/);
+    expect(code).toMatch(/create table if not exists public\.carousel_slides/);
+    const createTableMatches = code.match(/create table/gi) ?? [];
+    expect(createTableMatches).toHaveLength(2);
+  });
+
+  describe("carousel_items", () => {
+    it("requires workspace_id, title, status, created_at, updated_at — every other column is nullable", () => {
+      const code = stripSqlComments(sql());
+      const table = code.slice(code.indexOf("create table if not exists public.carousel_items"), code.indexOf("comment on table public.carousel_items"));
+      expect(table).toMatch(/workspace_id uuid not null references public\.workspaces \(id\) on delete cascade/);
+      expect(table).toMatch(/title text not null/);
+      expect(table).toMatch(/status text not null default 'active'/);
+      expect(table).toMatch(/created_at timestamptz not null default now\(\)/);
+      expect(table).toMatch(/updated_at timestamptz not null default now\(\)/);
+
+      for (const nullableColumn of ["source_idea_id uuid", "archived_at timestamptz"]) {
+        const line = table.split("\n").find((l) => l.trim().startsWith(nullableColumn));
+        expect(line, `expected a nullable "${nullableColumn}" column`).toBeDefined();
+        expect(line).not.toMatch(/not null/);
+      }
+    });
+
+    it("source_idea_id is a nullable FK to idea_items with on delete set null — never a copy of Idea content", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/source_idea_id uuid references public\.idea_items \(id\) on delete set null/);
+    });
+
+    it("created_by is a nullable FK to auth.users with on delete set null", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/created_by uuid references auth\.users \(id\) on delete set null/);
+    });
+
+    it("constrains status to active/archived only", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/constraint carousel_items_status_check\s*\n\s*check \(status in \('active', 'archived'\)\)/);
+    });
+
+    it("has no source_script_id, source_inspiration_id, media_asset_id, content_format, priority, notes, or version field — SOCIAL-10B's own decisions", () => {
+      const code = stripSqlComments(sql()).toLowerCase();
+      const table = code.slice(code.indexOf("create table if not exists public.carousel_items"), code.indexOf("comment on table public.carousel_items"));
+      for (const forbidden of ["source_script_id", "source_inspiration_id", "media_asset_id", "content_format", "priority", "notes", "version"]) {
+        expect(table).not.toContain(forbidden);
+      }
+    });
+
+    it("imposes no title uniqueness — Carousels may legitimately share a title", () => {
+      const code = stripSqlComments(sql());
+      const table = code.slice(code.indexOf("create table if not exists public.carousel_items"), code.indexOf("comment on table public.carousel_items"));
+      expect(table).not.toMatch(/unique/i);
+    });
+
+    it("creates exactly the three approved indexes", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create index if not exists carousel_items_workspace_archived_idx\s*\n\s*on public\.carousel_items \(workspace_id, archived_at\);/);
+      expect(code).toMatch(/create index if not exists carousel_items_workspace_created_idx\s*\n\s*on public\.carousel_items \(workspace_id, created_at desc\);/);
+      expect(code).toMatch(/create index if not exists carousel_items_workspace_status_idx\s*\n\s*on public\.carousel_items \(workspace_id, status\);/);
+    });
+
+    it("reuses the existing set_updated_at() trigger function", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create trigger trg_carousel_items_set_updated_at\s*\n\s*before update on public\.carousel_items\s*\n\s*for each row execute function public\.set_updated_at\(\);/);
+    });
+
+    it("enables RLS with SELECT/INSERT/UPDATE-only workspace-member policies — explicitly no DELETE policy", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/alter table public\.carousel_items enable row level security;/);
+      expect(code).toMatch(/create policy "carousel_items_select_workspace_member"\s*\n\s*on public\.carousel_items for select\s*\n\s*to authenticated\s*\n\s*using \(public\.is_workspace_member\(workspace_id\)\);/);
+      expect(code).toMatch(/create policy "carousel_items_insert_workspace_member"\s*\n\s*on public\.carousel_items for insert\s*\n\s*to authenticated\s*\n\s*with check \(public\.is_workspace_member\(workspace_id\)\);/);
+      expect(code).toMatch(/create policy "carousel_items_update_workspace_member"\s*\n\s*on public\.carousel_items for update\s*\n\s*to authenticated\s*\n\s*using \(public\.is_workspace_member\(workspace_id\)\)\s*\n\s*with check \(public\.is_workspace_member\(workspace_id\)\);/);
+      const itemsSection = code.slice(code.indexOf("create table if not exists public.carousel_items"), code.indexOf("create table if not exists public.carousel_slides"));
+      expect(itemsSection).not.toMatch(/for delete/i);
+    });
+  });
+
+  describe("carousel_slides", () => {
+    it("requires carousel_id, workspace_id, content, sort_order, created_at, updated_at — media_asset_id is nullable", () => {
+      const code = stripSqlComments(sql());
+      const table = code.slice(code.indexOf("create table if not exists public.carousel_slides"), code.indexOf("comment on table public.carousel_slides"));
+      expect(table).toMatch(/carousel_id uuid not null references public\.carousel_items \(id\) on delete cascade/);
+      expect(table).toMatch(/workspace_id uuid not null references public\.workspaces \(id\) on delete cascade/);
+      expect(table).toMatch(/content text not null default ''/);
+      expect(table).toMatch(/sort_order integer not null default 0/);
+
+      const line = table.split("\n").find((l) => l.trim().startsWith("media_asset_id uuid"));
+      expect(line, "expected a nullable media_asset_id column").toBeDefined();
+      expect(line).not.toMatch(/not null/);
+    });
+
+    it("media_asset_id is a nullable FK to media_assets with on delete set null — exactly one such column on this table", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/media_asset_id uuid references public\.media_assets \(id\) on delete set null/);
+      const table = code.slice(code.indexOf("create table if not exists public.carousel_slides"), code.indexOf("comment on table public.carousel_slides"));
+      const columnLines = table.split("\n").filter((l) => l.trim().startsWith("media_asset_id"));
+      expect(columnLines).toHaveLength(1);
+    });
+
+    it("constrains sort_order to a non-negative value, with no uniqueness constraint on (carousel_id, sort_order) — mirrors script_blocks' own tolerance of duplicates", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/constraint carousel_slides_sort_order_check\s*\n\s*check \(sort_order >= 0\)/);
+      expect(code).not.toMatch(/create unique index.*carousel_slides/i);
+    });
+
+    it("has no title, body, notes, design coordinates, colors, fonts, templates, animations, CTA, analytics, or AI field", () => {
+      const code = stripSqlComments(sql()).toLowerCase();
+      const table = code.slice(code.indexOf("create table if not exists public.carousel_slides"), code.indexOf("comment on table public.carousel_slides"));
+      for (const forbidden of ["title", "body", "notes", "coordinate", "color", "font", "template", "animation", " cta", "analytics", "ai_"]) {
+        expect(table).not.toContain(forbidden);
+      }
+    });
+
+    it("creates exactly one index, ordering slides within a carousel", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create index if not exists carousel_slides_carousel_sort_idx\s*\n\s*on public\.carousel_slides \(carousel_id, sort_order\);/);
+    });
+
+    it("reuses the existing set_updated_at() trigger function", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create trigger trg_carousel_slides_set_updated_at\s*\n\s*before update on public\.carousel_slides\s*\n\s*for each row execute function public\.set_updated_at\(\);/);
+    });
+
+    it("enables RLS with SELECT/INSERT/UPDATE policies plus exactly one workspace-member-gated DELETE policy — SOCIAL-10C's own explicit slide-delete decision", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/alter table public\.carousel_slides enable row level security;/);
+      expect(code).toMatch(/create policy "carousel_slides_select_workspace_member"/);
+      expect(code).toMatch(/create policy "carousel_slides_insert_workspace_member"/);
+      expect(code).toMatch(/create policy "carousel_slides_update_workspace_member"/);
+      expect(code).toMatch(/create policy "carousel_slides_delete_workspace_member"\s*\n\s*on public\.carousel_slides for delete\s*\n\s*to authenticated\s*\n\s*using \(public\.is_workspace_member\(workspace_id\)\);/);
+    });
+  });
+
+  it("creates exactly one DELETE policy in total — scoped to carousel_slides only, never carousel_items", () => {
+    const code = stripSqlComments(sql());
+    const deleteMatches = code.match(/for delete/gi) ?? [];
+    expect(deleteMatches).toHaveLength(1);
+    const policyMatches = code.match(/create policy/gi) ?? [];
+    expect(policyMatches).toHaveLength(7);
+  });
+
+  it("never touches idea_items, inspiration_items, script_items, script_versions, script_blocks, social_posts, ai_generations, media_assets, or workspaces", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    for (const line of code.split("\n")) {
+      if (/^alter table/.test(line.trim())) {
+        expect(line).toMatch(/public\.carousel_(items|slides)/);
+      }
+    }
+    expect(code).not.toMatch(/create table.*(idea_items|inspiration_items|script_items|script_versions|script_blocks|social_posts|ai_generations|media_assets)/);
+    expect(code).not.toMatch(/alter table public\.(idea_items|inspiration_items|script_items|script_versions|script_blocks|social_posts|ai_generations|media_assets|workspaces)/);
+  });
+
+  it("never disables RLS, drops a table, deletes rows via raw SQL, grants to service_role, or references AI/a provider", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/disable row level security/);
+    expect(code).not.toMatch(/drop table/);
+    expect(code).not.toMatch(/\bdelete from\b/);
+    expect(code).not.toMatch(/to service_role/);
+    expect(code).not.toMatch(/grant execute/);
+    expect(code).not.toContain("openai");
+    expect(code).not.toContain("anthropic");
+    expect(code).not.toContain("ai_generations");
+    expect(code).not.toContain("source_entity_type");
   });
 });

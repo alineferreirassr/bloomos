@@ -251,8 +251,19 @@ import type {
 import { mockScriptRepository } from "@/lib/data/script/mockRepository";
 import { supabaseScriptRepository } from "@/lib/data/script/supabaseRepository";
 import type { AIGeneration, CreateAIGenerationInput, ListAIGenerationsFilters } from "@/types/aiGeneration";
+import type { CarouselItem } from "@/types/carouselItem";
+import type { CarouselSlide } from "@/types/carouselSlide";
 import { mockAIGenerationRepository } from "@/lib/data/aiGeneration/mockRepository";
 import { supabaseAIGenerationRepository } from "@/lib/data/aiGeneration/supabaseRepository";
+import type {
+  CreateCarouselItemInput,
+  UpdateCarouselItemInput,
+  ListCarouselItemsFilters,
+  CreateCarouselSlideInput,
+  UpdateCarouselSlideInput,
+} from "@/lib/data/carousel/repository";
+import { mockCarouselRepository } from "@/lib/data/carousel/mockRepository";
+import { supabaseCarouselRepository } from "@/lib/data/carousel/supabaseRepository";
 import type {
   InvoiceFilters,
   PaymentFilters,
@@ -326,6 +337,8 @@ import { resetScriptItemsStore } from "@/lib/data/mock/scriptItemsStore";
 import { resetScriptVersionsStore } from "@/lib/data/mock/scriptVersionsStore";
 import { resetScriptBlocksStore } from "@/lib/data/mock/scriptBlocksStore";
 import { resetAIGenerationsStore } from "@/lib/data/mock/aiGenerationsStore";
+import { resetCarouselItemsStore } from "@/lib/data/mock/carouselItemsStore";
+import { resetCarouselSlidesStore } from "@/lib/data/mock/carouselSlidesStore";
 import { resetContractTemplatesStore } from "@/lib/data/mock/contractTemplatesStore";
 import { resetContractExhibitsStore } from "@/lib/data/mock/contractExhibitsStore";
 import { resetInvoicesStore } from "@/lib/data/mock/invoicesStore";
@@ -1516,6 +1529,57 @@ export async function archiveAIGeneration(id: string): Promise<DataResult<AIGene
 
 export async function unarchiveAIGeneration(id: string): Promise<DataResult<AIGeneration>> {
   return aiGenerationRepository().unarchiveAIGeneration(id);
+}
+
+// ---------------------------------------------------------------------------
+// SOCIAL-10C — Carousel Studio repository. Same selectRepository() dispatch
+// every other domain uses, mirroring Script's own combined-domain shape
+// (one repository covering carousel_items/carousel_slides). No Server
+// Action, no UI — repository foundation only (SOCIAL-10D+ own those).
+// ---------------------------------------------------------------------------
+
+function carouselRepository() {
+  return selectRepository({ mock: mockCarouselRepository, supabase: supabaseCarouselRepository });
+}
+
+export async function createCarouselItem(input: CreateCarouselItemInput): Promise<DataResult<CarouselItem>> {
+  return carouselRepository().createCarouselItem(input);
+}
+
+export async function getCarouselItemById(id: string): Promise<CarouselItem> {
+  return carouselRepository().getCarouselItemById(id);
+}
+
+export async function listCarouselItems(workspaceId: string, filters?: ListCarouselItemsFilters): Promise<CarouselItem[]> {
+  return carouselRepository().listCarouselItems(workspaceId, filters);
+}
+
+export async function updateCarouselItem(id: string, input: UpdateCarouselItemInput): Promise<DataResult<CarouselItem>> {
+  return carouselRepository().updateCarouselItem(id, input);
+}
+
+export async function archiveCarouselItem(id: string): Promise<DataResult<CarouselItem>> {
+  return carouselRepository().archiveCarouselItem(id);
+}
+
+export async function unarchiveCarouselItem(id: string): Promise<DataResult<CarouselItem>> {
+  return carouselRepository().unarchiveCarouselItem(id);
+}
+
+export async function createCarouselSlide(input: CreateCarouselSlideInput): Promise<DataResult<CarouselSlide>> {
+  return carouselRepository().createCarouselSlide(input);
+}
+
+export async function listCarouselSlides(carouselId: string): Promise<CarouselSlide[]> {
+  return carouselRepository().listCarouselSlides(carouselId);
+}
+
+export async function updateCarouselSlide(id: string, input: UpdateCarouselSlideInput): Promise<DataResult<CarouselSlide>> {
+  return carouselRepository().updateCarouselSlide(id, input);
+}
+
+export async function removeCarouselSlide(id: string): Promise<DataResult<null>> {
+  return carouselRepository().removeCarouselSlide(id);
 }
 
 // ---------------------------------------------------------------------------
@@ -3826,6 +3890,8 @@ export function resetAllMockData(): void {
   resetScriptVersionsStore();
   resetScriptBlocksStore();
   resetAIGenerationsStore();
+  resetCarouselItemsStore();
+  resetCarouselSlidesStore();
   resetInvoicesStore();
   resetPaymentsStore();
   resetExpensesStore();

@@ -24,6 +24,8 @@ import type { ScriptItem, ScriptStatus } from "@/types/scriptItem";
 import type { ScriptVersion, ScriptVersionStatus } from "@/types/scriptVersion";
 import type { ScriptBlock } from "@/types/scriptBlock";
 import type { AIGeneration, AIGenerationSourceEntityType, AIGenerationApprovalStatus } from "@/types/aiGeneration";
+import type { CarouselItem, CarouselStatus } from "@/types/carouselItem";
+import type { CarouselSlide } from "@/types/carouselSlide";
 import type { Contract, ContractVersionSnapshot } from "@/types/contract";
 import type { ContractTemplate } from "@/types/contractTemplate";
 import type { ContractExhibit } from "@/types/contractExhibit";
@@ -186,6 +188,8 @@ type ScriptItemRow = Database["public"]["Tables"]["script_items"]["Row"];
 type ScriptVersionRow = Database["public"]["Tables"]["script_versions"]["Row"];
 type ScriptBlockRow = Database["public"]["Tables"]["script_blocks"]["Row"];
 type AIGenerationRow = Database["public"]["Tables"]["ai_generations"]["Row"];
+type CarouselItemRow = Database["public"]["Tables"]["carousel_items"]["Row"];
+type CarouselSlideRow = Database["public"]["Tables"]["carousel_slides"]["Row"];
 
 /**
  * Deliberate seam between raw database rows and domain types, even though
@@ -1429,6 +1433,33 @@ export function mapScriptBlockRow(row: ScriptBlockRow): ScriptBlock {
     workspace_id: row.workspace_id,
     content: row.content,
     sort_order: row.sort_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapCarouselItemRow(row: CarouselItemRow): CarouselItem {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    title: row.title,
+    status: row.status as CarouselStatus,
+    source_idea_id: row.source_idea_id,
+    archived_at: row.archived_at,
+    created_by: row.created_by,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapCarouselSlideRow(row: CarouselSlideRow): CarouselSlide {
+  return {
+    id: row.id,
+    carousel_id: row.carousel_id,
+    workspace_id: row.workspace_id,
+    content: row.content,
+    sort_order: row.sort_order,
+    media_asset_id: row.media_asset_id,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
