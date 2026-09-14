@@ -386,3 +386,40 @@ describe("mockScriptRepository.updateScriptBlock", () => {
     if (updated.success) expect(updated.data.sort_order).toBe(0);
   });
 });
+
+describe("mockScriptRepository.removeScriptBlock", () => {
+  it("removes the block — it no longer appears in the version's list", async () => {
+    const script = await mockScriptRepository.createScriptItem(createItemInput());
+    if (!script.success) throw new Error("setup failed");
+    const version = await mockScriptRepository.createScriptVersion(createVersionInput(script.data.id));
+    if (!version.success) throw new Error("setup failed");
+    const block = await mockScriptRepository.createScriptBlock(createBlockInput(version.data.id));
+    if (!block.success) throw new Error("setup failed");
+
+    const result = await mockScriptRepository.removeScriptBlock(block.data.id);
+    expect(result.success).toBe(true);
+
+    const list = await mockScriptRepository.listScriptBlocks(version.data.id);
+    expect(list).toHaveLength(0);
+  });
+
+  it("returns not-found for a block id that does not exist", async () => {
+    const result = await mockScriptRepository.removeScriptBlock("nope");
+    expect(result.success).toBe(false);
+  });
+
+  it("removes only the targeted block, leaving sibling blocks in the same version untouched", async () => {
+    const script = await mockScriptRepository.createScriptItem(createItemInput());
+    if (!script.success) throw new Error("setup failed");
+    const version = await mockScriptRepository.createScriptVersion(createVersionInput(script.data.id));
+    if (!version.success) throw new Error("setup failed");
+    const blockA = await mockScriptRepository.createScriptBlock(createBlockInput(version.data.id, { content: "A", sortOrder: 0 }));
+    const blockB = await mockScriptRepository.createScriptBlock(createBlockInput(version.data.id, { content: "B", sortOrder: 1 }));
+    if (!blockA.success || !blockB.success) throw new Error("setup failed");
+
+    await mockScriptRepository.removeScriptBlock(blockA.data.id);
+
+    const list = await mockScriptRepository.listScriptBlocks(version.data.id);
+    expect(list.map((b) => b.content)).toEqual(["B"]);
+  });
+});

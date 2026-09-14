@@ -29,6 +29,7 @@ function createMockSupabase(responses: QueryResult[]) {
     b.select = chain("select");
     b.insert = chain("insert");
     b.update = chain("update");
+    b.delete = chain("delete");
     b.eq = chain("eq");
     b.ilike = chain("ilike");
     b.order = chain("order");
@@ -337,6 +338,34 @@ describe("supabaseScriptRepository.updateScriptBlock", () => {
 
     const result = await supabaseScriptRepository.updateScriptBlock("missing", { content: "X" });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("supabaseScriptRepository.removeScriptBlock", () => {
+  it("deletes the row scoped by id and succeeds when a row was actually removed", async () => {
+    const { client, calls } = createMockSupabase([{ data: [{ id: "block_1" }], error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseScriptRepository.removeScriptBlock("block_1");
+    expect(result.success).toBe(true);
+
+    expect(calls.some((c) => c.table === "script_blocks" && c.method === "delete")).toBe(true);
+    expect(calls.some((c) => c.method === "eq" && c.args[0] === "id" && c.args[1] === "block_1")).toBe(true);
+  });
+
+  it("returns a controlled not-found error when no row matched (already gone or cross-workspace, RLS-excluded) rather than a false success", async () => {
+    const { client } = createMockSupabase([{ data: [], error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseScriptRepository.removeScriptBlock("missing");
+    expect(result.success).toBe(false);
+  });
+
+  it("throws on a genuine database error rather than swallowing it", async () => {
+    const { client } = createMockSupabase([{ data: null, error: { code: "500", message: "connection lost" } }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await expect(supabaseScriptRepository.removeScriptBlock("block_1")).rejects.toThrow();
   });
 });
 

@@ -187,6 +187,15 @@ async function updateScriptBlock(id: string, input: UpdateScriptBlockInput): Pro
   return ok(updated);
 }
 
+async function removeScriptBlock(id: string): Promise<DataResult<null>> {
+  const blocks = readScriptBlocks();
+  const existing = blocks.find((b) => b.id === id);
+  if (!existing) return fail(SCRIPT_BLOCK_NOT_FOUND_ERROR);
+
+  writeScriptBlocks(blocks.filter((b) => b.id !== id));
+  return ok(null);
+}
+
 export const mockScriptRepository: ScriptRepository = {
   createScriptItem,
   getScriptItemById,
@@ -200,4 +209,5 @@ export const mockScriptRepository: ScriptRepository = {
   createScriptBlock,
   listScriptBlocks,
   updateScriptBlock,
+  removeScriptBlock,
 };

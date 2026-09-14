@@ -210,6 +210,23 @@ async function updateScriptBlock(id: string, input: UpdateScriptBlockInput): Pro
   return ok(mapScriptBlockRow(data));
 }
 
+/**
+ * SOCIAL-08D — the one real physical deletion in Script Studio, authorized
+ * specifically for `script_blocks` (see `20260922100000_script_blocks_delete_policy.sql`).
+ * `.select("id")` on the delete makes a no-matching-row delete
+ * distinguishable from a real one — Supabase's delete otherwise returns no
+ * error and an empty `data` array either way, so without this a caller
+ * deleting an already-gone/foreign-workspace block (RLS silently excludes
+ * it, never a permission error) would see a false success.
+ */
+async function removeScriptBlock(id: string): Promise<DataResult<null>> {
+  const supabase = createSupabaseClient();
+  const { data, error } = await supabase.from("script_blocks").delete().eq("id", id).select("id");
+  if (error) throw normalizeSupabaseError(error);
+  if (!data || data.length === 0) return fail(SCRIPT_BLOCK_NOT_FOUND_ERROR);
+  return ok(null);
+}
+
 export const supabaseScriptRepository: ScriptRepository = {
   createScriptItem,
   getScriptItemById,
@@ -223,4 +240,5 @@ export const supabaseScriptRepository: ScriptRepository = {
   createScriptBlock,
   listScriptBlocks,
   updateScriptBlock,
+  removeScriptBlock,
 };

@@ -15,6 +15,7 @@ import {
   InboxIcon,
   InspirationIcon,
   IdeaIcon,
+  ScriptIcon,
   IntegrationsIcon,
   InventoryIcon,
   MarketplaceIcon,
@@ -175,6 +176,11 @@ export const navigationModules: NavModule[] = [
   // same content-planning lineage (Inspiration → Idea → future Script), not
   // a Social publishing surface itself.
   { id: "ideas", label: "Ideas", icon: IdeaIcon, href: "/ideas", group: "knowledge", keywords: ["concept", "content idea", "brainstorm"] },
+  // SOCIAL-08D — the next stage of the same content-planning lineage
+  // (Inspiration → Idea → Script), adjacent to both in the "knowledge"
+  // group: a Script breaks an Idea into ordered scenes/blocks ready to
+  // shoot, still never a Social publishing surface itself.
+  { id: "scripts", label: "Scripts", icon: ScriptIcon, href: "/scripts", group: "knowledge", keywords: ["script studio", "scenes", "blocks", "draft"] },
 
   { id: "team", label: "Team", icon: TeamIcon, href: "/team", group: "team" },
   { id: "team-operations", label: "Team Operations", icon: TeamIcon, href: "/team/operations", group: "team" },

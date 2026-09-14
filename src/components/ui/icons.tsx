@@ -47,6 +47,7 @@ import {
   CalendarClock,
   Lightbulb,
   NotebookPen,
+  Clapperboard,
 } from "lucide-react";
 
 type IconProps = SVGProps<SVGSVGElement>;
@@ -269,4 +270,9 @@ export function InspirationIcon(props: IconProps) {
 /** SOCIAL-07D — Ideas Library. Deliberately distinct from `InspirationIcon`'s `Lightbulb` (a saved external reference) — an Idea is Amoré Bloom's own not-yet-created concept, so this uses a "writing it down" glyph instead. */
 export function IdeaIcon(props: IconProps) {
   return <NotebookPen strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** SOCIAL-08D — Script Studio. Deliberately distinct from `IdeaIcon`'s `NotebookPen` (a concept) — a Script is the concept broken into scenes/blocks ready to shoot, so this uses a literal production glyph instead. */
+export function ScriptIcon(props: IconProps) {
+  return <Clapperboard strokeWidth={2} aria-hidden="true" {...props} />;
 }

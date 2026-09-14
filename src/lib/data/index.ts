@@ -1471,6 +1471,10 @@ export async function updateScriptBlock(id: string, input: UpdateScriptBlockInpu
   return scriptRepository().updateScriptBlock(id, input);
 }
 
+export async function removeScriptBlock(id: string): Promise<DataResult<null>> {
+  return scriptRepository().removeScriptBlock(id);
+}
+
 // ---------------------------------------------------------------------------
 // Contract Notes and Timeline — routes through contractsRepository(), same
 // as Events above, instead of the generic mock-only getNotesByOwner/

@@ -67,11 +67,11 @@ export interface UpdateScriptBlockInput {
  *
  * No destructive delete exists for script_items (archive-only, matching
  * Idea's own convention) or for script_versions (append/update-only,
- * matching the DB's own no-DELETE-policy design). script_blocks has no
- * remove operation in this checkpoint either — the underlying migration
- * (SOCIAL-08B) deliberately created no DELETE policy for it; see
- * `scriptActions.ts`'s own doc comment and this checkpoint's final report
- * for the reasoning.
+ * matching the DB's own no-DELETE-policy design). script_blocks is the one
+ * exception: SOCIAL-08D added a workspace-member-gated DELETE policy for
+ * it specifically (see `20260922100000_script_blocks_delete_policy.sql`),
+ * resolving the gap SOCIAL-08C's own final report flagged rather than
+ * silently working around.
  */
 export interface ScriptRepository {
   createScriptItem(input: CreateScriptItemInput): Promise<DataResult<ScriptItem>>;
@@ -92,6 +92,8 @@ export interface ScriptRepository {
   createScriptBlock(input: CreateScriptBlockInput): Promise<DataResult<ScriptBlock>>;
   listScriptBlocks(scriptVersionId: string): Promise<ScriptBlock[]>;
   updateScriptBlock(id: string, input: UpdateScriptBlockInput): Promise<DataResult<ScriptBlock>>;
+  /** SOCIAL-08D — the one real physical deletion anywhere in Script Studio, authorized specifically for this table. Idempotent-unfriendly by design (mirrors `removeServiceIncludedItem`'s own shape): returns a not-found error rather than silently succeeding if the block is already gone. */
+  removeScriptBlock(id: string): Promise<DataResult<null>>;
 }
 
 export type { ScriptStatus };

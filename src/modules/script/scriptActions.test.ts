@@ -17,6 +17,7 @@ import {
   createScriptBlockAction,
   listScriptBlocksAction,
   updateScriptBlockAction,
+  removeScriptBlockAction,
   type ScriptItemActionInput,
 } from "@/modules/script/scriptActions";
 import { resetScriptItemsStore } from "@/lib/data/mock/scriptItemsStore";
@@ -535,5 +536,61 @@ describe("Script actions — block lifecycle", () => {
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data.content).toBe(payload);
+  });
+
+  describe("removeScriptBlockAction — SOCIAL-08D", () => {
+    it("removes the block — it no longer appears in the version's list", async () => {
+      const versionId = await setupVersion();
+      const created = await createScriptBlockAction(versionId, { content: "Gone soon", sort_order: 0 });
+      if (!created.success) throw new Error("setup failed");
+
+      const result = await removeScriptBlockAction(versionId, created.data.id);
+      expect(result.success).toBe(true);
+
+      const list = await listScriptBlocksAction(versionId);
+      expect(list.success).toBe(true);
+      if (list.success) expect(list.data).toHaveLength(0);
+    });
+
+    it("requires social.create", async () => {
+      const versionId = await setupVersion();
+      const created = await createScriptBlockAction(versionId, { content: "X", sort_order: 0 });
+      if (!created.success) throw new Error("setup failed");
+
+      vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(viewOnlySession);
+      const result = await removeScriptBlockAction(versionId, created.data.id);
+      expect(result.success).toBe(false);
+    });
+
+    it("returns not-found for a block id that does not exist", async () => {
+      const versionId = await setupVersion();
+      const result = await removeScriptBlockAction(versionId, "does_not_exist");
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects removal when the scriptVersionId belongs to a different workspace, even with a valid block id", async () => {
+      const versionId = await setupVersion();
+      const created = await createScriptBlockAction(versionId, { content: "X", sort_order: 0 });
+      if (!created.success) throw new Error("setup failed");
+
+      vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(otherWorkspaceSession);
+      const result = await removeScriptBlockAction(versionId, created.data.id);
+      expect(result.success).toBe(false);
+    });
+
+    it("never removes a sibling block belonging to a different version", async () => {
+      const versionAId = await setupVersion();
+      const versionBId = await setupVersion();
+      const blockA = await createScriptBlockAction(versionAId, { content: "A", sort_order: 0 });
+      const blockB = await createScriptBlockAction(versionBId, { content: "B", sort_order: 0 });
+      if (!blockA.success || !blockB.success) throw new Error("setup failed");
+
+      const result = await removeScriptBlockAction(versionAId, blockB.data.id);
+      expect(result.success).toBe(false);
+
+      const listB = await listScriptBlocksAction(versionBId);
+      expect(listB.success).toBe(true);
+      if (listB.success) expect(listB.data).toHaveLength(1);
+    });
   });
 });

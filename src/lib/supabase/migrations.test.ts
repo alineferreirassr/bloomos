@@ -110,6 +110,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // not-yet-released, unrelated to the Finance release this exact-count
   // assertion describes.
   "20260921100000_script_items_foundation.sql",
+  // SOCIAL-08D — script_blocks DELETE policy. Independently-tracked,
+  // not-yet-released, unrelated to the Finance release this exact-count
+  // assertion describes.
+  "20260922100000_script_blocks_delete_policy.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {
@@ -5011,5 +5015,41 @@ describe("SOCIAL-08B migration — Script Studio data foundation", () => {
     for (const forbidden of ["media_asset_id", "ai_score", "ai_generated", "analytics", "engagement", "reach"]) {
       expect(code).not.toContain(forbidden);
     }
+  });
+});
+
+describe("SOCIAL-08D migration — script_blocks DELETE policy", () => {
+  function sql(): string {
+    return readMigration("20260922100000_script_blocks_delete_policy.sql");
+  }
+
+  it("adds exactly one DELETE policy, workspace-member gated, matching the existing SELECT/INSERT/UPDATE shape", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(
+      /create policy "script_blocks_delete_workspace_member"\s*\n\s*on public\.script_blocks for delete\s*\n\s*to authenticated\s*\n\s*using \(public\.is_workspace_member\(workspace_id\)\);/,
+    );
+    const policyMatches = code.match(/create policy/gi) ?? [];
+    expect(policyMatches).toHaveLength(1);
+  });
+
+  it("touches only script_blocks — no other table, no column change, no new table", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/create table/);
+    expect(code).not.toMatch(/alter table.*add column/);
+    expect(code).not.toMatch(/for delete[\s\S]*?on public\.script_items/);
+    expect(code).not.toMatch(/for delete[\s\S]*?on public\.script_versions/);
+    for (const line of code.split("\n")) {
+      if (/^(alter table|create policy)/.test(line.trim())) {
+        expect(line).toMatch(/script_blocks/);
+      }
+    }
+  });
+
+  it("never disables RLS, drops a table, or grants to service_role", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/disable row level security/);
+    expect(code).not.toMatch(/drop table/);
+    expect(code).not.toMatch(/to service_role/);
+    expect(code).not.toMatch(/grant execute/);
   });
 });

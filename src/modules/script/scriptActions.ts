@@ -14,6 +14,7 @@ import {
   createScriptBlock,
   listScriptBlocks,
   updateScriptBlock,
+  removeScriptBlock,
   getIdeaItemById,
 } from "@/lib/data";
 import { scriptItemInputSchema, scriptItemUpdateSchema, scriptBlockInputSchema, scriptBlockUpdateSchema } from "@/modules/script/schema";
@@ -303,17 +304,11 @@ export async function listScriptBlocksAction(scriptVersionId: string): Promise<R
 }
 
 /**
- * There is no `removeScriptBlockAction` in this checkpoint: the SOCIAL-08B
- * migration deliberately created no DELETE policy on `script_blocks` (see
- * that migration's own comment), and this checkpoint's own instruction is
- * not to alter SOCIAL-08B's schema/RLS without first stopping and
- * reporting rather than silently working around it — see this
- * checkpoint's final report.
- *
- * There is also no single-block `getScriptBlockById` repository primitive
- * (no call site needed it besides this one) — updating a block re-derives
- * it via its own version's already-ordered block list, which is
- * workspace-checked one level up by the version ownership check below.
+ * There is no single-block `getScriptBlockById` repository primitive (no
+ * call site needed it besides this one and `removeScriptBlockAction`
+ * below) — both re-derive the block via its own version's already-ordered
+ * block list, which is workspace-checked one level up by the version
+ * ownership check below.
  */
 export async function updateScriptBlockAction(scriptVersionId: string, id: string, input: ScriptBlockActionUpdateInput): Promise<Result<ScriptBlock>> {
   const resolved = await requireActiveSession("social.create");
@@ -333,4 +328,27 @@ export async function updateScriptBlockAction(scriptVersionId: string, id: strin
     content: parsed.data.content,
     sortOrder: parsed.data.sort_order,
   });
+}
+
+/**
+ * SOCIAL-08D — the one real physical deletion in Script Studio, using the
+ * DELETE policy added specifically for `script_blocks`
+ * (`20260922100000_script_blocks_delete_policy.sql`). Verifies the target
+ * version's ownership and the block's membership in that version before
+ * ever calling the repository — never trusts `id` alone, and never allows
+ * a block belonging to a different version (or a different workspace's
+ * version) to be removed via this action.
+ */
+export async function removeScriptBlockAction(scriptVersionId: string, id: string): Promise<Result<null>> {
+  const resolved = await requireActiveSession("social.create");
+  if (!resolved.success) return resolved;
+
+  const version = await loadOwnedScriptVersion(scriptVersionId, resolved.session.workspace.id);
+  if (!version) return { success: false, error: SCRIPT_VERSION_NOT_FOUND_ERROR };
+
+  const blocks = await listScriptBlocks(scriptVersionId).catch(() => []);
+  const existing = blocks.find((b) => b.id === id);
+  if (!existing) return { success: false, error: SCRIPT_BLOCK_NOT_FOUND_ERROR };
+
+  return removeScriptBlock(id);
 }
