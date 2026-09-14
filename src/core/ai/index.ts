@@ -89,5 +89,5 @@ export { registerSkillRunner, unregisterSkillRunner, getSkillRunner, resetSkillR
 export { mapSkillErrorToMessage } from "@/core/ai/skills/errorMapping";
 export type { SkillErrorMessages } from "@/core/ai/skills/errorMapping";
 
-export { wrapUntrustedSourceContent, buildBoundedPrompt } from "@/core/ai/promptBoundary";
-export type { UntrustedSourceContent } from "@/core/ai/promptBoundary";
+export { wrapUntrustedSourceContent, buildBoundedPrompt, buildLayeredPrompt } from "@/core/ai/promptBoundary";
+export type { UntrustedSourceContent, LayeredPromptInput } from "@/core/ai/promptBoundary";
