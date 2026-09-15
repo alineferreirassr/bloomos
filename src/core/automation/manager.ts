@@ -1,4 +1,6 @@
 import { mockAutomationRepository } from "@/lib/data/core/automation/mockRepository";
+import { supabaseAutomationRepository } from "@/lib/data/core/automation/supabaseRepository";
+import { selectRepository } from "@/lib/data/provider";
 import type { AutomationRepository } from "@/lib/data/core/automation/repository";
 import { getLogger } from "@/core/observability/logger";
 import type { AutomationExecution, RecordAutomationExecutionInput } from "@/types/automation";
@@ -28,8 +30,15 @@ export interface AutomationManager {
   setApprovalOverride(workspaceId: string, automationId: string, required: boolean): Promise<DataResult<void>>;
 }
 
+/**
+ * SOCIAL-11B — first Supabase-backed implementation of this Knowledge
+ * Store; previously hardcoded to `mockAutomationRepository` (mirroring
+ * `core/ai/memory/manager.ts`'s own still-mock-only precedent), now routed
+ * through the same centralized `selectRepository()` every other domain's
+ * mock/Supabase pair already uses.
+ */
 function knowledgeStore(): AutomationRepository {
-  return mockAutomationRepository;
+  return selectRepository({ mock: mockAutomationRepository, supabase: supabaseAutomationRepository });
 }
 
 async function recordExecution(workspaceId: string, input: RecordAutomationExecutionInput): Promise<DataResult<AutomationExecution>> {

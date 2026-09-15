@@ -122,6 +122,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // not-yet-released, unrelated to the Finance release this exact-count
   // assertion describes.
   "20260924100000_carousel_items_foundation.sql",
+  // SOCIAL-11B — Durable Automation Execution + Idempotency Foundation.
+  // Independently-tracked, not-yet-released, unrelated to the Finance
+  // release this exact-count assertion describes.
+  "20260925100000_automation_execution_idempotency_foundation.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {
@@ -5388,5 +5392,235 @@ describe("SOCIAL-10C migration — Carousel Studio data foundation", () => {
     expect(code).not.toContain("anthropic");
     expect(code).not.toContain("ai_generations");
     expect(code).not.toContain("source_entity_type");
+  });
+});
+
+describe("SOCIAL-11B migration — Durable Automation Execution + Idempotency Foundation", () => {
+  function sql(): string {
+    return readMigration("20260925100000_automation_execution_idempotency_foundation.sql");
+  }
+
+  it("creates exactly three new tables: automation_executions, automation_approval_overrides, automation_idempotency_keys", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create table if not exists public\.automation_executions/);
+    expect(code).toMatch(/create table if not exists public\.automation_approval_overrides/);
+    expect(code).toMatch(/create table if not exists public\.automation_idempotency_keys/);
+    const createTableMatches = code.match(/create table/gi) ?? [];
+    expect(createTableMatches).toHaveLength(3);
+  });
+
+  describe("automation_executions", () => {
+    function table(): string {
+      const code = stripSqlComments(sql());
+      return code.slice(code.indexOf("create table if not exists public.automation_executions"), code.indexOf("comment on table public.automation_executions"));
+    }
+
+    it("requires workspace_id, automation identity fields, conditions_passed, approval_status, action_results, status, duration_ms, started_at — no created_at column", () => {
+      const t = table();
+      expect(t).toMatch(/workspace_id uuid not null references public\.workspaces \(id\) on delete cascade/);
+      expect(t).toMatch(/automation_id text not null/);
+      expect(t).toMatch(/automation_name text not null/);
+      expect(t).toMatch(/automation_version text not null/);
+      expect(t).toMatch(/trigger_type text not null/);
+      expect(t).toMatch(/conditions_passed boolean not null/);
+      expect(t).toMatch(/approval_status text not null/);
+      expect(t).toMatch(/action_results jsonb not null default '\[\]'::jsonb/);
+      expect(t).toMatch(/status text not null/);
+      expect(t).toMatch(/duration_ms integer not null/);
+      expect(t).toMatch(/started_at timestamptz not null/);
+      expect(t).not.toMatch(/\bcreated_at\b/);
+    });
+
+    it("has an updated_at column and its own set_updated_at() trigger, even though the domain type has no updated_at field", () => {
+      const code = stripSqlComments(sql());
+      expect(table()).toMatch(/updated_at timestamptz not null default now\(\)/);
+      expect(code).toMatch(/create trigger trg_automation_executions_set_updated_at\s*\n\s*before update on public\.automation_executions\s*\n\s*for each row execute function public\.set_updated_at\(\);/);
+    });
+
+    it("approved_by/approved_at/completed_at/started_by are nullable", () => {
+      const t = table();
+      for (const nullableColumn of ["approved_by uuid", "approved_at timestamptz", "completed_at timestamptz", "started_by uuid"]) {
+        const line = t.split("\n").find((l) => l.trim().startsWith(nullableColumn));
+        expect(line, `expected a nullable "${nullableColumn}" column`).toBeDefined();
+        expect(line).not.toMatch(/not null/);
+      }
+    });
+
+    it("approved_by and started_by are both nullable FKs to auth.users with on delete set null", () => {
+      const t = table();
+      const approvedByLine = t.split("\n").find((l) => l.trim().startsWith("approved_by"));
+      const startedByLine = t.split("\n").find((l) => l.trim().startsWith("started_by"));
+      expect(approvedByLine).toMatch(/references auth\.users \(id\) on delete set null/);
+      expect(startedByLine).toMatch(/references auth\.users \(id\) on delete set null/);
+    });
+
+    it("constrains approval_status to exactly the four values the AutomationApprovalStatus type allows", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/constraint automation_executions_approval_status_check\s*\n\s*check \(approval_status in \('not_required', 'pending', 'approved', 'rejected'\)\)/);
+    });
+
+    it("constrains status to exactly the six values AUTOMATION_EXECUTION_STATUSES allows", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(
+        /constraint automation_executions_status_check\s*\n\s*check \(status in \('success', 'failure', 'partial_failure', 'pending_approval', 'skipped_conditions_not_met', 'rejected'\)\)/,
+      );
+    });
+
+    it("does not constrain trigger_type with a CHECK — the closed list lives in TypeScript, not the database", () => {
+      const t = table();
+      expect(t).not.toMatch(/trigger_type.*check/i);
+      expect(t).not.toMatch(/constraint.*trigger_type/i);
+    });
+
+    it("creates exactly the two approved indexes", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create index if not exists automation_executions_workspace_started_idx\s*\n\s*on public\.automation_executions \(workspace_id, started_at desc\);/);
+      expect(code).toMatch(/create index if not exists automation_executions_workspace_approval_idx\s*\n\s*on public\.automation_executions \(workspace_id, approval_status\);/);
+    });
+
+    it("enables RLS with SELECT/INSERT/UPDATE-only workspace-member policies — explicitly no DELETE policy, matching the engine's own append-only precedent", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/alter table public\.automation_executions enable row level security;/);
+      expect(code).toMatch(/create policy "automation_executions_select_workspace_member"\s*\n\s*on public\.automation_executions for select\s*\n\s*to authenticated\s*\n\s*using \(public\.is_workspace_member\(workspace_id\)\);/);
+      expect(code).toMatch(
+        /create policy "automation_executions_insert_workspace_member"\s*\n\s*on public\.automation_executions for insert\s*\n\s*to authenticated\s*\n\s*with check \(public\.is_workspace_member\(workspace_id\)\);/,
+      );
+      expect(code).toMatch(
+        /create policy "automation_executions_update_workspace_member"\s*\n\s*on public\.automation_executions for update\s*\n\s*to authenticated\s*\n\s*using \(public\.is_workspace_member\(workspace_id\)\)\s*\n\s*with check \(public\.is_workspace_member\(workspace_id\)\);/,
+      );
+      const section = code.slice(code.indexOf("create table if not exists public.automation_executions"), code.indexOf("create table if not exists public.automation_approval_overrides"));
+      expect(section).not.toMatch(/for delete/i);
+    });
+  });
+
+  describe("automation_approval_overrides", () => {
+    it("has a composite (workspace_id, automation_id) primary key — no separate id column", () => {
+      const code = stripSqlComments(sql());
+      const t = code.slice(code.indexOf("create table if not exists public.automation_approval_overrides"), code.indexOf("comment on table public.automation_approval_overrides"));
+      expect(t).toMatch(/primary key \(workspace_id, automation_id\)/);
+      expect(t).not.toMatch(/^\s*id uuid primary key/m);
+      expect(t).toMatch(/required boolean not null/);
+    });
+
+    it("reuses the existing set_updated_at() trigger and enables RLS with SELECT/INSERT/UPDATE-only policies — no DELETE", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(
+        /create trigger trg_automation_approval_overrides_set_updated_at\s*\n\s*before update on public\.automation_approval_overrides\s*\n\s*for each row execute function public\.set_updated_at\(\);/,
+      );
+      expect(code).toMatch(/alter table public\.automation_approval_overrides enable row level security;/);
+      expect(code).toMatch(/create policy "automation_approval_overrides_select_workspace_member"/);
+      expect(code).toMatch(/create policy "automation_approval_overrides_insert_workspace_member"/);
+      expect(code).toMatch(/create policy "automation_approval_overrides_update_workspace_member"/);
+      const section = code.slice(
+        code.indexOf("create table if not exists public.automation_approval_overrides"),
+        code.indexOf("create table if not exists public.automation_idempotency_keys"),
+      );
+      expect(section).not.toMatch(/for delete/i);
+    });
+  });
+
+  describe("automation_idempotency_keys", () => {
+    function table(): string {
+      const code = stripSqlComments(sql());
+      return code.slice(code.indexOf("create table if not exists public.automation_idempotency_keys"), code.indexOf("comment on table public.automation_idempotency_keys"));
+    }
+
+    it("has a unique constraint on (workspace_id, source, dedup_key) — the sole duplicate-detection key", () => {
+      expect(table()).toMatch(/constraint automation_idempotency_keys_unique\s*\n\s*unique \(workspace_id, source, dedup_key\)/);
+    });
+
+    it("constrains status to processing/completed/failed and defaults to processing", () => {
+      const t = table();
+      expect(t).toMatch(/status text not null default 'processing'/);
+      expect(t).toMatch(/constraint automation_idempotency_keys_status_check\s*\n\s*check \(status in \('processing', 'completed', 'failed'\)\)/);
+    });
+
+    it("execution_id is a nullable FK to automation_executions with on delete set null", () => {
+      expect(table()).toMatch(/execution_id uuid references public\.automation_executions \(id\) on delete set null/);
+    });
+
+    it("rejects a blank source or dedup_key at the database level", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/constraint automation_idempotency_keys_source_not_blank_check\s*\n\s*check \(btrim\(source\) <> ''\)/);
+      expect(code).toMatch(/constraint automation_idempotency_keys_dedup_key_not_blank_check\s*\n\s*check \(btrim\(dedup_key\) <> ''\)/);
+    });
+
+    it("enables RLS with ZERO policies — internal infrastructure only, mirroring docusign_webhook_reconciliations exactly", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/alter table public\.automation_idempotency_keys enable row level security;/);
+      const section = code.slice(code.indexOf("create table if not exists public.automation_idempotency_keys"), code.indexOf("create or replace function public.claim_automation_idempotency_key"));
+      expect(section).not.toMatch(/create policy/);
+    });
+  });
+
+  describe("claim_automation_idempotency_key()", () => {
+    function body(): string {
+      const code = stripSqlComments(sql());
+      return code.slice(code.indexOf("create or replace function public.claim_automation_idempotency_key"), code.indexOf("create or replace function public.complete_automation_idempotency_key"));
+    }
+
+    it("is security definer with search_path pinned — the same shape claim_due_social_posts() already uses", () => {
+      const b = body();
+      expect(b).toMatch(/security definer/);
+      expect(b).toMatch(/set search_path = public/);
+    });
+
+    it("performs an atomic INSERT ... ON CONFLICT ... DO UPDATE ... WHERE status = 'failed' — the DB-level race protection the checkpoint requires", () => {
+      const b = body();
+      expect(b).toMatch(/insert into public\.automation_idempotency_keys/);
+      expect(b).toMatch(/on conflict \(workspace_id, source, dedup_key\) do update/);
+      expect(b).toMatch(/where\s+automation_idempotency_keys\.status = 'failed'/);
+      expect(b).toMatch(/attempt_count = automation_idempotency_keys\.attempt_count \+ 1/);
+    });
+
+    it("is revoked from public/anon/authenticated and granted only to service_role", () => {
+      const b = body();
+      expect(b).toMatch(/revoke all on function public\.claim_automation_idempotency_key\(uuid, text, text\) from public;/);
+      expect(b).toMatch(/revoke execute on function public\.claim_automation_idempotency_key\(uuid, text, text\) from anon;/);
+      expect(b).toMatch(/revoke execute on function public\.claim_automation_idempotency_key\(uuid, text, text\) from authenticated;/);
+      expect(b).toMatch(/grant execute on function public\.claim_automation_idempotency_key\(uuid, text, text\) to service_role;/);
+    });
+  });
+
+  describe("complete_automation_idempotency_key()", () => {
+    function body(): string {
+      const code = stripSqlComments(sql());
+      return code.slice(code.indexOf("create or replace function public.complete_automation_idempotency_key"));
+    }
+
+    it("is security definer with search_path pinned, rejects an invalid status, and is revoked/granted the same as the claim function", () => {
+      const b = body();
+      expect(b).toMatch(/security definer/);
+      expect(b).toMatch(/set search_path = public/);
+      expect(b).toMatch(/if p_status not in \('completed', 'failed'\) then/);
+      expect(b).toMatch(/revoke all on function public\.complete_automation_idempotency_key\(uuid, text, uuid\) from public;/);
+      expect(b).toMatch(/grant execute on function public\.complete_automation_idempotency_key\(uuid, text, uuid\) to service_role;/);
+    });
+  });
+
+  it("never touches idea_items, inspiration_items, script_items, carousel_items, carousel_slides, social_posts, ai_generations, leads, integration_connections, or integration_credentials", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    for (const line of code.split("\n")) {
+      if (/^alter table/.test(line.trim())) {
+        expect(line).toMatch(/public\.automation_(executions|approval_overrides|idempotency_keys)/);
+      }
+    }
+    expect(code).not.toMatch(
+      /create table.*(idea_items|inspiration_items|script_items|carousel_items|carousel_slides|social_posts|ai_generations|leads|integration_connections|integration_credentials)/,
+    );
+    expect(code).not.toMatch(
+      /alter table public\.(idea_items|inspiration_items|script_items|carousel_items|carousel_slides|social_posts|ai_generations|leads|integration_connections|integration_credentials)/,
+    );
+  });
+
+  it("never disables RLS, drops a table, deletes rows via raw SQL, or references AI/a provider/Meta/Instagram", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/disable row level security/);
+    expect(code).not.toMatch(/drop table/);
+    expect(code).not.toMatch(/\bdelete from\b/);
+    expect(code).not.toContain("openai");
+    expect(code).not.toContain("anthropic");
+    expect(code).not.toContain("graph.facebook.com");
+    expect(code).not.toContain("instagram_business_account");
   });
 });

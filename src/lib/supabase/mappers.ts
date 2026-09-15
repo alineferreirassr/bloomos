@@ -26,6 +26,13 @@ import type { ScriptBlock } from "@/types/scriptBlock";
 import type { AIGeneration, AIGenerationSourceEntityType, AIGenerationApprovalStatus } from "@/types/aiGeneration";
 import type { CarouselItem, CarouselStatus } from "@/types/carouselItem";
 import type { CarouselSlide } from "@/types/carouselSlide";
+import type {
+  AutomationExecution,
+  AutomationTriggerType,
+  AutomationApprovalStatus,
+  AutomationActionExecutionResult,
+  AutomationExecutionStatus,
+} from "@/types/automation";
 import type { Contract, ContractVersionSnapshot } from "@/types/contract";
 import type { ContractTemplate } from "@/types/contractTemplate";
 import type { ContractExhibit } from "@/types/contractExhibit";
@@ -190,6 +197,7 @@ type ScriptBlockRow = Database["public"]["Tables"]["script_blocks"]["Row"];
 type AIGenerationRow = Database["public"]["Tables"]["ai_generations"]["Row"];
 type CarouselItemRow = Database["public"]["Tables"]["carousel_items"]["Row"];
 type CarouselSlideRow = Database["public"]["Tables"]["carousel_slides"]["Row"];
+type AutomationExecutionRow = Database["public"]["Tables"]["automation_executions"]["Row"];
 
 /**
  * Deliberate seam between raw database rows and domain types, even though
@@ -1462,6 +1470,37 @@ export function mapCarouselSlideRow(row: CarouselSlideRow): CarouselSlide {
     media_asset_id: row.media_asset_id,
     created_at: row.created_at,
     updated_at: row.updated_at,
+  };
+}
+
+/**
+ * SOCIAL-11B — maps an `automation_executions` row back to the existing
+ * `AutomationExecution` type (types/automation.ts), never a new/parallel
+ * shape. `trigger_type`/`approval_status`/`status` are cast to their own
+ * closed TS unions the same way `mapCarouselItemRow` already casts
+ * `status`; the DB itself only constrains `approval_status`/`status` via
+ * CHECK, and doesn't constrain `trigger_type` at all (see the migration's
+ * own reasoning).
+ */
+export function mapAutomationExecutionRow(row: AutomationExecutionRow): AutomationExecution {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    automationId: row.automation_id,
+    automationName: row.automation_name,
+    automationVersion: row.automation_version,
+    trigger: row.trigger_type as AutomationTriggerType,
+    triggerFacts: row.trigger_facts as Record<string, string | number | boolean | null>,
+    conditionsPassed: row.conditions_passed,
+    approvalStatus: row.approval_status as AutomationApprovalStatus,
+    approvedBy: row.approved_by,
+    approvedAt: row.approved_at,
+    actionResults: row.action_results as unknown as AutomationActionExecutionResult[],
+    status: row.status as AutomationExecutionStatus,
+    durationMs: row.duration_ms,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    startedBy: row.started_by,
   };
 }
 

@@ -2614,6 +2614,24 @@ export interface Database {
         Update: { id?: string; carousel_id?: string; workspace_id?: string; content?: string; sort_order?: number; media_asset_id?: string | null; created_at?: string; updated_at?: string };
         Relationships: [];
       };
+      automation_executions: {
+        Row: { id: string; workspace_id: string; automation_id: string; automation_name: string; automation_version: string; trigger_type: string; trigger_facts: Record<string, unknown>; conditions_passed: boolean; approval_status: string; approved_by: string | null; approved_at: string | null; action_results: Record<string, unknown>[]; status: string; duration_ms: number; started_at: string; completed_at: string | null; started_by: string | null; updated_at: string };
+        Insert: { id?: string; workspace_id: string; automation_id: string; automation_name: string; automation_version: string; trigger_type: string; trigger_facts?: Record<string, unknown>; conditions_passed: boolean; approval_status: string; approved_by?: string | null; approved_at?: string | null; action_results?: Record<string, unknown>[]; status: string; duration_ms: number; started_at: string; completed_at?: string | null; started_by?: string | null; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; automation_id?: string; automation_name?: string; automation_version?: string; trigger_type?: string; trigger_facts?: Record<string, unknown>; conditions_passed?: boolean; approval_status?: string; approved_by?: string | null; approved_at?: string | null; action_results?: Record<string, unknown>[]; status?: string; duration_ms?: number; started_at?: string; completed_at?: string | null; started_by?: string | null; updated_at?: string };
+        Relationships: [];
+      };
+      automation_approval_overrides: {
+        Row: { workspace_id: string; automation_id: string; required: boolean; created_at: string; updated_at: string };
+        Insert: { workspace_id: string; automation_id: string; required: boolean; created_at?: string; updated_at?: string };
+        Update: { workspace_id?: string; automation_id?: string; required?: boolean; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      automation_idempotency_keys: {
+        Row: { id: string; workspace_id: string; source: string; dedup_key: string; status: string; execution_id: string | null; attempt_count: number; claimed_at: string; completed_at: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; source: string; dedup_key: string; status?: string; execution_id?: string | null; attempt_count?: number; claimed_at?: string; completed_at?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; source?: string; dedup_key?: string; status?: string; execution_id?: string | null; attempt_count?: number; claimed_at?: string; completed_at?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -2640,6 +2658,14 @@ export interface Database {
       reclaim_abandoned_social_posts: {
         Args: { p_lease_seconds?: number };
         Returns: number;
+      };
+      claim_automation_idempotency_key: {
+        Args: { p_workspace_id: string; p_source: string; p_dedup_key: string };
+        Returns: Database["public"]["Tables"]["automation_idempotency_keys"]["Row"][];
+      };
+      complete_automation_idempotency_key: {
+        Args: { p_id: string; p_status: string; p_execution_id?: string | null };
+        Returns: Database["public"]["Tables"]["automation_idempotency_keys"]["Row"];
       };
       is_workspace_member: {
         Args: { workspace_uuid: string };
