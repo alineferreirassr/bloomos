@@ -2632,6 +2632,18 @@ export interface Database {
         Update: { id?: string; workspace_id?: string; source?: string; dedup_key?: string; status?: string; execution_id?: string | null; attempt_count?: number; claimed_at?: string; completed_at?: string | null; created_at?: string; updated_at?: string };
         Relationships: [];
       };
+      instagram_account_identities: {
+        Row: { id: string; workspace_id: string; connection_id: string; instagram_account_id: string; instagram_username: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; connection_id: string; instagram_account_id: string; instagram_username?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; connection_id?: string; instagram_account_id?: string; instagram_username?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      meta_webhook_events: {
+        Row: { id: string; idempotency_key_id: string | null; workspace_id: string | null; instagram_account_identity_id: string | null; external_account_id: string; object_type: string; event_type: string; payload: Record<string, unknown>; received_at: string };
+        Insert: { id?: string; idempotency_key_id?: string | null; workspace_id?: string | null; instagram_account_identity_id?: string | null; external_account_id: string; object_type: string; event_type: string; payload: Record<string, unknown>; received_at?: string };
+        Update: { id?: string; idempotency_key_id?: string | null; workspace_id?: string | null; instagram_account_identity_id?: string | null; external_account_id?: string; object_type?: string; event_type?: string; payload?: Record<string, unknown>; received_at?: string };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

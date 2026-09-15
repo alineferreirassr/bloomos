@@ -33,6 +33,7 @@ import type {
   AutomationActionExecutionResult,
   AutomationExecutionStatus,
 } from "@/types/automation";
+import type { InstagramAccountIdentity } from "@/types/instagramAccountIdentity";
 import type { Contract, ContractVersionSnapshot } from "@/types/contract";
 import type { ContractTemplate } from "@/types/contractTemplate";
 import type { ContractExhibit } from "@/types/contractExhibit";
@@ -198,6 +199,7 @@ type AIGenerationRow = Database["public"]["Tables"]["ai_generations"]["Row"];
 type CarouselItemRow = Database["public"]["Tables"]["carousel_items"]["Row"];
 type CarouselSlideRow = Database["public"]["Tables"]["carousel_slides"]["Row"];
 type AutomationExecutionRow = Database["public"]["Tables"]["automation_executions"]["Row"];
+type InstagramAccountIdentityRow = Database["public"]["Tables"]["instagram_account_identities"]["Row"];
 
 /**
  * Deliberate seam between raw database rows and domain types, even though
@@ -1501,6 +1503,18 @@ export function mapAutomationExecutionRow(row: AutomationExecutionRow): Automati
     startedAt: row.started_at,
     completedAt: row.completed_at,
     startedBy: row.started_by,
+  };
+}
+
+export function mapInstagramAccountIdentityRow(row: InstagramAccountIdentityRow): InstagramAccountIdentity {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    connection_id: row.connection_id,
+    instagram_account_id: row.instagram_account_id,
+    instagram_username: row.instagram_username,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   };
 }
 

@@ -10,6 +10,8 @@ import { installProvider, attachCredential, applyConnectionEvent } from "@/core/
 import { issueOAuthCredential, resetEncryptionProvider } from "@/core/integrations/credentialManager";
 import { resetConnectionStore } from "@/lib/data/core/integrations/connectionStore";
 import { resetCredentialStore } from "@/lib/data/core/integrations/credentialStore";
+import { resetInstagramAccountIdentitiesStore } from "@/lib/data/instagramAccountIdentity/mockRepository";
+import { listInstagramAccountIdentitiesForWorkspace, getInstagramAccountIdentityByExternalId } from "@/lib/data";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 
 const session: MemberSessionSnapshot = {
@@ -50,6 +52,7 @@ beforeEach(() => {
   resetConnectionStore();
   resetCredentialStore();
   resetEncryptionProvider();
+  resetInstagramAccountIdentitiesStore();
   vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session);
 });
 
@@ -164,5 +167,50 @@ describe("selectMetaPublishingIdentityAction", () => {
     vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(sessionWithoutPermission);
     const result = await selectMetaPublishingIdentityAction({ id: "page_1" });
     expect(result.success).toBe(false);
+  });
+
+  describe("SOCIAL-11C — instagram_account_identities side effect", () => {
+    it("selecting a Page with a linked Instagram account also creates an Instagram Account Identity for this workspace", async () => {
+      const connectionId = await connectMetaWithToken();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response(JSON.stringify(GRAPH_PAGES_RESPONSE), { status: 200 })),
+      );
+
+      await selectMetaPublishingIdentityAction({ id: "page_1" });
+
+      const identities = await listInstagramAccountIdentitiesForWorkspace(CURRENT_WORKSPACE_ID);
+      expect(identities).toHaveLength(1);
+      expect(identities[0]).toMatchObject({ workspace_id: CURRENT_WORKSPACE_ID, connection_id: connectionId, instagram_account_id: "ig_1", instagram_username: "amorebloom" });
+
+      const byExternalId = await getInstagramAccountIdentityByExternalId("ig_1");
+      expect(byExternalId?.workspace_id).toBe(CURRENT_WORKSPACE_ID);
+    });
+
+    it("selecting a Page with no linked Instagram account creates no identity row", async () => {
+      await connectMetaWithToken();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response(JSON.stringify(GRAPH_PAGES_RESPONSE), { status: 200 })),
+      );
+
+      await selectMetaPublishingIdentityAction({ id: "page_2" });
+
+      expect(await listInstagramAccountIdentitiesForWorkspace(CURRENT_WORKSPACE_ID)).toHaveLength(0);
+    });
+
+    it("still succeeds selecting the Page even if the identity upsert itself fails (additive, never blocking)", async () => {
+      await connectMetaWithToken();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response(JSON.stringify(GRAPH_PAGES_RESPONSE), { status: 200 })),
+      );
+      // Simulate the account already being claimed by a different workspace.
+      const { mockInstagramAccountIdentityRepository } = await import("@/lib/data/instagramAccountIdentity/mockRepository");
+      await mockInstagramAccountIdentityRepository.upsertInstagramAccountIdentity({ workspaceId: "ws_other_tenant", connectionId: "conn_other", instagramAccountId: "ig_1", instagramUsername: null });
+
+      const result = await selectMetaPublishingIdentityAction({ id: "page_1" });
+      expect(result.success).toBe(true);
+    });
   });
 });

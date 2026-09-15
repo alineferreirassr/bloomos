@@ -253,6 +253,8 @@ import { supabaseScriptRepository } from "@/lib/data/script/supabaseRepository";
 import type { AIGeneration, CreateAIGenerationInput, ListAIGenerationsFilters } from "@/types/aiGeneration";
 import type { CarouselItem } from "@/types/carouselItem";
 import type { CarouselSlide } from "@/types/carouselSlide";
+import type { InstagramAccountIdentity } from "@/types/instagramAccountIdentity";
+import type { UpsertInstagramAccountIdentityInput } from "@/lib/data/instagramAccountIdentity/repository";
 import { mockAIGenerationRepository } from "@/lib/data/aiGeneration/mockRepository";
 import { supabaseAIGenerationRepository } from "@/lib/data/aiGeneration/supabaseRepository";
 import type {
@@ -264,6 +266,8 @@ import type {
 } from "@/lib/data/carousel/repository";
 import { mockCarouselRepository } from "@/lib/data/carousel/mockRepository";
 import { supabaseCarouselRepository } from "@/lib/data/carousel/supabaseRepository";
+import { mockInstagramAccountIdentityRepository } from "@/lib/data/instagramAccountIdentity/mockRepository";
+import { supabaseInstagramAccountIdentityRepository } from "@/lib/data/instagramAccountIdentity/supabaseRepository";
 import type {
   InvoiceFilters,
   PaymentFilters,
@@ -1580,6 +1584,29 @@ export async function updateCarouselSlide(id: string, input: UpdateCarouselSlide
 
 export async function removeCarouselSlide(id: string): Promise<DataResult<null>> {
   return carouselRepository().removeCarouselSlide(id);
+}
+
+// ---------------------------------------------------------------------------
+// Instagram Account Identity — SOCIAL-11C. Same selectRepository() dispatch
+// every other domain uses. The Meta webhook receiver does NOT read through
+// this switchboard (it has no auth.uid()); it reads via its own dedicated
+// service-role module instead — see core/integrations/webhooks/metaWebhookServiceRole.ts.
+// ---------------------------------------------------------------------------
+
+function instagramAccountIdentityRepository() {
+  return selectRepository({ mock: mockInstagramAccountIdentityRepository, supabase: supabaseInstagramAccountIdentityRepository });
+}
+
+export async function upsertInstagramAccountIdentity(input: UpsertInstagramAccountIdentityInput): Promise<DataResult<InstagramAccountIdentity>> {
+  return instagramAccountIdentityRepository().upsertInstagramAccountIdentity(input);
+}
+
+export async function getInstagramAccountIdentityByExternalId(instagramAccountId: string): Promise<InstagramAccountIdentity | null> {
+  return instagramAccountIdentityRepository().getInstagramAccountIdentityByExternalId(instagramAccountId);
+}
+
+export async function listInstagramAccountIdentitiesForWorkspace(workspaceId: string): Promise<InstagramAccountIdentity[]> {
+  return instagramAccountIdentityRepository().listInstagramAccountIdentitiesForWorkspace(workspaceId);
 }
 
 // ---------------------------------------------------------------------------

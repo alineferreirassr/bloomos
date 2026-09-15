@@ -7,6 +7,8 @@ import { setConnectionConfig } from "@/core/integrations/integrationManager";
 import { MetaProvider, isMetaAuthError, type MetaPageSummary } from "@/core/integrations/providers/meta/metaProvider";
 import { sanitizeIntegrationError } from "@/core/integrations/errorSanitizer";
 import { insertErrorRecord } from "@/lib/data/core/integrations/errorRecordStore";
+import { upsertInstagramAccountIdentity } from "@/lib/data";
+import { getLogger } from "@/core/observability/logger";
 import type { IntegrationConnection } from "@/core/integrations/types";
 
 /**
@@ -128,6 +130,27 @@ export async function selectMetaPublishingIdentityAction(page: { id: string }): 
     meta_instagram_username: match.instagramUsername ?? "",
   });
   if (!updated) return { success: false, error: "Could not save the selected Page." };
+
+  // SOCIAL-11C — additive only, never replacing the config write above:
+  // keeps the new, indexed instagram_account_identities table (needed by
+  // the Meta webhook receiver's own workspace-resolution lookup) in sync
+  // with the same selection. A Page with no linked Instagram account
+  // (match.instagramAccountId === null) has nothing to record here — this
+  // table only ever represents a real Instagram account, never a bare
+  // Facebook Page. A failure here is logged but never blocks the Page
+  // selection itself from succeeding — this table is additive
+  // infrastructure, not (yet) load-bearing for anything user-facing.
+  if (match.instagramAccountId) {
+    const identityResult = await upsertInstagramAccountIdentity({
+      workspaceId: resolved.connection.workspace_id,
+      connectionId: resolved.connection.id,
+      instagramAccountId: match.instagramAccountId,
+      instagramUsername: match.instagramUsername,
+    });
+    if (!identityResult.success) {
+      getLogger().warn("Could not upsert Instagram account identity after Page selection", { workspaceId: resolved.connection.workspace_id, error: identityResult.error });
+    }
+  }
 
   return { success: true, data: { pageId: match.id, pageName: match.name, instagramAccountId: match.instagramAccountId, instagramUsername: match.instagramUsername } };
 }

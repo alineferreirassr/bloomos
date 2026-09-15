@@ -126,6 +126,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // Independently-tracked, not-yet-released, unrelated to the Finance
   // release this exact-count assertion describes.
   "20260925100000_automation_execution_idempotency_foundation.sql",
+  // SOCIAL-11C — Instagram Account Identity + Meta Webhook Receiver
+  // Foundation. Independently-tracked, not-yet-released, unrelated to the
+  // Finance release this exact-count assertion describes.
+  "20260926100000_instagram_account_identity_and_meta_webhook_foundation.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {
@@ -5622,5 +5626,208 @@ describe("SOCIAL-11B migration — Durable Automation Execution + Idempotency Fo
     expect(code).not.toContain("anthropic");
     expect(code).not.toContain("graph.facebook.com");
     expect(code).not.toContain("instagram_business_account");
+  });
+});
+
+describe("SOCIAL-11C migration — Instagram Account Identity + Meta Webhook Receiver Foundation", () => {
+  function sql(): string {
+    return readMigration("20260926100000_instagram_account_identity_and_meta_webhook_foundation.sql");
+  }
+
+  it("creates exactly two new tables: instagram_account_identities, meta_webhook_events", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create table if not exists public\.instagram_account_identities/);
+    expect(code).toMatch(/create table if not exists public\.meta_webhook_events/);
+    const createTableMatches = code.match(/create table/gi) ?? [];
+    expect(createTableMatches).toHaveLength(2);
+  });
+
+  it("never alters social_posts — the existing snapshot column stays completely untouched (only referenced in prose explaining why it was deliberately left alone)", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/alter table public\.social_posts/);
+    expect(code).not.toMatch(/create table.*social_posts/);
+    // target_instagram_account_id may appear only inside a `comment on ... is '...'` string literal (documentation), never as a real DDL column reference.
+    for (const line of code.split("\n")) {
+      if (line.includes("target_instagram_account_id")) {
+        expect(line.trim().startsWith("'") || line.includes("comment on")).toBe(true);
+      }
+    }
+  });
+
+  describe("instagram_account_identities", () => {
+    function table(): string {
+      const code = stripSqlComments(sql());
+      return code.slice(code.indexOf("create table if not exists public.instagram_account_identities"), code.indexOf("comment on table public.instagram_account_identities"));
+    }
+
+    it("requires workspace_id, connection_id, instagram_account_id, created_at, updated_at — instagram_username is nullable", () => {
+      const t = table();
+      expect(t).toMatch(/workspace_id uuid not null references public\.workspaces \(id\) on delete cascade/);
+      expect(t).toMatch(/connection_id uuid not null references public\.integration_connections \(id\) on delete cascade/);
+      expect(t).toMatch(/instagram_account_id text not null/);
+      expect(t).toMatch(/created_at timestamptz not null default now\(\)/);
+      expect(t).toMatch(/updated_at timestamptz not null default now\(\)/);
+
+      const line = t.split("\n").find((l) => l.trim().startsWith("instagram_username"));
+      expect(line, "expected a nullable instagram_username column").toBeDefined();
+      expect(line).not.toMatch(/not null/);
+    });
+
+    it("has no access_token/credential/secret column of any kind — identity only, never credentials", () => {
+      const t = table().toLowerCase();
+      for (const forbidden of ["token", "secret", "credential", "password"]) {
+        expect(t).not.toContain(forbidden);
+      }
+    });
+
+    it("instagram_account_id is globally unique — not merely per-workspace", () => {
+      expect(table()).toMatch(/constraint instagram_account_identities_account_id_unique\s*\n\s*unique \(instagram_account_id\)/);
+      expect(table()).not.toMatch(/unique \(workspace_id, instagram_account_id\)/);
+    });
+
+    it("rejects a blank instagram_account_id at the database level", () => {
+      expect(table()).toMatch(/constraint instagram_account_identities_account_id_not_blank_check\s*\n\s*check \(btrim\(instagram_account_id\) <> ''\)/);
+    });
+
+    it("has no status/lifecycle column — the owning connection's own state already serves that purpose", () => {
+      const t = table().toLowerCase();
+      expect(t).not.toMatch(/\bstatus\b/);
+      expect(t).not.toMatch(/\blifecycle\b/);
+    });
+
+    it("has no jsonb column and no version column — no JSONB-for-convenience, no versioning", () => {
+      const t = table().toLowerCase();
+      expect(t).not.toContain("jsonb");
+      expect(t).not.toContain("version");
+    });
+
+    it("creates exactly the two approved indexes", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create index if not exists instagram_account_identities_workspace_idx\s*\n\s*on public\.instagram_account_identities \(workspace_id\);/);
+      expect(code).toMatch(/create index if not exists instagram_account_identities_connection_idx\s*\n\s*on public\.instagram_account_identities \(connection_id\);/);
+    });
+
+    it("reuses the existing set_updated_at() trigger function", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(
+        /create trigger trg_instagram_account_identities_set_updated_at\s*\n\s*before update on public\.instagram_account_identities\s*\n\s*for each row execute function public\.set_updated_at\(\);/,
+      );
+    });
+
+    it("enables RLS with SELECT/INSERT/UPDATE-only workspace-member policies — no DELETE, no new permission literal", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/alter table public\.instagram_account_identities enable row level security;/);
+      expect(code).toMatch(
+        /create policy "instagram_account_identities_select_workspace_member"\s*\n\s*on public\.instagram_account_identities for select\s*\n\s*to authenticated\s*\n\s*using \(public\.is_workspace_member\(workspace_id\)\);/,
+      );
+      expect(code).toMatch(
+        /create policy "instagram_account_identities_insert_workspace_member"\s*\n\s*on public\.instagram_account_identities for insert\s*\n\s*to authenticated\s*\n\s*with check \(public\.is_workspace_member\(workspace_id\)\);/,
+      );
+      expect(code).toMatch(
+        /create policy "instagram_account_identities_update_workspace_member"\s*\n\s*on public\.instagram_account_identities for update\s*\n\s*to authenticated\s*\n\s*using \(public\.is_workspace_member\(workspace_id\)\)\s*\n\s*with check \(public\.is_workspace_member\(workspace_id\)\);/,
+      );
+      const section = code.slice(code.indexOf("create table if not exists public.instagram_account_identities"), code.indexOf("create table if not exists public.meta_webhook_events"));
+      expect(section).not.toMatch(/for delete/i);
+      expect(code).not.toMatch(/"[a-z_]*\.(manage|admin)"/);
+    });
+  });
+
+  describe("meta_webhook_events", () => {
+    function table(): string {
+      const code = stripSqlComments(sql());
+      return code.slice(code.indexOf("create table if not exists public.meta_webhook_events"), code.indexOf("comment on table public.meta_webhook_events"));
+    }
+
+    it("requires external_account_id, object_type, event_type, payload, received_at — workspace_id/instagram_account_identity_id/idempotency_key_id are all nullable", () => {
+      const t = table();
+      expect(t).toMatch(/external_account_id text not null/);
+      expect(t).toMatch(/object_type text not null/);
+      expect(t).toMatch(/event_type text not null/);
+      expect(t).toMatch(/payload jsonb not null/);
+      expect(t).toMatch(/received_at timestamptz not null default now\(\)/);
+
+      for (const nullableColumn of ["workspace_id uuid", "instagram_account_identity_id uuid", "idempotency_key_id uuid"]) {
+        const line = t.split("\n").find((l) => l.trim().startsWith(nullableColumn));
+        expect(line, `expected a nullable "${nullableColumn}" column`).toBeDefined();
+        expect(line).not.toMatch(/not null/);
+      }
+    });
+
+    it("idempotency_key_id references automation_idempotency_keys — reuses SOCIAL-11B's own ledger directly, never a second one", () => {
+      expect(table()).toMatch(/idempotency_key_id uuid references public\.automation_idempotency_keys \(id\) on delete restrict/);
+    });
+
+    it("instagram_account_identity_id references instagram_account_identities with on delete set null", () => {
+      expect(table()).toMatch(/instagram_account_identity_id uuid references public\.instagram_account_identities \(id\) on delete set null/);
+    });
+
+    it("enforces workspace_id and idempotency_key_id are both null or both non-null together", () => {
+      expect(table()).toMatch(/constraint meta_webhook_events_idempotency_requires_workspace_check\s*\n\s*check \(\(workspace_id is null\) = \(idempotency_key_id is null\)\)/);
+    });
+
+    it("rejects blank external_account_id/object_type/event_type at the database level", () => {
+      const t = table();
+      expect(t).toMatch(/constraint meta_webhook_events_external_account_id_not_blank_check\s*\n\s*check \(btrim\(external_account_id\) <> ''\)/);
+      expect(t).toMatch(/constraint meta_webhook_events_object_type_not_blank_check\s*\n\s*check \(btrim\(object_type\) <> ''\)/);
+      expect(t).toMatch(/constraint meta_webhook_events_event_type_not_blank_check\s*\n\s*check \(btrim\(event_type\) <> ''\)/);
+    });
+
+    it("does not constrain event_type with an enumerated CHECK — this checkpoint does not enumerate or process any specific event type", () => {
+      const t = table();
+      expect(t).not.toMatch(/event_type.*check \(event_type in/i);
+    });
+
+    it("creates exactly the two approved indexes", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create index if not exists meta_webhook_events_workspace_received_idx\s*\n\s*on public\.meta_webhook_events \(workspace_id, received_at desc\);/);
+      expect(code).toMatch(/create index if not exists meta_webhook_events_external_account_idx\s*\n\s*on public\.meta_webhook_events \(external_account_id\);/);
+    });
+
+    it("has no updated_at column or trigger — this is an append-only, write-once ingestion record", () => {
+      const t = table();
+      expect(t).not.toMatch(/\bupdated_at\b/);
+      const code = stripSqlComments(sql());
+      expect(code).not.toMatch(/trg_meta_webhook_events/);
+    });
+
+    it("enables RLS with a read-only, workspace-scoped SELECT policy — no insert/update/delete policy for authenticated at all, mirroring stripe_webhook_events exactly", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/alter table public\.meta_webhook_events enable row level security;/);
+      expect(code).toMatch(
+        /create policy "meta_webhook_events_select_workspace_member"\s*\n\s*on public\.meta_webhook_events for select\s*\n\s*to authenticated\s*\n\s*using \(workspace_id is not null and public\.is_workspace_member\(workspace_id\)\);/,
+      );
+      const section = code.slice(code.indexOf("create table if not exists public.meta_webhook_events"));
+      expect(section).not.toMatch(/for insert/i);
+      expect(section).not.toMatch(/for update/i);
+      expect(section).not.toMatch(/for delete/i);
+    });
+  });
+
+  it("never touches idea_items, inspiration_items, script_items, carousel_items, carousel_slides, social_posts, ai_generations, leads, integration_credentials, or automation_executions/automation_approval_overrides", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    for (const line of code.split("\n")) {
+      if (/^alter table/.test(line.trim())) {
+        expect(line).toMatch(/public\.(instagram_account_identities|meta_webhook_events)/);
+      }
+    }
+    expect(code).not.toMatch(
+      /create table.*(idea_items|inspiration_items|script_items|carousel_items|carousel_slides|social_posts|ai_generations|leads|integration_credentials|automation_executions|automation_approval_overrides)/,
+    );
+    expect(code).not.toMatch(
+      /alter table public\.(idea_items|inspiration_items|script_items|carousel_items|carousel_slides|social_posts|ai_generations|leads|integration_credentials|automation_executions|automation_approval_overrides)/,
+    );
+  });
+
+  it("never disables RLS, drops a table, deletes rows via raw SQL, grants to service_role, stores a plaintext secret, or references AI/a provider", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/disable row level security/);
+    expect(code).not.toMatch(/drop table/);
+    expect(code).not.toMatch(/\bdelete from\b/);
+    expect(code).not.toMatch(/to service_role/);
+    expect(code).not.toMatch(/grant execute/);
+    expect(code).not.toContain("openai");
+    expect(code).not.toContain("anthropic");
+    expect(code).not.toContain("app_secret");
+    expect(code).not.toContain("verify_token");
   });
 });
