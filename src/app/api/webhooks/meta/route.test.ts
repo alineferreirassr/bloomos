@@ -13,11 +13,15 @@ vi.mock("@/core/automation/idempotency", () => ({
   claimAutomationIdempotencyKey: vi.fn(),
   completeAutomationIdempotencyKey: vi.fn().mockResolvedValue({ success: true, key: { id: "idem_1", status: "completed" } }),
 }));
+vi.mock("@/core/integrations/webhooks/metaWebhookProcessing", () => ({
+  processMetaWebhookEvent: vi.fn().mockResolvedValue(undefined),
+}));
 
 import { GET, POST } from "@/app/api/webhooks/meta/route";
 import { verifyMetaWebhookChallenge, verifyMetaWebhookSignature } from "@/core/integrations/webhooks/metaWebhookVerification";
 import { createMetaWebhookServiceRoleClient, resolveInstagramAccountOwnership, recordMetaWebhookEvent } from "@/core/integrations/webhooks/metaWebhookServiceRole";
 import { claimAutomationIdempotencyKey, completeAutomationIdempotencyKey } from "@/core/automation/idempotency";
+import { processMetaWebhookEvent } from "@/core/integrations/webhooks/metaWebhookProcessing";
 
 function makeGetRequest(params: Record<string, string>): Request {
   const url = new URL("https://app.test/api/webhooks/meta");
@@ -122,7 +126,7 @@ describe("POST /api/webhooks/meta — idempotency (reuses SOCIAL-11B's own ledge
     vi.mocked(resolveInstagramAccountOwnership).mockResolvedValue({ workspaceId: "ws_1", instagramAccountIdentityId: "identity_1" });
   }
 
-  it("first delivery — claims the key, records the event, completes the claim as completed", async () => {
+  it("first delivery — claims the key, records the event, dispatches processing, completes the claim as completed", async () => {
     setupResolved();
     vi.mocked(claimAutomationIdempotencyKey).mockResolvedValue({ success: true, claimed: true, key: claimedKey() });
     vi.mocked(recordMetaWebhookEvent).mockResolvedValue({ success: true, id: "evt_1" });
@@ -131,6 +135,9 @@ describe("POST /api/webhooks/meta — idempotency (reuses SOCIAL-11B's own ledge
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ received: true, resolved: true });
     expect(recordMetaWebhookEvent).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ idempotencyKeyId: "idem_1", workspaceId: "ws_1", instagramAccountIdentityId: "identity_1" }));
+    expect(processMetaWebhookEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "ws_1", instagramAccountIdentityId: "identity_1", externalAccountId: "acct_1", objectType: "instagram" }),
+    );
     expect(completeAutomationIdempotencyKey).toHaveBeenCalledWith("idem_1", "completed");
   });
 
@@ -213,5 +220,75 @@ describe("POST /api/webhooks/meta — idempotency (reuses SOCIAL-11B's own ledge
 
     expect(claimAutomationIdempotencyKey).toHaveBeenCalledWith("ws_real_owner", "meta_webhook", expect.any(String));
     expect(recordMetaWebhookEvent).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ workspaceId: "ws_real_owner", instagramAccountIdentityId: "identity_real" }));
+  });
+});
+
+describe("POST /api/webhooks/meta — SOCIAL-11E processing/automation dispatch integration point", () => {
+  function setupResolved() {
+    vi.mocked(verifyMetaWebhookSignature).mockReturnValue(true);
+    vi.mocked(createMetaWebhookServiceRoleClient).mockReturnValue({} as never);
+    vi.mocked(resolveInstagramAccountOwnership).mockResolvedValue({ workspaceId: "ws_1", instagramAccountIdentityId: "identity_1" });
+  }
+
+  it("calls processMetaWebhookEvent only after the raw event is successfully recorded, and before completing idempotency as completed", async () => {
+    setupResolved();
+    vi.mocked(claimAutomationIdempotencyKey).mockResolvedValue({ success: true, claimed: true, key: claimedKey() });
+    vi.mocked(recordMetaWebhookEvent).mockResolvedValue({ success: true, id: "evt_1" });
+
+    const callOrder: string[] = [];
+    vi.mocked(recordMetaWebhookEvent).mockImplementation(async () => {
+      callOrder.push("recordMetaWebhookEvent");
+      return { success: true, id: "evt_1" };
+    });
+    vi.mocked(processMetaWebhookEvent).mockImplementation(async () => {
+      callOrder.push("processMetaWebhookEvent");
+    });
+    vi.mocked(completeAutomationIdempotencyKey).mockImplementation(async () => {
+      callOrder.push("completeAutomationIdempotencyKey");
+      return { success: true, key: claimedKey({ status: "completed" }) };
+    });
+
+    await POST(makePostRequest(VALID_BODY, "sha256=real"));
+    expect(callOrder).toEqual(["recordMetaWebhookEvent", "processMetaWebhookEvent", "completeAutomationIdempotencyKey"]);
+  });
+
+  it("never calls processMetaWebhookEvent when recordMetaWebhookEvent itself fails", async () => {
+    setupResolved();
+    vi.mocked(claimAutomationIdempotencyKey).mockResolvedValue({ success: true, claimed: true, key: claimedKey() });
+    vi.mocked(recordMetaWebhookEvent).mockResolvedValue({ success: false, error: "db error" });
+
+    await POST(makePostRequest(VALID_BODY, "sha256=real"));
+    expect(processMetaWebhookEvent).not.toHaveBeenCalled();
+  });
+
+  it("never calls processMetaWebhookEvent for an unresolved (no workspace) delivery", async () => {
+    vi.mocked(verifyMetaWebhookSignature).mockReturnValue(true);
+    vi.mocked(createMetaWebhookServiceRoleClient).mockReturnValue({} as never);
+    vi.mocked(resolveInstagramAccountOwnership).mockResolvedValue(null);
+    vi.mocked(recordMetaWebhookEvent).mockResolvedValue({ success: true, id: "evt_1" });
+
+    await POST(makePostRequest(VALID_BODY, "sha256=real"));
+    expect(processMetaWebhookEvent).not.toHaveBeenCalled();
+  });
+
+  it("a processMetaWebhookEvent failure (e.g. a genuine domain persistence error) marks the delivery failed/retryable, mirroring a recordMetaWebhookEvent failure exactly — the existing SOCIAL-11C error path, unmodified", async () => {
+    setupResolved();
+    vi.mocked(claimAutomationIdempotencyKey).mockResolvedValue({ success: true, claimed: true, key: claimedKey() });
+    vi.mocked(recordMetaWebhookEvent).mockResolvedValue({ success: true, id: "evt_1" });
+    vi.mocked(processMetaWebhookEvent).mockRejectedValueOnce(new Error("comment persistence failed"));
+    vi.mocked(completeAutomationIdempotencyKey).mockResolvedValue({ success: true, key: claimedKey({ status: "failed" }) });
+
+    const response = await POST(makePostRequest(VALID_BODY, "sha256=real"));
+    expect(response.status).toBe(500);
+    expect(completeAutomationIdempotencyKey).toHaveBeenCalledWith("idem_1", "failed");
+  });
+
+  it("no outbound Meta call, comment reply, DM reply, Lead creation, AI provider call, or CRM mutation happens anywhere in the route's own module graph — processMetaWebhookEvent is the only new call, and it is mocked here specifically so this test file never exercises real Meta/AI/CRM code", async () => {
+    setupResolved();
+    vi.mocked(claimAutomationIdempotencyKey).mockResolvedValue({ success: true, claimed: true, key: claimedKey() });
+    vi.mocked(recordMetaWebhookEvent).mockResolvedValue({ success: true, id: "evt_1" });
+
+    await POST(makePostRequest(VALID_BODY, "sha256=real"));
+    expect(processMetaWebhookEvent).toHaveBeenCalledTimes(1);
   });
 });

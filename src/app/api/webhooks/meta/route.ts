@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { verifyMetaWebhookChallenge, verifyMetaWebhookSignature } from "@/core/integrations/webhooks/metaWebhookVerification";
 import { createMetaWebhookServiceRoleClient, resolveInstagramAccountOwnership, recordMetaWebhookEvent } from "@/core/integrations/webhooks/metaWebhookServiceRole";
+import { processMetaWebhookEvent } from "@/core/integrations/webhooks/metaWebhookProcessing";
 import { claimAutomationIdempotencyKey, completeAutomationIdempotencyKey } from "@/core/automation/idempotency";
 import { getLogger } from "@/core/observability/logger";
 
@@ -14,10 +15,18 @@ const SERVICE_ROLE_UNAVAILABLE_ERROR = "Service unavailable.";
  * SOCIAL-11C — the Meta/Instagram inbound webhook receiver. A pure
  * ingestion boundary: verify authenticity, resolve which workspace owns
  * the event, claim idempotency (when a workspace was resolved), durably
- * record the raw event, acknowledge receipt. No Comment/DM/Lead/
- * automation-rule processing happens here — that is explicitly out of
- * this checkpoint's own scope (SOCIAL-11D/11E).
+ * record the raw event, acknowledge receipt. SOCIAL-11E adds exactly one
+ * further, minimal call after the raw event is durably recorded and
+ * before idempotency completes — `processMetaWebhookEvent`
+ * (`metaWebhookProcessing.ts`), which resolves/creates the domain
+ * comment/conversation/message (SOCIAL-11D) and dispatches the matching
+ * Automation Engine trigger (SOCIAL-11B). No Lead creation, no reply, no
+ * outbound Meta call, no AI call happens anywhere in that path — see
+ * `metaWebhookProcessing.ts`'s own doc comment for the full boundary.
+ * Signature verification, the GET handshake, and the idempotency
+ * claim/complete logic are all unchanged from SOCIAL-11C.
  *
+
  * A single, fixed URL — unlike `api/webhooks/stripe/[connectionId]`,
  * Meta's own webhook model subscribes one callback URL at the App level
  * for every workspace's connected account at once (see
@@ -189,6 +198,20 @@ export async function POST(request: Request): Promise<NextResponse> {
       getLogger().error("Meta webhook: failed to durably record a resolved event", { workspaceId: resolved.workspaceId, error: result.error });
       return NextResponse.json({ error: "Could not record this event." }, { status: 500 });
     }
+
+    // SOCIAL-11E — resolve/create the domain comment/conversation/message
+    // (SOCIAL-11D) and dispatch the matching Automation Engine trigger
+    // (SOCIAL-11B). A benign "nothing to process" outcome never throws;
+    // only a genuine processing failure does, letting this function's own
+    // existing catch block below mark the delivery "failed" (retryable) —
+    // unchanged from SOCIAL-11C, not a new error-handling path.
+    await processMetaWebhookEvent({
+      workspaceId: resolved.workspaceId,
+      instagramAccountIdentityId: resolved.instagramAccountIdentityId,
+      externalAccountId,
+      objectType,
+      entry: firstEntry,
+    });
 
     await completeAutomationIdempotencyKey(claim.key.id, "completed");
     return NextResponse.json({ received: true, resolved: true });

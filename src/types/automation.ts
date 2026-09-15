@@ -88,6 +88,16 @@ export const AUTOMATION_TRIGGER_TYPES = [
   "signature.declined",
   "storage.file_synced",
   "connection.failed",
+  // SOCIAL-11E — Instagram Automations. Same shape as the
+  // `email.delivered`/`signature.completed` precedent immediately above:
+  // discrete values dispatched once an inbound Meta webhook delivery has
+  // been signature-verified (SOCIAL-11C), durably recorded, and resolved/
+  // persisted into its own domain row (SOCIAL-11D — see
+  // `core/integrations/webhooks/metaWebhookProcessing.ts`). Deliberately
+  // only these two — a reply/auto-reply/lead-creation/AI trigger is
+  // explicitly out of this checkpoint's own scope, not merely deferred.
+  "instagram.comment_received",
+  "instagram.message_received",
 ] as const;
 export type AutomationTriggerType = (typeof AUTOMATION_TRIGGER_TYPES)[number];
 
