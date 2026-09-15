@@ -255,6 +255,11 @@ import type { CarouselItem } from "@/types/carouselItem";
 import type { CarouselSlide } from "@/types/carouselSlide";
 import type { InstagramAccountIdentity } from "@/types/instagramAccountIdentity";
 import type { UpsertInstagramAccountIdentityInput } from "@/lib/data/instagramAccountIdentity/repository";
+import type { InstagramComment, InstagramCommentStatus } from "@/types/instagramComment";
+import type { CreateInstagramCommentInput } from "@/lib/data/instagramComment/repository";
+import type { InstagramConversation } from "@/types/instagramConversation";
+import type { InstagramMessage } from "@/types/instagramMessage";
+import type { CreateInstagramConversationInput, CreateInstagramMessageInput } from "@/lib/data/instagramConversation/repository";
 import { mockAIGenerationRepository } from "@/lib/data/aiGeneration/mockRepository";
 import { supabaseAIGenerationRepository } from "@/lib/data/aiGeneration/supabaseRepository";
 import type {
@@ -268,6 +273,10 @@ import { mockCarouselRepository } from "@/lib/data/carousel/mockRepository";
 import { supabaseCarouselRepository } from "@/lib/data/carousel/supabaseRepository";
 import { mockInstagramAccountIdentityRepository } from "@/lib/data/instagramAccountIdentity/mockRepository";
 import { supabaseInstagramAccountIdentityRepository } from "@/lib/data/instagramAccountIdentity/supabaseRepository";
+import { mockInstagramCommentRepository } from "@/lib/data/instagramComment/mockRepository";
+import { supabaseInstagramCommentRepository } from "@/lib/data/instagramComment/supabaseRepository";
+import { mockInstagramConversationRepository } from "@/lib/data/instagramConversation/mockRepository";
+import { supabaseInstagramConversationRepository } from "@/lib/data/instagramConversation/supabaseRepository";
 import type {
   InvoiceFilters,
   PaymentFilters,
@@ -1607,6 +1616,75 @@ export async function getInstagramAccountIdentityByExternalId(instagramAccountId
 
 export async function listInstagramAccountIdentitiesForWorkspace(workspaceId: string): Promise<InstagramAccountIdentity[]> {
   return instagramAccountIdentityRepository().listInstagramAccountIdentitiesForWorkspace(workspaceId);
+}
+
+// ---------------------------------------------------------------------------
+// Instagram Comment — SOCIAL-11D. Same selectRepository() dispatch every
+// other domain uses. No Server Action, no UI — repository foundation only
+// (a future SOCIAL-11E owns actually calling these from webhook ingestion).
+// ---------------------------------------------------------------------------
+
+function instagramCommentRepository() {
+  return selectRepository({ mock: mockInstagramCommentRepository, supabase: supabaseInstagramCommentRepository });
+}
+
+export async function createInstagramComment(input: CreateInstagramCommentInput): Promise<DataResult<InstagramComment>> {
+  return instagramCommentRepository().createComment(input);
+}
+
+export async function getInstagramCommentByExternalId(instagramAccountIdentityId: string, externalCommentId: string): Promise<InstagramComment | null> {
+  return instagramCommentRepository().getCommentByExternalId(instagramAccountIdentityId, externalCommentId);
+}
+
+export async function listInstagramCommentsForWorkspace(workspaceId: string): Promise<InstagramComment[]> {
+  return instagramCommentRepository().listCommentsForWorkspace(workspaceId);
+}
+
+export async function updateInstagramCommentStatus(id: string, status: InstagramCommentStatus): Promise<DataResult<InstagramComment>> {
+  return instagramCommentRepository().updateCommentStatus(id, status);
+}
+
+// ---------------------------------------------------------------------------
+// Instagram Conversation + Message — SOCIAL-11D. Same selectRepository()
+// dispatch, combined in one repository the same way carouselRepository()
+// covers carousel_items/carousel_slides — a genuine parent+children
+// relationship.
+// ---------------------------------------------------------------------------
+
+function instagramConversationRepository() {
+  return selectRepository({ mock: mockInstagramConversationRepository, supabase: supabaseInstagramConversationRepository });
+}
+
+export async function createInstagramConversation(input: CreateInstagramConversationInput): Promise<DataResult<InstagramConversation>> {
+  return instagramConversationRepository().createConversation(input);
+}
+
+export async function getInstagramConversationByExternalParticipantId(instagramAccountIdentityId: string, externalParticipantId: string): Promise<InstagramConversation | null> {
+  return instagramConversationRepository().getConversationByExternalParticipantId(instagramAccountIdentityId, externalParticipantId);
+}
+
+export async function getInstagramConversationByExternalConversationId(instagramAccountIdentityId: string, externalConversationId: string): Promise<InstagramConversation | null> {
+  return instagramConversationRepository().getConversationByExternalConversationId(instagramAccountIdentityId, externalConversationId);
+}
+
+export async function listInstagramConversationsForWorkspace(workspaceId: string): Promise<InstagramConversation[]> {
+  return instagramConversationRepository().listConversationsForWorkspace(workspaceId);
+}
+
+export async function updateInstagramConversationLastMessageAt(id: string, lastMessageAt: string): Promise<DataResult<InstagramConversation>> {
+  return instagramConversationRepository().updateConversationLastMessageAt(id, lastMessageAt);
+}
+
+export async function createInstagramMessage(input: CreateInstagramMessageInput): Promise<DataResult<InstagramMessage>> {
+  return instagramConversationRepository().createMessage(input);
+}
+
+export async function getInstagramMessageByExternalId(conversationId: string, externalMessageId: string): Promise<InstagramMessage | null> {
+  return instagramConversationRepository().getMessageByExternalId(conversationId, externalMessageId);
+}
+
+export async function listInstagramMessagesForConversation(conversationId: string): Promise<InstagramMessage[]> {
+  return instagramConversationRepository().listMessagesForConversation(conversationId);
 }
 
 // ---------------------------------------------------------------------------

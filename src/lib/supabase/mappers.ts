@@ -34,6 +34,9 @@ import type {
   AutomationExecutionStatus,
 } from "@/types/automation";
 import type { InstagramAccountIdentity } from "@/types/instagramAccountIdentity";
+import type { InstagramComment, InstagramCommentStatus } from "@/types/instagramComment";
+import type { InstagramConversation, InstagramConversationStatus } from "@/types/instagramConversation";
+import type { InstagramMessage, InstagramMessageDirection } from "@/types/instagramMessage";
 import type { Contract, ContractVersionSnapshot } from "@/types/contract";
 import type { ContractTemplate } from "@/types/contractTemplate";
 import type { ContractExhibit } from "@/types/contractExhibit";
@@ -200,6 +203,9 @@ type CarouselItemRow = Database["public"]["Tables"]["carousel_items"]["Row"];
 type CarouselSlideRow = Database["public"]["Tables"]["carousel_slides"]["Row"];
 type AutomationExecutionRow = Database["public"]["Tables"]["automation_executions"]["Row"];
 type InstagramAccountIdentityRow = Database["public"]["Tables"]["instagram_account_identities"]["Row"];
+type InstagramCommentRow = Database["public"]["Tables"]["instagram_comments"]["Row"];
+type InstagramConversationRow = Database["public"]["Tables"]["instagram_conversations"]["Row"];
+type InstagramMessageRow = Database["public"]["Tables"]["instagram_messages"]["Row"];
 
 /**
  * Deliberate seam between raw database rows and domain types, even though
@@ -1513,6 +1519,55 @@ export function mapInstagramAccountIdentityRow(row: InstagramAccountIdentityRow)
     connection_id: row.connection_id,
     instagram_account_id: row.instagram_account_id,
     instagram_username: row.instagram_username,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapInstagramCommentRow(row: InstagramCommentRow): InstagramComment {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    instagram_account_identity_id: row.instagram_account_identity_id,
+    external_comment_id: row.external_comment_id,
+    external_media_id: row.external_media_id,
+    parent_external_comment_id: row.parent_external_comment_id,
+    external_author_id: row.external_author_id,
+    external_author_username: row.external_author_username,
+    content: row.content,
+    status: row.status as InstagramCommentStatus,
+    external_created_at: row.external_created_at,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapInstagramConversationRow(row: InstagramConversationRow): InstagramConversation {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    instagram_account_identity_id: row.instagram_account_identity_id,
+    external_conversation_id: row.external_conversation_id,
+    external_participant_id: row.external_participant_id,
+    external_participant_username: row.external_participant_username,
+    status: row.status as InstagramConversationStatus,
+    last_message_at: row.last_message_at,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function mapInstagramMessageRow(row: InstagramMessageRow): InstagramMessage {
+  return {
+    id: row.id,
+    conversation_id: row.conversation_id,
+    workspace_id: row.workspace_id,
+    external_message_id: row.external_message_id,
+    direction: row.direction as InstagramMessageDirection,
+    message_type: row.message_type,
+    content: row.content,
+    external_media_reference: row.external_media_reference,
+    external_created_at: row.external_created_at,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };

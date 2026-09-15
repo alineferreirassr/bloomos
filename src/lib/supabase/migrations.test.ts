@@ -130,6 +130,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // Foundation. Independently-tracked, not-yet-released, unrelated to the
   // Finance release this exact-count assertion describes.
   "20260926100000_instagram_account_identity_and_meta_webhook_foundation.sql",
+  // SOCIAL-11D — Instagram Comment / DM Conversation / Message Data
+  // Foundation. Independently-tracked, not-yet-released, unrelated to the
+  // Finance release this exact-count assertion describes.
+  "20260927100000_instagram_comments_conversations_messages_foundation.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {
@@ -5829,5 +5833,253 @@ describe("SOCIAL-11C migration — Instagram Account Identity + Meta Webhook Rec
     expect(code).not.toContain("anthropic");
     expect(code).not.toContain("app_secret");
     expect(code).not.toContain("verify_token");
+  });
+});
+
+describe("SOCIAL-11D migration — Instagram Comment / DM Conversation / Message Data Foundation", () => {
+  function sql(): string {
+    return readMigration("20260927100000_instagram_comments_conversations_messages_foundation.sql");
+  }
+
+  it("creates exactly three new tables: instagram_comments, instagram_conversations, instagram_messages", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create table if not exists public\.instagram_comments/);
+    expect(code).toMatch(/create table if not exists public\.instagram_conversations/);
+    expect(code).toMatch(/create table if not exists public\.instagram_messages/);
+    const createTableMatches = code.match(/create table/gi) ?? [];
+    expect(createTableMatches).toHaveLength(3);
+  });
+
+  describe("instagram_comments", () => {
+    function table(): string {
+      const code = stripSqlComments(sql());
+      return code.slice(code.indexOf("create table if not exists public.instagram_comments"), code.indexOf("comment on table public.instagram_comments"));
+    }
+
+    it("requires workspace_id, external_comment_id, external_author_id, status, created_at, updated_at — everything else is nullable", () => {
+      const t = table();
+      expect(t).toMatch(/workspace_id uuid not null references public\.workspaces \(id\) on delete cascade/);
+      expect(t).toMatch(/external_comment_id text not null/);
+      expect(t).toMatch(/external_author_id text not null/);
+      expect(t).toMatch(/status text not null default 'active'/);
+      expect(t).toMatch(/created_at timestamptz not null default now\(\)/);
+      expect(t).toMatch(/updated_at timestamptz not null default now\(\)/);
+
+      for (const nullableColumn of ["instagram_account_identity_id uuid", "external_media_id text", "parent_external_comment_id text", "external_author_username text", "external_created_at timestamptz"]) {
+        const line = t.split("\n").find((l) => l.trim().startsWith(nullableColumn));
+        expect(line, `expected a nullable "${nullableColumn}" column`).toBeDefined();
+        expect(line).not.toMatch(/not null/);
+      }
+    });
+
+    it("instagram_account_identity_id is a nullable FK to instagram_account_identities with on delete set null — history survives Identity disconnection", () => {
+      expect(table()).toMatch(/instagram_account_identity_id uuid references public\.instagram_account_identities \(id\) on delete set null/);
+    });
+
+    it("parent_external_comment_id is plain text, never a self-referencing FK", () => {
+      const t = table();
+      expect(t).toMatch(/parent_external_comment_id text/);
+      expect(t).not.toMatch(/parent_external_comment_id.*references/);
+    });
+
+    it("constrains status to active/removed only", () => {
+      expect(table()).toMatch(/constraint instagram_comments_status_check\s*\n\s*check \(status in \('active', 'removed'\)\)/);
+    });
+
+    it("rejects a blank external_comment_id or external_author_id at the database level", () => {
+      const t = table();
+      expect(t).toMatch(/constraint instagram_comments_external_comment_id_not_blank_check\s*\n\s*check \(btrim\(external_comment_id\) <> ''\)/);
+      expect(t).toMatch(/constraint instagram_comments_external_author_id_not_blank_check\s*\n\s*check \(btrim\(external_author_id\) <> ''\)/);
+    });
+
+    it("has a unique constraint on (instagram_account_identity_id, external_comment_id) — the entity-level dedup key", () => {
+      expect(table()).toMatch(/constraint instagram_comments_account_external_id_unique\s*\n\s*unique \(instagram_account_identity_id, external_comment_id\)/);
+    });
+
+    it("has no reply/moderation/sentiment/AI field of any kind", () => {
+      const t = table().toLowerCase();
+      for (const forbidden of ["reply", "moderat", "sentiment", "ai_", "lead_id", "automation"]) {
+        expect(t).not.toContain(forbidden);
+      }
+    });
+
+    it("creates exactly the two approved indexes plus the partial media index", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create index if not exists instagram_comments_account_idx\s*\n\s*on public\.instagram_comments \(instagram_account_identity_id\);/);
+      expect(code).toMatch(/create index if not exists instagram_comments_workspace_idx\s*\n\s*on public\.instagram_comments \(workspace_id\);/);
+      expect(code).toMatch(/create index if not exists instagram_comments_external_media_idx\s*\n\s*on public\.instagram_comments \(external_media_id\)\s*\n\s*where external_media_id is not null;/);
+    });
+
+    it("reuses the existing set_updated_at() trigger function", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create trigger trg_instagram_comments_set_updated_at\s*\n\s*before update on public\.instagram_comments\s*\n\s*for each row execute function public\.set_updated_at\(\);/);
+    });
+
+    it("enables RLS with a read-only, workspace-scoped SELECT policy only — no insert/update/delete policy for authenticated", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/alter table public\.instagram_comments enable row level security;/);
+      expect(code).toMatch(
+        /create policy "instagram_comments_select_workspace_member"\s*\n\s*on public\.instagram_comments for select\s*\n\s*to authenticated\s*\n\s*using \(public\.is_workspace_member\(workspace_id\)\);/,
+      );
+      const section = code.slice(code.indexOf("create table if not exists public.instagram_comments"), code.indexOf("create table if not exists public.instagram_conversations"));
+      expect(section).not.toMatch(/for insert/i);
+      expect(section).not.toMatch(/for update/i);
+      expect(section).not.toMatch(/for delete/i);
+    });
+  });
+
+  describe("instagram_conversations", () => {
+    function table(): string {
+      const code = stripSqlComments(sql());
+      return code.slice(code.indexOf("create table if not exists public.instagram_conversations"), code.indexOf("comment on table public.instagram_conversations"));
+    }
+
+    it("requires workspace_id, external_participant_id, status, created_at, updated_at — external_conversation_id/last_message_at are nullable", () => {
+      const t = table();
+      expect(t).toMatch(/workspace_id uuid not null references public\.workspaces \(id\) on delete cascade/);
+      expect(t).toMatch(/external_participant_id text not null/);
+      expect(t).toMatch(/status text not null default 'active'/);
+      expect(t).toMatch(/created_at timestamptz not null default now\(\)/);
+      expect(t).toMatch(/updated_at timestamptz not null default now\(\)/);
+
+      for (const nullableColumn of ["external_conversation_id text", "last_message_at timestamptz"]) {
+        const line = t.split("\n").find((l) => l.trim().startsWith(nullableColumn));
+        expect(line, `expected a nullable "${nullableColumn}" column`).toBeDefined();
+        expect(line).not.toMatch(/not null/);
+      }
+    });
+
+    it("constrains status to active/archived only", () => {
+      expect(table()).toMatch(/constraint instagram_conversations_status_check\s*\n\s*check \(status in \('active', 'archived'\)\)/);
+    });
+
+    it("has a table-level unique constraint on (instagram_account_identity_id, external_participant_id) — the primary dedup key", () => {
+      expect(table()).toMatch(/constraint instagram_conversations_account_participant_unique\s*\n\s*unique \(instagram_account_identity_id, external_participant_id\)/);
+    });
+
+    it("has a partial unique index on (instagram_account_identity_id, external_conversation_id) where not null — the secondary dedup key", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(
+        /create unique index if not exists instagram_conversations_account_external_id_unique_idx\s*\n\s*on public\.instagram_conversations \(instagram_account_identity_id, external_conversation_id\)\s*\n\s*where external_conversation_id is not null;/,
+      );
+    });
+
+    it("has no attachment/media storage subsystem — no jsonb column", () => {
+      expect(table().toLowerCase()).not.toContain("jsonb");
+    });
+
+    it("reuses the existing set_updated_at() trigger function", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create trigger trg_instagram_conversations_set_updated_at\s*\n\s*before update on public\.instagram_conversations\s*\n\s*for each row execute function public\.set_updated_at\(\);/);
+    });
+
+    it("enables RLS with a read-only, workspace-scoped SELECT policy only — no insert/update/delete policy for authenticated", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/alter table public\.instagram_conversations enable row level security;/);
+      expect(code).toMatch(
+        /create policy "instagram_conversations_select_workspace_member"\s*\n\s*on public\.instagram_conversations for select\s*\n\s*to authenticated\s*\n\s*using \(public\.is_workspace_member\(workspace_id\)\);/,
+      );
+      const section = code.slice(code.indexOf("create table if not exists public.instagram_conversations"), code.indexOf("create table if not exists public.instagram_messages"));
+      expect(section).not.toMatch(/for insert/i);
+      expect(section).not.toMatch(/for update/i);
+      expect(section).not.toMatch(/for delete/i);
+    });
+  });
+
+  describe("instagram_messages", () => {
+    function table(): string {
+      const code = stripSqlComments(sql());
+      return code.slice(code.indexOf("create table if not exists public.instagram_messages"), code.indexOf("comment on table public.instagram_messages"));
+    }
+
+    it("requires conversation_id, workspace_id, external_message_id, direction, message_type, created_at, updated_at — content/external_media_reference/external_created_at are nullable", () => {
+      const t = table();
+      expect(t).toMatch(/conversation_id uuid not null references public\.instagram_conversations \(id\) on delete cascade/);
+      expect(t).toMatch(/workspace_id uuid not null references public\.workspaces \(id\) on delete cascade/);
+      expect(t).toMatch(/external_message_id text not null/);
+      expect(t).toMatch(/direction text not null/);
+      expect(t).toMatch(/message_type text not null default 'text'/);
+
+      for (const nullableColumn of ["content text", "external_media_reference text", "external_created_at timestamptz"]) {
+        const line = t.split("\n").find((l) => l.trim().startsWith(nullableColumn));
+        expect(line, `expected a nullable "${nullableColumn}" column`).toBeDefined();
+        expect(line).not.toMatch(/not null/);
+      }
+    });
+
+    it("constrains direction to inbound/outbound only", () => {
+      expect(table()).toMatch(/constraint instagram_messages_direction_check\s*\n\s*check \(direction in \('inbound', 'outbound'\)\)/);
+    });
+
+    it("does not constrain message_type with an enumerated CHECK — this checkpoint does not enumerate Instagram's own evolving message type vocabulary", () => {
+      const t = table();
+      expect(t).not.toMatch(/message_type.*check \(message_type in/i);
+    });
+
+    it("has a unique constraint on (conversation_id, external_message_id) — the entity-level dedup key", () => {
+      expect(table()).toMatch(/constraint instagram_messages_conversation_external_id_unique\s*\n\s*unique \(conversation_id, external_message_id\)/);
+    });
+
+    it("has no separate status column — direction plus the row's own existence already describe what future ingestion needs", () => {
+      const t = table();
+      expect(t).not.toMatch(/^\s*status\s/m);
+    });
+
+    it("has no attachment/media storage subsystem — no jsonb column, only a plain text reference", () => {
+      expect(table().toLowerCase()).not.toContain("jsonb");
+    });
+
+    it("creates exactly the two approved indexes", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create index if not exists instagram_messages_conversation_idx\s*\n\s*on public\.instagram_messages \(conversation_id, created_at\);/);
+      expect(code).toMatch(/create index if not exists instagram_messages_workspace_idx\s*\n\s*on public\.instagram_messages \(workspace_id\);/);
+    });
+
+    it("reuses the existing set_updated_at() trigger function", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/create trigger trg_instagram_messages_set_updated_at\s*\n\s*before update on public\.instagram_messages\s*\n\s*for each row execute function public\.set_updated_at\(\);/);
+    });
+
+    it("enables RLS with a read-only, workspace-scoped SELECT policy only — no insert/update/delete policy for authenticated", () => {
+      const code = stripSqlComments(sql());
+      expect(code).toMatch(/alter table public\.instagram_messages enable row level security;/);
+      expect(code).toMatch(
+        /create policy "instagram_messages_select_workspace_member"\s*\n\s*on public\.instagram_messages for select\s*\n\s*to authenticated\s*\n\s*using \(public\.is_workspace_member\(workspace_id\)\);/,
+      );
+      const section = code.slice(code.indexOf("create table if not exists public.instagram_messages"));
+      expect(section).not.toMatch(/for insert/i);
+      expect(section).not.toMatch(/for update/i);
+      expect(section).not.toMatch(/for delete/i);
+    });
+  });
+
+  it("never creates a second idempotency ledger — no automation_idempotency_keys-shaped table, no new claim/complete function", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toContain("idempotency");
+    expect(code).not.toMatch(/create.*function/);
+  });
+
+  it("never alters automation_idempotency_keys, automation_executions, meta_webhook_events, integration_connections, integration_credentials, or social_posts", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    for (const line of code.split("\n")) {
+      if (/^alter table/.test(line.trim())) {
+        expect(line).toMatch(/public\.instagram_(comments|conversations|messages)/);
+      }
+    }
+    expect(code).not.toMatch(/create table.*(automation_idempotency_keys|automation_executions|meta_webhook_events|integration_connections|integration_credentials|social_posts)/);
+    expect(code).not.toMatch(/alter table public\.(automation_idempotency_keys|automation_executions|meta_webhook_events|integration_connections|integration_credentials|social_posts)/);
+  });
+
+  it("never disables RLS, drops a table, deletes rows via raw SQL, grants to service_role, stores an access token/credential, or references AI/a provider", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/disable row level security/);
+    expect(code).not.toMatch(/drop table/);
+    expect(code).not.toMatch(/\bdelete from\b/);
+    expect(code).not.toMatch(/to service_role/);
+    expect(code).not.toMatch(/grant execute/);
+    expect(code).not.toContain("access_token");
+    expect(code).not.toContain("credential");
+    expect(code).not.toContain("openai");
+    expect(code).not.toContain("anthropic");
   });
 });

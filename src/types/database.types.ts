@@ -2644,6 +2644,24 @@ export interface Database {
         Update: { id?: string; idempotency_key_id?: string | null; workspace_id?: string | null; instagram_account_identity_id?: string | null; external_account_id?: string; object_type?: string; event_type?: string; payload?: Record<string, unknown>; received_at?: string };
         Relationships: [];
       };
+      instagram_comments: {
+        Row: { id: string; workspace_id: string; instagram_account_identity_id: string | null; external_comment_id: string; external_media_id: string | null; parent_external_comment_id: string | null; external_author_id: string; external_author_username: string | null; content: string; status: string; external_created_at: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; instagram_account_identity_id?: string | null; external_comment_id: string; external_media_id?: string | null; parent_external_comment_id?: string | null; external_author_id: string; external_author_username?: string | null; content?: string; status?: string; external_created_at?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; instagram_account_identity_id?: string | null; external_comment_id?: string; external_media_id?: string | null; parent_external_comment_id?: string | null; external_author_id?: string; external_author_username?: string | null; content?: string; status?: string; external_created_at?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      instagram_conversations: {
+        Row: { id: string; workspace_id: string; instagram_account_identity_id: string | null; external_conversation_id: string | null; external_participant_id: string; external_participant_username: string | null; status: string; last_message_at: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; workspace_id: string; instagram_account_identity_id?: string | null; external_conversation_id?: string | null; external_participant_id: string; external_participant_username?: string | null; status?: string; last_message_at?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; workspace_id?: string; instagram_account_identity_id?: string | null; external_conversation_id?: string | null; external_participant_id?: string; external_participant_username?: string | null; status?: string; last_message_at?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
+      instagram_messages: {
+        Row: { id: string; conversation_id: string; workspace_id: string; external_message_id: string; direction: string; message_type: string; content: string | null; external_media_reference: string | null; external_created_at: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; conversation_id: string; workspace_id: string; external_message_id: string; direction: string; message_type?: string; content?: string | null; external_media_reference?: string | null; external_created_at?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; conversation_id?: string; workspace_id?: string; external_message_id?: string; direction?: string; message_type?: string; content?: string | null; external_media_reference?: string | null; external_created_at?: string | null; created_at?: string; updated_at?: string };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
