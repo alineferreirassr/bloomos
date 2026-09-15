@@ -16,6 +16,11 @@ vi.mock("@/lib/auth/memberSessionSnapshot", () => ({
 // Mocked for the same reason every other AI entry-point test mocks this
 // exact set: importing the real chain (not calling it) is enough to trip
 // `server-only` in a jsdom test.
+// SOCIAL-12C additionally registers replyToInstagramCommentAction, which
+// imports instagramCommentReplyServiceRole.ts — a real `import "server-only"`
+// at module scope, mirroring every other narrow service-role boundary in
+// this codebase.
+vi.mock("server-only", () => ({}));
 vi.mock("@/modules/ai/fetchEventContext.server", () => ({ fetchEventContextRecord: vi.fn() }));
 vi.mock("@/lib/data/mock/clientsStore", () => ({ readClients: vi.fn() }));
 vi.mock("@/lib/data/mock/eventServicesStore", () => ({ readEventServices: vi.fn() }));

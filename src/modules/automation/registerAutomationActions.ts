@@ -25,6 +25,7 @@ import addRelationshipAction from "@/modules/automation/actions/addRelationshipA
 import archiveEntityAction from "@/modules/automation/actions/archiveEntityAction";
 import duplicateEntityAction from "@/modules/automation/actions/duplicateEntityAction";
 import delayAction from "@/modules/automation/actions/delayAction";
+import replyToInstagramCommentAction from "@/modules/automation/actions/replyToInstagramCommentAction";
 import { makeRunSkillAction, runSkillFallbackActionId } from "@/modules/automation/actions/runSkillActionFactory";
 import { registerProposalSkill, PROPOSAL_SKILL_ID } from "@/modules/ai/proposal/registerProposalSkill";
 import { registerEventOperationsBriefSkill } from "@/modules/ai/registerEventOperationsBriefSkill";
@@ -103,6 +104,13 @@ export function registerAutomationActions(): void {
   registerAutomationAction(duplicateEntityAction);
   // v2.0 Checkpoint 39 addendum — Workflow Studio's own Delay/Wait node.
   registerAutomationAction(delayAction);
+  // SOCIAL-12C — the first Instagram Comment/DM Automation Action. Not yet
+  // reachable from any registered AutomationDefinition or the Workflow
+  // Builder (see the action's own doc comment) — registered here only so
+  // it exists in the Action Registry for a future automation to reference,
+  // matching every other Action's own "register first, wire to a trigger
+  // later" precedent in this file.
+  registerAutomationAction(replyToInstagramCommentAction);
 
   // Ensure the real Skill Registry is populated before reading it — mirrors `getBloomAIOverview.ts`'s own inline, idempotent registration-on-load.
   registerProposalSkill();

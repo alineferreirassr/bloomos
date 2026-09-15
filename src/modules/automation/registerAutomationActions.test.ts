@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
+// SOCIAL-12C — replyToInstagramCommentAction transitively imports
+// instagramCommentReplyServiceRole.ts, which (like every other narrow
+// service-role boundary in this codebase) has a real `import "server-only"`
+// at module scope. Mirrors scheduledPostExecutor.test.ts's own identical
+// `vi.mock("server-only", () => ({}))` for the exact same reason: outside
+// real Next.js webpack compilation, the real `server-only` package throws
+// unconditionally on import.
+vi.mock("server-only", () => ({}));
 vi.mock("@/modules/ai/fetchEventContext.server", () => ({ fetchEventContextRecord: vi.fn() }));
 vi.mock("@/lib/data/mock/clientsStore", () => ({ readClients: vi.fn() }));
 vi.mock("@/lib/data/mock/eventServicesStore", () => ({ readEventServices: vi.fn() }));

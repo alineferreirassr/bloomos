@@ -11,6 +11,10 @@ vi.mock("@/lib/auth/memberSessionSnapshot", () => ({
 // files this test never actually exercises. Same standard mock set every
 // other AI/Automation entry-point test in this codebase already uses for
 // this exact reason (see `reviewProposalDraft.test.ts`).
+// SOCIAL-12C additionally reaches instagramCommentReplyServiceRole.ts,
+// which has a real `import "server-only"` at module scope — mirrors
+// scheduledPostExecutor.test.ts's own identical mock for the same reason.
+vi.mock("server-only", () => ({}));
 vi.mock("@/modules/ai/fetchEventContext.server", () => ({ fetchEventContextRecord: vi.fn() }));
 vi.mock("@/lib/data/mock/clientsStore", () => ({ readClients: vi.fn() }));
 vi.mock("@/lib/data/mock/eventServicesStore", () => ({ readEventServices: vi.fn() }));
