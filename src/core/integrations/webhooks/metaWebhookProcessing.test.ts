@@ -35,7 +35,17 @@ function commentEntry(overrides: Partial<Record<string, unknown>> = {}): MetaWeb
 }
 
 function commentRow(overrides: Partial<Record<string, unknown>> = {}) {
-  return { id: "internal_comment_1", workspace_id: "ws_1", instagram_account_identity_id: "identity_1", external_comment_id: "comment_1", external_author_id: "author_1", parent_external_comment_id: null, ...overrides };
+  return {
+    id: "internal_comment_1",
+    workspace_id: "ws_1",
+    instagram_account_identity_id: "identity_1",
+    external_comment_id: "comment_1",
+    external_author_id: "author_1",
+    parent_external_comment_id: null,
+    content: "Beautiful!",
+    external_author_username: "a_follower",
+    ...overrides,
+  };
 }
 
 function messagingEntry(overrides: Partial<Record<string, unknown>> = {}): MetaWebhookEntryLike {
@@ -46,11 +56,11 @@ function messagingEntry(overrides: Partial<Record<string, unknown>> = {}): MetaW
 }
 
 function conversationRow(overrides: Partial<Record<string, unknown>> = {}) {
-  return { id: "internal_conv_1", workspace_id: "ws_1", instagram_account_identity_id: "identity_1", external_participant_id: "participant_1", ...overrides };
+  return { id: "internal_conv_1", workspace_id: "ws_1", instagram_account_identity_id: "identity_1", external_participant_id: "participant_1", external_participant_username: null, ...overrides };
 }
 
 function messageRow(overrides: Partial<Record<string, unknown>> = {}) {
-  return { id: "internal_msg_1", conversation_id: "internal_conv_1", workspace_id: "ws_1", direction: "inbound", ...overrides };
+  return { id: "internal_msg_1", conversation_id: "internal_conv_1", workspace_id: "ws_1", direction: "inbound", content: "Hi, do you have June availability?", ...overrides };
 }
 
 afterEach(() => vi.clearAllMocks());
@@ -67,6 +77,28 @@ describe("processMetaWebhookEvent — comment trigger dispatch", () => {
       expect.objectContaining({ type: "instagram.comment_received", workspaceId: "ws_1", facts: expect.objectContaining({ commentId: "internal_comment_1", hasParent: false }) }),
       expect.objectContaining({ userId: null, permissions: [] }),
     );
+  });
+
+  it("SOCIAL-13B — commentText and externalAuthorUsername are read verbatim off the just-created domain row, not re-derived from the raw Meta payload", async () => {
+    vi.mocked(getInstagramCommentByExternalId).mockResolvedValue(null);
+    vi.mocked(createInstagramComment).mockResolvedValue({ success: true, data: commentRow({ content: "Loved this shoot!", external_author_username: "amoré_fan_22" }) as never });
+
+    await processMetaWebhookEvent({ ...BASE_INPUT, entry: commentEntry() });
+
+    expect(dispatchAutomationTrigger).toHaveBeenCalledWith(
+      expect.objectContaining({ facts: expect.objectContaining({ commentText: "Loved this shoot!", externalAuthorUsername: "amoré_fan_22" }) }),
+      expect.anything(),
+    );
+  });
+
+  it("SOCIAL-13B — a null external_author_username on the domain row stays null in facts, never fabricated or substituted with externalAuthorId", async () => {
+    vi.mocked(getInstagramCommentByExternalId).mockResolvedValue(null);
+    vi.mocked(createInstagramComment).mockResolvedValue({ success: true, data: commentRow({ external_author_username: null }) as never });
+
+    await processMetaWebhookEvent({ ...BASE_INPUT, entry: commentEntry() });
+
+    const [trigger] = vi.mocked(dispatchAutomationTrigger).mock.calls[0];
+    expect(trigger.facts.externalAuthorUsername).toBeNull();
   });
 
   it("captures hasParent=true for a reply comment", async () => {
@@ -126,6 +158,46 @@ describe("processMetaWebhookEvent — DM/message trigger dispatch", () => {
     expect(updateInstagramConversationLastMessageAt).toHaveBeenCalledWith("internal_conv_1", expect.any(String));
     expect(dispatchAutomationTrigger).toHaveBeenCalledWith(
       expect.objectContaining({ type: "instagram.message_received", workspaceId: "ws_1", facts: expect.objectContaining({ messageId: "internal_msg_1", conversationId: "internal_conv_1" }) }),
+      expect.anything(),
+    );
+  });
+
+  it("SOCIAL-13B — messageText is read verbatim off the just-created message row, and externalParticipantUsername off the resolved conversation row already in memory (no new query)", async () => {
+    vi.mocked(getInstagramConversationByExternalParticipantId).mockResolvedValue(null);
+    vi.mocked(createInstagramConversation).mockResolvedValue({ success: true, data: conversationRow({ external_participant_username: "curious_bride" }) as never });
+    vi.mocked(getInstagramMessageByExternalId).mockResolvedValue(null);
+    vi.mocked(createInstagramMessage).mockResolvedValue({ success: true, data: messageRow({ content: "Hi, do you have June availability?" }) as never });
+
+    await processMetaWebhookEvent({ ...BASE_INPUT, entry: messagingEntry() });
+
+    expect(dispatchAutomationTrigger).toHaveBeenCalledWith(
+      expect.objectContaining({ facts: expect.objectContaining({ messageText: "Hi, do you have June availability?", externalParticipantUsername: "curious_bride" }) }),
+      expect.anything(),
+    );
+  });
+
+  it("SOCIAL-13B — a null message content and a null conversation username both stay null in facts, never fabricated", async () => {
+    vi.mocked(getInstagramConversationByExternalParticipantId).mockResolvedValue(conversationRow({ external_participant_username: null }) as never);
+    vi.mocked(getInstagramMessageByExternalId).mockResolvedValue(null);
+    vi.mocked(createInstagramMessage).mockResolvedValue({ success: true, data: messageRow({ content: null }) as never });
+
+    await processMetaWebhookEvent({ ...BASE_INPUT, entry: messagingEntry() });
+
+    const [trigger] = vi.mocked(dispatchAutomationTrigger).mock.calls[0];
+    expect(trigger.facts.messageText).toBeNull();
+    expect(trigger.facts.externalParticipantUsername).toBeNull();
+  });
+
+  it("SOCIAL-13B — reusing an existing conversation reads externalParticipantUsername from that already-resolved row, not a new query", async () => {
+    vi.mocked(getInstagramConversationByExternalParticipantId).mockResolvedValue(conversationRow({ external_participant_username: "already_on_file" }) as never);
+    vi.mocked(getInstagramMessageByExternalId).mockResolvedValue(null);
+    vi.mocked(createInstagramMessage).mockResolvedValue({ success: true, data: messageRow() as never });
+
+    await processMetaWebhookEvent({ ...BASE_INPUT, entry: messagingEntry() });
+
+    expect(createInstagramConversation).not.toHaveBeenCalled();
+    expect(dispatchAutomationTrigger).toHaveBeenCalledWith(
+      expect.objectContaining({ facts: expect.objectContaining({ externalParticipantUsername: "already_on_file" }) }),
       expect.anything(),
     );
   });

@@ -175,6 +175,16 @@ async function processCommentChange(input: ProcessMetaWebhookEventInput, value: 
       instagramAccountIdentityId: input.instagramAccountIdentityId,
       externalAuthorId: created.data.external_author_id,
       hasParent: created.data.parent_external_comment_id !== null,
+      // SOCIAL-13B — enrichment only, both read straight off the just-created
+      // domain row already in memory (no new query, no cross-workspace risk).
+      // `commentText` mirrors `InstagramComment.content`'s own type (`string`,
+      // never null — `processCommentChange` itself always coerces a missing
+      // Meta `text` to `""` at create time, never `null`).
+      // `externalAuthorUsername` mirrors `InstagramComment.external_author_username`
+      // (`string | null`) verbatim — never fabricated, never falls back to
+      // `externalAuthorId` when absent.
+      commentText: created.data.content,
+      externalAuthorUsername: created.data.external_author_username,
     },
   });
 }
@@ -268,6 +278,20 @@ async function processMessagingEntry(input: ProcessMetaWebhookEventInput, value:
       conversationId: conversation.id,
       instagramAccountIdentityId: input.instagramAccountIdentityId,
       direction: created.data.direction,
+      // SOCIAL-13B — enrichment only, both read straight off domain rows
+      // already resolved earlier in this same function (no new query, no
+      // cross-workspace risk). `messageText` mirrors
+      // `InstagramMessage.content`'s own type (`string | null`) verbatim.
+      // `externalParticipantUsername` mirrors `InstagramConversation
+      // .external_participant_username` (`string | null`) — deliberately
+      // read from `conversation`, not `created.data` (the message row has
+      // no username field of its own); today this is always `null` in
+      // practice (nothing in the current ingestion pipeline ever populates
+      // it — see `processMessagingEntry`'s own `externalParticipantUsername:
+      // null` at conversation-creation time), never fabricated or
+      // substituted with `externalParticipantId`.
+      messageText: created.data.content,
+      externalParticipantUsername: conversation.external_participant_username,
     },
   });
 }
