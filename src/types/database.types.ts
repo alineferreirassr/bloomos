@@ -398,11 +398,12 @@ export interface Database {
         Row: {
           id: string;
           workspace_id: string;
-          first_name: string;
-          last_name: string;
-          email: string;
+          first_name: string | null;
+          last_name: string | null;
+          email: string | null;
           phone: string | null;
           instagram: string | null;
+          instagram_external_id: string | null;
           source: string;
           event_type: string | null;
           event_date: string | null;
@@ -420,11 +421,12 @@ export interface Database {
         Insert: {
           id?: string;
           workspace_id: string;
-          first_name: string;
-          last_name: string;
-          email: string;
+          first_name?: string | null;
+          last_name?: string | null;
+          email?: string | null;
           phone?: string | null;
           instagram?: string | null;
+          instagram_external_id?: string | null;
           source: string;
           event_type?: string | null;
           event_date?: string | null;
@@ -442,11 +444,12 @@ export interface Database {
         Update: {
           id?: string;
           workspace_id?: string;
-          first_name?: string;
-          last_name?: string;
-          email?: string;
+          first_name?: string | null;
+          last_name?: string | null;
+          email?: string | null;
           phone?: string | null;
           instagram?: string | null;
+          instagram_external_id?: string | null;
           source?: string;
           event_type?: string | null;
           event_date?: string | null;

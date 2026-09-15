@@ -47,7 +47,7 @@ export function filterCommercialLeads(leads: Lead[], filters: CommercialPipeline
 
   return leads.filter((lead) => {
     if (search) {
-      const haystack = `${getFullName(lead)} ${lead.email} ${lead.event_type ?? ""}`.toLowerCase();
+      const haystack = `${getFullName(lead)} ${lead.email ?? ""} ${lead.event_type ?? ""}`.toLowerCase();
       if (!haystack.includes(search)) return false;
     }
     if (filters.assignedTo !== "all" && lead.assigned_to !== filters.assignedTo) return false;
@@ -85,9 +85,9 @@ export function columnPipelineValue(leads: Lead[]): number {
 /** Converts a loaded Lead back into the form shape updateLead() expects — used by "Assign Team," the only Quick Action that needs a full-form resubmission since Leads has no partial-update endpoint. */
 export function leadToFormInput(lead: Lead): LeadFormInput {
   return {
-    first_name: lead.first_name,
-    last_name: lead.last_name,
-    email: lead.email,
+    first_name: lead.first_name ?? "",
+    last_name: lead.last_name ?? "",
+    email: lead.email ?? "",
     phone: lead.phone ?? "",
     instagram: lead.instagram ?? "",
     source: lead.source,

@@ -194,6 +194,28 @@ describe("supabaseConversionRepository.convertLeadToClient", () => {
     expect(result.error).toBe("Archived leads cannot be converted to a Client.");
   });
 
+  it("SOCIAL-13C-FND — surfaces the no-email P0001 rejection (a nullable-email Lead, e.g. Instagram-originated) as a DataResult failure", async () => {
+    mockSession();
+    mockRpc({ data: null, error: { code: "P0001", message: "A valid email is required before this lead can be converted to a Client." } });
+
+    const result = await supabaseConversionRepository.convertLeadToClient("lead_1");
+
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error("expected failure");
+    expect(result.error).toBe("A valid email is required before this lead can be converted to a Client.");
+  });
+
+  it("SOCIAL-13C-FND — surfaces the no-name P0001 rejection as a DataResult failure", async () => {
+    mockSession();
+    mockRpc({ data: null, error: { code: "P0001", message: "A name is required before this lead can be converted to a Client." } });
+
+    const result = await supabaseConversionRepository.convertLeadToClient("lead_1");
+
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error("expected failure");
+    expect(result.error).toBe("A name is required before this lead can be converted to a Client.");
+  });
+
   it("surfaces the not-found P0001 rejection (also covers a cross-Workspace lead id hidden by RLS) as a DataResult failure", async () => {
     mockSession();
     mockRpc({ data: null, error: { code: "P0001", message: "Lead not found." } });

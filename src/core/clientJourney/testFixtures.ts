@@ -19,6 +19,7 @@ export function makeLead(overrides: Partial<Lead> = {}): Lead {
     email: "jamie@example.com",
     phone: null,
     instagram: null,
+    instagram_external_id: null,
     source: "referral",
     event_type: "wedding",
     event_date: null,

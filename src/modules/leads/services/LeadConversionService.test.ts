@@ -9,6 +9,8 @@ import {
   getTimelineByLeadId,
   resetAllMockData,
 } from "@/lib/data";
+import { readLeads, writeLeads } from "@/lib/data/mock/leadsStore";
+import { makeLead } from "@/modules/leads/testUtils";
 import type { LeadFormInput } from "@/modules/leads/schema";
 import { makeClient } from "@/modules/clients/testUtils";
 
@@ -243,5 +245,63 @@ describe("convertLeadToClient — duplicate-Client prevention (Booking Workflow,
 
     const clientTimeline = await getTimelineByClientId(secondConversion.data.client.id);
     expect(clientTimeline.some((activity) => activity.type === "client_updated")).toBe(true);
+  });
+});
+
+describe("convertLeadToClient — SOCIAL-13C-FND nullable email/name guard", () => {
+  it("a Lead with no email cannot be converted — fails with a clear, controlled message, never a crash", async () => {
+    const socialLead = makeLead({ id: "lead_social_no_email", workspace_id: "ws_social", email: null, instagram: "@curious_bride", instagram_external_id: "17841400000000001", source: "Instagram" });
+    writeLeads([...readLeads(), socialLead]);
+
+    const result = await convertLeadToClient("lead_social_no_email");
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("A valid email is required before this lead can be converted to a Client.");
+
+    // Never crashed, never half-converted — the Lead itself is untouched.
+    const stillThere = readLeads().find((l) => l.id === "lead_social_no_email");
+    expect(stillThere?.status).toBe("new");
+    expect(stillThere?.converted_client_id).toBeNull();
+  });
+
+  it("a Lead with no first/last name cannot be converted — fails with a clear, controlled message, checked before the email guard", async () => {
+    const socialLead = makeLead({ id: "lead_social_no_name", workspace_id: "ws_social", first_name: null, last_name: null, email: "real@example.com", instagram_external_id: "17841400000000002" });
+    writeLeads([...readLeads(), socialLead]);
+
+    const result = await convertLeadToClient("lead_social_no_name");
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("A name is required before this lead can be converted to a Client.");
+  });
+
+  it("a Lead with a real name and email still converts exactly as before, unaffected by the new nullable columns or instagram_external_id being present", async () => {
+    const socialLead = makeLead({ id: "lead_social_complete", workspace_id: "ws_social_2", first_name: "Marina", last_name: "Souza", email: "marina@example.com", instagram: "@marina.s", instagram_external_id: "17841400000000003", source: "Instagram" });
+    writeLeads([...readLeads(), socialLead]);
+
+    const result = await convertLeadToClient("lead_social_complete");
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.client.first_name).toBe("Marina");
+    expect(result.data.client.email).toBe("marina@example.com");
+    expect(result.data.lead.status).toBe("converted");
+  });
+
+  it("workspace isolation — the same instagram_external_id on two Leads in different workspaces never collides or cross-links during conversion", async () => {
+    const leadA = makeLead({ id: "lead_ws_a", workspace_id: "ws_a", email: "a@example.com", instagram_external_id: "17841400000000099" });
+    const leadB = makeLead({ id: "lead_ws_b", workspace_id: "ws_b", email: "b@example.com", instagram_external_id: "17841400000000099" });
+    writeLeads([...readLeads(), leadA, leadB]);
+
+    const resultA = await convertLeadToClient("lead_ws_a");
+    const resultB = await convertLeadToClient("lead_ws_b");
+
+    expect(resultA.success).toBe(true);
+    expect(resultB.success).toBe(true);
+    if (!resultA.success || !resultB.success) return;
+    expect(resultA.data.client.workspace_id).toBe("ws_a");
+    expect(resultB.data.client.workspace_id).toBe("ws_b");
+    expect(resultA.data.client.id).not.toBe(resultB.data.client.id);
   });
 });

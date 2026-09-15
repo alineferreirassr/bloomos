@@ -3,6 +3,8 @@ import { workspaceSearchProvider } from "@/core/workspace/workspaceSearchProvide
 import { registerSearchableEntity } from "@/core/search/registry";
 import { registerDefaultSearchableEntities } from "@/core/search/defaultRegistrations";
 import { resetAllMockData } from "@/lib/data";
+import { readLeads, writeLeads } from "@/lib/data/mock/leadsStore";
+import { makeLead } from "@/modules/leads/testUtils";
 import { CURRENT_WORKSPACE_ID } from "@/core/constants/workspace";
 import { getCoreWorkersService, getCoreTeamsService, getCoreEquipmentService, getCoreVehiclesService } from "@/core/workforce";
 
@@ -47,6 +49,20 @@ describe("workspaceSearchProvider", () => {
     const results = await workspaceSearchProvider.search({ workspaceId: CURRENT_WORKSPACE_ID, term: "Sofia" });
     // No assertion on purchase-specific content (no fetcher registered for it) — this just confirms the search call doesn't throw when new entity configs are added.
     expect(Array.isArray(results)).toBe(true);
+  });
+
+  describe("SOCIAL-13C-FND — nullable Lead name/email never crash search or render \"null\"", () => {
+    it("a Lead with no name at all falls back to its Instagram handle as the search result title, never the literal word \"null\"", async () => {
+      const socialLead = makeLead({ id: "lead_social_search", workspace_id: CURRENT_WORKSPACE_ID, first_name: null, last_name: null, email: null, instagram: "@curious_bride", instagram_external_id: "17841400000000042" });
+      writeLeads([...readLeads(), socialLead]);
+
+      const results = await workspaceSearchProvider.search({ workspaceId: CURRENT_WORKSPACE_ID, term: "curious_bride" });
+      const match = results.find((r) => r.entityType === "lead");
+
+      expect(match).toBeDefined();
+      expect(match!.title).toBe("@curious_bride");
+      expect(match!.title).not.toContain("null");
+    });
   });
 
   describe("worker/team/equipment/vehicle (Checkpoint 45A — Finding 17 fix)", () => {

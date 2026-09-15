@@ -116,7 +116,7 @@ async function getLeads(filters: LeadFilters = {}, context?: ServerRepositoryCon
   const q = search?.trim().toLowerCase();
   if (!q) return leads;
   return leads.filter((lead) => {
-    const haystack = `${getFullName(lead)} ${lead.email}`.toLowerCase();
+    const haystack = `${getFullName(lead)} ${lead.email ?? ""}`.toLowerCase();
     return haystack.includes(q);
   });
 }

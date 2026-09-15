@@ -1,5 +1,6 @@
 import { formatMoney, sumMinor } from "@/lib/money";
 import { clockNow } from "@/core/time/clock";
+import { getFullName } from "@/lib/personName";
 import type { CrmAssistantMaterials } from "@/modules/ai/crmAssistant/fetchCrmAssistantContext.server";
 import type {
   CrmAssistantContext,
@@ -51,7 +52,7 @@ function toClientSummary(client: CrmAssistantMaterials["clients"][number]): CrmA
 function toLeadSummary(lead: CrmAssistantMaterials["leads"][number]): CrmAssistantLeadSummary {
   return {
     leadId: lead.id,
-    name: `${lead.first_name} ${lead.last_name}`.trim(),
+    name: getFullName(lead),
     status: lead.status,
     source: lead.source,
     eventType: lead.event_type,

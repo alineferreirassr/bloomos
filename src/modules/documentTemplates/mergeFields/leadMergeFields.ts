@@ -1,6 +1,7 @@
 import { registerMergeField } from "@/core/documents/mergeFieldRegistry";
 import { registerMergeResolver } from "@/core/documents/mergeEngine";
 import { getLeadById } from "@/lib/data";
+import { getFullName } from "@/lib/personName";
 import type { MergeFieldDefinition } from "@/types/documentPlatform";
 
 /**
@@ -24,7 +25,10 @@ export function registerLeadMergeFields(): void {
   registerMergeResolver("lead_name", async (context) => {
     if (!context.leadId) return null;
     const lead = await getLeadById(context.leadId).catch(() => null);
-    return lead ? `${lead.first_name} ${lead.last_name}` : null;
+    if (!lead) return null;
+    // SOCIAL-13C-FND — a social-originated Lead may have no name at all;
+    // never render the literal word "null" into a generated document.
+    return getFullName(lead) || null;
   });
 
   registerMergeResolver("lead_email", async (context) => {

@@ -15,6 +15,7 @@ import {
   listMediaAssetsForWorkspace,
   listPurchases,
 } from "@/lib/data";
+import { getFullName } from "@/lib/personName";
 import type { EntityType } from "@/core/enums/entityType";
 import type { Client } from "@/types/client";
 import type { Contract } from "@/types/contract";
@@ -86,7 +87,10 @@ interface Candidate {
 
 async function searchLeads(workspaceId: string): Promise<Candidate[]> {
   const leads: Lead[] = await getLeads();
-  return leads.filter((l) => l.workspace_id === workspaceId).map((l) => ({ entityId: l.id, title: `${l.first_name} ${l.last_name}`, snippet: l.email }));
+  // SOCIAL-13C-FND — a social-originated Lead may have no name/email; never
+  // render the literal word "null" as a search result title, and never
+  // assign `null` into the optional-string `snippet` field.
+  return leads.filter((l) => l.workspace_id === workspaceId).map((l) => ({ entityId: l.id, title: getFullName(l) || l.instagram || "Untitled Lead", snippet: l.email ?? undefined }));
 }
 
 async function searchClients(workspaceId: string): Promise<Candidate[]> {

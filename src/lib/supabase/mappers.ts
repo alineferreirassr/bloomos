@@ -303,6 +303,7 @@ export function mapLeadRow(row: LeadRow): Lead {
     email: row.email,
     phone: row.phone,
     instagram: row.instagram,
+    instagram_external_id: row.instagram_external_id,
     source: row.source,
     event_type: row.event_type,
     event_date: row.event_date,

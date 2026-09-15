@@ -40,7 +40,7 @@ async function getLeads(filters: LeadFilters = {}): Promise<Lead[]> {
     if (search) {
       const q = search.trim().toLowerCase();
       if (!q) return true;
-      const haystack = `${getFullName(lead)} ${lead.email}`.toLowerCase();
+      const haystack = `${getFullName(lead)} ${lead.email ?? ""}`.toLowerCase();
       if (!haystack.includes(q)) return false;
     }
     return true;
@@ -69,6 +69,10 @@ async function createLead(input: LeadFormInput): Promise<DataResult<Lead>> {
     ...parsed.data,
     status: "new",
     converted_client_id: null,
+    // Every manually-created Lead goes through leadFormSchema, which has no
+    // concept of an Instagram external id — always null here; only a future
+    // social-write path (not built this checkpoint) would ever set it.
+    instagram_external_id: null,
     created_at: timestamp,
     updated_at: timestamp,
     archived_at: null,

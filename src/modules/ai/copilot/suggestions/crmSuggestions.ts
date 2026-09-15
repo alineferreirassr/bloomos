@@ -1,4 +1,5 @@
 import { getLeads } from "@/lib/data";
+import { getFullName } from "@/lib/personName";
 import type { SuggestionProvider, CopilotSuggestion } from "@/core/ai/copilot/suggestionEngine";
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -24,7 +25,7 @@ export const crmSuggestionProvider: SuggestionProvider = {
       suggestions.push({
         id: `crm-follow-up-${lead.id}`,
         module: "crm",
-        label: `Follow up with ${lead.first_name} ${lead.last_name}`,
+        label: `Follow up with ${getFullName(lead) || lead.instagram || "this lead"}`,
         description: "Qualified for over a week with no update — a check-in keeps momentum before they cool off.",
         actionId: null,
         tone: "warning",

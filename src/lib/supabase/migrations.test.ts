@@ -134,6 +134,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // Foundation. Independently-tracked, not-yet-released, unrelated to the
   // Finance release this exact-count assertion describes.
   "20260927100000_instagram_comments_conversations_messages_foundation.sql",
+  // SOCIAL-13C-FND — Lead Social Capture Data Foundation. Independently-
+  // tracked, not-yet-released, unrelated to the Finance release this
+  // exact-count assertion describes.
+  "20260928100000_leads_social_capture_foundation.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {

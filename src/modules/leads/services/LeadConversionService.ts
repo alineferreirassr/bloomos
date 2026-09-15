@@ -35,6 +35,18 @@ export async function convertLeadToClient(
   if (existing.status === "converted" || existing.converted_client_id) {
     return fail("This lead has already been converted to a Client.");
   }
+  // SOCIAL-13C-FND — leads.first_name/last_name/email are all now nullable
+  // (a future social-originated Lead may never have real values for any of
+  // them); clients' own equivalent fields stay required and untouched. Both
+  // checks reject cleanly here, before either would otherwise crash on
+  // `.trim()` below or attempt to build a Client missing a field its own
+  // schema still requires.
+  if (!existing.first_name || !existing.last_name) {
+    return fail("A name is required before this lead can be converted to a Client.");
+  }
+  if (!existing.email) {
+    return fail("A valid email is required before this lead can be converted to a Client.");
+  }
 
   const timestamp = nowIso();
   const normalizedEmail = existing.email.trim().toLowerCase();
