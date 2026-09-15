@@ -17,6 +17,7 @@ import {
   listCarouselSlidesAction,
   updateCarouselSlideAction,
   removeCarouselSlideAction,
+  listCarouselMediaAssetOptionsAction,
   type CarouselItemActionInput,
 } from "@/modules/carousel/carouselActions";
 import { resetCarouselItemsStore } from "@/lib/data/mock/carouselItemsStore";
@@ -465,5 +466,36 @@ describe("Carousel actions — ordering, validation, and list behavior", () => {
   it("getCarouselItemAction returns a controlled not-found error for a nonexistent id", async () => {
     const result = await getCarouselItemAction("does-not-exist");
     expect(result.success).toBe(false);
+  });
+});
+
+describe("SOCIAL-10F — listCarouselMediaAssetOptionsAction permission gate", () => {
+  it("requires social.create — a social.view-only caller is rejected, matching listIdeaMediaAssetOptionsAction's own precedent exactly", async () => {
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(viewOnlySession);
+    const result = await listCarouselMediaAssetOptionsAction();
+    expect(result.success).toBe(false);
+  });
+
+  it("returns the caller's own workspace assets regardless of status — no approval gate", async () => {
+    writeMediaAssets([
+      mediaAsset({ id: "asset_pending", status: "pending" }),
+      mediaAsset({ id: "asset_approved", status: "approved" }),
+      mediaAsset({ id: "asset_rejected", status: "rejected" }),
+      mediaAsset({ id: "asset_needs_revision", status: "needs_revision" }),
+    ]);
+
+    const result = await listCarouselMediaAssetOptionsAction();
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.map((a) => a.id).sort()).toEqual(["asset_approved", "asset_needs_revision", "asset_pending", "asset_rejected"]);
+  });
+
+  it("never returns another workspace's assets", async () => {
+    writeMediaAssets([mediaAsset({ id: "asset_mine" }), mediaAsset({ id: "asset_theirs", workspace_id: OTHER_WORKSPACE })]);
+
+    const result = await listCarouselMediaAssetOptionsAction();
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.map((a) => a.id)).toEqual(["asset_mine"]);
   });
 });

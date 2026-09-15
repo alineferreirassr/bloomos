@@ -320,12 +320,15 @@ export async function removeCarouselSlideAction(carouselId: string, id: string):
 
 /**
  * SOCIAL-10E — the Carousel slide editor's own MediaAsset picker feed.
- * Structurally mirrors `listIdeaMediaAssetOptionsAction` exactly — same
- * "resolve session, call `listMediaAssetsForWorkspace`, catch and report a
- * controlled error" shape. Read-only, gated on `social.view`.
+ * Structurally mirrors `listIdeaMediaAssetOptionsAction` exactly, including
+ * its permission gate: `social.create`, not `social.view` (SOCIAL-10F fix —
+ * the UI already only ever calls this from `CarouselSlideRow`'s picker,
+ * which is itself hidden without `social.create`, but the Server Action
+ * boundary itself must enforce the same gate directly, since a caller isn't
+ * limited to going through the UI).
  */
 export async function listCarouselMediaAssetOptionsAction(): Promise<Result<MediaAsset[]>> {
-  const resolved = await requireActiveSession("social.view");
+  const resolved = await requireActiveSession("social.create");
   if (!resolved.success) return resolved;
 
   try {
