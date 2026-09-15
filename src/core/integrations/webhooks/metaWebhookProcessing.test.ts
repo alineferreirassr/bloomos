@@ -1,17 +1,43 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/data", () => ({
-  getInstagramCommentByExternalId: vi.fn(),
-  createInstagramComment: vi.fn(),
-  getInstagramConversationByExternalParticipantId: vi.fn(),
-  createInstagramConversation: vi.fn(),
-  getInstagramMessageByExternalId: vi.fn(),
-  createInstagramMessage: vi.fn(),
-  updateInstagramConversationLastMessageAt: vi.fn(),
-}));
+// SOCIAL-13H — `importOriginal` rather than a fully-replaced module: this
+// file only needs these 7 Instagram-specific functions controlled, but the
+// new `registerAutomationDefinitions()` call (see below) transitively
+// imports `archiveEntityAction.ts` and others that need every *other* real
+// `@/lib/data` export (e.g. `archiveLead`) to actually exist.
+vi.mock("@/lib/data", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/data")>();
+  return {
+    ...actual,
+    getInstagramCommentByExternalId: vi.fn(),
+    createInstagramComment: vi.fn(),
+    getInstagramConversationByExternalParticipantId: vi.fn(),
+    createInstagramConversation: vi.fn(),
+    getInstagramMessageByExternalId: vi.fn(),
+    createInstagramMessage: vi.fn(),
+    updateInstagramConversationLastMessageAt: vi.fn(),
+  };
+});
 vi.mock("@/core/automation/resolver", () => ({
   dispatchAutomationTrigger: vi.fn().mockResolvedValue([]),
 }));
+// SOCIAL-13H — this module now calls `registerAutomationDefinitions()` at
+// its own module scope (see `metaWebhookProcessing.ts`'s own doc comment),
+// which pulls in `registerAutomationActions()` and therefore every
+// registered Action, including the four "Generate X" actions (each
+// importing its own Skill wrapper) and the Instagram Lead-capture actions
+// (`instagramLeadCapture.ts`'s own real `import "server-only"`) — none of
+// this is actually exercised at runtime here (`dispatchAutomationTrigger`
+// itself is mocked above), this mock set exists purely so the import graph
+// resolves. Identical, proven set to `getAutomationDashboardData.test.ts`'s
+// own mocks for the exact same reason.
+vi.mock("server-only", () => ({}));
+vi.mock("@/modules/ai/fetchEventContext.server", () => ({ fetchEventContextRecord: vi.fn() }));
+vi.mock("@/lib/data/mock/clientsStore", () => ({ readClients: vi.fn() }));
+vi.mock("@/lib/data/mock/eventServicesStore", () => ({ readEventServices: vi.fn() }));
+vi.mock("@/lib/data/mock/contractsStore", () => ({ readContracts: vi.fn() }));
+vi.mock("@/lib/data/mock/notesTimelineShared", () => ({ getNotesByOwner: vi.fn() }));
+vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 
 import { processMetaWebhookEvent, type MetaWebhookEntryLike } from "@/core/integrations/webhooks/metaWebhookProcessing";
 import {

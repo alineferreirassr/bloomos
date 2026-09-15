@@ -1,5 +1,6 @@
 import { getInstagramCommentByExternalId, createInstagramComment, getInstagramConversationByExternalParticipantId, createInstagramConversation, getInstagramMessageByExternalId, createInstagramMessage, updateInstagramConversationLastMessageAt } from "@/lib/data";
 import { dispatchAutomationTrigger, type ExecuteAutomationContext } from "@/core/automation/resolver";
+import { registerAutomationDefinitions } from "@/modules/automation/registerAutomationDefinitions";
 import { getLogger } from "@/core/observability/logger";
 import { clockNow } from "@/core/time/clock";
 import type { AutomationTriggerEvent } from "@/types/automation";
@@ -20,12 +21,26 @@ import type { AutomationTriggerEvent } from "@/types/automation";
  * already-server-resolved `workspaceId`.
  *
  * Deliberately narrow: no reply, no outbound Meta API call, no AI call, no
- * Lead creation, no CRM mutation — see this file's own action boundary in
- * `dispatchAutomationTrigger`'s own context below (`permissions: []`,
- * mirroring Stripe's exact webhook-dispatch shape) and the fact that zero
- * `AutomationDefinition` is registered for either new trigger type in this
- * checkpoint (a deliberate choice, not an oversight — see SOCIAL-11E's own
- * final report).
+ * CRM mutation beyond Lead capture — this module itself never touches a
+ * Lead directly; it only ever dispatches a trigger, exactly like every
+ * other domain mutation in this codebase already does.
+ *
+ * SOCIAL-11E through SOCIAL-13G left both Instagram triggers dispatching
+ * into an empty registry by default — zero `AutomationDefinition` was
+ * registered for either trigger, a deliberate choice at the time (see
+ * SOCIAL-11E's own final report), later confirmed as the headline gap by
+ * SOCIAL-13G's own read-only audit. SOCIAL-13H closes it: the module-level
+ * `registerAutomationDefinitions()` call below (mirroring
+ * `acceptProposalDraft.ts`'s own identical precedent — the established
+ * pattern for "whichever module actually dispatches a trigger ensures the
+ * registry is populated first") guarantees the 2 default Instagram
+ * Lead-capture Automations (`captureLeadFromInstagramComment.ts`/
+ * `captureLeadFromInstagramDm.ts`) are registered before any dispatch below
+ * can run, in every real request through `api/webhooks/meta/route.ts` —
+ * without requiring a workspace admin to hand-build a Workflow first. A
+ * workspace that has *also* built its own matching Workflow is unaffected:
+ * both fire independently, and `create-lead-from-instagram-comment`/
+ * `-dm` are already idempotent, so no duplicate Lead results either way.
  *
  * Idempotency layering, kept strictly distinct (never mixed, per this
  * checkpoint's own explicit instruction):
@@ -46,7 +61,19 @@ import type { AutomationTriggerEvent } from "@/types/automation";
  *    ever calls `dispatchAutomationTrigger` once per newly-created domain
  *    row, exactly once, and never re-dispatches for a domain row this
  *    module itself determined was a duplicate.
+ * 4. Lead-capture deduplication (SOCIAL-13C) — entirely
+ *    `findOrCreateInstagramLead`'s own concern (workspace-scoped lookup +
+ *    the `instagram_external_id` partial unique index as the race-safe
+ *    backstop); safe to run more than once for the same identity by
+ *    construction, which is exactly what makes SOCIAL-13H's own default
+ *    wiring safe alongside a hand-built Workflow on the same pair.
  */
+
+// Registered once per process — idempotent, mirrors every other
+// Automation/AI entry point's own call-on-load (e.g. `acceptProposalDraft.ts`).
+// Ensures the 2 default Instagram Lead-capture Automations are registered
+// before `dispatchInstagramTrigger` below can ever run, in a real request.
+registerAutomationDefinitions();
 
 const SYSTEM_DISPATCH_CONTEXT: ExecuteAutomationContext = { workspaceName: null, userId: null, userName: null, role: null, permissions: [] };
 
