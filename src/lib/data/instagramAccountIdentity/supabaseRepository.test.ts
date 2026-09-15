@@ -96,6 +96,24 @@ describe("supabaseInstagramAccountIdentityRepository", () => {
     expect(calls.find((c) => c.method === "insert")).toBeUndefined();
   });
 
+  it("SOCIAL-11F — a genuine reconnect (a new connection_id for the same external account) updates connection_id in place via the update path, never insert — mock/Supabase parity for disconnect/reconnect safety", async () => {
+    const { client, calls } = createMockSupabase([
+      { data: identityRow({ connection_id: "connection_old" }), error: null }, // lookup: existing, same workspace
+      { data: identityRow({ connection_id: "connection_new_after_reconnect" }), error: null }, // update
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseInstagramAccountIdentityRepository.upsertInstagramAccountIdentity(stubInput({ connectionId: "connection_new_after_reconnect" }));
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.connection_id).toBe("connection_new_after_reconnect");
+    expect(result.data.id).toBe("identity_1");
+
+    const updateCall = calls.find((c) => c.method === "update");
+    expect(updateCall?.args[0]).toMatchObject({ connection_id: "connection_new_after_reconnect" });
+    expect(calls.find((c) => c.method === "insert")).toBeUndefined();
+  });
+
   it("rejects claiming an account already connected to a different workspace — never calls insert or update", async () => {
     const { client, calls } = createMockSupabase([{ data: identityRow({ workspace_id: "ws_other" }), error: null }]);
     vi.mocked(createClient).mockReturnValue(client as never);

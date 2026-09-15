@@ -26,7 +26,6 @@ const SERVICE_ROLE_UNAVAILABLE_ERROR = "Service unavailable.";
  * Signature verification, the GET handshake, and the idempotency
  * claim/complete logic are all unchanged from SOCIAL-11C.
  *
-
  * A single, fixed URL — unlike `api/webhooks/stripe/[connectionId]`,
  * Meta's own webhook model subscribes one callback URL at the App level
  * for every workspace's connected account at once (see

@@ -45,6 +45,20 @@ describe("mockInstagramAccountIdentityRepository", () => {
     expect(all).toHaveLength(1);
   });
 
+  it("SOCIAL-11F — a genuine reconnect (a new connection_id for the same external account) updates connection_id in place, preserving the same identity id — disconnect/reconnect never corrupts historical comment/message records, which reference this identity's own id, never connection_id", async () => {
+    const first = await mockInstagramAccountIdentityRepository.upsertInstagramAccountIdentity(stubInput({ connectionId: "connection_old" }));
+    if (!first.success) throw new Error("setup failed");
+
+    const reconnected = await mockInstagramAccountIdentityRepository.upsertInstagramAccountIdentity(stubInput({ connectionId: "connection_new_after_reconnect" }));
+    expect(reconnected.success).toBe(true);
+    if (!reconnected.success) return;
+    expect(reconnected.data.id).toBe(first.data.id);
+    expect(reconnected.data.connection_id).toBe("connection_new_after_reconnect");
+
+    const all = await mockInstagramAccountIdentityRepository.listInstagramAccountIdentitiesForWorkspace("ws_1");
+    expect(all).toHaveLength(1);
+  });
+
   it("rejects claiming an external Instagram account already connected to a different workspace — duplicate external account handling", async () => {
     await mockInstagramAccountIdentityRepository.upsertInstagramAccountIdentity(stubInput({ workspaceId: "ws_1" }));
     const result = await mockInstagramAccountIdentityRepository.upsertInstagramAccountIdentity(stubInput({ workspaceId: "ws_2" }));
