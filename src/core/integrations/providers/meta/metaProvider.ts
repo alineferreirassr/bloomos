@@ -14,12 +14,30 @@ import type { ProviderCapability } from "@/core/integrations/types";
  * those media types are publishable through BloomOS yet either). No
  * Facebook Page publishing, no carousel, no Stories/Reels.
  *
+ * SOCIAL-12B adds exactly two outbound methods — `replyToInstagramComment`
+ * and `sendInstagramDirectMessage` — pure provider-layer capability only.
+ * Neither is wired to the Automation Engine, a registered Action, the
+ * Workflow Builder, or any UI; SOCIAL-12A's own audit confirmed this
+ * capability did not exist in any form before this checkpoint (comment/DM
+ * data only ever flowed inbound, via the Meta webhook). Both endpoints were
+ * live-verified against developers.facebook.com on 2026-09-14 (not assumed
+ * from training data — see the SOCIAL-12B report). A pull/read capability
+ * (fetching a comment or conversation from Meta) was deliberately not
+ * added: both new methods operate directly on the external id already
+ * persisted by SOCIAL-11D's own webhook-ingestion pipeline
+ * (`instagram_comments.external_comment_id`,
+ * `instagram_conversations.external_participant_id`), so no lookup call is
+ * needed first — see each method's own doc comment.
+ *
  * Graph API version is pinned to `v26.0`, the current latest stable
  * release (2026-07-29) as of this checkpoint, verified against Meta's own
  * live developer documentation rather than assumed from training data —
  * see the SOCIAL-02/03 architecture-gate reports for the full evidence
- * trail. Bump this constant (and re-verify against developers.facebook.com)
- * the next time this provider is touched, mirroring how every other
+ * trail. SOCIAL-12B re-confirmed both new endpoints are version-generic
+ * (Meta's own docs pages show no version-specific gating for either), so
+ * no version bump was required to add them. Bump this constant (and
+ * re-verify against developers.facebook.com) the next time this provider
+ * is touched for an unrelated reason, mirroring how every other
  * date-versioned provider in this codebase is expected to be re-checked
  * rather than left to silently rot on a deprecated version.
  */
@@ -60,6 +78,17 @@ interface GraphInsightsResponse {
 export interface InstagramMediaInsight {
   metric: string;
   value: number;
+}
+
+/** SOCIAL-12B — `replyToInstagramComment`'s own result shape, matching Meta's own `{ "id": "<reply_comment_id>" }` response verbatim. */
+export interface InstagramCommentReplyResult {
+  replyId: string;
+}
+
+/** SOCIAL-12B — `sendInstagramDirectMessage`'s own result shape, matching Meta's own `{ "recipient_id": "...", "message_id": "..." }` response verbatim. */
+export interface InstagramDirectMessageResult {
+  recipientId: string;
+  messageId: string;
 }
 
 /**
@@ -226,5 +255,81 @@ export class MetaProvider implements BaseProvider {
       if (typeof value === "number") insights.push({ metric: entry.name, value });
     }
     return insights;
+  }
+
+  /**
+   * `POST /{ig-comment-id}/replies?message={message}` — SOCIAL-12B, live-verified
+   * against developers.facebook.com/docs/instagram-platform/instagram-graph-api/
+   * reference/ig-comment/replies (2026-09-14): the documented way to create a
+   * reply to a top-level Instagram comment. Takes the already-persisted
+   * `external_comment_id` (SOCIAL-11D's own `instagram_comments` schema)
+   * directly — no separate read/lookup call is needed first, since this is
+   * exactly the id Meta's own endpoint expects.
+   *
+   * Meta's own documented limitations are deliberately NOT pre-validated
+   * here (only a non-empty `commentId`/`message` is guarded against, a real
+   * local-caller-bug case) — matching this provider's existing "let Meta's
+   * own response be the source of truth" discipline (see e.g.
+   * `getInstagramMediaPermalink`'s own doc comment): only top-level comments
+   * can be replied to, a reply to an already-hidden comment is rejected, and
+   * a comment on a live video cannot be replied to this way (Meta's own docs
+   * point to a DM private reply instead — out of this checkpoint's scope).
+   * Any such rejection surfaces as whatever error Meta itself returns,
+   * classified downstream exactly like every other `MetaProvider` error
+   * (`isMetaAuthError`/`isMetaRateLimitError`/`sanitizeIntegrationError`) —
+   * no new error-classification path was added for this method.
+   */
+  async replyToInstagramComment(commentId: string, message: string): Promise<InstagramCommentReplyResult> {
+    if (!commentId.trim()) throw new Error("replyToInstagramComment: commentId is required.");
+    if (!message.trim()) throw new Error("replyToInstagramComment: message must not be empty.");
+    const result = await this.request<{ id: string }>(`/${commentId}/replies`, { message }, "POST");
+    if (typeof result.id !== "string" || !result.id) {
+      throw new Error("replyToInstagramComment: Meta returned an unexpected response shape (missing id).");
+    }
+    return { replyId: result.id };
+  }
+
+  /**
+   * `POST /{page-id}/messages` — SOCIAL-12B, live-verified against
+   * developers.facebook.com/docs/messenger-platform/instagram/features/
+   * send-message (2026-09-14): sends a free-form text DM from the connected
+   * Instagram professional account. Deliberately keyed on `pageId` (the
+   * linked Facebook Page id) rather than `igUserId` — this is Meta's own
+   * documented shape for this specific endpoint, unlike
+   * `createInstagramMediaContainer`/`publishInstagramMedia`/the insights
+   * methods above (all keyed on `ig-user-id`) — matching the existing
+   * Facebook-Login-for-Business flow this whole provider is built around
+   * (see this file's own header doc comment). Resolving `pageId` is the
+   * caller's own responsibility (already stored today in a connection's own
+   * `config.meta_page_id` — see `metaAccountActions.ts`); this method does
+   * not look it up itself, matching every other method here.
+   *
+   * `recipientInstagramScopedId` is deliberately named for exactly what it
+   * is — the recipient's Instagram-scoped id (IGSID), i.e. SOCIAL-11D's own
+   * `instagram_conversations.external_participant_id` — and is never
+   * confused with `external_conversation_id` (a different, Meta-optional
+   * field this endpoint neither accepts nor needs; see the SOCIAL-12B
+   * report's own "read/lookup" scope note for why no separate conversation
+   * lookup call was added either).
+   *
+   * `recipient`/`message` travel as JSON-stringified query-string values —
+   * the exact same shape `request()` already uses for every other POST call
+   * in this class (see `request()`'s own doc comment); Meta's own documented
+   * curl example for this endpoint shows the identical form-encoded shape,
+   * so no new request path/body-encoding was added to support this method.
+   */
+  async sendInstagramDirectMessage(pageId: string, params: { recipientInstagramScopedId: string; text: string }): Promise<InstagramDirectMessageResult> {
+    if (!pageId.trim()) throw new Error("sendInstagramDirectMessage: pageId is required.");
+    if (!params.recipientInstagramScopedId.trim()) throw new Error("sendInstagramDirectMessage: recipientInstagramScopedId is required.");
+    if (!params.text.trim()) throw new Error("sendInstagramDirectMessage: text must not be empty.");
+    const result = await this.request<{ recipient_id: string; message_id: string }>(
+      `/${pageId}/messages`,
+      { recipient: JSON.stringify({ id: params.recipientInstagramScopedId }), message: JSON.stringify({ text: params.text }) },
+      "POST",
+    );
+    if (typeof result.recipient_id !== "string" || !result.recipient_id || typeof result.message_id !== "string" || !result.message_id) {
+      throw new Error("sendInstagramDirectMessage: Meta returned an unexpected response shape (missing recipient_id/message_id).");
+    }
+    return { recipientId: result.recipient_id, messageId: result.message_id };
   }
 }

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MetaProvider, isMetaAuthError, isMetaRateLimitError } from "@/core/integrations/providers/meta/metaProvider";
 
@@ -281,5 +283,224 @@ describe("isMetaRateLimitError", () => {
     expect(isMetaRateLimitError(new Error("Meta Graph API error 500: internal server error"))).toBe(false);
     expect(isMetaRateLimitError(new Error("Meta Graph API error 401: (#190) OAuthException — the access token could not be decrypted"))).toBe(false);
     expect(isMetaRateLimitError(new TypeError("network failure"))).toBe(false);
+  });
+});
+
+describe("MetaProvider — SOCIAL-12B Instagram comment reply", () => {
+  const provider = new MetaProvider("test_access_token");
+
+  it("replyToInstagramComment() posts message to the /{comment-id}/replies endpoint and returns the real reply id", async () => {
+    const fetchMock = vi.fn(async (url: URL, init?: RequestInit) => {
+      void url;
+      void init;
+      return new Response(JSON.stringify({ id: "reply_comment_1" }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.replyToInstagramComment("comment_123", "Thank you so much!");
+    expect(result).toEqual({ replyId: "reply_comment_1" });
+
+    const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    expect(url.pathname).toBe("/v26.0/comment_123/replies");
+    expect(init.method).toBe("POST");
+    expect(url.searchParams.get("message")).toBe("Thank you so much!");
+    expect(url.searchParams.get("access_token")).toBe("test_access_token");
+  });
+
+  it("rejects locally, without a network call, when commentId is empty — a caller bug, not a Meta failure", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(provider.replyToInstagramComment("  ", "hello")).rejects.toThrow(/commentId is required/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects locally, without a network call, when message is empty", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(provider.replyToInstagramComment("comment_123", "   ")).rejects.toThrow(/message must not be empty/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("throws on an authentication failure (recognizable by isMetaAuthError), same taxonomy as every other MetaProvider method", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: { message: "Invalid OAuth access token.", code: 190 } }), { status: 401 })),
+    );
+    await expect(provider.replyToInstagramComment("comment_123", "hi")).rejects.toSatisfy((error: unknown) => isMetaAuthError(error));
+  });
+
+  it("throws on a Meta authorization failure (permission denied on this comment/Page) distinctly from a plain auth failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: { message: "(#10) Application does not have permission for this action", code: 10 } }), { status: 403 })),
+    );
+    await expect(provider.replyToInstagramComment("comment_123", "hi")).rejects.toThrow(/403/);
+  });
+
+  it("throws on an invalid target (comment does not exist / was deleted)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: { message: "Unsupported get request. Object with ID 'comment_123' does not exist", code: 100 } }), { status: 400 })),
+    );
+    await expect(provider.replyToInstagramComment("comment_123", "hi")).rejects.toThrow(/400/);
+  });
+
+  it("throws on a rate-limit failure (recognizable by isMetaRateLimitError)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: { message: "(#4) Application request limit reached", code: 4 } }), { status: 400 })),
+    );
+    await expect(provider.replyToInstagramComment("comment_123", "hi")).rejects.toSatisfy((error: unknown) => isMetaRateLimitError(error));
+  });
+
+  it("throws on a transient Meta failure (5xx)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("Service temporarily unavailable", { status: 503 })),
+    );
+    await expect(provider.replyToInstagramComment("comment_123", "hi")).rejects.toThrow(/503/);
+  });
+
+  it("throws on an unknown/unexpected Meta failure without misclassifying it as auth or rate-limit", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: { message: "An unknown error occurred", code: 1 } }), { status: 400 })),
+    );
+    const rejection = provider.replyToInstagramComment("comment_123", "hi");
+    await expect(rejection).rejects.toThrow(/400/);
+    await expect(rejection.catch((error: unknown) => error)).resolves.toSatisfy((error: unknown) => !isMetaAuthError(error) && !isMetaRateLimitError(error));
+  });
+
+  it("throws a clear error on a malformed/unexpected 200 response (missing id) rather than silently returning an undefined replyId", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 })),
+    );
+    await expect(provider.replyToInstagramComment("comment_123", "hi")).rejects.toThrow(/unexpected response shape/);
+  });
+
+  it("never exposes the access token in a thrown error's message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("Invalid OAuth access token.", { status: 401 })),
+    );
+    await expect(provider.replyToInstagramComment("comment_123", "hi")).rejects.not.toThrow(/test_access_token/);
+  });
+});
+
+describe("MetaProvider — SOCIAL-12B Instagram DM send", () => {
+  const provider = new MetaProvider("test_access_token");
+
+  it("sendInstagramDirectMessage() posts recipient/message JSON-string params to the /{page-id}/messages endpoint and returns the real recipient/message ids", async () => {
+    const fetchMock = vi.fn(async (url: URL, init?: RequestInit) => {
+      void url;
+      void init;
+      return new Response(JSON.stringify({ recipient_id: "igsid_1", message_id: "message_1" }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.sendInstagramDirectMessage("page_1", { recipientInstagramScopedId: "igsid_1", text: "Hi there!" });
+    expect(result).toEqual({ recipientId: "igsid_1", messageId: "message_1" });
+
+    const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    expect(url.pathname).toBe("/v26.0/page_1/messages");
+    expect(init.method).toBe("POST");
+    expect(url.searchParams.get("recipient")).toBe(JSON.stringify({ id: "igsid_1" }));
+    expect(url.searchParams.get("message")).toBe(JSON.stringify({ text: "Hi there!" }));
+    expect(url.searchParams.get("access_token")).toBe("test_access_token");
+  });
+
+  it("rejects locally, without a network call, when pageId is empty", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(provider.sendInstagramDirectMessage("  ", { recipientInstagramScopedId: "igsid_1", text: "hi" })).rejects.toThrow(/pageId is required/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects locally, without a network call, when recipientInstagramScopedId is empty — never falls back to a conversation id", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(provider.sendInstagramDirectMessage("page_1", { recipientInstagramScopedId: "  ", text: "hi" })).rejects.toThrow(/recipientInstagramScopedId is required/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects locally, without a network call, when text is empty", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(provider.sendInstagramDirectMessage("page_1", { recipientInstagramScopedId: "igsid_1", text: "   " })).rejects.toThrow(/text must not be empty/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("throws on an authentication failure (recognizable by isMetaAuthError)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: { message: "Invalid OAuth access token.", code: 190 } }), { status: 401 })),
+    );
+    await expect(provider.sendInstagramDirectMessage("page_1", { recipientInstagramScopedId: "igsid_1", text: "hi" })).rejects.toSatisfy((error: unknown) => isMetaAuthError(error));
+  });
+
+  it("throws on a Meta authorization failure (missing instagram_manage_messages / no MESSAGE task on this Page)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: { message: "(#10) Application does not have permission for this action", code: 10 } }), { status: 403 })),
+    );
+    await expect(provider.sendInstagramDirectMessage("page_1", { recipientInstagramScopedId: "igsid_1", text: "hi" })).rejects.toThrow(/403/);
+  });
+
+  it("throws on an invalid target (recipient not reachable / outside the 24-hour messaging window)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: { message: "(#551) This person isn't available right now", code: 551 } }), { status: 400 })),
+    );
+    await expect(provider.sendInstagramDirectMessage("page_1", { recipientInstagramScopedId: "igsid_1", text: "hi" })).rejects.toThrow(/400/);
+  });
+
+  it("throws on a rate-limit failure (recognizable by isMetaRateLimitError)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: { message: "(#80002) Calls to this api have exceeded the rate limit", code: 80002 } }), { status: 400 })),
+    );
+    await expect(provider.sendInstagramDirectMessage("page_1", { recipientInstagramScopedId: "igsid_1", text: "hi" })).rejects.toSatisfy((error: unknown) => isMetaRateLimitError(error));
+  });
+
+  it("throws on a transient Meta failure (5xx)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("Service temporarily unavailable", { status: 503 })),
+    );
+    await expect(provider.sendInstagramDirectMessage("page_1", { recipientInstagramScopedId: "igsid_1", text: "hi" })).rejects.toThrow(/503/);
+  });
+
+  it("throws a clear error on a malformed/unexpected 200 response (missing message_id) rather than silently returning an undefined id", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ recipient_id: "igsid_1" }), { status: 200 })),
+    );
+    await expect(provider.sendInstagramDirectMessage("page_1", { recipientInstagramScopedId: "igsid_1", text: "hi" })).rejects.toThrow(/unexpected response shape/);
+  });
+
+  it("never exposes the access token in a thrown error's message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("Invalid OAuth access token.", { status: 401 })),
+    );
+    await expect(provider.sendInstagramDirectMessage("page_1", { recipientInstagramScopedId: "igsid_1", text: "hi" })).rejects.not.toThrow(/test_access_token/);
+  });
+});
+
+describe("MetaProvider — SOCIAL-12B provider-boundary and parity checks", () => {
+  const providerSourceFile = readFileSync(join(process.cwd(), "src/core/integrations/providers/meta/metaProvider.ts"), "utf-8");
+
+  it("the provider source file never imports credential-resolution/server-only code — it only ever accepts an already-resolved accessToken via its constructor, exactly as before this checkpoint", () => {
+    expect(providerSourceFile).not.toMatch(/from ["']@\/core\/integrations\/credentialManager["']/);
+    expect(providerSourceFile).not.toMatch(/resolveAccessToken/);
+  });
+
+  it("no separate mock MetaProvider implementation exists — this remains the only implementation, exercised via fetch-stubbing in tests, matching every pre-existing MetaProvider test in this file (mock/provider parity is N/A by design, not skipped)", () => {
+    expect(() => readFileSync(join(process.cwd(), "src/core/integrations/providers/meta/mockMetaProvider.ts"), "utf-8")).toThrow();
+  });
+
+  it("declares only the oauth capability still — SOCIAL-12B does not change the class's declared capabilities, matching how SOCIAL-03/05B also left this field unchanged when adding significant new methods", () => {
+    expect(new MetaProvider("test_access_token").capabilities).toEqual(["oauth"]);
   });
 });
