@@ -79,6 +79,14 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
   const { lead, notes, timeline } = state;
   const isReadOnly = lead.status === "converted";
   const nextAction = getNextRecommendedAction(lead);
+  // SOCIAL-13E — mirrors convertLeadToClient()'s own two real guards exactly
+  // (LeadConversionService.ts / convert_lead_to_client(), both added in
+  // SOCIAL-13C-FND): a Lead missing a name or email — e.g. an
+  // Instagram-originated Lead before a human backfills the rest — is
+  // rejected there with a clear, controlled error. This is a proactive
+  // indication of that same real, existing rule, not a new one; the
+  // Convert button itself is left exactly as it was, still always clickable.
+  const needsIdentityForConversion = !lead.first_name || !lead.last_name || !lead.email;
 
   return (
     <div className="space-y-6">
@@ -110,6 +118,12 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
       ) : (
         <LeadActions lead={lead} onChanged={refetch} onConverted={refetch} />
       )}
+
+      {!isReadOnly && needsIdentityForConversion ? (
+        <div className="rounded-lg border border-border bg-surface-muted px-4 py-3 text-sm text-text-muted">
+          This Lead needs a name and email before it can be converted to a Client.
+        </div>
+      ) : null}
 
       {nextAction && !isReadOnly ? (
         <Card className="border-accent/40 bg-accent/5">

@@ -218,6 +218,44 @@ async function updateLeadStatus(id: string, status: LeadStatus): Promise<DataRes
   return ok(updated);
 }
 
+async function updateLeadAssignment(workspaceId: string, id: string, assignedTo: string | null): Promise<DataResult<Lead>> {
+  const existing = await fetchLeadRow(id);
+  // Never resolved by id alone and trusted — a lead in another workspace is
+  // treated as not found, mirroring fetchLeadRow's own doc comment exactly.
+  if (!existing || existing.workspace_id !== workspaceId) {
+    return fail("Lead not found.");
+  }
+  if (existing.status === "converted") {
+    return fail("This lead was converted to a Client and is read-only.");
+  }
+
+  const normalized = assignedTo && assignedTo.trim().length > 0 ? assignedTo.trim() : null;
+
+  const session = await requireWorkspaceSession();
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .update({ assigned_to: normalized })
+    .eq("id", id)
+    .eq("workspace_id", workspaceId)
+    .select("*")
+    .single();
+  if (error) throw normalizeSupabaseError(error);
+
+  const updated = mapLeadRow(data);
+  await insertTimelineActivity(
+    supabase,
+    resolveActorName(session),
+    updated.workspace_id,
+    id,
+    "lead_updated",
+    normalized ? `Assigned to ${normalized}` : "Unassigned",
+    { assigned_to: normalized },
+  );
+
+  return ok(updated);
+}
+
 async function archiveLead(id: string): Promise<DataResult<Lead>> {
   const existing = await fetchLeadRow(id);
   if (!existing) {
@@ -405,6 +443,7 @@ export const supabaseLeadsRepository: LeadsRepository = {
   createLead,
   updateLead,
   updateLeadStatus,
+  updateLeadAssignment,
   archiveLead,
   markWelcomeGuideSent,
   getNotesByLeadId,

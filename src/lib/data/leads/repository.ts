@@ -37,6 +37,22 @@ export interface LeadsRepository {
   createLead(input: LeadFormInput): Promise<DataResult<Lead>>;
   updateLead(id: string, input: LeadFormInput): Promise<DataResult<Lead>>;
   updateLeadStatus(id: string, status: LeadStatus): Promise<DataResult<Lead>>;
+  /**
+   * SOCIAL-13E — an isolated, single-field update, deliberately bypassing
+   * `leadFormSchema`/`leadDataSchema` entirely (mirrors `updateLeadStatus`'s
+   * own "narrow update, no full-form validation" shape) so a Lead missing
+   * `first_name`/`last_name`/`email` (an Instagram-originated Lead, before
+   * a human backfills the rest) can still be assigned — the only existing
+   * path (`updateLead`, the full `LeadFormInput`) would otherwise reject it.
+   * `workspaceId` is required and checked explicitly against the Lead's own
+   * `workspace_id` — never resolved by `id` alone and trusted, the same
+   * defense-in-depth discipline every other workspace-scoped write in this
+   * codebase already follows. `assignedTo` accepts `null` (or an empty/
+   * whitespace-only string, normalized to `null`) to unassign — the
+   * existing free-text semantics of `assigned_to` are otherwise completely
+   * unchanged: still no FK, no enum, no real member lookup.
+   */
+  updateLeadAssignment(workspaceId: string, id: string, assignedTo: string | null): Promise<DataResult<Lead>>;
   archiveLead(id: string): Promise<DataResult<Lead>>;
   markWelcomeGuideSent(id: string): Promise<DataResult<Lead>>;
   getNotesByLeadId(leadId: string): Promise<Note[]>;

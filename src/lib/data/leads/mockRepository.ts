@@ -188,6 +188,33 @@ async function markWelcomeGuideSent(id: string): Promise<DataResult<Lead>> {
   return ok(updated);
 }
 
+async function updateLeadAssignment(workspaceId: string, id: string, assignedTo: string | null): Promise<DataResult<Lead>> {
+  const existing = readLeads().find((l) => l.id === id);
+  // A lead in another workspace is treated as not found, never a distinct
+  // error case — mirrors fetchLeadRow's own established RLS-adjacent
+  // discipline in supabaseRepository.ts.
+  if (!existing || existing.workspace_id !== workspaceId) {
+    return fail("Lead not found.");
+  }
+  if (existing.status === "converted") {
+    return fail("This lead was converted to a Client and is read-only.");
+  }
+
+  const normalized = assignedTo && assignedTo.trim().length > 0 ? assignedTo.trim() : null;
+  const updated: Lead = { ...existing, assigned_to: normalized, updated_at: nowIso() };
+  writeLeads(readLeads().map((l) => (l.id === id ? updated : l)));
+  recordTimelineActivity(
+    existing.workspace_id,
+    "lead",
+    id,
+    "lead_updated",
+    normalized ? `Assigned to ${normalized}` : "Unassigned",
+    { assigned_to: normalized },
+  );
+
+  return ok(updated);
+}
+
 async function getNotesByLeadId(leadId: string): Promise<Note[]> {
   const lead = readLeads().find((l) => l.id === leadId);
   if (!lead) return [];
@@ -243,6 +270,7 @@ export const mockLeadsRepository: LeadsRepository = {
   createLead,
   updateLead,
   updateLeadStatus,
+  updateLeadAssignment,
   archiveLead,
   markWelcomeGuideSent,
   getNotesByLeadId,

@@ -4,8 +4,7 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { updateLead } from "@/lib/data";
-import { leadToFormInput } from "@/modules/pipeline/logic";
+import { updateLeadAssignment } from "@/lib/data";
 import type { Lead } from "@/types/lead";
 
 interface AssignTeamModalProps {
@@ -16,10 +15,13 @@ interface AssignTeamModalProps {
 }
 
 /**
- * Leads has no dedicated partial-update endpoint — updateLead() takes the
- * full LeadFormInput, so this resubmits every existing field unchanged
- * except assigned_to (leadToFormInput does the null->"" conversion the form
- * shape expects).
+ * SOCIAL-13E — uses `updateLeadAssignment()`, an isolated, single-field
+ * update that bypasses `leadFormSchema`/`leadDataSchema` entirely
+ * (previously this resubmitted the full `LeadFormInput` via `updateLead()`,
+ * which required a non-empty name and email on every save — impossible for
+ * an Instagram-originated Lead before a human backfills the rest). Still
+ * the same free-text input, still no real member picker — the existing
+ * `assigned_to` semantics are otherwise completely unchanged.
  */
 export function AssignTeamModal({ lead, open, onClose, onAssigned }: AssignTeamModalProps) {
   const [assignedTo, setAssignedTo] = useState(lead.assigned_to ?? "");
@@ -29,7 +31,7 @@ export function AssignTeamModal({ lead, open, onClose, onAssigned }: AssignTeamM
   const handleConfirm = async () => {
     setSubmitting(true);
     setError(null);
-    const result = await updateLead(lead.id, { ...leadToFormInput(lead), assigned_to: assignedTo });
+    const result = await updateLeadAssignment(lead.workspace_id, lead.id, assignedTo);
     setSubmitting(false);
     if (!result.success) {
       setError(result.error);

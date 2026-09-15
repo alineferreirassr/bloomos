@@ -438,6 +438,14 @@ export async function updateLeadStatus(
   return leadsRepository().updateLeadStatus(id, status);
 }
 
+export async function updateLeadAssignment(
+  workspaceId: string,
+  id: string,
+  assignedTo: string | null,
+): Promise<DataResult<Lead>> {
+  return leadsRepository().updateLeadAssignment(workspaceId, id, assignedTo);
+}
+
 export async function archiveLead(id: string): Promise<DataResult<Lead>> {
   return leadsRepository().archiveLead(id);
 }

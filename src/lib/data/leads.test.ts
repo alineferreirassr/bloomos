@@ -1,4 +1,11 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// SOCIAL-13E — findOrCreateInstagramLead (instagramLeadCapture.ts) has a
+// real `import "server-only"` at module scope, mirroring every other narrow
+// service-role boundary in this codebase (see e.g. SOCIAL-12C/13C's own
+// established mock for this exact reason).
+vi.mock("server-only", () => ({}));
+
 import {
   archiveLead,
   convertLeadToClient,
@@ -12,8 +19,10 @@ import {
   resetAllMockData,
   togglePinNote,
   updateLead,
+  updateLeadAssignment,
   updateLeadStatus,
 } from "@/lib/data";
+import { findOrCreateInstagramLead } from "@/core/automation/instagramLeadCapture";
 import type { LeadFormInput } from "@/modules/leads/schema";
 
 const validInput: LeadFormInput = {
@@ -83,6 +92,95 @@ describe("updateLead", () => {
     expect(converted.success).toBe(true);
 
     const result = await updateLead(created.data.id, { ...validInput, first_name: "Should Not Apply" });
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toMatch(/read-only/i);
+  });
+});
+
+describe("updateLeadAssignment — SOCIAL-13E", () => {
+  it("assigns a normal, manually-created lead and preserves every other field", async () => {
+    const created = await createLead(validInput);
+    if (!created.success) throw new Error("setup failed");
+
+    const result = await updateLeadAssignment(created.data.workspace_id, created.data.id, "Aline Ferreira");
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.assigned_to).toBe("Aline Ferreira");
+    expect(result.data).toMatchObject({ ...created.data, assigned_to: "Aline Ferreira", updated_at: result.data.updated_at });
+
+    const timeline = await getTimelineByLeadId(created.data.id);
+    expect(timeline.some((activity) => activity.type === "lead_updated" && activity.description.includes("Assigned to Aline Ferreira"))).toBe(true);
+  });
+
+  it("assigns an Instagram-originated Lead with null first_name/last_name/email — the full-form updateLead() path would reject this", async () => {
+    const captured = await findOrCreateInstagramLead({
+      workspaceId: "ws_instagram_1",
+      source: "Instagram",
+      instagramExternalId: "17841400000000001",
+      instagram: "@curious_bride",
+      message: "Do you have June availability?",
+      firstName: null,
+      lastName: null,
+      email: null,
+    });
+    if (!captured.success) throw new Error("setup failed");
+    expect(captured.data.lead.first_name).toBeNull();
+
+    const result = await updateLeadAssignment("ws_instagram_1", captured.data.lead.id, "Aline Ferreira");
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.assigned_to).toBe("Aline Ferreira");
+    // Every other field — including the still-null identity fields — is untouched.
+    expect(result.data.first_name).toBeNull();
+    expect(result.data.last_name).toBeNull();
+    expect(result.data.email).toBeNull();
+    expect(result.data.instagram).toBe("@curious_bride");
+    expect(result.data.instagram_external_id).toBe("17841400000000001");
+    expect(result.data.message).toBe("Do you have June availability?");
+  });
+
+  it("unassigns a Lead — an empty string is normalized to null, mirroring the existing free-text semantics", async () => {
+    const created = await createLead({ ...validInput, assigned_to: "Aline Ferreira" });
+    if (!created.success) throw new Error("setup failed");
+    expect(created.data.assigned_to).toBe("Aline Ferreira");
+
+    const result = await updateLeadAssignment(created.data.workspace_id, created.data.id, "");
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.assigned_to).toBeNull();
+  });
+
+  it("fails for a lead that doesn't exist", async () => {
+    const result = await updateLeadAssignment("ws_1", "lead_does_not_exist", "Aline Ferreira");
+    expect(result.success).toBe(false);
+  });
+
+  it("workspace-scoped — a lead resolved with the wrong workspace id is treated as not found, never assigned", async () => {
+    const created = await createLead(validInput);
+    if (!created.success) throw new Error("setup failed");
+
+    const result = await updateLeadAssignment("ws_completely_different", created.data.id, "Aline Ferreira");
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toMatch(/not found/i);
+
+    // Confirm it was genuinely never touched.
+    const stillUnassigned = await getLeadById(created.data.id);
+    expect(stillUnassigned.assigned_to).toBeNull();
+  });
+
+  it("refuses to assign a lead that has already been converted to a Client, same read-only rule as updateLead", async () => {
+    const created = await createLead(validInput);
+    if (!created.success) throw new Error("setup failed");
+    const converted = await convertLeadToClient(created.data.id);
+    expect(converted.success).toBe(true);
+
+    const result = await updateLeadAssignment(created.data.workspace_id, created.data.id, "Aline Ferreira");
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error).toMatch(/read-only/i);

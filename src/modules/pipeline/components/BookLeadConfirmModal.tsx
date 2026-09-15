@@ -25,8 +25,20 @@ function guessEventType(lead: Lead): EventType | "" {
   return match ?? "";
 }
 
+/**
+ * SOCIAL-13E — a Lead with no name (e.g. an Instagram-originated Lead
+ * before a human backfills one) previously produced a literal `"'s Event"`
+ * title and a blank `<strong>` in this modal's own copy. Falls back to the
+ * Lead's own Instagram handle (still real, observed data — never
+ * fabricated) and only then to a fixed, generic, stable label — never an
+ * invented name.
+ */
+function leadDisplayName(lead: Lead): string {
+  return getFullName(lead) || lead.instagram || "New Lead";
+}
+
 export function BookLeadConfirmModal({ lead, open, onClose, onBooked, onPendingRecovery }: BookLeadConfirmModalProps) {
-  const [title, setTitle] = useState(() => `${getFullName(lead)}'s Event`);
+  const [title, setTitle] = useState(() => `${leadDisplayName(lead)}'s Event`);
   const [eventType, setEventType] = useState<EventType | "">(() => guessEventType(lead));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +108,7 @@ export function BookLeadConfirmModal({ lead, open, onClose, onBooked, onPendingR
   return (
     <Modal open={open} onClose={onClose} title="Book Lead">
       <p className="text-sm text-text-muted">
-        This converts <strong className="text-text">{lead.first_name} {lead.last_name}</strong> to a Client
+        This converts <strong className="text-text">{leadDisplayName(lead)}</strong> to a Client
         (reusing an existing Client by email if one already exists) and creates a linked Event, starting it in
         the Planning stage.
       </p>

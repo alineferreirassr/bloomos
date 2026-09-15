@@ -338,6 +338,95 @@ describe("supabaseLeadsRepository.updateLeadStatus", () => {
   });
 });
 
+describe("supabaseLeadsRepository.updateLeadAssignment — SOCIAL-13E", () => {
+  it("fails when the lead does not exist", async () => {
+    const { client } = createMockSupabase([{ data: null, error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseLeadsRepository.updateLeadAssignment("workspace_1", "missing", "Aline Ferreira");
+    expect(result).toEqual({ success: false, error: "Lead not found." });
+  });
+
+  it("workspace-scoped — a lead that exists but belongs to a different workspace is treated as not found, never assigned", async () => {
+    const { client } = createMockSupabase([{ data: leadRow({ workspace_id: "workspace_other_tenant" }), error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseLeadsRepository.updateLeadAssignment("workspace_1", "lead_1", "Aline Ferreira");
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toBe("Lead not found.");
+  });
+
+  it("fails when the lead was already converted", async () => {
+    const { client } = createMockSupabase([{ data: leadRow({ status: "converted" }), error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseLeadsRepository.updateLeadAssignment("workspace_1", "lead_1", "Aline Ferreira");
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toContain("read-only");
+  });
+
+  it("assigns a normal lead without going through leadFormSchema — no field-validation error possible", async () => {
+    mockSession();
+    const { client, calls } = createMockSupabase([
+      { data: leadRow(), error: null },
+      { data: leadRow({ assigned_to: "Aline Ferreira" }), error: null },
+      { data: null, error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseLeadsRepository.updateLeadAssignment("workspace_1", "lead_1", "Aline Ferreira");
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.assigned_to).toBe("Aline Ferreira");
+
+    const updateCall = calls.find((c) => c.table === "leads" && c.method === "update");
+    expect(updateCall?.args[0]).toEqual({ assigned_to: "Aline Ferreira" });
+    const timelineInsert = calls.find((c) => c.table === "timeline_activities" && c.method === "insert");
+    expect((timelineInsert?.args[0] as Record<string, unknown>).type).toBe("lead_updated");
+  });
+
+  it("assigns an Instagram-originated lead with null first_name/last_name/email — the full-form updateLead() path would reject this", async () => {
+    mockSession();
+    const instagramLeadRow = leadRow({ first_name: null, last_name: null, email: null, instagram: "@curious_bride", source: "Instagram" });
+    const { client } = createMockSupabase([
+      { data: instagramLeadRow, error: null },
+      { data: { ...instagramLeadRow, assigned_to: "Aline Ferreira" }, error: null },
+      { data: null, error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseLeadsRepository.updateLeadAssignment("workspace_1", "lead_1", "Aline Ferreira");
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.assigned_to).toBe("Aline Ferreira");
+    expect(result.data.first_name).toBeNull();
+    expect(result.data.last_name).toBeNull();
+    expect(result.data.email).toBeNull();
+  });
+
+  it("unassigns a lead — an empty string is normalized to null before the update call", async () => {
+    mockSession();
+    const { client, calls } = createMockSupabase([
+      { data: leadRow({ assigned_to: "Aline Ferreira" }), error: null },
+      { data: leadRow({ assigned_to: null }), error: null },
+      { data: null, error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseLeadsRepository.updateLeadAssignment("workspace_1", "lead_1", "");
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.assigned_to).toBeNull();
+    const updateCall = calls.find((c) => c.table === "leads" && c.method === "update");
+    expect(updateCall?.args[0]).toEqual({ assigned_to: null });
+  });
+});
+
 describe("supabaseLeadsRepository.archiveLead", () => {
   it("fails when already archived", async () => {
     const { client } = createMockSupabase([{ data: leadRow({ status: "archived" }), error: null }]);
