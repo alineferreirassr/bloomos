@@ -48,6 +48,7 @@ import {
   Lightbulb,
   NotebookPen,
   Clapperboard,
+  GalleryHorizontal,
 } from "lucide-react";
 
 type IconProps = SVGProps<SVGSVGElement>;
@@ -275,4 +276,9 @@ export function IdeaIcon(props: IconProps) {
 /** SOCIAL-08D — Script Studio. Deliberately distinct from `IdeaIcon`'s `NotebookPen` (a concept) — a Script is the concept broken into scenes/blocks ready to shoot, so this uses a literal production glyph instead. */
 export function ScriptIcon(props: IconProps) {
   return <Clapperboard strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** SOCIAL-10E — Carousel Studio. Deliberately distinct from `ScriptIcon`'s `Clapperboard` (video/reel production) — a Carousel is an ordered sequence of static slides, so this uses a literal horizontal-gallery glyph instead. */
+export function CarouselIcon(props: IconProps) {
+  return <GalleryHorizontal strokeWidth={2} aria-hidden="true" {...props} />;
 }

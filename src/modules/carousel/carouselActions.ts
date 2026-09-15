@@ -14,11 +14,13 @@ import {
   removeCarouselSlide,
   getIdeaItemById,
   getMediaAssetById,
+  listMediaAssetsForWorkspace,
 } from "@/lib/data";
 import { carouselItemInputSchema, carouselItemUpdateSchema, carouselSlideInputSchema, carouselSlideUpdateSchema } from "@/modules/carousel/schema";
 import type { CarouselItem } from "@/types/carouselItem";
 import type { CarouselSlide } from "@/types/carouselSlide";
 import type { CarouselArchivedFilter } from "@/lib/data/carousel/repository";
+import type { MediaAsset } from "@/types/mediaAsset";
 
 /**
  * SOCIAL-10D — the production data-access/action layer for Carousel
@@ -314,4 +316,22 @@ export async function removeCarouselSlideAction(carouselId: string, id: string):
   if (!existing) return { success: false, error: CAROUSEL_SLIDE_NOT_FOUND_ERROR };
 
   return removeCarouselSlide(id);
+}
+
+/**
+ * SOCIAL-10E — the Carousel slide editor's own MediaAsset picker feed.
+ * Structurally mirrors `listIdeaMediaAssetOptionsAction` exactly — same
+ * "resolve session, call `listMediaAssetsForWorkspace`, catch and report a
+ * controlled error" shape. Read-only, gated on `social.view`.
+ */
+export async function listCarouselMediaAssetOptionsAction(): Promise<Result<MediaAsset[]>> {
+  const resolved = await requireActiveSession("social.view");
+  if (!resolved.success) return resolved;
+
+  try {
+    const assets = await listMediaAssetsForWorkspace(resolved.session.workspace.id);
+    return { success: true, data: assets };
+  } catch {
+    return { success: false, error: "Could not load your files." };
+  }
 }

@@ -62,6 +62,9 @@ export const ROUTE_ACCESS_MAP: RouteAccessEntry[] = [
   // SOCIAL-08D — Script Studio. Same social.view/social.create split as
   // Inspiration/Idea's own routes. No new permission.
   { prefix: "/scripts", requirement: { kind: "permission", permission: "social.view" } },
+  // SOCIAL-10E — Carousel Studio. Same social.view/social.create split as
+  // Inspiration/Idea/Script's own routes. No new permission.
+  { prefix: "/carousels", requirement: { kind: "permission", permission: "social.view" } },
   // Finance F1 gated these on `events.view` (provisional — these two had no
   // entry at all before, closing an open-to-everyone gap was the priority).
   // Finance F1.5 revisits that choice: both pages display real financial

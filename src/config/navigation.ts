@@ -16,6 +16,7 @@ import {
   InspirationIcon,
   IdeaIcon,
   ScriptIcon,
+  CarouselIcon,
   IntegrationsIcon,
   InventoryIcon,
   MarketplaceIcon,
@@ -181,6 +182,13 @@ export const navigationModules: NavModule[] = [
   // group: a Script breaks an Idea into ordered scenes/blocks ready to
   // shoot, still never a Social publishing surface itself.
   { id: "scripts", label: "Scripts", icon: ScriptIcon, href: "/scripts", group: "knowledge", keywords: ["script studio", "scenes", "blocks", "draft"] },
+  // SOCIAL-10E — the same content-planning lineage's carousel-format path
+  // (Idea, tagged content_format = "carousel" → Carousel Studio's own
+  // ordered slides), a parallel sibling to Scripts (the reel/video-format
+  // path) rather than downstream from it — mirrors content_format's own
+  // mutually-exclusive reel/carousel split. Still never a Social publishing
+  // surface itself.
+  { id: "carousels", label: "Carousels", icon: CarouselIcon, href: "/carousels", group: "knowledge", keywords: ["carousel studio", "slides", "instagram carousel"] },
 
   { id: "team", label: "Team", icon: TeamIcon, href: "/team", group: "team" },
   { id: "team-operations", label: "Team Operations", icon: TeamIcon, href: "/team/operations", group: "team" },
