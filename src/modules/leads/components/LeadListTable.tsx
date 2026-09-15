@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Lead } from "@/types/lead";
 import { LeadStatusBadge } from "@/modules/leads/components/LeadStatusBadge";
+import { getLeadDisplayName } from "@/lib/personName";
 
 function formatBudget(min: number | null, max: number | null): string {
   if (min === null && max === null) return "—";
@@ -36,7 +37,7 @@ export function LeadListTable({ leads }: { leads: Lead[] }) {
                   href={`/leads/${lead.id}`}
                   className="text-[15px] font-medium text-text hover:text-accent"
                 >
-                  {lead.first_name} {lead.last_name}
+                  {getLeadDisplayName(lead)}
                 </Link>
                 <p className="mt-0.5 text-xs text-text-muted">{lead.email}</p>
               </td>

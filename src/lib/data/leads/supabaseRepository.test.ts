@@ -34,6 +34,7 @@ function createMockSupabase(responses: QueryResult[]) {
     b.select = chain("select");
     b.eq = chain("eq");
     b.neq = chain("neq");
+    b.is = chain("is");
     b.order = chain("order");
     b.insert = chain("insert");
     b.update = chain("update");
@@ -181,6 +182,39 @@ describe("supabaseLeadsRepository.getLeads", () => {
     expect(calls.some((c) => c.method === "eq" && c.args[0] === "event_type" && c.args[1] === "Proposal")).toBe(
       true,
     );
+  });
+
+  it("SOCIAL-13F — applies unassignedOnly as an .is('assigned_to', null) call", async () => {
+    mockSession();
+    const { client, calls } = createMockSupabase([{ data: [], error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await supabaseLeadsRepository.getLeads({ unassignedOnly: true });
+
+    const isCall = calls.find((c) => c.method === "is");
+    expect(isCall?.args).toEqual(["assigned_to", null]);
+  });
+
+  it("SOCIAL-13F — omits the .is() call entirely when unassignedOnly is false/omitted", async () => {
+    mockSession();
+    const { client, calls } = createMockSupabase([{ data: [], error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await supabaseLeadsRepository.getLeads();
+
+    expect(calls.some((c) => c.method === "is")).toBe(false);
+  });
+
+  it("SOCIAL-13F — the unassignedOnly filter never crosses workspace boundaries — the same query always carries the workspace_id eq() filter too", async () => {
+    mockSession();
+    const { client, calls } = createMockSupabase([{ data: [], error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    await supabaseLeadsRepository.getLeads({ unassignedOnly: true });
+
+    const eqWorkspace = calls.find((c) => c.method === "eq" && c.args[0] === "workspace_id");
+    expect(eqWorkspace?.args[1]).toBe("workspace_1");
+    expect(calls.some((c) => c.method === "is" && c.args[0] === "assigned_to")).toBe(true);
   });
 
   it("matches search across first name, last name, and email combined, exactly like the mock", async () => {

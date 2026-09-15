@@ -13,6 +13,8 @@ export interface LeadFilters {
   source?: string | "all";
   eventType?: string | "all";
   includeArchived?: boolean;
+  /** SOCIAL-13F — when true, only Leads with `assigned_to === null` are returned. Workspace-scoped exactly like every other filter here (implicit via the same `workspace_id` boundary `getLeads` already enforces per data mode). */
+  unassignedOnly?: boolean;
 }
 
 /**

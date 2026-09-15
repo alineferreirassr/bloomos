@@ -44,6 +44,7 @@ const defaultFilters: LeadFiltersValue = {
   source: "all",
   eventType: "all",
   includeArchived: false,
+  unassignedOnly: false,
 };
 
 type LoadState =
@@ -59,6 +60,7 @@ async function loadLeadsFor(filters: LeadFiltersValue): Promise<LoadState> {
       source: filters.source,
       eventType: filters.eventType,
       includeArchived: filters.includeArchived,
+      unassignedOnly: filters.unassignedOnly,
     });
     return { status: "ready", leads };
   } catch {
@@ -103,7 +105,8 @@ export function LeadsListView() {
     filters.search !== "" ||
     filters.status !== "all" ||
     filters.source !== "all" ||
-    filters.eventType !== "all";
+    filters.eventType !== "all" ||
+    filters.unassignedOnly;
 
   const kpis =
     state.status === "ready"

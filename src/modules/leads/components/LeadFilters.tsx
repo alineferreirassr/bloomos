@@ -12,6 +12,8 @@ export interface LeadFiltersValue {
   source: string;
   eventType: string;
   includeArchived: boolean;
+  /** SOCIAL-13F — when true, only Leads with no `assigned_to` are shown. */
+  unassignedOnly: boolean;
 }
 
 interface LeadFiltersProps {
@@ -76,6 +78,13 @@ export function LeadFilters({ value, onChange }: LeadFiltersProps) {
           onChange={(event) => onChange({ ...value, includeArchived: event.target.checked })}
         />
         Show archived leads
+      </label>
+      <label className="flex items-center gap-2 text-sm text-text-muted lg:col-span-5">
+        <Checkbox
+          checked={value.unassignedOnly}
+          onChange={(event) => onChange({ ...value, unassignedOnly: event.target.checked })}
+        />
+        Unassigned only
       </label>
     </div>
   );

@@ -372,6 +372,47 @@ describe("getLeads filtering", () => {
     const noMatch = await getLeads({ search: "no-such-lead-xyz" });
     expect(noMatch.length).toBe(0);
   });
+
+  it("SOCIAL-13F — unassignedOnly returns only leads with no assigned_to, including an Instagram-originated Lead", async () => {
+    const unassigned = await createLead(validInput);
+    if (!unassigned.success) throw new Error("setup failed");
+    expect(unassigned.data.assigned_to).toBeNull();
+
+    const assigned = await createLead({ ...validInput, assigned_to: "Aline Ferreira" });
+    if (!assigned.success) throw new Error("setup failed");
+
+    const instagramLead = await findOrCreateInstagramLead({
+      workspaceId: unassigned.data.workspace_id,
+      source: "Instagram",
+      instagramExternalId: "17841400000000001",
+      instagram: "@curious_bride",
+      message: "Do you have June availability?",
+      firstName: null,
+      lastName: null,
+      email: null,
+    });
+    if (!instagramLead.success) throw new Error("setup failed");
+    expect(instagramLead.data.lead.assigned_to).toBeNull();
+
+    const results = await getLeads({ unassignedOnly: true });
+
+    expect(results.some((lead) => lead.id === unassigned.data.id)).toBe(true);
+    expect(results.some((lead) => lead.id === instagramLead.data.lead.id)).toBe(true);
+    expect(results.some((lead) => lead.id === assigned.data.id)).toBe(false);
+  });
+
+  it("SOCIAL-13F — a Lead assigned via updateLeadAssignment stops appearing in the unassignedOnly filter; unassigning it returns it", async () => {
+    const created = await createLead(validInput);
+    if (!created.success) throw new Error("setup failed");
+
+    await updateLeadAssignment(created.data.workspace_id, created.data.id, "Aline Ferreira");
+    const afterAssign = await getLeads({ unassignedOnly: true });
+    expect(afterAssign.some((lead) => lead.id === created.data.id)).toBe(false);
+
+    await updateLeadAssignment(created.data.workspace_id, created.data.id, "");
+    const afterUnassign = await getLeads({ unassignedOnly: true });
+    expect(afterUnassign.some((lead) => lead.id === created.data.id)).toBe(true);
+  });
 });
 
 describe("getLeadById", () => {

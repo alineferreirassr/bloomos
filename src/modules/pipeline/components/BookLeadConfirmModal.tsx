@@ -9,7 +9,7 @@ import { bookLead, getClientsWithPendingRecovery, type BookLeadInput } from "@/l
 import { EVENT_TYPES, EVENT_TYPE_LABELS, type EventType } from "@/core/enums/eventType";
 import type { Lead } from "@/types/lead";
 import type { Client } from "@/types/client";
-import { getFullName } from "@/lib/personName";
+import { getLeadDisplayName } from "@/lib/personName";
 
 interface BookLeadConfirmModalProps {
   lead: Lead;
@@ -25,20 +25,8 @@ function guessEventType(lead: Lead): EventType | "" {
   return match ?? "";
 }
 
-/**
- * SOCIAL-13E — a Lead with no name (e.g. an Instagram-originated Lead
- * before a human backfills one) previously produced a literal `"'s Event"`
- * title and a blank `<strong>` in this modal's own copy. Falls back to the
- * Lead's own Instagram handle (still real, observed data — never
- * fabricated) and only then to a fixed, generic, stable label — never an
- * invented name.
- */
-function leadDisplayName(lead: Lead): string {
-  return getFullName(lead) || lead.instagram || "New Lead";
-}
-
 export function BookLeadConfirmModal({ lead, open, onClose, onBooked, onPendingRecovery }: BookLeadConfirmModalProps) {
-  const [title, setTitle] = useState(() => `${leadDisplayName(lead)}'s Event`);
+  const [title, setTitle] = useState(() => `${getLeadDisplayName(lead)}'s Event`);
   const [eventType, setEventType] = useState<EventType | "">(() => guessEventType(lead));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,7 +96,7 @@ export function BookLeadConfirmModal({ lead, open, onClose, onBooked, onPendingR
   return (
     <Modal open={open} onClose={onClose} title="Book Lead">
       <p className="text-sm text-text-muted">
-        This converts <strong className="text-text">{leadDisplayName(lead)}</strong> to a Client
+        This converts <strong className="text-text">{getLeadDisplayName(lead)}</strong> to a Client
         (reusing an existing Client by email if one already exists) and creates a linked Event, starting it in
         the Planning stage.
       </p>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import type { Lead } from "@/types/lead";
 import { LeadStatusBadge } from "@/modules/leads/components/LeadStatusBadge";
+import { getLeadDisplayName } from "@/lib/personName";
 
 /* Relationships/CRM visual pass — reuses the same LuxuryCard surface the
    approved Founder/Team Home dashboards use, so the mobile card list reads
@@ -14,9 +15,7 @@ export function LeadListCards({ leads }: { leads: Lead[] }) {
           <LuxuryCard className="transition-transform duration-150 hover:-translate-y-0.5">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="font-medium tracking-tight text-text">
-                  {lead.first_name} {lead.last_name}
-                </p>
+                <p className="font-medium tracking-tight text-text">{getLeadDisplayName(lead)}</p>
                 <p className="mt-0.5 text-xs text-text-muted">{lead.email}</p>
               </div>
               <LeadStatusBadge status={lead.status} />

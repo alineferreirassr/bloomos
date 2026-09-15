@@ -8,6 +8,7 @@ import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
 import { NotFoundError } from "@/core/errors";
 import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LeadStatusBadge } from "@/modules/leads/components/LeadStatusBadge";
@@ -17,6 +18,7 @@ import { NotesSection } from "@/modules/notes/components/NotesSection";
 import { Timeline } from "@/modules/timeline/components/Timeline";
 import { getNextRecommendedAction } from "@/core/workflows/leadWorkflow";
 import { LeadJourneySummaryCard } from "@/modules/clientJourney/components/LeadJourneySummaryCard";
+import { getLeadDisplayName } from "@/lib/personName";
 
 type LoadState =
   | { status: "loading" }
@@ -92,10 +94,9 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
     <div className="space-y-6">
       <div>
         <div className="flex flex-wrap items-center gap-3">
-          <h2 className="text-3xl font-semibold text-text">
-            {lead.first_name} {lead.last_name}
-          </h2>
+          <h2 className="text-3xl font-semibold text-text">{getLeadDisplayName(lead)}</h2>
           <LeadStatusBadge status={lead.status} />
+          {lead.source === "Instagram" ? <Badge tone="neutral">Instagram</Badge> : null}
         </div>
         <p className="mt-1 text-sm text-text-muted">{lead.email}</p>
       </div>
@@ -145,7 +146,7 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
               <Field label="Phone" value={lead.phone} />
               <Field label="Instagram" value={lead.instagram} />
               <Field label="Source" value={lead.source} />
-              <Field label="Assigned to" value={lead.assigned_to} />
+              <Field label="Assigned to" value={lead.assigned_to} emptyLabel="Unassigned" />
             </dl>
           </Card>
 
@@ -204,11 +205,11 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
   );
 }
 
-function Field({ label, value }: { label: string; value: string | null }) {
+function Field({ label, value, emptyLabel = "—" }: { label: string; value: string | null; emptyLabel?: string }) {
   return (
     <div>
       <dt className="text-xs text-text-muted">{label}</dt>
-      <dd className="text-sm text-text">{value || "—"}</dd>
+      <dd className="text-sm text-text">{value || emptyLabel}</dd>
     </div>
   );
 }

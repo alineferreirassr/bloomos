@@ -17,6 +17,14 @@ describe("LeadListTable (desktop)", () => {
     expect(screen.getByText("Qualified")).toBeInTheDocument();
     expect(screen.getByText("New")).toBeInTheDocument();
   });
+
+  it("SOCIAL-13F — an Instagram-originated Lead with no name renders correctly, using its Instagram handle instead of a blank name, and its Source column still reads Instagram", () => {
+    const instagramLead = makeLead({ id: "lead_ig", first_name: null, last_name: null, email: null, instagram: "@curious_bride", instagram_external_id: "17841400000000001", source: "Instagram" });
+    render(<LeadListTable leads={[instagramLead]} />);
+
+    expect(screen.getByText("@curious_bride")).toBeInTheDocument();
+    expect(screen.getByText("Instagram")).toBeInTheDocument();
+  });
 });
 
 describe("LeadListCards (mobile)", () => {
@@ -26,5 +34,12 @@ describe("LeadListCards (mobile)", () => {
     expect(screen.getByText("Daniel Reyes")).toBeInTheDocument();
     expect(screen.getByText("Qualified")).toBeInTheDocument();
     expect(screen.getByText("New")).toBeInTheDocument();
+  });
+
+  it("SOCIAL-13F — an Instagram-originated Lead with no name renders correctly, using its Instagram handle instead of a blank name", () => {
+    const instagramLead = makeLead({ id: "lead_ig", first_name: null, last_name: null, email: null, instagram: "@curious_bride", instagram_external_id: "17841400000000001", source: "Instagram" });
+    render(<LeadListCards leads={[instagramLead]} />);
+
+    expect(screen.getByText("@curious_bride")).toBeInTheDocument();
   });
 });

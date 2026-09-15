@@ -86,7 +86,7 @@ async function fetchLeadRow(id: string): Promise<Lead | null> {
 
 async function getLeads(filters: LeadFilters = {}, context?: ServerRepositoryContext): Promise<Lead[]> {
   const session = context?.session ?? (await requireWorkspaceSession());
-  const { search, status, source, eventType, includeArchived = false } = filters;
+  const { search, status, source, eventType, includeArchived = false, unassignedOnly = false } = filters;
 
   const supabase = context?.supabase ?? createClient();
   let query = supabase.from("leads").select("*").eq("workspace_id", session.workspace.id);
@@ -102,6 +102,9 @@ async function getLeads(filters: LeadFilters = {}, context?: ServerRepositoryCon
   }
   if (eventType && eventType !== "all") {
     query = query.eq("event_type", eventType);
+  }
+  if (unassignedOnly) {
+    query = query.is("assigned_to", null);
   }
 
   const { data, error } = await query.order("created_at", { ascending: false });

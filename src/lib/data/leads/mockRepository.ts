@@ -30,13 +30,14 @@ function fieldErrorsFromZod(error: {
 
 async function getLeads(filters: LeadFilters = {}): Promise<Lead[]> {
   await delay(200);
-  const { search, status, source, eventType, includeArchived = false } = filters;
+  const { search, status, source, eventType, includeArchived = false, unassignedOnly = false } = filters;
 
   return readLeads().filter((lead) => {
     if (!includeArchived && lead.status === "archived") return false;
     if (status && status !== "all" && lead.status !== status) return false;
     if (source && source !== "all" && lead.source !== source) return false;
     if (eventType && eventType !== "all" && lead.event_type !== eventType) return false;
+    if (unassignedOnly && lead.assigned_to !== null) return false;
     if (search) {
       const q = search.trim().toLowerCase();
       if (!q) return true;

@@ -62,3 +62,48 @@ describe("LeadDetailView — SOCIAL-13E conversion-readiness indication", () => 
     expect(screen.queryByText(BANNER_TEXT)).not.toBeInTheDocument();
   });
 });
+
+describe("LeadDetailView — SOCIAL-13F operational state visibility", () => {
+  it("shows an Instagram badge in the header and the Instagram handle as the display name for an Instagram-originated Lead", async () => {
+    const lead = makeLead({ id: "l5", first_name: null, last_name: null, email: null, instagram: "@curious_bride", instagram_external_id: "17841400000000001", source: "Instagram" });
+    vi.mocked(getLeadById).mockResolvedValue(lead);
+
+    render(<LeadDetailView leadId="l5" />);
+
+    expect(await screen.findByRole("heading", { name: "@curious_bride" })).toBeInTheDocument();
+    // Scoped to the badge's own <span> specifically — "Instagram" also
+    // legitimately appears elsewhere on this page (the "Instagram" contact
+    // field label, and the Source field's own value), so a bare text query
+    // would false-positive regardless of whether the badge itself renders.
+    expect(screen.getByText("Instagram", { selector: "span" })).toBeInTheDocument();
+  });
+
+  it("never shows the Instagram badge for a manually-created, non-Instagram Lead", async () => {
+    const lead = makeLead({ id: "l6", first_name: "Priya", last_name: "Nair", source: "Website" });
+    vi.mocked(getLeadById).mockResolvedValue(lead);
+
+    render(<LeadDetailView leadId="l6" />);
+
+    expect(await screen.findByRole("heading", { name: "Priya Nair" })).toBeInTheDocument();
+    expect(screen.queryByText("Instagram", { selector: "span" })).not.toBeInTheDocument();
+  });
+
+  it("shows a clear 'Unassigned' label (not a bare dash) for a Lead with no assigned_to", async () => {
+    const lead = makeLead({ id: "l7", first_name: "Priya", last_name: "Nair", assigned_to: null });
+    vi.mocked(getLeadById).mockResolvedValue(lead);
+
+    render(<LeadDetailView leadId="l7" />);
+
+    expect(await screen.findByText("Unassigned")).toBeInTheDocument();
+  });
+
+  it("shows the real assignee name once a Lead has been assigned", async () => {
+    const lead = makeLead({ id: "l8", first_name: "Priya", last_name: "Nair", assigned_to: "Aline Ferreira" });
+    vi.mocked(getLeadById).mockResolvedValue(lead);
+
+    render(<LeadDetailView leadId="l8" />);
+
+    expect(await screen.findByText("Aline Ferreira")).toBeInTheDocument();
+    expect(screen.queryByText("Unassigned")).not.toBeInTheDocument();
+  });
+});
