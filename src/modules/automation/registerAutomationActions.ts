@@ -27,6 +27,8 @@ import duplicateEntityAction from "@/modules/automation/actions/duplicateEntityA
 import delayAction from "@/modules/automation/actions/delayAction";
 import replyToInstagramCommentAction from "@/modules/automation/actions/replyToInstagramCommentAction";
 import sendInstagramDirectMessageAction from "@/modules/automation/actions/sendInstagramDirectMessageAction";
+import createLeadFromInstagramCommentAction from "@/modules/automation/actions/createLeadFromInstagramCommentAction";
+import createLeadFromInstagramDmAction from "@/modules/automation/actions/createLeadFromInstagramDmAction";
 import { makeRunSkillAction, runSkillFallbackActionId } from "@/modules/automation/actions/runSkillActionFactory";
 import { registerProposalSkill, PROPOSAL_SKILL_ID } from "@/modules/ai/proposal/registerProposalSkill";
 import { registerEventOperationsBriefSkill } from "@/modules/ai/registerEventOperationsBriefSkill";
@@ -115,6 +117,10 @@ export function registerAutomationActions(): void {
   // SOCIAL-12D — the second Instagram Comment/DM Automation Action, same
   // "register first, wire to a trigger later" precedent.
   registerAutomationAction(sendInstagramDirectMessageAction);
+  // SOCIAL-13C — the first real Instagram Lead-capture Actions, same
+  // "register first, wire to a trigger later" precedent.
+  registerAutomationAction(createLeadFromInstagramCommentAction);
+  registerAutomationAction(createLeadFromInstagramDmAction);
 
   // Ensure the real Skill Registry is populated before reading it — mirrors `getBloomAIOverview.ts`'s own inline, idempotent registration-on-load.
   registerProposalSkill();

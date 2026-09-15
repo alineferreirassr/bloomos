@@ -56,19 +56,17 @@ export interface Lead {
 }
 
 /**
- * SOCIAL-13C-FND — foundation only, not yet used by any write path. The
- * narrow shape a future Instagram Lead-capture Automation Action (SOCIAL-13C
- * itself, still unauthorized as of this checkpoint) would need to represent
- * a Lead captured from an Instagram comment or DM, without inventing data
- * this codebase has no honest way to obtain: `first_name`/`last_name`/`email`
- * are explicitly nullable here (never a placeholder string), matching the
- * now-nullable `Lead` columns above. `instagram_external_id` is required
- * (this is exactly what makes a social capture "social" — it's the one
- * stable identifier every Instagram comment/DM event always carries);
- * `instagram` (the username) and `message` (the comment/DM text) are
- * optional, matching their own real-world availability. No repository
- * function accepts this type yet — see this checkpoint's own final report
- * for why creating one now would be premature.
+ * SOCIAL-13C-FND — the narrow shape used by the Instagram Lead-capture
+ * Automation Action (SOCIAL-13C, `core/automation/instagramLeadCapture.ts`)
+ * to represent a Lead captured from an Instagram comment or DM, without
+ * inventing data this codebase has no honest way to obtain:
+ * `first_name`/`last_name`/`email` are explicitly nullable here (never a
+ * placeholder string), matching the nullable `Lead` columns above.
+ * `instagram_external_id` is required (this is exactly what makes a social
+ * capture "social" — it's the one stable identifier every Instagram
+ * comment/DM event always carries); `instagram` (the username) and
+ * `message` (the comment/DM text) are optional, matching their own
+ * real-world availability.
  */
 export interface InstagramLeadCaptureInput {
   workspaceId: string;
