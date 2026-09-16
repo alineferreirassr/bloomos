@@ -164,6 +164,12 @@ export const navigationModules: NavModule[] = [
   { id: "finance", label: "Finance", icon: FinanceIcon, href: "/finance", group: "business" },
   { id: "services", label: "Services", icon: ServicesIcon, href: "/services", group: "business" },
   { id: "social", label: "Social", icon: SocialIcon, href: "/social", group: "business" },
+  // SOCIAL-14D — AI Social Strategist UX. Its own top-level entry right
+  // beside Social (same `business` group, same `social.view` gate), the
+  // same precedent `crm-assistant` set beside Clients/Leads — no sub-tab
+  // pattern exists in this config, and every AI-assistant destination so
+  // far is a flat top-level module, never a nested route.
+  { id: "social-strategist", label: "Social Strategist", icon: SocialIcon, href: "/social-strategist", group: "business", keywords: ["ai", "content opportunities", "content pillars", "posting strategy"] },
 
   { id: "documents", label: "Documents", icon: DocumentsIcon, href: "/documents", group: "knowledge" },
   { id: "assets", label: "Asset Library", icon: AssetsIcon, href: "/assets", group: "knowledge", keywords: ["dam", "media"] },

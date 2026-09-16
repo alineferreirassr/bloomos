@@ -97,6 +97,22 @@ describe("getVisibleNavigationModules", () => {
   });
 });
 
+describe("Social Strategist navigation entry (SOCIAL-14D)", () => {
+  it("is a single top-level entry in the business group, pointing at /social-strategist, gated the same as every other module (social.view)", () => {
+    const entry = navigationModules.find((m) => m.id === "social-strategist");
+    expect(entry).toEqual({ id: "social-strategist", label: "Social Strategist", icon: entry?.icon, href: "/social-strategist", group: "business", keywords: entry?.keywords });
+    expect(navigationModules.filter((m) => m.href === "/social-strategist")).toHaveLength(1);
+  });
+
+  it("is visible for a member with social.view, hidden for one without it", () => {
+    const withPermission = getVisibleNavigationModules((permission) => permission === "social.view");
+    expect(withPermission.map((m) => m.id)).toContain("social-strategist");
+
+    const withoutPermission = getVisibleNavigationModules(() => false);
+    expect(withoutPermission.map((m) => m.id)).not.toContain("social-strategist");
+  });
+});
+
 describe("groupVisibleNavigationModules", () => {
   it("buckets every visible module into exactly one group, in NAV_GROUP_ORDER, covering every module with no drops or duplicates", () => {
     const groups = groupVisibleNavigationModules(() => true);

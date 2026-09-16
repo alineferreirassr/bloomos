@@ -23,6 +23,10 @@ describe("getRouteAccessRequirement", () => {
     expect(getRouteAccessRequirement("/social")).toEqual({ kind: "permission", permission: "social.view" });
   });
 
+  it("SOCIAL-14D — requires social.view for the Social Strategist page, same gate as /social itself", () => {
+    expect(getRouteAccessRequirement("/social-strategist")).toEqual({ kind: "permission", permission: "social.view" });
+  });
+
   it("requires team.view for the Team page", () => {
     expect(getRouteAccessRequirement("/team")).toEqual({ kind: "permission", permission: "team.view" });
   });

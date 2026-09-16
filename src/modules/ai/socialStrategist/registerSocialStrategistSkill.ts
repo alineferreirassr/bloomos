@@ -9,17 +9,12 @@ import { SOCIAL_STRATEGIST_USE_CASE_ID, registerSocialStrategistUseCase } from "
 export const SOCIAL_STRATEGIST_SKILL_ID = "social-strategist";
 
 /**
- * SOCIAL-14C — Skill layer + structured output contract only. Deliberately
- * NOT surfaced in any existing UI discovery surface yet
- * (`commandPaletteVisible`/`sidebarVisible` both `false`) — this checkpoint
- * builds a fully real, registered, executable Skill (discoverable via
- * `getSkill()`, runnable via `executeSkill()`, exactly like every other
- * Skill), but no dedicated page exists for it to open into yet (that's a
- * later checkpoint's own scope), so it stays invisible to end-user
- * discovery surfaces to avoid a dangling entry with nowhere to go — the
- * same reasoning a "Coming Soon" Skill's own visibility flags follow,
- * except this one genuinely runs (has a real `execute`) once a caller
- * knows its id.
+ * SOCIAL-14C built the Skill layer + structured output contract.
+ * SOCIAL-14D adds its own dedicated page (`/social-strategist`,
+ * `SocialStrategistView.tsx`) and flips `commandPaletteVisible`/
+ * `sidebarVisible` to `true` below — the exact gap SOCIAL-14C's own doc
+ * comment named as this checkpoint's scope to close, now that there's
+ * somewhere real for "Ask Bloom" and the Skill Picker to open into.
  *
  * `requiredPermissions: ["social.view"]` — the one permission that already
  * gates every Social-adjacent surface this Skill reads from (`/social`,
@@ -42,8 +37,8 @@ const socialStrategistSkill: SkillDefinition = {
   supportsStreaming: false,
   requiresApproval: false,
   requiresReview: false,
-  commandPaletteVisible: false,
-  sidebarVisible: false,
+  commandPaletteVisible: true,
+  sidebarVisible: true,
   featureFlag: null,
   minimumRole: null,
   version: SOCIAL_STRATEGIST_PROMPT_VERSION,

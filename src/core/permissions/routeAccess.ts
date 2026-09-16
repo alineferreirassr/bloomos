@@ -49,6 +49,12 @@ export const ROUTE_ACCESS_MAP: RouteAccessEntry[] = [
   { prefix: "/operations", requirement: { kind: "permission", permission: "events.view" } },
   { prefix: "/contracts", requirement: { kind: "permission", permission: "contracts.view" } },
   { prefix: "/social", requirement: { kind: "permission", permission: "social.view" } },
+  // SOCIAL-14D — AI Social Strategist UX. Same social.view gate as /social
+  // itself and every other Social-adjacent route below (Inspiration/Ideas/
+  // Scripts/Carousels) — this Skill already declares the identical
+  // `requiredPermissions: ["social.view"]` (SOCIAL-14C), so no new
+  // permission is introduced here.
+  { prefix: "/social-strategist", requirement: { kind: "permission", permission: "social.view" } },
   // SOCIAL-06D — Inspiration & Reference Library. A dedicated route, not a
   // /social tab (the creative pipeline it serves is broader than Social
   // publishing) — same social.view/social.create split SOCIAL-06C's own

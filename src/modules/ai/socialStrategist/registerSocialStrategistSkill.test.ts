@@ -111,10 +111,10 @@ describe("registerSocialStrategistSkill — registration / discovery", () => {
     expect(getSkill(SOCIAL_STRATEGIST_SKILL_ID)).toBeDefined();
   });
 
-  it("stays out of end-user discovery surfaces — commandPaletteVisible/sidebarVisible are both false, since no UI page exists for it yet", () => {
+  it("is discoverable via the command palette and sidebar Skill surfaces now that its own dedicated page exists (SOCIAL-14D)", () => {
     const skill = getSkill(SOCIAL_STRATEGIST_SKILL_ID);
-    expect(skill?.commandPaletteVisible).toBe(false);
-    expect(skill?.sidebarVisible).toBe(false);
+    expect(skill?.commandPaletteVisible).toBe(true);
+    expect(skill?.sidebarVisible).toBe(true);
   });
 
   it("declares no real AI provider — createMockProvider is set, and no real provider registration exists anywhere in this module", () => {
