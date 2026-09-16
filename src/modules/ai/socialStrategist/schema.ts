@@ -38,15 +38,18 @@ const socialStrategistReferencedContentSchema = z.object({
 /**
  * SOCIAL-14C — bounded, closed shape, no partial trust; mirrors
  * `crmAssistantModelOutputSchema`'s own guarantees exactly. Every array has
- * an explicit `.max()`, every free-text field has an explicit `.max()`
- * length — "no unlimited free text anywhere" is a schema-level guarantee,
- * not a prompt-only instruction. Id fields (`relatedPostId`, `relatedIdeaId`,
- * `relatedInspirationId`, `referencedContent[].id`) are validated here only
- * for shape (non-empty string) — the *semantic* check that each actually
- * references a real Post/Idea/Inspiration/Script/Carousel present in
- * `SocialStrategistContext` happens in `semanticValidation.ts`, the same
- * two-stage split `crmAssistantModelOutputSchema`/`semanticValidation.ts`
- * already established.
+ * an explicit `.max()`, and every narrative free-text field (labels,
+ * reasons, notes, observations) has an explicit `.max()` length — "no
+ * unlimited free-text narration anywhere" is a schema-level guarantee, not
+ * a prompt-only instruction. Id fields (`relatedPostId`, `relatedIdeaId`,
+ * `relatedInspirationId`, `referencedContent[].id`) are deliberately NOT
+ * length-bounded here — validated only for shape (non-empty string) — the
+ * exact same choice `crmAssistantModelOutputSchema` already made for its
+ * own id fields (`targetId`, `clientId`): an id's real guarantee comes from
+ * the *semantic* check in `semanticValidation.ts` (that it references a
+ * real Post/Idea/Inspiration/Script/Carousel present in
+ * `SocialStrategistContext`), not from its length, so a length cap would
+ * add nothing a fabricated-but-short id couldn't already defeat.
  */
 export const socialStrategistModelOutputSchema = z.object({
   accountObservations: observationArraySchema,

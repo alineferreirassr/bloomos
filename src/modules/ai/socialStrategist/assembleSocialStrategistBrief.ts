@@ -73,13 +73,6 @@ export interface SocialStrategistBrief {
   dataGaps: string[];
   confidence: number;
 
-  postCount: number;
-  ideaCount: number;
-  inspirationCount: number;
-  scriptCount: number;
-  carouselCount: number;
-  instagramLeadCount: number;
-  hasAccountMetrics: boolean;
   unavailableCategories: SocialStrategistDataCategory[];
 
   /** True only when every observation/opportunity/pillar/recommendation/reference array is empty — the honest "nothing to show yet" state, never inferred from a single field. */
@@ -179,13 +172,6 @@ export function assembleSocialStrategistBrief(modelOutput: SocialStrategistModel
     dataGaps: modelOutput.dataSufficiencyNotes,
     confidence: modelOutput.confidence,
 
-    postCount: context.posts.length,
-    ideaCount: context.ideas.length,
-    inspirationCount: context.inspiration.length,
-    scriptCount: context.scripts.length,
-    carouselCount: context.carousels.length,
-    instagramLeadCount: context.instagramLeads.length,
-    hasAccountMetrics: context.accountMetrics !== null,
     unavailableCategories: context.unavailableCategories,
 
     isEmpty,
