@@ -2665,6 +2665,12 @@ export interface Database {
         Update: { id?: string; conversation_id?: string; workspace_id?: string; external_message_id?: string; direction?: string; message_type?: string; content?: string | null; external_media_reference?: string | null; external_created_at?: string | null; created_at?: string; updated_at?: string };
         Relationships: [];
       };
+      notifications: {
+        Row: { id: string; workspace_id: string; recipient_member_id: string | null; recipient_client_account_id: string | null; channel: string; title: string; body: string; read_at: string | null; created_at: string; related_owner_type: string | null; related_owner_id: string | null; kind: string | null; priority: string; pinned_at: string | null; archived_at: string | null };
+        Insert: { id?: string; workspace_id: string; recipient_member_id?: string | null; recipient_client_account_id?: string | null; channel?: string; title: string; body?: string; read_at?: string | null; created_at?: string; related_owner_type?: string | null; related_owner_id?: string | null; kind?: string | null; priority?: string; pinned_at?: string | null; archived_at?: string | null };
+        Update: { id?: string; workspace_id?: string; recipient_member_id?: string | null; recipient_client_account_id?: string | null; channel?: string; title?: string; body?: string; read_at?: string | null; created_at?: string; related_owner_type?: string | null; related_owner_id?: string | null; kind?: string | null; priority?: string; pinned_at?: string | null; archived_at?: string | null };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

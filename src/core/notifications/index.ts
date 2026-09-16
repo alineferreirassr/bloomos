@@ -1,5 +1,7 @@
 import type { NotificationsRepository } from "@/lib/data/core/notifications/repository";
 import { mockNotificationsRepository } from "@/lib/data/core/notifications/mockRepository";
+import { supabaseNotificationsRepository } from "@/lib/data/core/notifications/supabaseRepository";
+import { selectRepository } from "@/lib/data/provider";
 
 export type { Notification, NotificationChannel, NotificationProvider, NotificationDeliveryRequest, NotificationKind, NotificationPriority } from "@/core/notifications/types";
 export { NOTIFICATION_CHANNELS, NOTIFICATION_KINDS, NOTIFICATION_PRIORITIES } from "@/core/notifications/types";
@@ -18,7 +20,13 @@ export type { CreateNotificationTemplateInput } from "@/lib/data/core/notificati
 export { resolveNotificationTemplate, findUnknownEmailTemplatePlaceholders, previewNotificationContent } from "@/core/notifications/emailTemplateEngine";
 export type { ResolvedNotificationContent } from "@/core/notifications/emailTemplateEngine";
 
-/** In-app notifications only — mock-only this phase (same rationale as `core/tags`). */
+/**
+ * SOCIAL-13J — in-app notifications now have a real Supabase-backed
+ * repository (`supabaseRepository.ts`) sitting alongside the mock one,
+ * selected the same single, centralized way every other module already
+ * routes through (`selectRepository`, `lib/data/provider.ts`) — never a
+ * second branch on `NEXT_PUBLIC_DATA_MODE` scattered elsewhere.
+ */
 export function getCoreNotificationsService(): NotificationsRepository {
-  return mockNotificationsRepository;
+  return selectRepository({ mock: mockNotificationsRepository, supabase: supabaseNotificationsRepository });
 }

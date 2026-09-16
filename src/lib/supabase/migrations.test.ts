@@ -138,6 +138,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // tracked, not-yet-released, unrelated to the Finance release this
   // exact-count assertion describes.
   "20260928100000_leads_social_capture_foundation.sql",
+  // SOCIAL-13J — Notification Persistence Foundation. Independently-
+  // tracked, not-yet-released, unrelated to the Finance release this
+  // exact-count assertion describes.
+  "20260929100000_notifications_foundation.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {

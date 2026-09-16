@@ -37,6 +37,7 @@ import type { InstagramAccountIdentity } from "@/types/instagramAccountIdentity"
 import type { InstagramComment, InstagramCommentStatus } from "@/types/instagramComment";
 import type { InstagramConversation, InstagramConversationStatus } from "@/types/instagramConversation";
 import type { InstagramMessage, InstagramMessageDirection } from "@/types/instagramMessage";
+import type { Notification, NotificationChannel, NotificationKind, NotificationPriority } from "@/core/notifications/types";
 import type { Contract, ContractVersionSnapshot } from "@/types/contract";
 import type { ContractTemplate } from "@/types/contractTemplate";
 import type { ContractExhibit } from "@/types/contractExhibit";
@@ -206,6 +207,7 @@ type InstagramAccountIdentityRow = Database["public"]["Tables"]["instagram_accou
 type InstagramCommentRow = Database["public"]["Tables"]["instagram_comments"]["Row"];
 type InstagramConversationRow = Database["public"]["Tables"]["instagram_conversations"]["Row"];
 type InstagramMessageRow = Database["public"]["Tables"]["instagram_messages"]["Row"];
+type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
 
 /**
  * Deliberate seam between raw database rows and domain types, even though
@@ -1510,6 +1512,35 @@ export function mapAutomationExecutionRow(row: AutomationExecutionRow): Automati
     startedAt: row.started_at,
     completedAt: row.completed_at,
     startedBy: row.started_by,
+  };
+}
+
+/**
+ * SOCIAL-13J — maps a `notifications` row back to the existing
+ * `Notification` type (core/notifications/types.ts), never a new/parallel
+ * shape. `channel`/`priority` are cast to their own closed TS unions the
+ * same way `mapAutomationExecutionRow` already casts `status`/`trigger_type`
+ * — the DB constrains both via CHECK. `kind`/`related_owner_type` are cast
+ * too, but the DB does NOT constrain them (see the migration's own
+ * reasoning: both are actively-growing, code-level closed lists).
+ */
+export function mapNotificationRow(row: NotificationRow): Notification {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    recipient_member_id: row.recipient_member_id,
+    recipient_client_account_id: row.recipient_client_account_id,
+    channel: row.channel as NotificationChannel,
+    title: row.title,
+    body: row.body,
+    read_at: row.read_at,
+    created_at: row.created_at,
+    related_owner_type: row.related_owner_type as EntityType | null,
+    related_owner_id: row.related_owner_id,
+    kind: row.kind as NotificationKind | null,
+    priority: row.priority as NotificationPriority,
+    pinned_at: row.pinned_at,
+    archived_at: row.archived_at,
   };
 }
 
