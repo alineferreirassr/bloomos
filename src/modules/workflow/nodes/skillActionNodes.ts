@@ -30,6 +30,7 @@ const SKILL_CATEGORY_ICON: Record<SkillCategory, string> = {
   finance: "DollarSign",
   documents: "FileStack",
   briefing: "Newspaper",
+  social: "Megaphone",
 };
 
 /**

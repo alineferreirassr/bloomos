@@ -42,6 +42,7 @@ const CATEGORY_LABEL: Record<SkillMetadata["category"], string> = {
   finance: "Finance",
   documents: "Documents",
   briefing: "Briefing",
+  social: "Social",
 };
 
 const MEMORY_CATEGORY_LABEL: Record<AIMemoryCategory, string> = {

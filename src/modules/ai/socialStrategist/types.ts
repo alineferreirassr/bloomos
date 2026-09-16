@@ -186,3 +186,77 @@ export interface SocialStrategistContext {
   /** A category name appears here only when its own read genuinely failed (Promise.allSettled rejection) — never for a real, empty result, which is a normal, gracefully-handled state (see `postCountByStatus`/etc. above, which are always present even at zero). */
   unavailableCategories: SocialStrategistDataCategory[];
 }
+
+/**
+ * SOCIAL-14C — the Social Strategist Skill's own structured output
+ * contract. Everything below is the MODEL's own narrative/synthesis output
+ * (mirroring `CRMAssistantModelOutput`'s exact role) — the deterministic
+ * `SocialStrategistContext` above only ever holds already-classified facts
+ * a model can narrate over, never a judgment call itself. Every id-bearing
+ * field here (`relatedPostId`, `relatedIdeaId`, `relatedInspirationId`,
+ * `referencedContent[].id`) is checked against the real context in
+ * `semanticValidation.ts` before this is ever trusted — the model cannot
+ * reference a Post/Idea/Inspiration that doesn't exist and have that
+ * reference survive validation. Every array is bounded and every string is
+ * length-bounded in `schema.ts`'s own Zod shape — "no unlimited free text"
+ * is enforced there, this file only declares the parsed TypeScript shape.
+ */
+export const SOCIAL_STRATEGIST_REFERENCED_CONTENT_TYPES = ["post", "idea", "inspiration", "script", "carousel"] as const;
+export type SocialStrategistReferencedContentType = (typeof SOCIAL_STRATEGIST_REFERENCED_CONTENT_TYPES)[number];
+
+export interface SocialStrategistContentOpportunity {
+  label: string;
+  reason: string;
+  relatedPostId: string | null;
+  relatedIdeaId: string | null;
+}
+
+export interface SocialStrategistContentPillar {
+  name: string;
+  rationale: string;
+}
+
+export interface SocialStrategistNextContentRecommendation {
+  label: string;
+  reason: string;
+  suggestedFormat: InspirationContentFormat | null;
+  relatedIdeaId: string | null;
+  relatedInspirationId: string | null;
+}
+
+/** "referências aos conteúdos existentes quando aplicável" — a bounded, explicit pointer back to a real Post/Idea/Inspiration/Script/Carousel already present in `SocialStrategistContext`, never a restatement of its own content. */
+export interface SocialStrategistReferencedContent {
+  type: SocialStrategistReferencedContentType;
+  id: string;
+  note: string;
+}
+
+/**
+ * `accountObservations`/`postingStrategyNotes`/`audienceObservations`/
+ * `conversionObservations` are all factual-observation arrays (never
+ * recommendations) — `contentOpportunities`/`contentPillars`/
+ * `nextContentRecommendations` are the advisory counterpart. Kept as
+ * separate fields rather than one tagged union so `schema.ts` can bound
+ * each independently and a caller never has to branch on a "kind" field to
+ * tell observation from recommendation, satisfying this checkpoint's own
+ * "distinguish factual observation from recommendation" requirement
+ * structurally, not by convention.
+ *
+ * `dataSufficiencyNotes` is the explicit, structured "not enough data for
+ * X" channel — an empty array in an observation/recommendation field is
+ * itself already a valid "nothing to report" signal, but this field lets
+ * the model name *why* (e.g. "no Instagram account connected yet") rather
+ * than leaving an empty section unexplained.
+ */
+export interface SocialStrategistModelOutput {
+  accountObservations: string[];
+  contentOpportunities: SocialStrategistContentOpportunity[];
+  contentPillars: SocialStrategistContentPillar[];
+  nextContentRecommendations: SocialStrategistNextContentRecommendation[];
+  postingStrategyNotes: string[];
+  audienceObservations: string[];
+  referencedContent: SocialStrategistReferencedContent[];
+  conversionObservations: string[];
+  dataSufficiencyNotes: string[];
+  confidence: number;
+}

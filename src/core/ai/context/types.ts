@@ -42,6 +42,15 @@
  * (`crmAssistantContext`) is itself requested, optionally, by a *different*
  * Skill (Finance Assistant) — proving the Context Orchestrator's sections
  * compose across Skills, not just within one.
+ *
+ * `socialStrategistContext` (SOCIAL-14C) is the same "workspace-wide
+ * composite that doesn't decompose into the generic keys" shape again,
+ * scoped to Social posts/analytics snapshots/Ideas/Inspiration/Scripts/
+ * Carousels/Instagram-sourced Leads — see
+ * `modules/ai/socialStrategist/socialStrategistContextBuilder.ts`, which
+ * wraps SOCIAL-14B's own `fetchSocialStrategistMaterials`/
+ * `buildSocialStrategistContext` pipeline exactly the way
+ * `crmAssistantContextBuilder.ts` wraps its own.
  */
 export const AI_CONTEXT_SECTION_KEYS = [
   "workspace",
@@ -59,6 +68,7 @@ export const AI_CONTEXT_SECTION_KEYS = [
   "crmAssistantContext",
   "financeAssistantContext",
   "analyticsSummaryContext",
+  "socialStrategistContext",
 ] as const;
 
 export type AIContextSectionKey = (typeof AI_CONTEXT_SECTION_KEYS)[number];

@@ -12,7 +12,7 @@ import type { AIErrorCategory } from "@/core/ai/errors";
  * letting a Skill declare an arbitrary string, so the Bloom AI Dashboard's
  * category grouping never has to handle an unbounded set of labels.
  */
-export const SKILL_CATEGORIES = ["proposal", "operations", "crm", "finance", "documents", "briefing"] as const;
+export const SKILL_CATEGORIES = ["proposal", "operations", "crm", "finance", "documents", "briefing", "social"] as const;
 export type SkillCategory = (typeof SKILL_CATEGORIES)[number];
 
 export interface SkillExecuteParams {

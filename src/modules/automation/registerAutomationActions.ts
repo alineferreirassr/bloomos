@@ -53,6 +53,7 @@ const SKILL_CATEGORY_TO_AUTOMATION_CATEGORY: Record<SkillCategory, AutomationCat
   finance: "finance",
   documents: "general",
   briefing: "operations",
+  social: "general",
 };
 
 /**

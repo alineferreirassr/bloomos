@@ -10,6 +10,7 @@ import { memoryContextBuilder } from "@/core/ai/context/builders/memoryContextBu
 import { crmAssistantContextBuilder } from "@/modules/ai/crmAssistant/crmAssistantContextBuilder";
 import { financeAssistantContextBuilder } from "@/modules/ai/financeAssistant/financeAssistantContextBuilder";
 import { analyticsSummaryContextBuilder } from "@/modules/analytics/aiSummary/analyticsSummaryContextBuilder";
+import { socialStrategistContextBuilder } from "@/modules/ai/socialStrategist/socialStrategistContextBuilder";
 
 let registered = false;
 
@@ -32,5 +33,6 @@ export function registerDefaultAIContextBuilders(): void {
   registerAIContextBuilder(crmAssistantContextBuilder);
   registerAIContextBuilder(financeAssistantContextBuilder);
   registerAIContextBuilder(analyticsSummaryContextBuilder);
+  registerAIContextBuilder(socialStrategistContextBuilder);
   registered = true;
 }
