@@ -47,17 +47,17 @@ export function OwnerHomeHeader({ studioDate, greeting, contextualSentence, isSu
 
   return (
     <div className="animate-fade-down">
-      <p className="text-luxury-status font-semibold tracking-[0.14em] text-luxury-coral uppercase">Today&rsquo;s Studio &middot; {studioDate}</p>
-      <h1 className="mt-2 flex items-center gap-2 font-luxury-display text-luxury-display font-semibold text-luxury-text" style={{ textWrap: "balance" }}>
+      <p className="text-luxury-status font-medium tracking-[0.16em] text-luxury-coral uppercase">Today&rsquo;s Studio &middot; {studioDate}</p>
+      <h1 className="mt-3 flex items-center gap-3 font-luxury-display text-[2.75rem] leading-[1.1] font-semibold text-luxury-text sm:text-[3.25rem]" style={{ textWrap: "balance" }}>
         {greeting}
-        <LuxuryHeartIcon className="h-6 w-6 shrink-0 text-luxury-rose" aria-hidden="true" />
+        <LuxuryHeartIcon className="h-7 w-7 shrink-0 text-luxury-rose" aria-hidden="true" />
       </h1>
-      <p className="mt-2 text-luxury-body text-luxury-text-muted">{contextualSentence}</p>
+      <p className="mt-3 text-luxury-body text-luxury-text-muted">{contextualSentence}</p>
 
-      <ul className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1.5" aria-label="System status">
+      <ul className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2" aria-label="System status">
         {statusItems.map(({ icon: Icon, label }) => (
-          <li key={label} className="flex items-center gap-1.5 text-luxury-status text-luxury-text-muted">
-            <Icon className="h-3.5 w-3.5 shrink-0 text-luxury-text-muted" aria-hidden="true" strokeWidth={1.75} />
+          <li key={label} className="flex items-center gap-1.5 text-luxury-status text-luxury-text-muted/90">
+            <Icon className="h-3.5 w-3.5 shrink-0 text-luxury-text-muted/90" aria-hidden="true" strokeWidth={1.5} />
             {label}
           </li>
         ))}

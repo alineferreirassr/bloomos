@@ -261,53 +261,31 @@
 .luxury-home-light {
   --luxury-background: #fdfbf7;
   --luxury-surface: #fffefc;
-  --luxury-surface-tint: #fbf7f1;
-  --luxury-border: color-mix(in srgb, #8a6d3f 14%, transparent);
-  --luxury-text-muted: color-mix(in srgb, #3d2f26 65%, transparent);
+  --luxury-surface-tint: #fbf5f0;
+  --luxury-border: color-mix(in srgb, #8a6d3f 10%, transparent);
+  --luxury-text-muted: color-mix(in srgb, #3d2f26 62%, transparent);
   --luxury-blush: #faf1ec;
-  --luxury-shadow-sm: 0 1px 3px color-mix(in srgb, #7a4d43 7%, transparent);
-  --luxury-shadow-md: 0 6px 18px color-mix(in srgb, #7a4d43 8%, transparent);
+  --luxury-shadow-sm: 0 1px 2px color-mix(in srgb, #7a4d43 4%, transparent);
+  --luxury-shadow-md: 0 4px 14px color-mix(in srgb, #7a4d43 5%, transparent);
 }
 
 /*
- * VISUAL-01 Revision C — the Owner Home Weather card's own soft blush
- * surface. Scoped identically to `.luxury-home-light` above: a wrapping
- * class on just the Weather card's own container in OwnerDashboardView.tsx
- * (now `OwnerWeatherCard`), never the global tokens — Team's
- * `NextEventWeatherCard` instance, and every other tone="surface" card on
- * this same page, stay on the ordinary light surface.
+ * VISUAL-01 Revision D — the Owner Home Weather card's own border accent.
+ * Scoped identically to `.luxury-home-light` above: a wrapping class on
+ * just the Weather card's own container in OwnerDashboardView.tsx (now
+ * `OwnerWeatherCard`), never the global tokens.
  *
- * Revision A blended --luxury-blush (itself a pale peach token) at 35% —
- * read as barely different from white. Revision B blended --luxury-rose
- * into --luxury-surface (the near-white but still warm-cream-cast card
- * token) at 14% — the founder called this still too subtle/cream. The
- * fix isn't a bigger percentage of the same blend; it's a different base:
- * mixing --luxury-rose into true white, at a level that reads as a
- * genuine dusty-rose/powder-blush swatch rather than a cream tint with a
- * hint of pink in it. Still derived entirely from the existing wine
- * accent token — never a new hand-picked color.
+ * Revision C gave the whole card a solid dusty-rose --luxury-surface fill
+ * — the founder rejected this outright as "a giant pink rectangle," not
+ * as "still too subtle." The correction is architectural, not a color
+ * value: Weather now uses the SAME light ivory surface as every other
+ * Home card (World Clock's own cards included) — no --luxury-surface
+ * override at all. Blush/wine only appear as a delicate border tint and
+ * inside `WeatherPin`'s own illustration (blush→coral gradient, wine
+ * linework, gold heart) — "blush as accent, not dominant fill."
  */
 .luxury-weather-blush {
-  --luxury-surface: color-mix(in srgb, var(--luxury-rose) 22%, white);
-  --luxury-border: color-mix(in srgb, var(--luxury-rose) 32%, transparent);
-}
-
-/*
- * VISUAL-01 Revision C — the Owner Home World Clock's own lighter, softer
- * framing. `WorldClockCard.tsx` is shared with Team (TeamDashboardView and
- * the Team roster page both render it) — its own padding/spacing can't
- * change without affecting those, so this is deliberately limited to what
- * a scoped token override can reach: a softer outer tint, a lighter
- * border, and a near-invisible shadow, wrapping just the Owner Home's own
- * WorldClockCard instance. Reduces the "two nested bordered frames"
- * heaviness (outer tint panel + inner bordered city cards) without
- * touching the shared component's own structure.
- */
-.luxury-worldclock-light {
-  --luxury-surface-tint: color-mix(in srgb, var(--luxury-background) 60%, var(--luxury-surface-tint) 40%);
-  --luxury-border: color-mix(in srgb, #8a6d3f 9%, transparent);
-  --luxury-shadow-sm: 0 1px 2px color-mix(in srgb, #7a4d43 4%, transparent);
-  --luxury-shadow-md: 0 4px 12px color-mix(in srgb, #7a4d43 5%, transparent);
+  --luxury-border: color-mix(in srgb, var(--luxury-rose) 18%, transparent);
 }
 
 @theme inline {

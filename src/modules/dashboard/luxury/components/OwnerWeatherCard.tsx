@@ -41,20 +41,30 @@ function MetricPair({ precipitationProbability, windSpeedMph }: { precipitationP
 }
 
 /**
- * VISUAL-01 Revision C — the Owner Home's own refined, AF-inspired Weather
+ * VISUAL-01 Revision D — the Owner Home's own refined, AF-inspired Weather
  * module. `NextEventWeatherCard` (still used unchanged by Team, see its
  * own doc comment) is a compact narrow-card layout; the founder rejected
- * that composition specifically for Home ("narrow coarse utility card") in
- * favor of a wider, more spacious module — same "Owner-only variant of a
- * shared concept" precedent as `OwnerHomeHeader` vs.
- * `PersonalizedWelcomeHeader` and `StudioTodayCard` vs. `LuxuryMetricCard`.
- * Reuses the exact same real data (`NextEventWeather`/`DailyForecast`) and
- * the exact same `operationalNote()` logic (exported from
- * `NextEventWeatherCard.tsx`, not duplicated) — no field beyond
+ * that composition specifically for Home in favor of a wider, more
+ * spacious module — same "Owner-only variant of a shared concept"
+ * precedent as `OwnerHomeHeader` vs. `PersonalizedWelcomeHeader` and
+ * `StudioTodayCard` vs. `LuxuryMetricCard`. Reuses the exact same real
+ * data (`NextEventWeather`/`DailyForecast`) and the exact same
+ * `operationalNote()` logic (exported from `NextEventWeatherCard.tsx`, not
+ * duplicated) — no field beyond
  * temperature/condition/high-low/precipitation/wind/location/recommendation
  * is rendered, since BloomOS's weather data has nothing else truthful to
  * show (no humidity/UV/feels-like/updated-time exist anywhere in
  * `src/types/weather.ts`).
+ *
+ * Revision C gave this card its own solid dusty-rose surface — the
+ * founder rejected that as "a giant pink rectangle." This component's own
+ * JSX/layout is unchanged from Revision C (icon row, illustration+temp,
+ * divider, metrics — that composition wasn't the problem); only the
+ * `.luxury-weather-blush` wrapping class in globals.css changed, from a
+ * full pink surface back to the ordinary light `tone="surface"` ivory
+ * with a delicate wine-tinted border — blush now lives only inside
+ * `WeatherPin`'s own illustration and the ♡ accent, matching "blush is an
+ * accent, not the dominant fill."
  */
 export function OwnerWeatherCard({ data, contingencyNote, fallback }: OwnerWeatherCardProps) {
   if (!data) {

@@ -23,7 +23,7 @@ import { RecentMessagesCard } from "@/modules/dashboard/luxury/components/Recent
 import { TeamActivityCard } from "@/modules/dashboard/luxury/components/TeamActivityCard";
 import { OwnerAIBriefCard } from "@/modules/dashboard/luxury/components/OwnerAIBriefCard";
 import { OwnerWeatherCard } from "@/modules/dashboard/luxury/components/OwnerWeatherCard";
-import { WorldClockCard } from "@/modules/dashboard/luxury/components/WorldClockCard";
+import { OwnerWorldClockCard } from "@/modules/dashboard/luxury/components/OwnerWorldClockCard";
 import { MyDaySection } from "@/modules/dashboard/luxury/components/MyDaySection";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatMoney } from "@/lib/money";
@@ -134,20 +134,17 @@ export function OwnerDashboardView({ data, branding, profileName, profileRoleLab
           heading, ahead of My Day. Only the five business KPIs (moved to
           Workspace in Revision B) were ever meant to move lower —
           Clock/Weather's position is founder-locked to this spot.
-          Revision C rebalances the column split (was 3/4-1/4, now 3/5-2/5)
-          so Weather has real room to breathe instead of a thin strip, and
-          both get their own scoped token overrides — see
-          `.luxury-worldclock-light`/`.luxury-weather-blush` in globals.css
-          — World Clock/Weather's own shared components stay untouched;
-          Weather itself is now `OwnerWeatherCard`, an Owner-only refined
-          layout (see its own doc comment for why it's a new component
-          rather than a `NextEventWeatherCard` change).
+          Revision D rebuilds both as Owner-only components
+          (`OwnerWorldClockCard`/`OwnerWeatherCard` — see their own doc
+          comments for why, given `WorldClockCard`/`NextEventWeatherCard`
+          stay shared with Team) at an approximately 2/3-1/3 split, per the
+          AF reference proportions.
         */}
-        <div className="animate-fade-up stagger-2 grid grid-cols-1 items-start gap-5 lg:grid-cols-5">
-          <div className="luxury-worldclock-light lg:col-span-3">
-            <WorldClockCard />
+        <div className="animate-fade-up stagger-2 grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <OwnerWorldClockCard />
           </div>
-          <div className="luxury-weather-blush lg:col-span-2">
+          <div className="luxury-weather-blush lg:col-span-1">
             <OwnerWeatherCard data={data.nextEventWeather} fallback={data.homeWeatherFallback ? { locationLabel: "Honolulu", forecast: data.homeWeatherFallback } : null} />
           </div>
         </div>

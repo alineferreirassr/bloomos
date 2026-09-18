@@ -32,11 +32,12 @@ vi.mock("@/modules/dashboard/luxury/components/MoodCheckInCard", () => ({
 vi.mock("@/modules/dashboard/luxury/components/WaterTrackerCard", () => ({
   WaterTrackerCard: () => null,
 }));
-// WorldClockCard's own timer/Intl behavior is fully covered by its dedicated
-// test file — stubbed here so this file's `vi.useFakeTimers()` calls (for
-// the greeting tests) can't interact with WorldClockCard's own interval.
-vi.mock("@/modules/dashboard/luxury/components/WorldClockCard", () => ({
-  WorldClockCard: () => <div>World Clock</div>,
+// OwnerWorldClockCard reuses the same buildWorldClockDisplays()/Intl logic
+// WorldClockCard.test.tsx already covers — stubbed here purely so this
+// file's `vi.useFakeTimers()` calls (for the greeting tests) can't
+// interact with its own interval.
+vi.mock("@/modules/dashboard/luxury/components/OwnerWorldClockCard", () => ({
+  OwnerWorldClockCard: () => <div>♡ World Clock</div>,
 }));
 
 import { OwnerDashboardView } from "@/modules/dashboard/luxury/components/OwnerDashboardView";
@@ -137,7 +138,7 @@ describe("OwnerDashboardView — A little look at today ♡ (World Clock + Weath
 
     expect(screen.getByText("Your Day")).toBeInTheDocument();
     expect(screen.getByText("A little look at today ♡")).toBeInTheDocument();
-    expect(screen.getByText("World Clock")).toBeInTheDocument();
+    expect(screen.getByText("♡ World Clock")).toBeInTheDocument();
 
     // Weather no longer vanishes when nextEventWeather is null — it still renders its own section, once.
     expect(screen.getAllByText("♡ Weather")).toHaveLength(1);
