@@ -210,6 +210,28 @@ export const AUTOMATION_CONDITION_FIELDS = [
   // not make.
   "previousAssignee",
   "newAssignee",
+  // SOCIAL-21C — matches `instagram.comment_received`'s own trigger facts
+  // (`core/integrations/webhooks/metaWebhookProcessing.ts`'s `processCommentChange`).
+  // Deliberately excludes `commentText`/`externalAuthorUsername`, both
+  // already present in the raw facts but never exposed here — the same
+  // "ids only, never raw comment/DM content or username" rule
+  // `resolveLeadAttribution()` and `SocialCommentAttributionStats` (SOCIAL-20D)
+  // already established, applied here for the third time rather than
+  // re-decided.
+  "commentId",
+  "instagramAccountIdentityId",
+  "externalAuthorId",
+  "hasParent",
+  // SOCIAL-21C — matches `instagram.message_received`'s own trigger facts
+  // (same file, `processMessagingEntry`). Deliberately excludes
+  // `messageText`/`externalParticipantUsername` for the identical reason
+  // above, and excludes `direction` for a different, structural reason:
+  // this trigger only ever dispatches for an inbound message (the
+  // function's own early return for an outbound one), so `direction` is
+  // always `"inbound"` here — a constant carries no discriminating value
+  // as a Condition field.
+  "messageId",
+  "conversationId",
 ] as const;
 export type AutomationConditionField = (typeof AUTOMATION_CONDITION_FIELDS)[number];
 

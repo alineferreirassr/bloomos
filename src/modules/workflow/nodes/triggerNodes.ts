@@ -286,6 +286,36 @@ export const leadAssignedTrigger = makeTriggerNode({
   compileTarget: "lead.assigned",
 });
 
+/**
+ * SOCIAL-21C — the two existing Instagram ingestion triggers (SOCIAL-11E),
+ * exposed to the Workflow Builder for the first time. Both already fire
+ * today from `metaWebhookProcessing.ts`, deduplicated at the source
+ * (delivery-level claim + domain-row unique constraint) before dispatch
+ * ever happens, and already fan out independently to the existing default
+ * Lead-capture Automations (`captureLeadFromInstagramComment.ts`/
+ * `captureLeadFromInstagramDm.ts`) — a user-built Workflow on either
+ * trigger runs as a fully separate Automation and cannot duplicate or
+ * interfere with that default capture. Condition fields carry only ids
+ * and structural facts, never raw comment/DM content or a username — see
+ * `AUTOMATION_CONDITION_FIELDS`'s own matching doc comment for the exact
+ * "why" on the excluded fields.
+ */
+export const instagramCommentReceivedTrigger = makeTriggerNode({
+  id: "trigger.instagram-comment-received",
+  name: "Instagram Comment Received",
+  description: "Fires when a new Instagram comment is received.",
+  icon: "MessageSquare",
+  compileTarget: "instagram.comment_received",
+});
+
+export const instagramMessageReceivedTrigger = makeTriggerNode({
+  id: "trigger.instagram-message-received",
+  name: "Instagram DM Received",
+  description: "Fires when a new inbound Instagram DM is received.",
+  icon: "MessageSquare",
+  compileTarget: "instagram.message_received",
+});
+
 export const triggerNodes: WorkflowNodeDefinition[] = [
   proposalAcceptedTrigger,
   proposalRejectedTrigger,
@@ -322,4 +352,6 @@ export const triggerNodes: WorkflowNodeDefinition[] = [
   leadStatusChangedTrigger,
   leadConvertedTrigger,
   leadAssignedTrigger,
+  instagramCommentReceivedTrigger,
+  instagramMessageReceivedTrigger,
 ];
