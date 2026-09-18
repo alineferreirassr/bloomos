@@ -6,7 +6,7 @@ import { DayPeriodGlyph } from "@/modules/dashboard/luxury/components/DayPeriodG
 import { WORLD_CLOCK_LOCATIONS, buildWorldClockDisplays, type WorldClockDisplay } from "@/modules/dashboard/luxury/worldClock";
 
 const REFRESH_INTERVAL_MS = 30_000;
-const CLOCK_FACE_SIZE = 100;
+const CLOCK_FACE_SIZE = 84;
 
 /**
  * VISUAL-01 Revision D — the Owner Home's own spacious World Clock
@@ -16,16 +16,25 @@ const CLOCK_FACE_SIZE = 100;
  * `OwnerHomeHeader`/`OwnerWeatherCard`. Reuses every piece of real logic
  * (`buildWorldClockDisplays`, `AnalogClockFace`, `DayPeriodGlyph`) — only
  * the layout/spacing/weight is different. No new clock/timezone behavior.
+ *
+ * Revision E — Revision D's `sm:grid-cols-3` on the city grid ignored how
+ * much width this module actually has (it sits in ~70% of the Dashboard
+ * content column, not the full viewport), so 3 cards could be forced
+ * narrower than their content needed, wrapping the time and stretching
+ * card height. Replaced with an `auto-fit`/`minmax` grid (see below) that
+ * reflows off the container's real rendered width instead of a hardcoded
+ * viewport breakpoint — the time is also `whitespace-nowrap` at a sized-
+ * down (but still prominent) scale so it can never break across lines.
  */
 function CityCard({ display }: { display: WorldClockDisplay }) {
   return (
-    <div className="flex flex-1 flex-col items-center rounded-[28px] border border-luxury-border bg-luxury-surface px-6 py-8 text-center">
+    <div className="flex flex-1 flex-col items-center rounded-[28px] border border-luxury-border bg-luxury-surface px-5 py-6 text-center">
       <AnalogClockFace hour24={display.hour24} minute={display.minute} size={CLOCK_FACE_SIZE} />
-      <p className="mt-4 font-luxury-display text-xl leading-tight font-semibold text-luxury-text">{display.city}</p>
-      <p className="mt-1 flex min-h-[14px] items-center text-luxury-metadata font-medium tracking-[0.16em] text-luxury-text-muted uppercase">{display.region}</p>
-      <p className="mt-3 font-luxury-display text-3xl leading-none font-semibold text-luxury-text">{display.timeLabel}</p>
+      <p className="mt-3 font-luxury-display text-lg leading-tight font-semibold text-luxury-text">{display.city}</p>
+      <p className="mt-1 flex min-h-[2.1em] items-center text-luxury-metadata font-medium tracking-[0.14em] text-luxury-text-muted uppercase">{display.region}</p>
+      <p className="mt-2 font-luxury-display text-[1.65rem] leading-none font-semibold whitespace-nowrap text-luxury-text">{display.timeLabel}</p>
       <p className="mt-2 text-luxury-small text-luxury-text-muted">{display.dateLabel}</p>
-      <div className="mt-auto flex items-center gap-2 pt-4">
+      <div className="mt-auto flex items-center gap-2 pt-3">
         <span className="flex items-center gap-1 text-luxury-status font-medium tracking-[0.1em] text-luxury-text-muted uppercase">
           <DayPeriodGlyph isNight={display.isNight} />
           {display.dayPeriod}
@@ -57,15 +66,15 @@ export function OwnerWorldClockCard() {
     <div className="rounded-[32px] border border-luxury-border/70 bg-luxury-surface-tint p-6">
       <p className="px-1 text-luxury-metadata font-medium tracking-[0.14em] text-luxury-text-muted uppercase">♡ World Clock</p>
       {now ? (
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-4">
           {buildWorldClockDisplays(now).map((display) => (
             <CityCard key={display.locationId} display={display} />
           ))}
         </div>
       ) : (
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3" aria-hidden="true">
+        <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-4" aria-hidden="true">
           {WORLD_CLOCK_LOCATIONS.map((location) => (
-            <div key={location.id} className="h-[15rem] rounded-[28px] border border-luxury-border bg-luxury-surface" />
+            <div key={location.id} className="h-[13rem] rounded-[28px] border border-luxury-border bg-luxury-surface" />
           ))}
         </div>
       )}

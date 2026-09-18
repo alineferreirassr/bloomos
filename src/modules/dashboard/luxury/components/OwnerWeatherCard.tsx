@@ -6,7 +6,7 @@ import { operationalNote } from "@/modules/dashboard/luxury/components/NextEvent
 import { WEATHER_CONDITION_LABEL, type DailyForecast } from "@/types/weather";
 import type { NextEventWeather } from "@/modules/dashboard/luxury/getOwnerDashboardData";
 
-const WEATHER_PIN_SIZE = 132;
+const WEATHER_PIN_SIZE = 112;
 
 interface OwnerWeatherCardProps {
   data: NextEventWeather | null;
@@ -65,6 +65,12 @@ function MetricPair({ precipitationProbability, windSpeedMph }: { precipitationP
  * with a delicate wine-tinted border — blush now lives only inside
  * `WeatherPin`'s own illustration and the ♡ accent, matching "blush is an
  * accent, not the dominant fill."
+ *
+ * Revision E — no color change (explicitly out of scope this pass); only
+ * a width-efficiency pass since this column shrank in the outer grid
+ * rebalance (see OwnerDashboardView.tsx): the pin is slightly smaller
+ * (132->112) and padding/gaps trimmed so the temperature/condition/
+ * high-low text has more room to breathe without wrapping.
  */
 export function OwnerWeatherCard({ data, contingencyNote, fallback }: OwnerWeatherCardProps) {
   if (!data) {
@@ -74,12 +80,12 @@ export function OwnerWeatherCard({ data, contingencyNote, fallback }: OwnerWeath
       const windSpeedMph = forecast.windSpeedMaxMph;
       const note = operationalNote(forecast.condition, precipitationProbability);
       return (
-        <LuxuryCard tone="surface" className="flex h-full flex-col gap-1 p-7">
+        <LuxuryCard tone="surface" className="flex h-full flex-col gap-1 p-6">
           <div className="flex items-baseline justify-between">
             <p className="text-luxury-metadata font-semibold tracking-wide text-luxury-text-muted uppercase">♡ Weather</p>
             <span className="text-luxury-small font-medium text-luxury-rose">{fallback.locationLabel}</span>
           </div>
-          <div className="mt-4 flex items-center gap-6">
+          <div className="mt-4 flex items-center gap-4">
             <WeatherPin condition={forecast.condition} size={WEATHER_PIN_SIZE} />
             <div className="min-w-0">
               <p className="font-luxury-display text-[3.25rem] leading-none font-semibold text-luxury-text">{forecast.highF}°</p>
@@ -100,7 +106,7 @@ export function OwnerWeatherCard({ data, contingencyNote, fallback }: OwnerWeath
       );
     }
     return (
-      <LuxuryCard tone="surface" className="flex h-full flex-col justify-center gap-1 p-7">
+      <LuxuryCard tone="surface" className="flex h-full flex-col justify-center gap-1 p-6">
         <p className="text-luxury-metadata font-semibold tracking-wide text-luxury-text-muted uppercase">♡ Weather</p>
         <p className="mt-2 text-luxury-body text-luxury-text-muted">No upcoming event with a set location yet — weather appears here once one is scheduled.</p>
       </LuxuryCard>
@@ -113,7 +119,7 @@ export function OwnerWeatherCard({ data, contingencyNote, fallback }: OwnerWeath
 
   if (!snapshot && !day) {
     return (
-      <LuxuryCard tone="surface" className="flex h-full flex-col justify-center gap-1 p-7">
+      <LuxuryCard tone="surface" className="flex h-full flex-col justify-center gap-1 p-6">
         <p className="text-luxury-metadata font-semibold tracking-wide text-luxury-text-muted uppercase">♡ Weather</p>
         <p className="mt-2 text-luxury-body text-luxury-text-muted">Weather unavailable for {data.title}.</p>
       </LuxuryCard>
@@ -127,7 +133,7 @@ export function OwnerWeatherCard({ data, contingencyNote, fallback }: OwnerWeath
   const note = operationalNote(condition, precipitationProbability);
 
   return (
-    <LuxuryCard tone="surface" className="flex h-full flex-col gap-1 p-7">
+    <LuxuryCard tone="surface" className="flex h-full flex-col gap-1 p-6">
       <div className="flex items-baseline justify-between gap-3">
         <p className="text-luxury-metadata font-semibold tracking-wide text-luxury-text-muted uppercase">♡ Weather</p>
         <Link href={`/events/${data.eventId}`} className="max-w-[10rem] truncate text-luxury-small font-medium text-luxury-rose">
@@ -138,7 +144,7 @@ export function OwnerWeatherCard({ data, contingencyNote, fallback }: OwnerWeath
         {data.dateLabel}
         {snapshot && data.timeLabel ? ` · ${data.timeLabel}` : ""}
       </p>
-      <div className="mt-4 flex items-center gap-6">
+      <div className="mt-4 flex items-center gap-4">
         <WeatherPin condition={condition} size={WEATHER_PIN_SIZE} />
         <div className="min-w-0">
           <p className="font-luxury-display text-[3.25rem] leading-none font-semibold text-luxury-text">{temperatureLabel}</p>

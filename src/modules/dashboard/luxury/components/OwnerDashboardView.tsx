@@ -137,14 +137,21 @@ export function OwnerDashboardView({ data, branding, profileName, profileRoleLab
           Revision D rebuilds both as Owner-only components
           (`OwnerWorldClockCard`/`OwnerWeatherCard` — see their own doc
           comments for why, given `WorldClockCard`/`NextEventWeatherCard`
-          stay shared with Team) at an approximately 2/3-1/3 split, per the
-          AF reference proportions.
+          stay shared with Team).
+          Revision E — side-by-side now only starts at `xl:` (1280px)
+          instead of `lg:` (1024px): between those widths, Weather stacks
+          below World Clock rather than squeezing 3 city cards into too
+          little room. The split itself moves to ~70/30
+          (`xl:grid-cols-10`, 7/3) — World Clock's own inner city grid is
+          now `auto-fit`/`minmax`-based (see OwnerWorldClockCard.tsx), so
+          it reflows off whatever width this column actually renders at
+          rather than assuming one.
         */}
-        <div className="animate-fade-up stagger-2 grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
-          <div className="lg:col-span-2">
+        <div className="animate-fade-up stagger-2 grid grid-cols-1 items-start gap-5 xl:grid-cols-10">
+          <div className="xl:col-span-7">
             <OwnerWorldClockCard />
           </div>
-          <div className="luxury-weather-blush lg:col-span-1">
+          <div className="luxury-weather-blush xl:col-span-3">
             <OwnerWeatherCard data={data.nextEventWeather} fallback={data.homeWeatherFallback ? { locationLabel: "Honolulu", forecast: data.homeWeatherFallback } : null} />
           </div>
         </div>
