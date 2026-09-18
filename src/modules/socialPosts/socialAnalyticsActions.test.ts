@@ -400,6 +400,91 @@ describe("getSocialAnalyticsDashboardAction — SOCIAL-15E hardening: finance.am
   });
 });
 
+describe("getSocialAnalyticsDashboardAction — SOCIAL-20D comment/conversation attribution wiring", () => {
+  it("threads byComment/byConversation through as commentAttribution/conversationAttribution, all-time, unredacted for a caller with finance.amounts.view", async () => {
+    const { writeLeads, resetLeadsStore } = await import("@/lib/data/mock/leadsStore");
+    const { writeClients, resetClientsStore } = await import("@/lib/data/mock/clientsStore");
+    const { writeInvoices, resetInvoicesStore } = await import("@/lib/data/mock/invoicesStore");
+    const { makeLead } = await import("@/modules/leads/testUtils");
+    const { makeClient } = await import("@/modules/clients/testUtils");
+    const { makeInvoice } = await import("@/modules/finance/testUtils");
+    resetLeadsStore();
+    resetClientsStore();
+    resetInvoicesStore();
+
+    writeLeads([
+      makeLead({ id: "lead_comment_attr", workspace_id: CURRENT_WORKSPACE_ID, instagram_comment_id: "comment_attr_1", social_post_id: null, converted_client_id: "client_comment_attr" }),
+      makeLead({ id: "lead_dm_attr", workspace_id: CURRENT_WORKSPACE_ID, instagram_conversation_id: "conversation_attr_1", converted_client_id: "client_dm_attr" }),
+    ]);
+    writeClients([
+      makeClient({ id: "client_comment_attr", workspace_id: CURRENT_WORKSPACE_ID, originating_lead_id: "lead_comment_attr" }),
+      makeClient({ id: "client_dm_attr", workspace_id: CURRENT_WORKSPACE_ID, originating_lead_id: "lead_dm_attr" }),
+    ]);
+    writeInvoices([makeInvoice({ id: "invoice_attr_1", workspace_id: CURRENT_WORKSPACE_ID, client_id: "client_comment_attr", total_minor: 200000, status: "sent" })]);
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue({ ...session, permissions: [...session.permissions, "finance.amounts.view"] });
+
+    const result = await getSocialAnalyticsDashboardAction();
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.commentAttribution).toEqual([
+      { instagramCommentId: "comment_attr_1", socialPostId: null, leadCount: 1, clientCount: 1, eventCount: 0, invoicedRevenueMinor: 200000, paidRevenueMinor: 0 },
+    ]);
+    expect(result.data.conversationAttribution).toEqual([
+      { instagramConversationId: "conversation_attr_1", leadCount: 1, clientCount: 1, eventCount: 0, invoicedRevenueMinor: 0, paidRevenueMinor: 0 },
+    ]);
+
+    resetLeadsStore();
+    resetClientsStore();
+    resetInvoicesStore();
+  });
+
+  it("never exposes real comment/conversation revenue to a caller without finance.amounts.view — counts remain visible, revenue redacted to null (never zero)", async () => {
+    const { writeLeads, resetLeadsStore } = await import("@/lib/data/mock/leadsStore");
+    const { writeClients, resetClientsStore } = await import("@/lib/data/mock/clientsStore");
+    const { writeInvoices, resetInvoicesStore } = await import("@/lib/data/mock/invoicesStore");
+    const { makeLead } = await import("@/modules/leads/testUtils");
+    const { makeClient } = await import("@/modules/clients/testUtils");
+    const { makeInvoice } = await import("@/modules/finance/testUtils");
+    resetLeadsStore();
+    resetClientsStore();
+    resetInvoicesStore();
+
+    writeLeads([makeLead({ id: "lead_comment", workspace_id: CURRENT_WORKSPACE_ID, instagram_comment_id: "comment_1", social_post_id: null, converted_client_id: "client_1" })]);
+    writeClients([makeClient({ id: "client_1", workspace_id: CURRENT_WORKSPACE_ID, originating_lead_id: "lead_comment" })]);
+    writeInvoices([makeInvoice({ id: "invoice_1", workspace_id: CURRENT_WORKSPACE_ID, client_id: "client_1", total_minor: 200000, status: "sent" })]);
+    // The `session` fixture carries only social.view/social.create/social.publish — no finance.amounts.view.
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session);
+
+    const result = await getSocialAnalyticsDashboardAction();
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.commentAttribution[0].leadCount).toBe(1);
+    expect(result.data.commentAttribution[0].clientCount).toBe(1);
+    expect(result.data.commentAttribution[0].invoicedRevenueMinor).toBeNull();
+    expect(result.data.commentAttribution[0].paidRevenueMinor).toBeNull();
+
+    resetLeadsStore();
+    resetClientsStore();
+    resetInvoicesStore();
+  });
+
+  it("returns empty commentAttribution/conversationAttribution arrays for a workspace with no comment- or DM-attributed Leads", async () => {
+    const { resetLeadsStore } = await import("@/lib/data/mock/leadsStore");
+    resetLeadsStore();
+
+    const result = await getSocialAnalyticsDashboardAction();
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.commentAttribution).toEqual([]);
+    expect(result.data.conversationAttribution).toEqual([]);
+
+    resetLeadsStore();
+  });
+});
+
 describe("getSocialAnalyticsDashboardAction — SOCIAL-16H.1 context propagation", () => {
   const ORIGINAL_ENV = { ...process.env };
 
@@ -420,7 +505,7 @@ describe("getSocialAnalyticsDashboardAction — SOCIAL-16H.1 context propagation
     process.env.NEXT_PUBLIC_DATA_MODE = "supabase";
     const resolvedContext = { supabase: {} as never, session: { workspace: { id: "ws_resolved" } } as never };
     const getServerRepositoryContextMock = vi.fn().mockResolvedValue(resolvedContext);
-    const getSocialAttributionReportMock = vi.fn().mockResolvedValue({ generatedAt: "2026-01-01T00:00:00.000Z", totals: { contentAttributedLeadCount: 0, commentAttributedLeadCount: 0, dmAttributedLeadCount: 0, attributedLeadCount: 0, unattributedLeadCount: 0, attributedClientCount: 0, attributedEventCount: 0, attributedInvoicedRevenueMinor: 0, attributedPaidRevenueMinor: 0 }, byPost: [] });
+    const getSocialAttributionReportMock = vi.fn().mockResolvedValue({ generatedAt: "2026-01-01T00:00:00.000Z", totals: { contentAttributedLeadCount: 0, commentAttributedLeadCount: 0, dmAttributedLeadCount: 0, attributedLeadCount: 0, unattributedLeadCount: 0, attributedClientCount: 0, attributedEventCount: 0, attributedInvoicedRevenueMinor: 0, attributedPaidRevenueMinor: 0 }, byPost: [], byComment: [], byConversation: [] });
 
     vi.doMock("@/lib/auth/workspaceSession", () => ({ getServerRepositoryContext: getServerRepositoryContextMock }));
     vi.doMock("@/modules/socialAttribution/getSocialAttributionReport", () => ({ getSocialAttributionReport: getSocialAttributionReportMock }));

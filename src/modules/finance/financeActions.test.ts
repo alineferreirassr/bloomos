@@ -297,6 +297,8 @@ describe("getFinanceDashboardDataAction — SOCIAL-16H.1 context propagation", (
       attributedPaidRevenueMinor: 0,
     },
     byPost: [],
+    byComment: [],
+    byConversation: [],
   };
 
   afterEach(() => {

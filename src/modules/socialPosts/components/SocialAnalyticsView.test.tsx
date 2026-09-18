@@ -55,6 +55,8 @@ function emptyData(overrides: Partial<SocialAnalyticsDashboardData> = {}): Socia
     accountHistory: [],
     postPerformance: [],
     topPosts: [],
+    commentAttribution: [],
+    conversationAttribution: [],
     freshness: { accountAsOf: null, postAsOf: null },
     ...overrides,
   };

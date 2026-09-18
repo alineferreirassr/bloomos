@@ -3,7 +3,13 @@ import { computeClientFinancialSummary } from "@/modules/finance/financialSummar
 import { clockNow } from "@/core/time/clock";
 import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 import type { Lead } from "@/types/lead";
-import type { SocialAttributionReport, SocialAttributionTotals, SocialPostAttributionStats } from "@/modules/socialAttribution/types";
+import type {
+  SocialAttributionReport,
+  SocialAttributionTotals,
+  SocialPostAttributionStats,
+  SocialCommentAttributionStats,
+  SocialConversationAttributionStats,
+} from "@/modules/socialAttribution/types";
 
 /**
  * SOCIAL-15D — the single reporting rollup over SOCIAL-15B/C's stored
@@ -39,6 +45,26 @@ import type { SocialAttributionReport, SocialAttributionTotals, SocialPostAttrib
  * nullable FK (never an array), a Lead can belong to at most one post's
  * own bucket — summing `byPost[*].invoicedRevenueMinor` across every post
  * therefore never exceeds `totals.attributedInvoicedRevenueMinor`.
+ *
+ * SOCIAL-20D — `byComment` (grouped by `lead.instagram_comment_id`) and
+ * `byConversation` (grouped by `lead.instagram_conversation_id`) reuse
+ * this exact same grouping algorithm, never a second one. `byComment` is
+ * NOT a sibling partition of `byPost` — it is a strict refinement: a post
+ * only ever resolves once a comment is found (SOCIAL-15C), so
+ * `social_post_id` is only ever set together with `instagram_comment_id`,
+ * meaning every post-attributed Lead is also comment-attributed, and one
+ * post's own `byPost` bucket is the union of one or more `byComment`
+ * buckets. Summing `byPost[*]` and `byComment[*]` together therefore
+ * double-counts every resolved comment — `totals` above remains the sole
+ * canonical, deduplicated figure regardless. `byConversation` is fully
+ * disjoint from both: the two Instagram capture Actions
+ * (`createLeadFromInstagramCommentAction.ts`/`createLeadFromInstagramDmAction.ts`)
+ * each set only their own attribution fields, never both, so a Lead is
+ * never simultaneously comment- and DM-attributed — `byConversation` is
+ * safe to sum alongside either `byPost` or `byComment`. Both new arrays
+ * carry ids only, never a comment's own `content` or any
+ * username/participant identifier — the same rule `resolveLeadAttribution()`
+ * already established for the single-Lead attribution display.
  */
 export async function getSocialAttributionReport(context?: ServerRepositoryContext): Promise<SocialAttributionReport> {
   const [leads, clients, events, invoices, payments] = await Promise.all([
@@ -130,9 +156,68 @@ export async function getSocialAttributionReport(context?: ServerRepositoryConte
     });
   }
 
+  const leadsByComment = new Map<string, Lead[]>();
+  for (const lead of commentAttributed) {
+    const commentId = lead.instagram_comment_id;
+    if (!commentId) continue;
+    const existing = leadsByComment.get(commentId);
+    if (existing) existing.push(lead);
+    else leadsByComment.set(commentId, [lead]);
+  }
+
+  const byComment: SocialCommentAttributionStats[] = [];
+  for (const [instagramCommentId, commentLeads] of leadsByComment) {
+    const commentLeadIds = new Set(commentLeads.map((lead) => lead.id));
+    const commentClientIds = clientIdsForLeads(commentLeads);
+    const commentEventIds = eventIdsForAttribution(commentClientIds, commentLeadIds);
+    const commentRevenue = revenueForClientIds(commentClientIds);
+
+    byComment.push({
+      instagramCommentId,
+      // SOCIAL-20D — every Lead grouped under the same instagram_comment_id
+      // was captured from the exact same comment, so social_post_id is
+      // identical across the group by construction; carried over as-is,
+      // never re-resolved.
+      socialPostId: commentLeads[0]?.social_post_id ?? null,
+      leadCount: commentLeadIds.size,
+      clientCount: commentClientIds.size,
+      eventCount: commentEventIds.size,
+      invoicedRevenueMinor: commentRevenue.invoicedRevenueMinor,
+      paidRevenueMinor: commentRevenue.paidRevenueMinor,
+    });
+  }
+
+  const leadsByConversation = new Map<string, Lead[]>();
+  for (const lead of dmAttributed) {
+    const conversationId = lead.instagram_conversation_id;
+    if (!conversationId) continue;
+    const existing = leadsByConversation.get(conversationId);
+    if (existing) existing.push(lead);
+    else leadsByConversation.set(conversationId, [lead]);
+  }
+
+  const byConversation: SocialConversationAttributionStats[] = [];
+  for (const [instagramConversationId, conversationLeads] of leadsByConversation) {
+    const conversationLeadIds = new Set(conversationLeads.map((lead) => lead.id));
+    const conversationClientIds = clientIdsForLeads(conversationLeads);
+    const conversationEventIds = eventIdsForAttribution(conversationClientIds, conversationLeadIds);
+    const conversationRevenue = revenueForClientIds(conversationClientIds);
+
+    byConversation.push({
+      instagramConversationId,
+      leadCount: conversationLeadIds.size,
+      clientCount: conversationClientIds.size,
+      eventCount: conversationEventIds.size,
+      invoicedRevenueMinor: conversationRevenue.invoicedRevenueMinor,
+      paidRevenueMinor: conversationRevenue.paidRevenueMinor,
+    });
+  }
+
   return {
     generatedAt: clockNow().toISOString(),
     totals,
     byPost,
+    byComment,
+    byConversation,
   };
 }

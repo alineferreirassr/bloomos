@@ -8,7 +8,7 @@ import { getOwnProviderConnectionAction } from "@/modules/integrations/manageOAu
 import { getSocialAttributionReport } from "@/modules/socialAttribution/getSocialAttributionReport";
 import type { SocialPost } from "@/types/socialPost";
 import type { SocialAccountMetricSnapshot, SocialPostMetricSnapshot } from "@/types/socialMetricSnapshot";
-import type { SocialPostAttributionStats } from "@/modules/socialAttribution/types";
+import type { SocialPostAttributionStats, SocialCommentAttributionStats, SocialConversationAttributionStats } from "@/modules/socialAttribution/types";
 
 /**
  * SOCIAL-05E — the Analytics tab's own read model. Reads ONLY the
@@ -61,21 +61,64 @@ export interface SocialPostAttributionView {
   paidRevenueMinor: number | null;
 }
 
+/**
+ * SOCIAL-20D — the redacted, client-facing shape of `SocialCommentAttributionStats`/
+ * `SocialConversationAttributionStats`, mirroring `SocialPostAttributionView`'s
+ * own redaction discipline exactly. Ids only — never a comment's own
+ * `content` or any username/participant identifier (see the source
+ * types' own doc comments).
+ */
+export interface SocialCommentAttributionView {
+  instagramCommentId: string;
+  socialPostId: string | null;
+  leadCount: number;
+  clientCount: number;
+  eventCount: number;
+  invoicedRevenueMinor: number | null;
+  paidRevenueMinor: number | null;
+}
+
+export interface SocialConversationAttributionView {
+  instagramConversationId: string;
+  leadCount: number;
+  clientCount: number;
+  eventCount: number;
+  invoicedRevenueMinor: number | null;
+  paidRevenueMinor: number | null;
+}
+
 /** The zero-stats default for a post with no entry in `getSocialAttributionReport()`'s own `byPost` — a real, honest zero (no attributed Lead exists), never a placeholder standing in for missing data. Money fields are redacted the same way as every other row via `redactAttribution`. */
 function zeroAttribution(socialPostId: string): SocialPostAttributionStats {
   return { socialPostId, leadCount: 0, clientCount: 0, eventCount: 0, invoicedRevenueMinor: 0, paidRevenueMinor: 0 };
 }
 
-/** SOCIAL-15E — redacts money fields for a caller without `finance.amounts.view`; counts are always passed through real. */
-function redactAttribution(stats: SocialPostAttributionStats, canViewAmounts: boolean): SocialPostAttributionView {
+/** SOCIAL-15E / SOCIAL-20D — shared redaction core for every attribution row shape in this file: counts always real, money fields `null` (never `0`) for a caller lacking `finance.amounts.view`. */
+function redactMoneyFields(
+  stats: { leadCount: number; clientCount: number; eventCount: number; invoicedRevenueMinor: number; paidRevenueMinor: number },
+  canViewAmounts: boolean,
+): { leadCount: number; clientCount: number; eventCount: number; invoicedRevenueMinor: number | null; paidRevenueMinor: number | null } {
   return {
-    socialPostId: stats.socialPostId,
     leadCount: stats.leadCount,
     clientCount: stats.clientCount,
     eventCount: stats.eventCount,
     invoicedRevenueMinor: canViewAmounts ? stats.invoicedRevenueMinor : null,
     paidRevenueMinor: canViewAmounts ? stats.paidRevenueMinor : null,
   };
+}
+
+/** SOCIAL-15E — redacts money fields for a caller without `finance.amounts.view`; counts are always passed through real. */
+function redactAttribution(stats: SocialPostAttributionStats, canViewAmounts: boolean): SocialPostAttributionView {
+  return { socialPostId: stats.socialPostId, ...redactMoneyFields(stats, canViewAmounts) };
+}
+
+/** SOCIAL-20D — same redaction discipline as `redactAttribution`, applied to a `byComment` row. */
+function redactCommentAttribution(stats: SocialCommentAttributionStats, canViewAmounts: boolean): SocialCommentAttributionView {
+  return { instagramCommentId: stats.instagramCommentId, socialPostId: stats.socialPostId, ...redactMoneyFields(stats, canViewAmounts) };
+}
+
+/** SOCIAL-20D — same redaction discipline as `redactAttribution`, applied to a `byConversation` row. */
+function redactConversationAttribution(stats: SocialConversationAttributionStats, canViewAmounts: boolean): SocialConversationAttributionView {
+  return { instagramConversationId: stats.instagramConversationId, ...redactMoneyFields(stats, canViewAmounts) };
 }
 
 export interface SocialPostPerformanceRow {
@@ -115,6 +158,17 @@ export interface SocialAnalyticsDashboardData {
   postPerformance: SocialPostPerformanceRow[];
   /** Deterministic ranking: total_interactions descending, tied-break by published_at descending. Only posts with a real (non-null) total_interactions are ranked — Phase 9's own "do not invent a fallback" instruction. */
   topPosts: RankedSocialPostPerformanceRow[];
+  /**
+   * SOCIAL-20D — one row per comment with at least one attributed Lead
+   * (`getSocialAttributionReport()`'s own `byComment`, redacted). All-time,
+   * exactly like `postPerformance[*].attribution` — never filtered by this
+   * action's own `range` selector. Overlaps `postPerformance`'s own
+   * attribution figures for any post-resolved comment; never additive with
+   * it (see `SocialAttributionReport.byComment`'s own doc comment).
+   */
+  commentAttribution: SocialCommentAttributionView[];
+  /** SOCIAL-20D — one row per DM conversation with at least one attributed Lead (`byConversation`, redacted). All-time, disjoint from `postPerformance`/`commentAttribution`. */
+  conversationAttribution: SocialConversationAttributionView[];
   freshness: {
     /** The latest account snapshot's own metric_date, regardless of the selected range — freshness is a global fact, not scoped to the current view. */
     accountAsOf: string | null;
@@ -170,6 +224,10 @@ export async function getSocialAnalyticsDashboardAction(range: SocialAnalyticsTi
       getSocialAttributionReport(context),
     ]);
     const attributionByPostId = new Map(attributionReport.byPost.map((stats) => [stats.socialPostId, stats]));
+    // SOCIAL-20D — all-time, exactly like attributionByPostId above; never
+    // filtered by `range`.
+    const commentAttribution = attributionReport.byComment.map((stats) => redactCommentAttribution(stats, canViewAmounts));
+    const conversationAttribution = attributionReport.byConversation.map((stats) => redactConversationAttribution(stats, canViewAmounts));
 
     const publishedPosts = allPosts.filter((post) => post.status === "published");
     // One bounded query for every published post's latest snapshot (Phase
@@ -218,6 +276,8 @@ export async function getSocialAnalyticsDashboardAction(range: SocialAnalyticsTi
         accountHistory,
         postPerformance,
         topPosts,
+        commentAttribution,
+        conversationAttribution,
         freshness: {
           accountAsOf: accountLatest?.metric_date ?? null,
           postAsOf: latestDate(snapshots.map((snapshot) => snapshot.snapshot_date)),

@@ -49,11 +49,71 @@ export interface SocialAttributionTotals {
   attributedPaidRevenueMinor: number;
 }
 
+/**
+ * SOCIAL-20D — a strict refinement of `byPost`, never a sibling partition
+ * of the same whole: `social_post_id` is only ever set together with
+ * `instagram_comment_id` (a post only resolves once a comment is found),
+ * so every post-attributed Lead is also comment-attributed, but a
+ * comment-attributed Lead's comment may never have resolved to any post.
+ * One post's own `byPost` bucket is therefore the union of one or more
+ * `byComment` buckets (many distinct comments can resolve to the same
+ * post) plus any comments that never resolved. `socialPostId` is carried
+ * over as-is from the Lead's own stored value — never re-derived or
+ * re-resolved here.
+ *
+ * Ids only, by design — never the comment's own raw `content` or
+ * `external_author_username`. This mirrors `resolveLeadAttribution()`'s
+ * own explicit, pre-existing rule ("never a comment's or conversation's
+ * raw content, and never re-derives Instagram username/participant PII")
+ * for the single-Lead attribution display — this aggregate view extends
+ * that same rule rather than making a new privacy decision.
+ */
+export interface SocialCommentAttributionStats {
+  instagramCommentId: string;
+  socialPostId: string | null;
+  leadCount: number;
+  clientCount: number;
+  eventCount: number;
+  invoicedRevenueMinor: number;
+  paidRevenueMinor: number;
+}
+
+/**
+ * SOCIAL-20D — fully disjoint from `byPost`/`byComment` under the current
+ * capture invariants: a DM-captured Lead's `instagram_conversation_id` is
+ * never set alongside `social_post_id`/`instagram_comment_id` (the two
+ * Instagram capture Actions each set only their own attribution fields,
+ * never both). Ids only — never `external_participant_username` or any
+ * message content, for the same reason `SocialCommentAttributionStats`
+ * never carries the comment's own content.
+ */
+export interface SocialConversationAttributionStats {
+  instagramConversationId: string;
+  leadCount: number;
+  clientCount: number;
+  eventCount: number;
+  invoicedRevenueMinor: number;
+  paidRevenueMinor: number;
+}
+
 export interface SocialAttributionReport {
   generatedAt: string;
   totals: SocialAttributionTotals;
-  /** One entry per Social Post with at least one resolved, attributed Lead. A post with zero attribution simply has no entry here — callers that need an explicit zero row for every post (e.g. Social Analytics' own Post Performance table, which lists every post regardless of engagement) build that by defaulting a missing lookup to zero, never by this report inventing empty rows for posts it has no evidence about. */
+  /** One entry per Social Post with at least one resolved, attributed Lead. A post with zero attribution simply has no entry here — callers that need an explicit zero row for every post (e.g. Social Analytics' own Post Performance table, which lists every post regardless of engagement) build that by defaulting a missing lookup to zero, never by this report inventing empty rows for posts it has no evidence about.
+   *
+   * SOCIAL-20D — `byComment` (below) overlaps this array: every row here
+   * corresponds to one or more `byComment` rows sharing the same resolved
+   * `socialPostId`. Summing `byPost[*]` and `byComment[*]` together
+   * double-counts every resolved comment's own leads/clients/events/
+   * revenue. `totals` above remains the sole canonical, deduplicated
+   * figure — computed independently of both `byPost` and `byComment`,
+   * unaffected by this overlap. `byConversation` is disjoint from both
+   * and safe to sum alongside either. */
   byPost: SocialPostAttributionStats[];
+  /** SOCIAL-20D — grouped by `leads.instagram_comment_id`; a strict refinement of `byPost` — see this array's own doc comment on `byPost` above for the exact overlap rule. Never summed with `byPost`. */
+  byComment: SocialCommentAttributionStats[];
+  /** SOCIAL-20D — grouped by `leads.instagram_conversation_id`; fully disjoint from `byPost` and `byComment` under the current capture invariants (a Lead is never both comment- and DM-attributed). Safe to sum alongside either. */
+  byConversation: SocialConversationAttributionStats[];
 }
 
 /** A single Lead's own stored attribution, resolved for display (Lead/Client/Event Detail) — never an aggregate. */

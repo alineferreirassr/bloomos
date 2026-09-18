@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { CardGridSkeleton, TableSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { getMediaAssetDownloadUrl } from "@/lib/data";
 import { formatMoney } from "@/lib/money";
-import { getSocialAnalyticsDashboardAction, type SocialAnalyticsDashboardData, type SocialAnalyticsTimeRange, type SocialPostAttributionView, type SocialPostPerformanceRow } from "@/modules/socialPosts/socialAnalyticsActions";
+import { getSocialAnalyticsDashboardAction, type SocialAnalyticsDashboardData, type SocialAnalyticsTimeRange, type SocialPostAttributionView, type SocialPostPerformanceRow, type SocialCommentAttributionView, type SocialConversationAttributionView } from "@/modules/socialPosts/socialAnalyticsActions";
 import { SocialAnalyticsTrendChart } from "@/modules/socialPosts/components/SocialAnalyticsTrendChart";
 
 /**
@@ -66,6 +66,19 @@ function MetricCell({ value }: { value: number | null }) {
 /** Matches FinanceDashboardView's own `money()` null-means-redacted convention exactly (`minor === null ? "—" : formatMoney(...)`) — this codebase has no per-post/per-workspace multi-currency tracking anywhere. */
 function money(minor: number | null, currency = "USD"): string {
   return minor === null ? "—" : formatMoney(minor, currency);
+}
+
+/**
+ * SOCIAL-20D — descending by `paidRevenueMinor`, a new copy rather than
+ * mutating the server-supplied array. `null` (redacted for every row
+ * alike when the caller lacks `finance.amounts.view`) sorts as the lowest
+ * value, but since redaction is applied uniformly per caller — never
+ * selectively per row — every row is `null` together in that case, so
+ * this never creates a hidden zero/non-zero ordering signal; it only ever
+ * distinguishes real, already-visible amounts from one another.
+ */
+function sortByPaidRevenueDesc<T extends { paidRevenueMinor: number | null }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => (b.paidRevenueMinor ?? -1) - (a.paidRevenueMinor ?? -1));
 }
 
 /**
@@ -306,6 +319,91 @@ export function SocialAnalyticsView() {
                     <td className="py-2.5 pr-3">
                       <AttributionCell attribution={row.attribution} />
                     </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <h3 className="font-serif text-[17px] font-semibold text-text">Comment Attribution</h3>
+        {data.commentAttribution.length === 0 ? (
+          <EmptyState title="No comment-attributed leads yet" description="Leads captured from an Instagram comment will appear here." />
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[480px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-border text-xs text-text-muted">
+                  <th className="py-2 pr-3 font-medium">Comment</th>
+                  <th className="py-2 pr-3 font-medium">Leads</th>
+                  <th className="py-2 pr-3 font-medium">Clients</th>
+                  <th className="py-2 pr-3 font-medium">Events</th>
+                  <th className="py-2 pr-3 font-medium">Paid</th>
+                  <th className="py-2 pr-3 font-medium">Invoiced</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortByPaidRevenueDesc(data.commentAttribution).map((row: SocialCommentAttributionView) => (
+                  <tr key={row.instagramCommentId} className="border-b border-border last:border-b-0">
+                    <td className="py-2.5 pr-3">
+                      <span className="font-mono text-xs text-text">{row.instagramCommentId}</span>
+                      {row.socialPostId ? <p className="text-xs text-text-muted">via a Social Post</p> : null}
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <MetricCell value={row.leadCount} />
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <MetricCell value={row.clientCount} />
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <MetricCell value={row.eventCount} />
+                    </td>
+                    <td className="py-2.5 pr-3">{money(row.paidRevenueMinor)}</td>
+                    <td className="py-2.5 pr-3">{money(row.invoicedRevenueMinor)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <h3 className="font-serif text-[17px] font-semibold text-text">DM Attribution</h3>
+        {data.conversationAttribution.length === 0 ? (
+          <EmptyState title="No DM-attributed leads yet" description="Leads captured from an Instagram DM conversation will appear here." />
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[480px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-border text-xs text-text-muted">
+                  <th className="py-2 pr-3 font-medium">Conversation</th>
+                  <th className="py-2 pr-3 font-medium">Leads</th>
+                  <th className="py-2 pr-3 font-medium">Clients</th>
+                  <th className="py-2 pr-3 font-medium">Events</th>
+                  <th className="py-2 pr-3 font-medium">Paid</th>
+                  <th className="py-2 pr-3 font-medium">Invoiced</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortByPaidRevenueDesc(data.conversationAttribution).map((row: SocialConversationAttributionView) => (
+                  <tr key={row.instagramConversationId} className="border-b border-border last:border-b-0">
+                    <td className="py-2.5 pr-3">
+                      <span className="font-mono text-xs text-text">{row.instagramConversationId}</span>
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <MetricCell value={row.leadCount} />
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <MetricCell value={row.clientCount} />
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <MetricCell value={row.eventCount} />
+                    </td>
+                    <td className="py-2.5 pr-3">{money(row.paidRevenueMinor)}</td>
+                    <td className="py-2.5 pr-3">{money(row.invoicedRevenueMinor)}</td>
                   </tr>
                 ))}
               </tbody>

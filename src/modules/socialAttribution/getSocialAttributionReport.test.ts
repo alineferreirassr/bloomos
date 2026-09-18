@@ -57,6 +57,8 @@ describe("getSocialAttributionReport — empty workspace", () => {
       attributedPaidRevenueMinor: 0,
     });
     expect(report.byPost).toEqual([]);
+    expect(report.byComment).toEqual([]);
+    expect(report.byConversation).toEqual([]);
   });
 });
 
@@ -285,5 +287,151 @@ describe("getSocialAttributionReport — finance semantics", () => {
     expect(report.byPost[0]).not.toHaveProperty("profitMinor");
     expect(report.totals).not.toHaveProperty("attributedExpenseMinor");
     expect(report.totals).not.toHaveProperty("attributedProfitMinor");
+  });
+});
+
+describe("getSocialAttributionReport — byComment/byConversation breakdown (SOCIAL-20D)", () => {
+  it("a comment with a resolved post appears in byComment with socialPostId set, and its Lead also appears in the corresponding byPost row", async () => {
+    setup({
+      leads: [makeLead({ id: "lead_1", social_post_id: "post_1", instagram_comment_id: "comment_1", converted_client_id: "client_1" })],
+      clients: [makeClient({ id: "client_1", originating_lead_id: "lead_1" })],
+      invoices: [makeInvoice({ id: "invoice_1", client_id: "client_1", total_minor: 100000, status: "sent" })],
+    });
+
+    const report = await getSocialAttributionReport();
+
+    expect(report.byComment).toEqual([
+      { instagramCommentId: "comment_1", socialPostId: "post_1", leadCount: 1, clientCount: 1, eventCount: 0, invoicedRevenueMinor: 100000, paidRevenueMinor: 0 },
+    ]);
+    expect(report.byPost).toEqual([
+      { socialPostId: "post_1", leadCount: 1, clientCount: 1, eventCount: 0, invoicedRevenueMinor: 100000, paidRevenueMinor: 0 },
+    ]);
+  });
+
+  it("a comment with no resolved post appears in byComment with socialPostId null, and never appears in byPost", async () => {
+    setup({ leads: [makeLead({ id: "lead_1", social_post_id: null, instagram_comment_id: "comment_1" })] });
+
+    const report = await getSocialAttributionReport();
+
+    expect(report.byComment).toEqual([
+      { instagramCommentId: "comment_1", socialPostId: null, leadCount: 1, clientCount: 0, eventCount: 0, invoicedRevenueMinor: 0, paidRevenueMinor: 0 },
+    ]);
+    expect(report.byPost).toEqual([]);
+  });
+
+  it("multiple distinct comments resolving to the same post produce multiple byComment rows but one merged byPost row", async () => {
+    setup({
+      leads: [
+        makeLead({ id: "lead_1", social_post_id: "post_1", instagram_comment_id: "comment_1", converted_client_id: "client_1" }),
+        makeLead({ id: "lead_2", social_post_id: "post_1", instagram_comment_id: "comment_2", converted_client_id: "client_2" }),
+      ],
+      clients: [makeClient({ id: "client_1", originating_lead_id: "lead_1" }), makeClient({ id: "client_2", originating_lead_id: "lead_2" })],
+    });
+
+    const report = await getSocialAttributionReport();
+
+    expect(report.byComment).toHaveLength(2);
+    const byComment = Object.fromEntries(report.byComment.map((c) => [c.instagramCommentId, c]));
+    expect(byComment.comment_1).toMatchObject({ socialPostId: "post_1", leadCount: 1, clientCount: 1 });
+    expect(byComment.comment_2).toMatchObject({ socialPostId: "post_1", leadCount: 1, clientCount: 1 });
+
+    expect(report.byPost).toHaveLength(1);
+    expect(report.byPost[0]).toMatchObject({ socialPostId: "post_1", leadCount: 2, clientCount: 2 });
+  });
+
+  it("a DM conversation appears in byConversation, and never in byPost or byComment", async () => {
+    setup({
+      leads: [makeLead({ id: "lead_1", instagram_conversation_id: "conversation_1", converted_client_id: "client_1" })],
+      clients: [makeClient({ id: "client_1", originating_lead_id: "lead_1" })],
+      events: [makeEvent({ id: "event_1", client_id: "client_1" })],
+      payments: [makePayment({ id: "payment_1", client_id: "client_1", amount_minor: 25000, status: "succeeded", payment_type: "deposit" })],
+    });
+
+    const report = await getSocialAttributionReport();
+
+    expect(report.byConversation).toEqual([
+      { instagramConversationId: "conversation_1", leadCount: 1, clientCount: 1, eventCount: 1, invoicedRevenueMinor: 0, paidRevenueMinor: 25000 },
+    ]);
+    expect(report.byPost).toEqual([]);
+    expect(report.byComment).toEqual([]);
+  });
+
+  it("existing totals remain the sole canonical, deduplicated figure and are unaffected by the presence of byComment/byConversation", async () => {
+    setup({
+      leads: [
+        makeLead({ id: "lead_1", social_post_id: "post_1", instagram_comment_id: "comment_1", converted_client_id: "client_1" }),
+        makeLead({ id: "lead_2", instagram_conversation_id: "conversation_1", converted_client_id: "client_2" }),
+      ],
+      clients: [makeClient({ id: "client_1", originating_lead_id: "lead_1" }), makeClient({ id: "client_2", originating_lead_id: "lead_2" })],
+      invoices: [
+        makeInvoice({ id: "invoice_1", client_id: "client_1", total_minor: 100000, status: "sent" }),
+        makeInvoice({ id: "invoice_2", client_id: "client_2", total_minor: 40000, status: "sent" }),
+      ],
+    });
+
+    const report = await getSocialAttributionReport();
+
+    expect(report.totals.attributedLeadCount).toBe(2);
+    expect(report.totals.attributedInvoicedRevenueMinor).toBe(140000);
+  });
+
+  it("finance redaction is not this report's own concern — counts and real revenue are both always returned unredacted at this layer (redaction happens in socialAnalyticsActions.ts, tested there)", async () => {
+    setup({ leads: [makeLead({ id: "lead_1", instagram_comment_id: "comment_1" })] });
+    const report = await getSocialAttributionReport();
+
+    expect(report.byComment[0].invoicedRevenueMinor).toBe(0);
+    expect(typeof report.byComment[0].invoicedRevenueMinor).toBe("number");
+  });
+
+  it("workspace isolation for byComment/byConversation relies on the same already-workspace-scoped repository facades byPost already relies on", async () => {
+    setup({ leads: [makeLead({ id: "lead_1", instagram_comment_id: "comment_1", workspace_id: "ws_1" })] });
+
+    await getSocialAttributionReport();
+
+    expect(getLeadsMock).toHaveBeenCalledWith({ includeArchived: true }, undefined);
+  });
+
+  it("returns empty byComment/byConversation arrays, never a crash, when no comment- or DM-attributed Lead exists", async () => {
+    setup({ leads: [makeLead({ id: "lead_1", social_post_id: "post_1", instagram_comment_id: "comment_1" })] });
+
+    const report = await getSocialAttributionReport();
+
+    expect(report.byConversation).toEqual([]);
+  });
+
+  it("overlap semantics: summing byPost and byComment together double-counts a resolved comment's Lead — proving why totals, not a sum across arrays, is the canonical figure", async () => {
+    setup({
+      leads: [makeLead({ id: "lead_1", social_post_id: "post_1", instagram_comment_id: "comment_1", converted_client_id: "client_1" })],
+      clients: [makeClient({ id: "client_1", originating_lead_id: "lead_1" })],
+      invoices: [makeInvoice({ id: "invoice_1", client_id: "client_1", total_minor: 100000, status: "sent" })],
+    });
+
+    const report = await getSocialAttributionReport();
+
+    const byPostSum = report.byPost.reduce((sum, p) => sum + p.invoicedRevenueMinor, 0);
+    const byCommentSum = report.byComment.reduce((sum, c) => sum + c.invoicedRevenueMinor, 0);
+    // Both arrays independently report the SAME Lead's revenue — summing
+    // them together would double it, while `totals` (computed once, from
+    // the deduplicated Lead set) reports the true figure exactly once.
+    expect(byPostSum).toBe(100000);
+    expect(byCommentSum).toBe(100000);
+    expect(byPostSum + byCommentSum).toBe(200000);
+    expect(report.totals.attributedInvoicedRevenueMinor).toBe(100000);
+  });
+
+  it("mutual exclusivity: a comment-attributed Lead never appears in byConversation, and a DM-attributed Lead never appears in byComment — consistent with the current capture invariant that a Lead is never both", async () => {
+    setup({
+      leads: [
+        makeLead({ id: "lead_comment", social_post_id: "post_1", instagram_comment_id: "comment_1" }),
+        makeLead({ id: "lead_dm", instagram_conversation_id: "conversation_1" }),
+      ],
+    });
+
+    const report = await getSocialAttributionReport();
+
+    expect(report.byComment).toHaveLength(1);
+    expect(report.byComment[0].instagramCommentId).toBe("comment_1");
+    expect(report.byConversation).toHaveLength(1);
+    expect(report.byConversation[0].instagramConversationId).toBe("conversation_1");
   });
 });
