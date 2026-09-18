@@ -118,6 +118,16 @@ export const AUTOMATION_TRIGGER_TYPES = [
   "lead.created",
   "lead.status_changed",
   "lead.converted",
+  // SOCIAL-18C — fires from the Leads repository's own `updateLeadAssignment`
+  // (both mock and Supabase), the single existing write path for
+  // `Lead.assigned_to`, gated on `previousAssignee !== newAssignee` so a
+  // same-value rewrite never dispatches — the identical no-op discipline
+  // `lead.status_changed` already uses. Never fires from `createLead()`
+  // even when a Lead is created already assigned (the manual "Add Lead"
+  // form allows this) — `lead.created` alone covers Lead creation, exactly
+  // as it already does for a Lead created with any other non-default
+  // field value.
+  "lead.assigned",
 ] as const;
 export type AutomationTriggerType = (typeof AUTOMATION_TRIGGER_TYPES)[number];
 
@@ -190,6 +200,16 @@ export const AUTOMATION_CONDITION_FIELDS = [
   // `compare()` — no evaluator change needed).
   "previousStatus",
   "newStatus",
+  // SOCIAL-18C — matches `facts.previousAssignee`/`facts.newAssignee` on a
+  // `lead.assigned` trigger. Only the existing non-null `eq`/`neq`/`in`/
+  // `notIn` comparison behavior is supported — `assigned_to` is free text
+  // (no FK, no enum), and a null-valued condition (e.g. "fires only when
+  // newAssignee is null") is out of scope: `AutomationCondition.value`
+  // has no `null` variant anywhere in this Condition Engine today, for any
+  // field, and widening it is a platform-core change this checkpoint does
+  // not make.
+  "previousAssignee",
+  "newAssignee",
 ] as const;
 export type AutomationConditionField = (typeof AUTOMATION_CONDITION_FIELDS)[number];
 

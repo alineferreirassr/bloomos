@@ -268,6 +268,24 @@ export const leadConvertedTrigger = makeTriggerNode({
   compileTarget: "lead.converted",
 });
 
+/**
+ * SOCIAL-18C — carries `previousAssignee`/`newAssignee` on its own trigger
+ * facts (see `AUTOMATION_CONDITION_FIELDS`'s matching new entries). Fires
+ * for a first assignment, a reassignment, and an unassignment alike — never
+ * for a same-value rewrite (gated at the repository dispatch layer, not
+ * here). Only non-null `eq`/`neq`/`in`/`notIn` condition comparisons are
+ * supported; a condition that needs to match "unassigned" specifically is
+ * out of scope (the Condition Engine has no null-valued condition anywhere
+ * today, not something unique to this trigger).
+ */
+export const leadAssignedTrigger = makeTriggerNode({
+  id: "trigger.lead-assigned",
+  name: "Lead Assigned",
+  description: "Fires when a Lead's assignment changes — assigned, reassigned, or unassigned.",
+  icon: "UserCheck",
+  compileTarget: "lead.assigned",
+});
+
 export const triggerNodes: WorkflowNodeDefinition[] = [
   proposalAcceptedTrigger,
   proposalRejectedTrigger,
@@ -303,4 +321,5 @@ export const triggerNodes: WorkflowNodeDefinition[] = [
   leadCreatedTrigger,
   leadStatusChangedTrigger,
   leadConvertedTrigger,
+  leadAssignedTrigger,
 ];

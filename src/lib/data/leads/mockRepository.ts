@@ -36,6 +36,25 @@ function dispatchLeadStatusChanged(workspaceId: string, leadId: string, previous
   ).catch((error: unknown) => getLogger().error("lead.status_changed trigger dispatch failed", { workspaceId, error: error instanceof Error ? error.message : "Unknown error" }));
 }
 
+/**
+ * SOCIAL-18C — same fire-and-forget dispatch shape as `dispatchLeadStatusChanged`
+ * directly above, for the same reason: `updateLeadAssignment` already has
+ * the pre-update `assigned_to` in scope, so the dispatch lives here rather
+ * than the thin `lib/data/index.ts` wrapper. Gated on an actual value
+ * change — `previousAssignee === newAssignee` (including null === null,
+ * i.e. an unassigned Lead "reassigned" to unassigned) never dispatches, the
+ * same no-op discipline `lead.status_changed` already uses. Never logs
+ * `previousAssignee`/`newAssignee` on failure — only `workspaceId` and the
+ * error message, matching every other dispatch helper in this file.
+ */
+function dispatchLeadAssigned(workspaceId: string, leadId: string, previousAssignee: string | null, newAssignee: string | null): void {
+  if (previousAssignee === newAssignee) return;
+  dispatchAutomationTrigger(
+    { type: "lead.assigned", workspaceId, occurredAt: clockNow().toISOString(), actorMemberId: null, facts: { leadId, previousAssignee, newAssignee } },
+    { workspaceName: null, userId: null, userName: null, role: null, permissions: [] },
+  ).catch((error: unknown) => getLogger().error("lead.assigned trigger dispatch failed", { workspaceId, error: error instanceof Error ? error.message : "Unknown error" }));
+}
+
 function fieldErrorsFromZod(error: {
   issues: { path: PropertyKey[]; message: string }[];
 }): Partial<Record<string, string>> {
@@ -242,6 +261,7 @@ async function updateLeadAssignment(workspaceId: string, id: string, assignedTo:
     normalized ? `Assigned to ${normalized}` : "Unassigned",
     { assigned_to: normalized },
   );
+  dispatchLeadAssigned(existing.workspace_id, id, existing.assigned_to, normalized);
 
   return ok(updated);
 }

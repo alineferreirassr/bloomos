@@ -6,10 +6,20 @@ vi.mock("@/lib/supabase/client", () => ({
 vi.mock("@/lib/auth/workspaceSessionClient", () => ({
   getClientWorkspaceSession: vi.fn(),
 }));
+// SOCIAL-18C — mocked so the lead.assigned dispatch tests below can inspect
+// exactly what was dispatched, the same pattern leads.test.ts already uses
+// for the mock repository's own SOCIAL-16D/18C dispatch coverage.
+vi.mock("@/core/automation/resolver", () => ({ dispatchAutomationTrigger: vi.fn().mockResolvedValue([]) }));
 
 import { supabaseLeadsRepository } from "@/lib/data/leads/supabaseRepository";
 import { createClient } from "@/lib/supabase/client";
 import { getClientWorkspaceSession } from "@/lib/auth/workspaceSessionClient";
+import { dispatchAutomationTrigger } from "@/core/automation/resolver";
+
+const dispatchMock = vi.mocked(dispatchAutomationTrigger);
+function callsOfType(type: string) {
+  return dispatchMock.mock.calls.filter(([trigger]) => trigger.type === type);
+}
 
 type QueryResult = { data: unknown; error: unknown };
 type RecordedCall = { table: string; method: string; args: unknown[] };
@@ -458,6 +468,100 @@ describe("supabaseLeadsRepository.updateLeadAssignment — SOCIAL-13E", () => {
     expect(result.data.assigned_to).toBeNull();
     const updateCall = calls.find((c) => c.table === "leads" && c.method === "update");
     expect(updateCall?.args[0]).toEqual({ assigned_to: null });
+  });
+});
+
+describe("supabaseLeadsRepository.updateLeadAssignment — lead.assigned dispatch (SOCIAL-18C)", () => {
+  it("null -> user dispatches exactly once with the correct leadId/previousAssignee/newAssignee", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: leadRow({ assigned_to: null }), error: null },
+      { data: leadRow({ assigned_to: "Aline Ferreira" }), error: null },
+      { data: null, error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseLeadsRepository.updateLeadAssignment("workspace_1", "lead_1", "Aline Ferreira");
+
+    expect(result.success).toBe(true);
+    const calls = callsOfType("lead.assigned");
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0]).toEqual(
+      expect.objectContaining({ type: "lead.assigned", workspaceId: "workspace_1", facts: { leadId: "lead_1", previousAssignee: null, newAssignee: "Aline Ferreira" } }),
+    );
+  });
+
+  it("user A -> user B (reassignment) dispatches exactly once with both real values", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: leadRow({ assigned_to: "Aline Ferreira" }), error: null },
+      { data: leadRow({ assigned_to: "Jamie Rivera" }), error: null },
+      { data: null, error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseLeadsRepository.updateLeadAssignment("workspace_1", "lead_1", "Jamie Rivera");
+
+    expect(result.success).toBe(true);
+    const calls = callsOfType("lead.assigned");
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0]).toEqual(
+      expect.objectContaining({ type: "lead.assigned", workspaceId: "workspace_1", facts: { leadId: "lead_1", previousAssignee: "Aline Ferreira", newAssignee: "Jamie Rivera" } }),
+    );
+  });
+
+  it("user -> null (unassignment) dispatches exactly once with newAssignee null", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: leadRow({ assigned_to: "Aline Ferreira" }), error: null },
+      { data: leadRow({ assigned_to: null }), error: null },
+      { data: null, error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseLeadsRepository.updateLeadAssignment("workspace_1", "lead_1", "");
+
+    expect(result.success).toBe(true);
+    const calls = callsOfType("lead.assigned");
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0]).toEqual(
+      expect.objectContaining({ type: "lead.assigned", workspaceId: "workspace_1", facts: { leadId: "lead_1", previousAssignee: "Aline Ferreira", newAssignee: null } }),
+    );
+  });
+
+  it("user A -> user A (same value) never dispatches", async () => {
+    mockSession();
+    const { client } = createMockSupabase([
+      { data: leadRow({ assigned_to: "Aline Ferreira" }), error: null },
+      { data: leadRow({ assigned_to: "Aline Ferreira" }), error: null },
+      { data: null, error: null },
+    ]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseLeadsRepository.updateLeadAssignment("workspace_1", "lead_1", "Aline Ferreira");
+
+    expect(result.success).toBe(true);
+    expect(callsOfType("lead.assigned")).toHaveLength(0);
+  });
+
+  it("a wrong-workspace assignment attempt never dispatches", async () => {
+    const { client } = createMockSupabase([{ data: leadRow({ workspace_id: "workspace_other_tenant" }), error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseLeadsRepository.updateLeadAssignment("workspace_1", "lead_1", "Aline Ferreira");
+
+    expect(result.success).toBe(false);
+    expect(callsOfType("lead.assigned")).toHaveLength(0);
+  });
+
+  it("an already-converted Lead's read-only guard prevents both the mutation and the dispatch", async () => {
+    const { client } = createMockSupabase([{ data: leadRow({ status: "converted" }), error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseLeadsRepository.updateLeadAssignment("workspace_1", "lead_1", "Aline Ferreira");
+
+    expect(result.success).toBe(false);
+    expect(callsOfType("lead.assigned")).toHaveLength(0);
   });
 });
 

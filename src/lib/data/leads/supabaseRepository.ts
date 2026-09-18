@@ -35,6 +35,20 @@ function dispatchLeadStatusChanged(workspaceId: string, leadId: string, previous
   ).catch((error: unknown) => getLogger().error("lead.status_changed trigger dispatch failed", { workspaceId, error: error instanceof Error ? error.message : "Unknown error" }));
 }
 
+/**
+ * SOCIAL-18C — see the identical helper in `leads/mockRepository.ts` for
+ * the full rationale. Gated on `previousAssignee === newAssignee` (no-op,
+ * including unassigned-to-unassigned) exactly like `dispatchLeadStatusChanged`
+ * above; never logs the assignee values on failure.
+ */
+function dispatchLeadAssigned(workspaceId: string, leadId: string, previousAssignee: string | null, newAssignee: string | null): void {
+  if (previousAssignee === newAssignee) return;
+  dispatchAutomationTrigger(
+    { type: "lead.assigned", workspaceId, occurredAt: clockNow().toISOString(), actorMemberId: null, facts: { leadId, previousAssignee, newAssignee } },
+    { workspaceName: null, userId: null, userName: null, role: null, permissions: [] },
+  ).catch((error: unknown) => getLogger().error("lead.assigned trigger dispatch failed", { workspaceId, error: error instanceof Error ? error.message : "Unknown error" }));
+}
+
 type SupabaseClient = ReturnType<typeof createClient>;
 
 function fieldErrorsFromZod(error: {
@@ -275,6 +289,7 @@ async function updateLeadAssignment(workspaceId: string, id: string, assignedTo:
     normalized ? `Assigned to ${normalized}` : "Unassigned",
     { assigned_to: normalized },
   );
+  dispatchLeadAssigned(updated.workspace_id, id, existing.assigned_to, normalized);
 
   return ok(updated);
 }

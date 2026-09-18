@@ -562,6 +562,114 @@ describe("SOCIAL-16D — Lead lifecycle automation triggers", () => {
     });
   });
 
+  describe("lead.assigned — SOCIAL-18C", () => {
+    it("null -> user dispatches exactly once with the correct leadId/previousAssignee/newAssignee", async () => {
+      const created = await createLead(validInput);
+      if (!created.success) throw new Error("setup failed");
+      dispatchMock.mockClear();
+
+      const result = await updateLeadAssignment(created.data.workspace_id, created.data.id, "Aline Ferreira");
+      expect(result.success).toBe(true);
+
+      const calls = callsOfType("lead.assigned");
+      expect(calls).toHaveLength(1);
+      expect(calls[0][0]).toEqual(
+        expect.objectContaining({ type: "lead.assigned", workspaceId: created.data.workspace_id, facts: { leadId: created.data.id, previousAssignee: null, newAssignee: "Aline Ferreira" } }),
+      );
+    });
+
+    it("user A -> user B (reassignment) dispatches exactly once with both real values", async () => {
+      const created = await createLead(validInput);
+      if (!created.success) throw new Error("setup failed");
+      await updateLeadAssignment(created.data.workspace_id, created.data.id, "Aline Ferreira");
+      dispatchMock.mockClear();
+
+      const result = await updateLeadAssignment(created.data.workspace_id, created.data.id, "Jamie Rivera");
+      expect(result.success).toBe(true);
+
+      const calls = callsOfType("lead.assigned");
+      expect(calls).toHaveLength(1);
+      expect(calls[0][0]).toEqual(
+        expect.objectContaining({ type: "lead.assigned", workspaceId: created.data.workspace_id, facts: { leadId: created.data.id, previousAssignee: "Aline Ferreira", newAssignee: "Jamie Rivera" } }),
+      );
+    });
+
+    it("user -> null (unassignment) dispatches exactly once with newAssignee null", async () => {
+      const created = await createLead(validInput);
+      if (!created.success) throw new Error("setup failed");
+      await updateLeadAssignment(created.data.workspace_id, created.data.id, "Aline Ferreira");
+      dispatchMock.mockClear();
+
+      const result = await updateLeadAssignment(created.data.workspace_id, created.data.id, "");
+      expect(result.success).toBe(true);
+
+      const calls = callsOfType("lead.assigned");
+      expect(calls).toHaveLength(1);
+      expect(calls[0][0]).toEqual(
+        expect.objectContaining({ type: "lead.assigned", workspaceId: created.data.workspace_id, facts: { leadId: created.data.id, previousAssignee: "Aline Ferreira", newAssignee: null } }),
+      );
+    });
+
+    it("user A -> user A (same value) never dispatches — a genuine no-op for automation purposes", async () => {
+      const created = await createLead(validInput);
+      if (!created.success) throw new Error("setup failed");
+      await updateLeadAssignment(created.data.workspace_id, created.data.id, "Aline Ferreira");
+      dispatchMock.mockClear();
+
+      const result = await updateLeadAssignment(created.data.workspace_id, created.data.id, "Aline Ferreira");
+      expect(result.success).toBe(true);
+      expect(callsOfType("lead.assigned")).toHaveLength(0);
+    });
+
+    it("null -> null (reassigning an already-unassigned Lead to unassigned) never dispatches", async () => {
+      const created = await createLead(validInput);
+      if (!created.success) throw new Error("setup failed");
+      dispatchMock.mockClear();
+
+      const result = await updateLeadAssignment(created.data.workspace_id, created.data.id, "");
+      expect(result.success).toBe(true);
+      expect(callsOfType("lead.assigned")).toHaveLength(0);
+    });
+
+    it("Lead creation with assigned_to already populated never dispatches lead.assigned — only lead.created fires", async () => {
+      const result = await createLead({ ...validInput, assigned_to: "Aline Ferreira" });
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.assigned_to).toBe("Aline Ferreira");
+
+      expect(callsOfType("lead.assigned")).toHaveLength(0);
+      expect(callsOfType("lead.created")).toHaveLength(1);
+    });
+
+    it("Lead creation without assignment never dispatches lead.assigned", async () => {
+      const result = await createLead(validInput);
+      expect(result.success).toBe(true);
+      expect(callsOfType("lead.assigned")).toHaveLength(0);
+    });
+
+    it("a wrong-workspace assignment attempt is rejected before any dispatch", async () => {
+      const created = await createLead(validInput);
+      if (!created.success) throw new Error("setup failed");
+      dispatchMock.mockClear();
+
+      const result = await updateLeadAssignment("ws_completely_different", created.data.id, "Aline Ferreira");
+      expect(result.success).toBe(false);
+      expect(callsOfType("lead.assigned")).toHaveLength(0);
+    });
+
+    it("a converted Lead's read-only guard prevents both the mutation and the dispatch", async () => {
+      const created = await createLead(validInput);
+      if (!created.success) throw new Error("setup failed");
+      const converted = await convertLeadToClient(created.data.id);
+      expect(converted.success).toBe(true);
+      dispatchMock.mockClear();
+
+      const result = await updateLeadAssignment(created.data.workspace_id, created.data.id, "Aline Ferreira");
+      expect(result.success).toBe(false);
+      expect(callsOfType("lead.assigned")).toHaveLength(0);
+    });
+  });
+
   describe("workspace correctness", () => {
     it("Leads created in two different workspaces each dispatch with their own real workspaceId, never crossed", async () => {
       const instagramA = await findOrCreateInstagramLead({
