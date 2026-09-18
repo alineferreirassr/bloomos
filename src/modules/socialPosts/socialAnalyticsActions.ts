@@ -1,6 +1,8 @@
 "use server";
 
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+import { getServerRepositoryContext } from "@/lib/auth/workspaceSession";
+import { getDataMode } from "@/lib/env";
 import { listSocialPosts, listLatestSocialPostMetricSnapshotsForWorkspace, listSocialAccountMetricSnapshots } from "@/lib/data";
 import { getOwnProviderConnectionAction } from "@/modules/integrations/manageOAuthConnectionActions";
 import { getSocialAttributionReport } from "@/modules/socialAttribution/getSocialAttributionReport";
@@ -148,10 +150,24 @@ export async function getSocialAnalyticsDashboardAction(range: SocialAnalyticsTi
   const canViewAmounts = resolved.session.permissions.includes("finance.amounts.view");
 
   try {
+    // SOCIAL-16H.1 — resolved exactly once, here at the genuine Server
+    // Action boundary (this file is "use server", never bundled for the
+    // client), and threaded through to getSocialAttributionReport()'s own
+    // five concurrent repository calls. Each of those otherwise falls back
+    // to independently resolving its own session via the browser-oriented
+    // getClientWorkspaceSession(), which can spuriously report
+    // "unauthenticated" under concurrent invocation even for a genuinely
+    // signed-in caller — the exact, confirmed cause of SOCIAL-16G's Social
+    // Analytics load failure. getSocialAttributionReport() itself must
+    // never resolve this context on its own: it (and the repository
+    // functions it calls) is reachable from client-bundled code elsewhere
+    // in the app, and `getServerRepositoryContext()` depends on
+    // `next/headers`, which can never appear in that import graph.
+    const context = getDataMode() === "supabase" ? await getServerRepositoryContext() : undefined;
     const [allPosts, identity, attributionReport] = await Promise.all([
       listSocialPosts(workspaceId),
       getOwnProviderConnectionAction("meta"),
-      getSocialAttributionReport(),
+      getSocialAttributionReport(context),
     ]);
     const attributionByPostId = new Map(attributionReport.byPost.map((stats) => [stats.socialPostId, stats]));
 

@@ -3,8 +3,14 @@ import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/auth/memberSessionSnapshot", () => ({ resolveMemberSessionSnapshot: vi.fn() }));
+// SOCIAL-16H.1 — mocked directly (in addition to @/lib/supabase/server above)
+// so the SOCIAL-16H.1 context-propagation tests below can observe/control
+// exactly what getServerRepositoryContext() returns and how many times it's
+// called, without needing a real Supabase session.
+vi.mock("@/lib/auth/workspaceSession", () => ({ getServerRepositoryContext: vi.fn() }));
 
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+import { getServerRepositoryContext } from "@/lib/auth/workspaceSession";
 import { getSocialAnalyticsDashboardAction } from "@/modules/socialPosts/socialAnalyticsActions";
 import { installProvider, attachCredential, applyConnectionEvent, setConnectionConfig } from "@/core/integrations/integrationManager";
 import { issueOAuthCredential, resetEncryptionProvider } from "@/core/integrations/credentialManager";
@@ -391,5 +397,49 @@ describe("getSocialAnalyticsDashboardAction — SOCIAL-15E hardening: finance.am
     resetLeadsStore();
     resetClientsStore();
     resetInvoicesStore();
+  });
+});
+
+describe("getSocialAnalyticsDashboardAction — SOCIAL-16H.1 context propagation", () => {
+  const ORIGINAL_ENV = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+    vi.resetModules();
+  });
+
+  it("mock mode (default) never resolves a ServerRepositoryContext — the Supabase-only code path is never reached", async () => {
+    delete process.env.NEXT_PUBLIC_DATA_MODE;
+
+    await getSocialAnalyticsDashboardAction();
+
+    expect(getServerRepositoryContext).not.toHaveBeenCalled();
+  });
+
+  it("supabase mode resolves ServerRepositoryContext exactly ONCE and passes that identical object into getSocialAttributionReport, closing the SOCIAL-16G race", async () => {
+    process.env.NEXT_PUBLIC_DATA_MODE = "supabase";
+    const resolvedContext = { supabase: {} as never, session: { workspace: { id: "ws_resolved" } } as never };
+    const getServerRepositoryContextMock = vi.fn().mockResolvedValue(resolvedContext);
+    const getSocialAttributionReportMock = vi.fn().mockResolvedValue({ generatedAt: "2026-01-01T00:00:00.000Z", totals: { contentAttributedLeadCount: 0, commentAttributedLeadCount: 0, dmAttributedLeadCount: 0, attributedLeadCount: 0, unattributedLeadCount: 0, attributedClientCount: 0, attributedEventCount: 0, attributedInvoicedRevenueMinor: 0, attributedPaidRevenueMinor: 0 }, byPost: [] });
+
+    vi.doMock("@/lib/auth/workspaceSession", () => ({ getServerRepositoryContext: getServerRepositoryContextMock }));
+    vi.doMock("@/modules/socialAttribution/getSocialAttributionReport", () => ({ getSocialAttributionReport: getSocialAttributionReportMock }));
+    vi.doMock("@/lib/data", () => ({
+      listSocialPosts: vi.fn().mockResolvedValue([]),
+      listLatestSocialPostMetricSnapshotsForWorkspace: vi.fn().mockResolvedValue([]),
+      listSocialAccountMetricSnapshots: vi.fn().mockResolvedValue([]),
+    }));
+    vi.doMock("@/modules/integrations/manageOAuthConnectionActions", () => ({ getOwnProviderConnectionAction: vi.fn().mockResolvedValue({ success: false, error: "not connected" }) }));
+    vi.doMock("@/lib/auth/memberSessionSnapshot", () => ({ resolveMemberSessionSnapshot: vi.fn().mockResolvedValue(session) }));
+    vi.resetModules();
+    const { getSocialAnalyticsDashboardAction: fresh } = await import("@/modules/socialPosts/socialAnalyticsActions");
+
+    const result = await fresh();
+
+    expect(result.success).toBe(true);
+    // Resolved exactly once, not once per concurrent repository call.
+    expect(getServerRepositoryContextMock).toHaveBeenCalledTimes(1);
+    // The same resolved object (reference equality) is threaded through to getSocialAttributionReport.
+    expect(getSocialAttributionReportMock).toHaveBeenCalledWith(resolvedContext);
   });
 });

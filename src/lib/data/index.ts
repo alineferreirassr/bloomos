@@ -2218,13 +2218,25 @@ export interface FinanceDashboardData {
 
 const FINANCE_DASHBOARD_RECENT_LIMIT = 5;
 
-export async function getFinanceDashboardData(): Promise<FinanceDashboardData> {
+/**
+ * SOCIAL-16H.1 — accepts the same optional `context?: ServerRepositoryContext`
+ * every repository call below already does, and — when the caller supplies
+ * one — passes that SAME object to all five concurrent calls, rather than
+ * each independently resolving its own session. This function itself must
+ * never resolve a context on its own: it (like the rest of this barrel) is
+ * reachable from client-bundled code elsewhere in the app, and a real
+ * server-side session resolver depends on `next/headers`, which can never
+ * appear in that import graph. The one real caller,
+ * `getFinanceDashboardDataAction()` (`financeActions.ts`, a genuine
+ * `"use server"` boundary), resolves the context and passes it in.
+ */
+export async function getFinanceDashboardData(context?: ServerRepositoryContext): Promise<FinanceDashboardData> {
   const [contracts, invoices, payments, expenses, allEvents] = await Promise.all([
-    getContracts({ includeArchived: true }),
-    getInvoices({ includeArchived: true }),
-    getPayments(),
-    getExpenses({ includeArchived: true }),
-    getEvents({ includeArchived: true }),
+    getContracts({ includeArchived: true }, context),
+    getInvoices({ includeArchived: true }, context),
+    getPayments({}, context),
+    getExpenses({ includeArchived: true }, context),
+    getEvents({ includeArchived: true }, context),
   ]);
   const activeEvents = allEvents.filter((e) => e.status !== "archived");
 

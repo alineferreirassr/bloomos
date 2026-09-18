@@ -2,15 +2,26 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 
 vi.mock("@/lib/auth/memberSessionSnapshot", () => ({ resolveMemberSessionSnapshot: vi.fn() }));
+// SOCIAL-16H.1 — financeActions.ts now statically imports getServerRepositoryContext
+// (@/lib/auth/workspaceSession), which transitively imports @/lib/supabase/server's
+// real `import "server-only"` guard. Mocked so the module graph loads; getDataMode()
+// defaults to "mock" in this test environment, so the real function is never invoked.
+vi.mock("@/lib/auth/workspaceSession", () => ({ getServerRepositoryContext: vi.fn() }));
 vi.mock("@/lib/data", () => ({
   getContractFinanceSummary: vi.fn(),
   getWorkspaceFinancialSummary: vi.fn(),
   getProfitAndLossReport: vi.fn(),
+  getFinanceDashboardData: vi.fn(),
 }));
+// SOCIAL-16H.1 — getFinanceDashboardDataAction also calls getSocialAttributionReport;
+// mocked so the SOCIAL-16H.1 context-propagation tests below can observe/control it.
+vi.mock("@/modules/socialAttribution/getSocialAttributionReport", () => ({ getSocialAttributionReport: vi.fn() }));
 
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
-import { getContractFinanceSummary, getWorkspaceFinancialSummary, getProfitAndLossReport } from "@/lib/data";
-import { getContractFinancialSummaryAction, getFinancialReconciliationDiagnosticAction } from "@/modules/finance/financeActions";
+import { getServerRepositoryContext } from "@/lib/auth/workspaceSession";
+import { getContractFinanceSummary, getWorkspaceFinancialSummary, getProfitAndLossReport, getFinanceDashboardData } from "@/lib/data";
+import { getSocialAttributionReport } from "@/modules/socialAttribution/getSocialAttributionReport";
+import { getContractFinancialSummaryAction, getFinancialReconciliationDiagnosticAction, getFinanceDashboardDataAction } from "@/modules/finance/financeActions";
 import { makeInvoice } from "@/modules/finance/testUtils";
 
 const founderSession: MemberSessionSnapshot = {
@@ -245,5 +256,90 @@ describe("getFinancialReconciliationDiagnosticAction (Finance F1.5)", () => {
     if (!result.success) return;
     expect(result.data.isReconciled).toBe(false);
     expect(result.data.discrepancies[0].differenceMinor).toBe(1);
+  });
+});
+
+describe("getFinanceDashboardDataAction — SOCIAL-16H.1 context propagation", () => {
+  const ORIGINAL_ENV = { ...process.env };
+  const emptyDashboardData = {
+    metrics: {
+      totalInvoicedMinor: 0,
+      totalCollectedMinor: 0,
+      outstandingReceivablesMinor: 0,
+      overdueReceivablesMinor: 0,
+      depositsPendingMinor: 0,
+      expensesThisMonthMinor: 0,
+      grossProfitMinor: 0,
+      netProfitMinor: 0,
+      refundsThisMonthMinor: 0,
+      unpaidExpensesCount: 0,
+      eventsAwaitingDepositCount: 0,
+      eventsPaidInFullCount: 0,
+    },
+    recentInvoices: [],
+    recentPayments: [],
+    overdueInvoices: [],
+    unpaidExpenses: [],
+    alerts: [],
+    eventsWithOutstandingBalance: [],
+  };
+  const emptyAttributionReport = {
+    generatedAt: "2026-01-01T00:00:00.000Z",
+    totals: {
+      contentAttributedLeadCount: 0,
+      commentAttributedLeadCount: 0,
+      dmAttributedLeadCount: 0,
+      attributedLeadCount: 0,
+      unattributedLeadCount: 0,
+      attributedClientCount: 0,
+      attributedEventCount: 0,
+      attributedInvoicedRevenueMinor: 0,
+      attributedPaidRevenueMinor: 0,
+    },
+    byPost: [],
+  };
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+  });
+
+  it("mock mode (default) never resolves a ServerRepositoryContext — the Supabase-only code path is never reached", async () => {
+    delete process.env.NEXT_PUBLIC_DATA_MODE;
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(founderSession);
+    vi.mocked(getFinanceDashboardData).mockResolvedValue(emptyDashboardData);
+    vi.mocked(getSocialAttributionReport).mockResolvedValue(emptyAttributionReport);
+
+    await getFinanceDashboardDataAction();
+
+    expect(getServerRepositoryContext).not.toHaveBeenCalled();
+  });
+
+  it("supabase mode resolves ServerRepositoryContext exactly ONCE and passes that identical object into both getFinanceDashboardData and getSocialAttributionReport, closing the SOCIAL-16G race", async () => {
+    process.env.NEXT_PUBLIC_DATA_MODE = "supabase";
+    const resolvedContext = { supabase: {} as never, session: { workspace: { id: "ws_resolved" } } as never };
+    vi.mocked(getServerRepositoryContext).mockResolvedValue(resolvedContext);
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(founderSession);
+    vi.mocked(getFinanceDashboardData).mockResolvedValue(emptyDashboardData);
+    vi.mocked(getSocialAttributionReport).mockResolvedValue(emptyAttributionReport);
+
+    const result = await getFinanceDashboardDataAction();
+
+    expect(result.success).toBe(true);
+    // Resolved exactly once, not once per concurrent repository call.
+    expect(getServerRepositoryContext).toHaveBeenCalledTimes(1);
+    // The same resolved object (reference equality) is threaded through to both.
+    expect(getFinanceDashboardData).toHaveBeenCalledWith(resolvedContext);
+    expect(getSocialAttributionReport).toHaveBeenCalledWith(resolvedContext);
+  });
+
+  it("unauthenticated/no-permission callers are rejected before any context resolution", async () => {
+    process.env.NEXT_PUBLIC_DATA_MODE = "supabase";
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue({ kind: "unauthenticated" } as never);
+
+    const result = await getFinanceDashboardDataAction();
+
+    expect(result.success).toBe(false);
+    expect(getServerRepositoryContext).not.toHaveBeenCalled();
+    expect(getFinanceDashboardData).not.toHaveBeenCalled();
   });
 });

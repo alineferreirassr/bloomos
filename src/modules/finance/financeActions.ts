@@ -1,6 +1,8 @@
 "use server";
 
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
+import { getServerRepositoryContext } from "@/lib/auth/workspaceSession";
+import { getDataMode } from "@/lib/env";
 import {
   getFinanceDashboardData,
   getChartOfAccounts,
@@ -134,7 +136,21 @@ export async function getFinanceDashboardDataAction(): Promise<FinanceDashboardA
   const canViewAmounts = session.permissions.includes("finance.amounts.view");
   const canViewExecutive = session.permissions.includes("finance.executive.view");
 
-  const [data, attributionReport] = await Promise.all([getFinanceDashboardData(), getSocialAttributionReport()]);
+  // SOCIAL-16H.1 — resolved exactly once, here at the genuine Server Action
+  // boundary (this file is "use server", never bundled for the client), and
+  // threaded through to both getFinanceDashboardData()'s own five concurrent
+  // repository calls and getSocialAttributionReport()'s own five. Each
+  // otherwise falls back to independently resolving its own session via the
+  // browser-oriented getClientWorkspaceSession(), which can spuriously
+  // report "unauthenticated" under concurrent invocation even for a
+  // genuinely signed-in caller — the exact, confirmed cause of SOCIAL-16G's
+  // Finance Dashboard load failure. Neither getFinanceDashboardData() nor
+  // getSocialAttributionReport() may resolve this context on their own:
+  // both are reachable from client-bundled code elsewhere in the app, and
+  // `getServerRepositoryContext()` depends on `next/headers`, which can
+  // never appear in that import graph.
+  const context = getDataMode() === "supabase" ? await getServerRepositoryContext() : undefined;
+  const [data, attributionReport] = await Promise.all([getFinanceDashboardData(context), getSocialAttributionReport(context)]);
 
   return {
     success: true,
