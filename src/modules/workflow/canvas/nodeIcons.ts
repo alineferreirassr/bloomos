@@ -47,6 +47,7 @@ import {
   FilePlus,
   FileOutput,
   Hourglass,
+  UserPlus,
   type LucideIcon,
 } from "lucide-react";
 
@@ -108,6 +109,7 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   FilePlus,
   FileOutput,
   Hourglass,
+  UserPlus,
 };
 
 export function resolveNodeIcon(name: string): LucideIcon {

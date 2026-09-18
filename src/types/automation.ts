@@ -98,6 +98,26 @@ export const AUTOMATION_TRIGGER_TYPES = [
   // explicitly out of this checkpoint's own scope, not merely deferred.
   "instagram.comment_received",
   "instagram.message_received",
+  // SOCIAL-16D — Lead Lifecycle Automation Triggers. Dispatched from the
+  // canonical Lead mutation points (`lib/data/index.ts`'s `createLead`/
+  // `convertLeadToClient` wrappers; `core/automation/instagramLeadCapture.ts`'s
+  // `findOrCreateInstagramLead`; and the Leads repository's own
+  // `updateLeadStatus`/`archiveLead`/`markWelcomeGuideSent` implementations,
+  // where the previous status is already in scope without an extra fetch).
+  // `lead.created` fires once per genuinely new Lead row (gated on the
+  // Instagram path's own `created === true`, never on a found-existing or
+  // race-loser outcome). `lead.status_changed` fires only when
+  // `previousStatus !== newStatus`, so a same-value rewrite (e.g.
+  // `markWelcomeGuideSent` when the Lead isn't `new`/`contacted`) never
+  // dispatches. `lead.converted` fires once from the single shared
+  // `convertLeadToClient` success path (covering both the Convert-to-Client
+  // modal and `bookLead()`); it intentionally does NOT also emit a paired
+  // `lead.status_changed` — the accurate pre-conversion status isn't
+  // available at the atomic Supabase RPC boundary without either an extra
+  // fetch or an RPC/schema change, both out of this checkpoint's scope.
+  "lead.created",
+  "lead.status_changed",
+  "lead.converted",
 ] as const;
 export type AutomationTriggerType = (typeof AUTOMATION_TRIGGER_TYPES)[number];
 
@@ -164,6 +184,12 @@ export const AUTOMATION_CONDITION_FIELDS = [
   // `facts.contractStatus` — never a new state machine.
   "approvalState",
   "paymentState",
+  // SOCIAL-16D — matches `facts.previousStatus`/`facts.newStatus` on a
+  // `lead.status_changed` trigger. `eq`/`neq` already work unchanged for
+  // these string-valued `LeadStatus` facts (see `conditions.ts`'s own
+  // `compare()` — no evaluator change needed).
+  "previousStatus",
+  "newStatus",
 ] as const;
 export type AutomationConditionField = (typeof AUTOMATION_CONDITION_FIELDS)[number];
 

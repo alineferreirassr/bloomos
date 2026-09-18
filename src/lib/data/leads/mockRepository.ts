@@ -14,6 +14,27 @@ import { recordTimelineActivity } from "@/lib/data/mock/timelineStore";
 import { getNotesByOwner, createNoteForOwner, getTimelineByOwner } from "@/lib/data/mock/notesTimelineShared";
 import type { LeadFilters, LeadsRepository } from "@/lib/data/leads/repository";
 import { getFullName } from "@/lib/personName";
+import { dispatchAutomationTrigger } from "@/core/automation/resolver";
+import { clockNow } from "@/core/time/clock";
+import { getLogger } from "@/core/observability/logger";
+
+/**
+ * SOCIAL-16D — fire-and-forget `lead.status_changed` dispatch, mirroring
+ * `lib/data/index.ts`'s own `dispatchSystemTrigger` pattern exactly. Lives
+ * here (not in the thin `lib/data/index.ts` wrapper) because `existing.status`
+ * is already in scope at every call site below without a second fetch — the
+ * thin wrapper only ever sees the post-mutation `DataResult<Lead>`, which
+ * carries no previous-status information. Gated on an actual value change so
+ * a same-status rewrite (`markWelcomeGuideSent`'s own no-advance branch)
+ * never dispatches a spurious event.
+ */
+function dispatchLeadStatusChanged(workspaceId: string, leadId: string, previousStatus: LeadStatus, newStatus: LeadStatus): void {
+  if (previousStatus === newStatus) return;
+  dispatchAutomationTrigger(
+    { type: "lead.status_changed", workspaceId, occurredAt: clockNow().toISOString(), actorMemberId: null, facts: { leadId, previousStatus, newStatus } },
+    { workspaceName: null, userId: null, userName: null, role: null, permissions: [] },
+  ).catch((error: unknown) => getLogger().error("lead.status_changed trigger dispatch failed", { workspaceId, error: error instanceof Error ? error.message : "Unknown error" }));
+}
 
 function fieldErrorsFromZod(error: {
   issues: { path: PropertyKey[]; message: string }[];
@@ -138,6 +159,7 @@ async function updateLeadStatus(id: string, status: LeadStatus): Promise<DataRes
     `Status changed from ${LEAD_STATUS_LABELS[existing.status]} to ${LEAD_STATUS_LABELS[status]}`,
     { from: existing.status, to: status },
   );
+  dispatchLeadStatusChanged(existing.workspace_id, id, existing.status, status);
 
   return ok(updated);
 }
@@ -163,6 +185,7 @@ async function archiveLead(id: string): Promise<DataResult<Lead>> {
   };
   writeLeads(readLeads().map((l) => (l.id === id ? updated : l)));
   recordTimelineActivity(existing.workspace_id, "lead", id, "lead_archived", "Lead archived");
+  dispatchLeadStatusChanged(existing.workspace_id, id, existing.status, "archived");
 
   return ok(updated);
 }
@@ -191,6 +214,7 @@ async function markWelcomeGuideSent(id: string): Promise<DataResult<Lead>> {
     "welcome_guide_sent",
     "Welcome Guide marked as sent (mock email service — no real email sent)",
   );
+  dispatchLeadStatusChanged(existing.workspace_id, id, existing.status, updated.status);
 
   return ok(updated);
 }

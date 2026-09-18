@@ -421,7 +421,11 @@ export async function getLeadById(id: string): Promise<Lead> {
 }
 
 export async function createLead(input: LeadFormInput): Promise<DataResult<Lead>> {
-  return leadsRepository().createLead(input);
+  const result = await leadsRepository().createLead(input);
+  if (result.success) {
+    dispatchSystemTrigger("lead.created", result.data.workspace_id, { leadId: result.data.id, source: result.data.source });
+  }
+  return result;
 }
 
 export async function updateLead(
@@ -467,7 +471,16 @@ function conversionRepository() {
  * transaction — see supabase/migrations/20260717100500_lead_to_client_conversion.sql).
  */
 export async function convertLeadToClient(leadId: string) {
-  return conversionRepository().convertLeadToClient(leadId);
+  const result = await conversionRepository().convertLeadToClient(leadId);
+  if (result.success) {
+    // SOCIAL-16D — the single shared conversion boundary (both
+    // ConvertToClientModal and bookLead() call this same wrapper), so this
+    // one dispatch site covers both callers. Deliberately does not also
+    // dispatch a paired lead.status_changed here — see AUTOMATION_TRIGGER_TYPES'
+    // own doc comment for why.
+    dispatchSystemTrigger("lead.converted", result.data.lead.workspace_id, { leadId: result.data.lead.id, clientId: result.data.client.id });
+  }
+  return result;
 }
 
 export type BookLeadInput = Omit<EventFormInput, "client_id" | "originating_lead_id">;

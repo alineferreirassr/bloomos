@@ -7,6 +7,9 @@ import { readLeads, writeLeads } from "@/lib/data/mock/leadsStore";
 import { recordTimelineActivity } from "@/lib/data/mock/timelineStore";
 import { generateId, nowIso } from "@/lib/data/utils";
 import { type DataResult, ok, fail } from "@/lib/data/result";
+import { dispatchAutomationTrigger } from "@/core/automation/resolver";
+import { clockNow } from "@/core/time/clock";
+import { getLogger } from "@/core/observability/logger";
 import type { Lead, InstagramLeadCaptureInput } from "@/types/lead";
 import type { Database } from "@/types/database.types";
 
@@ -174,7 +177,26 @@ async function findOrCreateInstagramLeadSupabase(input: InstagramLeadCaptureInpu
  * creates one. Never overwrites an existing Lead's own fields (name,
  * email, status, instagram, message) — a repeat capture of the same
  * external identity is always a pure no-op read, never an update.
+ *
+ * SOCIAL-16D — dispatches `lead.created` exactly once, here at this single
+ * shared wrapper, gated on `created === true`. Both the "existing Lead
+ * found" branch and the concurrent-race-loser branch already return
+ * `created: false` (see each mode's own function above), so a redelivered/
+ * duplicate Instagram capture never dispatches a second event — the exact
+ * SOCIAL-15C idempotency guarantee this reuses unchanged.
  */
 export async function findOrCreateInstagramLead(input: InstagramLeadCaptureInput): Promise<DataResult<FindOrCreateInstagramLeadResult>> {
-  return getDataMode() === "supabase" ? findOrCreateInstagramLeadSupabase(input) : findOrCreateInstagramLeadMock(input);
+  const result = getDataMode() === "supabase" ? await findOrCreateInstagramLeadSupabase(input) : await findOrCreateInstagramLeadMock(input);
+
+  if (result.success && result.data.created) {
+    const { lead } = result.data;
+    dispatchAutomationTrigger(
+      { type: "lead.created", workspaceId: lead.workspace_id, occurredAt: clockNow().toISOString(), actorMemberId: null, facts: { leadId: lead.id, source: lead.source } },
+      { workspaceName: null, userId: null, userName: null, role: null, permissions: [] },
+    ).catch((error: unknown) =>
+      getLogger().error("lead.created trigger dispatch failed", { workspaceId: lead.workspace_id, error: error instanceof Error ? error.message : "Unknown error" }),
+    );
+  }
+
+  return result;
 }

@@ -5,9 +5,18 @@ vi.mock("server-only", () => ({}));
 const createClientMock = vi.fn();
 vi.mock("@supabase/supabase-js", () => ({ createClient: (...args: unknown[]) => createClientMock(...args) }));
 
+// SOCIAL-16D — real dispatch calls (see findOrCreateInstagramLead's own
+// dispatch gated on `created === true`) route through this module; mocked
+// the same way metaWebhookProcessing.test.ts already mocks it, so the
+// assertions below can inspect exactly what was dispatched.
+vi.mock("@/core/automation/resolver", () => ({ dispatchAutomationTrigger: vi.fn().mockResolvedValue([]) }));
+
 import { findOrCreateInstagramLead } from "@/core/automation/instagramLeadCapture";
 import { readLeads, resetLeadsStore } from "@/lib/data/mock/leadsStore";
+import { dispatchAutomationTrigger } from "@/core/automation/resolver";
 import type { InstagramLeadCaptureInput } from "@/types/lead";
+
+const dispatchMock = vi.mocked(dispatchAutomationTrigger);
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -169,6 +178,47 @@ describe("findOrCreateInstagramLead — mock mode", () => {
       expect(result.data.lead.instagram_conversation_id).toBeNull();
     });
   });
+
+  describe("SOCIAL-16D — lead.created trigger dispatch", () => {
+    /** Mock-mode `recordTimelineActivity` also fires its own, pre-existing, unrelated `timeline_event` dispatch for every Lead timeline entry — filtering to `lead.created` isolates SOCIAL-16D's own event from that legitimate, untouched behavior. */
+    function leadCreatedCalls() {
+      return dispatchMock.mock.calls.filter(([trigger]) => trigger.type === "lead.created");
+    }
+
+    it("dispatches lead.created exactly once for a genuine new Lead captured from a comment (instagramCommentId/socialPostId present), with the correct workspaceId/leadId/source", async () => {
+      const result = await findOrCreateInstagramLead(input({ instagramExternalId: "17841400000000201", instagramCommentId: "comment_1", socialPostId: "post_1" }));
+      expect(result.success && result.data.created).toBe(true);
+      if (!result.success) return;
+
+      const calls = leadCreatedCalls();
+      expect(calls).toHaveLength(1);
+      expect(calls[0][0]).toEqual(
+        expect.objectContaining({ type: "lead.created", workspaceId: "ws_1", facts: { leadId: result.data.lead.id, source: "Instagram" } }),
+      );
+    });
+
+    it("dispatches lead.created exactly once for a genuine new Lead captured from a DM (instagramConversationId present, no socialPostId)", async () => {
+      const result = await findOrCreateInstagramLead(input({ instagramExternalId: "17841400000000202", instagramConversationId: "conversation_1" }));
+      expect(result.success && result.data.created).toBe(true);
+      if (!result.success) return;
+
+      const calls = leadCreatedCalls();
+      expect(calls).toHaveLength(1);
+      expect(calls[0][0]).toEqual(
+        expect.objectContaining({ type: "lead.created", workspaceId: "ws_1", facts: { leadId: result.data.lead.id, source: "Instagram" } }),
+      );
+    });
+
+    it("never dispatches lead.created when an existing Lead is found — a redelivered/duplicate capture is a pure no-op read", async () => {
+      const first = await findOrCreateInstagramLead(input({ instagramExternalId: "17841400000000203" }));
+      expect(first.success && first.data.created).toBe(true);
+      dispatchMock.mockClear();
+
+      const second = await findOrCreateInstagramLead(input({ instagramExternalId: "17841400000000203" }));
+      expect(second.success && !second.data.created).toBe(true);
+      expect(leadCreatedCalls()).toHaveLength(0);
+    });
+  });
 });
 
 describe("findOrCreateInstagramLead — supabase mode", () => {
@@ -263,6 +313,9 @@ describe("findOrCreateInstagramLead — supabase mode", () => {
     expect(result.data.lead.instagram_external_id).toBe("17841400000000001");
     expect(result.data.lead.first_name).toBeNull();
     expect(stub.timelineInsert).toHaveBeenCalledTimes(1);
+    // SOCIAL-16D — a genuine insert dispatches lead.created exactly once.
+    expect(dispatchMock).toHaveBeenCalledTimes(1);
+    expect(dispatchMock).toHaveBeenCalledWith(expect.objectContaining({ type: "lead.created", workspaceId: "ws_1", facts: { leadId: result.data.lead.id, source: "Instagram" } }), expect.anything());
   });
 
   it("SOCIAL-15C — the insert payload carries the exact attribution fields provided, never fabricated or omitted", async () => {
@@ -309,9 +362,11 @@ describe("findOrCreateInstagramLead — supabase mode", () => {
     expect(result.data.created).toBe(false);
     expect(result.data.lead.id).toBe("lead_db_1");
     expect(stub.timelineInsert).not.toHaveBeenCalled();
+    // SOCIAL-16D — "found existing" never dispatches lead.created.
+    expect(dispatchMock).not.toHaveBeenCalled();
   });
 
-  it("concurrent-race unique violation on insert — re-reads and returns the winning row, never throws, never a duplicate", async () => {
+  it("concurrent-race unique violation on insert — re-reads and returns the winning row, never throws, never a duplicate, never dispatches lead.created for the losing racer", async () => {
     const stub = makeStub({
       // First .maybeSingle(): not found yet. Insert then hits the unique index
       // (someone else's concurrent insert already landed). Second
@@ -330,6 +385,8 @@ describe("findOrCreateInstagramLead — supabase mode", () => {
     if (!result.success) return;
     expect(result.data.created).toBe(false);
     expect(result.data.lead.id).toBe("lead_race_winner");
+    // SOCIAL-16D — the race-loser branch (created: false) never dispatches.
+    expect(dispatchMock).not.toHaveBeenCalled();
   });
 
   it("throws a normalized error for a genuine, non-unique-violation database failure — never silently swallowed", async () => {

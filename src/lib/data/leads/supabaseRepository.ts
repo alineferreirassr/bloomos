@@ -15,6 +15,25 @@ import { getClientWorkspaceSession, type WorkspaceSession } from "@/lib/auth/wor
 import type { ServerRepositoryContext } from "@/lib/auth/workspaceSession";
 import type { LeadFilters, LeadsRepository } from "@/lib/data/leads/repository";
 import { getFullName } from "@/lib/personName";
+import { dispatchAutomationTrigger } from "@/core/automation/resolver";
+import { clockNow } from "@/core/time/clock";
+import { getLogger } from "@/core/observability/logger";
+
+/**
+ * SOCIAL-16D — fire-and-forget `lead.status_changed` dispatch, mirroring
+ * `lib/data/index.ts`'s own `dispatchSystemTrigger` pattern exactly. See
+ * the identical helper in `leads/mockRepository.ts` for the full rationale
+ * on why this lives here rather than in the thin `lib/data/index.ts`
+ * wrapper: `existing.status` is already in scope at every call site below
+ * without a second fetch.
+ */
+function dispatchLeadStatusChanged(workspaceId: string, leadId: string, previousStatus: LeadStatus, newStatus: LeadStatus): void {
+  if (previousStatus === newStatus) return;
+  dispatchAutomationTrigger(
+    { type: "lead.status_changed", workspaceId, occurredAt: clockNow().toISOString(), actorMemberId: null, facts: { leadId, previousStatus, newStatus } },
+    { workspaceName: null, userId: null, userName: null, role: null, permissions: [] },
+  ).catch((error: unknown) => getLogger().error("lead.status_changed trigger dispatch failed", { workspaceId, error: error instanceof Error ? error.message : "Unknown error" }));
+}
 
 type SupabaseClient = ReturnType<typeof createClient>;
 
@@ -217,6 +236,7 @@ async function updateLeadStatus(id: string, status: LeadStatus): Promise<DataRes
     `Status changed from ${LEAD_STATUS_LABELS[existing.status]} to ${LEAD_STATUS_LABELS[status]}`,
     { from: existing.status, to: status },
   );
+  dispatchLeadStatusChanged(updated.workspace_id, id, existing.status, status);
 
   return ok(updated);
 }
@@ -284,6 +304,7 @@ async function archiveLead(id: string): Promise<DataResult<Lead>> {
 
   const updated = mapLeadRow(data);
   await insertTimelineActivity(supabase, resolveActorName(session), updated.workspace_id, id, "lead_archived", "Lead archived");
+  dispatchLeadStatusChanged(updated.workspace_id, id, existing.status, "archived");
 
   return ok(updated);
 }
@@ -317,6 +338,7 @@ async function markWelcomeGuideSent(id: string): Promise<DataResult<Lead>> {
     "welcome_guide_sent",
     "Welcome Guide marked as sent (mock email service — no real email sent)",
   );
+  dispatchLeadStatusChanged(updated.workspace_id, id, existing.status, updated.status);
 
   return ok(updated);
 }

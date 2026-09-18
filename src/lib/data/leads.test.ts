@@ -6,6 +6,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // established mock for this exact reason).
 vi.mock("server-only", () => ({}));
 
+// SOCIAL-16D — mocked so the tests below can inspect exactly what was
+// dispatched. `recordTimelineActivity` (lib/data/mock/timelineStore.ts) also
+// fires its own, pre-existing, unrelated `timeline_event` dispatch for every
+// Lead timeline entry created by these same wrapper functions — every
+// assertion below filters to the specific SOCIAL-16D trigger type it cares
+// about rather than asserting a raw total call count, so that legitimate,
+// untouched `timeline_event` dispatches never cause a false failure.
+vi.mock("@/core/automation/resolver", () => ({ dispatchAutomationTrigger: vi.fn().mockResolvedValue([]) }));
+
 import {
   archiveLead,
   convertLeadToClient,
@@ -23,7 +32,13 @@ import {
   updateLeadStatus,
 } from "@/lib/data";
 import { findOrCreateInstagramLead } from "@/core/automation/instagramLeadCapture";
+import { dispatchAutomationTrigger } from "@/core/automation/resolver";
 import type { LeadFormInput } from "@/modules/leads/schema";
+
+const dispatchMock = vi.mocked(dispatchAutomationTrigger);
+function callsOfType(type: string) {
+  return dispatchMock.mock.calls.filter(([trigger]) => trigger.type === type);
+}
 
 const validInput: LeadFormInput = {
   first_name: "Jamie",
@@ -43,6 +58,7 @@ const validInput: LeadFormInput = {
 
 beforeEach(() => {
   resetAllMockData();
+  dispatchMock.mockClear();
 });
 
 describe("createLead", () => {
@@ -418,5 +434,164 @@ describe("getLeads filtering", () => {
 describe("getLeadById", () => {
   it("throws NotFoundError for a missing lead", async () => {
     await expect(getLeadById("does_not_exist")).rejects.toThrow();
+  });
+});
+
+describe("SOCIAL-16D — Lead lifecycle automation triggers", () => {
+  describe("lead.created", () => {
+    it("dispatches exactly once for a manually-created Lead, with the correct workspaceId/leadId/source", async () => {
+      const result = await createLead(validInput);
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+
+      const calls = callsOfType("lead.created");
+      expect(calls).toHaveLength(1);
+      expect(calls[0][0]).toEqual(
+        expect.objectContaining({ type: "lead.created", workspaceId: result.data.workspace_id, facts: { leadId: result.data.id, source: "Website" } }),
+      );
+    });
+
+    it("does not dispatch for a rejected (invalid-input) Lead creation attempt", async () => {
+      const result = await createLead({ ...validInput, email: "not-an-email" });
+      expect(result.success).toBe(false);
+      expect(callsOfType("lead.created")).toHaveLength(0);
+    });
+  });
+
+  describe("lead.status_changed", () => {
+    it("updateLeadStatus — a valid transition dispatches exactly once with the correct previousStatus/newStatus", async () => {
+      const created = await createLead(validInput);
+      if (!created.success) throw new Error("setup failed");
+      dispatchMock.mockClear();
+
+      const result = await updateLeadStatus(created.data.id, "qualified");
+      expect(result.success).toBe(true);
+
+      const calls = callsOfType("lead.status_changed");
+      expect(calls).toHaveLength(1);
+      expect(calls[0][0]).toEqual(
+        expect.objectContaining({ type: "lead.status_changed", workspaceId: created.data.workspace_id, facts: { leadId: created.data.id, previousStatus: "new", newStatus: "qualified" } }),
+      );
+    });
+
+    it("updateLeadStatus — an illegal transition is rejected before any dispatch, never a partial event", async () => {
+      const created = await createLead(validInput);
+      if (!created.success) throw new Error("setup failed");
+      dispatchMock.mockClear();
+
+      const result = await updateLeadStatus(created.data.id, "converted");
+      expect(result.success).toBe(false);
+      expect(callsOfType("lead.status_changed")).toHaveLength(0);
+    });
+
+    it("archiveLead — dispatches exactly once with newStatus archived", async () => {
+      const created = await createLead(validInput);
+      if (!created.success) throw new Error("setup failed");
+      dispatchMock.mockClear();
+
+      const result = await archiveLead(created.data.id);
+      expect(result.success).toBe(true);
+
+      const calls = callsOfType("lead.status_changed");
+      expect(calls).toHaveLength(1);
+      expect(calls[0][0]).toEqual(
+        expect.objectContaining({ type: "lead.status_changed", workspaceId: created.data.workspace_id, facts: { leadId: created.data.id, previousStatus: "new", newStatus: "archived" } }),
+      );
+    });
+
+    it("markWelcomeGuideSent — a real transition (new -> welcome_guide_sent) dispatches exactly once", async () => {
+      const created = await createLead(validInput);
+      if (!created.success) throw new Error("setup failed");
+      dispatchMock.mockClear();
+
+      const result = await markWelcomeGuideSent(created.data.id);
+      expect(result.success).toBe(true);
+
+      const calls = callsOfType("lead.status_changed");
+      expect(calls).toHaveLength(1);
+      expect(calls[0][0]).toEqual(
+        expect.objectContaining({ type: "lead.status_changed", workspaceId: created.data.workspace_id, facts: { leadId: created.data.id, previousStatus: "new", newStatus: "welcome_guide_sent" } }),
+      );
+    });
+
+    it("markWelcomeGuideSent — the no-op branch (Lead already past new/contacted) never dispatches", async () => {
+      const created = await createLead(validInput);
+      if (!created.success) throw new Error("setup failed");
+      await updateLeadStatus(created.data.id, "qualified");
+      dispatchMock.mockClear();
+
+      const result = await markWelcomeGuideSent(created.data.id);
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.status).toBe("qualified");
+      expect(callsOfType("lead.status_changed")).toHaveLength(0);
+    });
+  });
+
+  describe("lead.converted", () => {
+    it("a successful conversion dispatches exactly one lead.converted with the real leadId/clientId, and zero lead.status_changed", async () => {
+      const created = await createLead(validInput);
+      if (!created.success) throw new Error("setup failed");
+      dispatchMock.mockClear();
+
+      const result = await convertLeadToClient(created.data.id);
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+
+      const convertedCalls = callsOfType("lead.converted");
+      expect(convertedCalls).toHaveLength(1);
+      expect(convertedCalls[0][0]).toEqual(
+        expect.objectContaining({ type: "lead.converted", workspaceId: created.data.workspace_id, facts: { leadId: created.data.id, clientId: result.data.client.id } }),
+      );
+      // SOCIAL-16D deviation from SOCIAL-16C: conversion emits lead.converted
+      // but not a paired lead.status_changed — see AUTOMATION_TRIGGER_TYPES'
+      // own doc comment for the full reasoning.
+      expect(callsOfType("lead.status_changed")).toHaveLength(0);
+    });
+
+    it("retrying conversion against an already-converted Lead dispatches zero additional lead.converted events", async () => {
+      const created = await createLead(validInput);
+      if (!created.success) throw new Error("setup failed");
+      const first = await convertLeadToClient(created.data.id);
+      expect(first.success).toBe(true);
+      dispatchMock.mockClear();
+
+      const retry = await convertLeadToClient(created.data.id);
+      expect(retry.success).toBe(false);
+      expect(callsOfType("lead.converted")).toHaveLength(0);
+    });
+  });
+
+  describe("workspace correctness", () => {
+    it("Leads created in two different workspaces each dispatch with their own real workspaceId, never crossed", async () => {
+      const instagramA = await findOrCreateInstagramLead({
+        workspaceId: "ws_dispatch_a",
+        source: "Instagram",
+        instagramExternalId: "17841400000000301",
+        instagram: "@a",
+        message: null,
+        firstName: null,
+        lastName: null,
+        email: null,
+      });
+      const instagramB = await findOrCreateInstagramLead({
+        workspaceId: "ws_dispatch_b",
+        source: "Instagram",
+        instagramExternalId: "17841400000000302",
+        instagram: "@b",
+        message: null,
+        firstName: null,
+        lastName: null,
+        email: null,
+      });
+      if (!instagramA.success || !instagramB.success) throw new Error("setup failed");
+
+      const calls = callsOfType("lead.created");
+      expect(calls).toHaveLength(2);
+      const forA = calls.find(([trigger]) => trigger.facts.leadId === instagramA.data.lead.id);
+      const forB = calls.find(([trigger]) => trigger.facts.leadId === instagramB.data.lead.id);
+      expect(forA?.[0].workspaceId).toBe("ws_dispatch_a");
+      expect(forB?.[0].workspaceId).toBe("ws_dispatch_b");
+    });
   });
 });

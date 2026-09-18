@@ -234,6 +234,40 @@ export const signatureDeclinedTrigger = makeTriggerNode({ id: "trigger.signature
 export const externalFileSyncedTrigger = makeTriggerNode({ id: "trigger.external-file-synced", name: "External File Synced", description: "Fires when a file finishes syncing to or from a connected storage provider.", icon: "FolderSync", compileTarget: "storage.file_synced" });
 export const integrationConnectionFailedTrigger = makeTriggerNode({ id: "trigger.integration-connection-failed", name: "Integration Connection Failed", description: "Fires when a connected provider's connection health check fails.", icon: "PlugZap", compileTarget: "connection.failed" });
 
+/**
+ * SOCIAL-16D — Lead Lifecycle Automation Triggers. `leadStatusChangedTrigger`
+ * carries `previousStatus`/`newStatus` on its own trigger facts (see
+ * `AUTOMATION_CONDITION_FIELDS`'s matching new entries) — condition support
+ * needs no evaluator change since `eq`/`neq` already compare any string
+ * fact value unchanged. `leadConvertedTrigger` deliberately has no
+ * conversion-specific condition fields of its own beyond the standard
+ * ones; `facts.clientId` is available to Actions but isn't exposed as a
+ * selectable Condition field (no existing precedent compares a raw id).
+ */
+export const leadCreatedTrigger = makeTriggerNode({
+  id: "trigger.lead-created",
+  name: "Lead Created",
+  description: "Fires when a new Lead is captured for the Workspace, whether entered manually or captured from an Instagram comment or DM.",
+  icon: "UserPlus",
+  compileTarget: "lead.created",
+});
+
+export const leadStatusChangedTrigger = makeTriggerNode({
+  id: "trigger.lead-status-changed",
+  name: "Lead Status Changed",
+  description: "Fires when a Lead's status actually changes to a different value.",
+  icon: "RefreshCw",
+  compileTarget: "lead.status_changed",
+});
+
+export const leadConvertedTrigger = makeTriggerNode({
+  id: "trigger.lead-converted",
+  name: "Lead Converted",
+  description: "Fires when a Lead is successfully converted to a Client.",
+  icon: "BadgeCheck",
+  compileTarget: "lead.converted",
+});
+
 export const triggerNodes: WorkflowNodeDefinition[] = [
   proposalAcceptedTrigger,
   proposalRejectedTrigger,
@@ -266,4 +300,7 @@ export const triggerNodes: WorkflowNodeDefinition[] = [
   integrationConnectionFailedTrigger,
   manualTrigger,
   timerTrigger,
+  leadCreatedTrigger,
+  leadStatusChangedTrigger,
+  leadConvertedTrigger,
 ];
