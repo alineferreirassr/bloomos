@@ -124,7 +124,7 @@ describe("createLeadFromInstagramDmAction — registration", () => {
 });
 
 describe("createLeadFromInstagramDmAction — execute()", () => {
-  it("6/7/8/9. creates a Lead using the conversation's own external_participant_id as instagram_external_id, username as instagram, message text as message", async () => {
+  it("6/7/8/9. creates a Lead using the conversation's own external_participant_id as instagram_external_id, username as instagram, message text as message, plus SOCIAL-15C instagram_conversation_id attribution", async () => {
     listConversationsMock.mockResolvedValue([conversationRow()]);
     findOrCreateMock.mockResolvedValue({ success: true, data: { lead: leadFixture(), created: true } });
 
@@ -138,6 +138,7 @@ describe("createLeadFromInstagramDmAction — execute()", () => {
       instagramExternalId: "17841400000000042",
       instagram: "curious_bride",
       message: "Do you have June availability?",
+      instagramConversationId: "conversation_domain_1",
       firstName: null,
       lastName: null,
       email: null,
@@ -226,6 +227,37 @@ describe("createLeadFromInstagramDmAction — execute()", () => {
     const result = await createLeadFromInstagramDmAction.execute(actionParams());
 
     expect(result).toEqual({ success: false, message: "Service unavailable." });
+  });
+});
+
+describe("createLeadFromInstagramDmAction — SOCIAL-15C content attribution", () => {
+  it("11. a DM Lead receives instagram_conversation_id from the real, resolved Conversation row", async () => {
+    listConversationsMock.mockResolvedValue([conversationRow({ id: "conversation_real_1" })]);
+    findOrCreateMock.mockResolvedValue({ success: true, data: { lead: leadFixture(), created: true } });
+
+    await createLeadFromInstagramDmAction.execute(actionParams({ facts: { ...actionParams().facts, conversationId: "conversation_real_1" } }));
+
+    expect(findOrCreateMock).toHaveBeenCalledWith(expect.objectContaining({ instagramConversationId: "conversation_real_1" }));
+  });
+
+  it("12. a DM capture never sets socialPostId by inference — the capture input has no social-post field for DM at all", async () => {
+    listConversationsMock.mockResolvedValue([conversationRow()]);
+    findOrCreateMock.mockResolvedValue({ success: true, data: { lead: leadFixture(), created: true } });
+
+    await createLeadFromInstagramDmAction.execute(actionParams());
+
+    const callArgs = findOrCreateMock.mock.calls[0][0];
+    expect(callArgs).not.toHaveProperty("socialPostId");
+  });
+
+  it("13. a Conversation resolved from a workspace-scoped list can never be attributed to a Lead in a different workspace — the same listInstagramConversationsForWorkspace(workspaceId) call already enforces this", async () => {
+    listConversationsMock.mockResolvedValue([conversationRow({ id: "conversation_ws_a", workspace_id: "ws_a" })]);
+    findOrCreateMock.mockResolvedValue({ success: true, data: { lead: leadFixture(), created: true } });
+
+    await createLeadFromInstagramDmAction.execute(actionParams({ workspaceId: "ws_a", facts: { ...actionParams().facts, conversationId: "conversation_ws_a" } }));
+
+    expect(listConversationsMock).toHaveBeenCalledWith("ws_a");
+    expect(findOrCreateMock).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: "ws_a", instagramConversationId: "conversation_ws_a" }));
   });
 });
 

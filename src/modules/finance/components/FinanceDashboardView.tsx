@@ -216,6 +216,12 @@ export function FinanceDashboardView() {
       value: money(metrics.refundsThisMonthMinor),
       href: "/finance/payments",
     },
+    // SOCIAL-15D — Instagram-content-attributed revenue only (never total
+    // company revenue, and never implying engagement "caused" the
+    // revenue — this is stored attribution, all-time). Label explicitly
+    // names the channel per this checkpoint's own "never make attributed
+    // revenue look like total revenue" instruction.
+    { label: "Instagram-attributed Revenue", value: money(metrics.attributedPaidRevenueMinor), href: "/social-strategist" },
     { label: "Unpaid Expenses", value: String(metrics.unpaidExpensesCount), href: "/finance/expenses" },
     { label: "Events Awaiting Deposit", value: String(metrics.eventsAwaitingDepositCount), href: "/events" },
     { label: "Events Paid in Full", value: String(metrics.eventsPaidInFullCount), href: "/events" },

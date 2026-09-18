@@ -15,8 +15,11 @@ import {
   getTimelineByEventId,
   listEventServicesByEvent,
   togglePinNote,
+  getLeadById,
 } from "@/lib/data";
 import { getEventFinancialSummaryAction, type FinancialSummaryView } from "@/modules/finance/financeActions";
+import { resolveLeadAttribution } from "@/modules/socialAttribution/resolveLeadAttribution";
+import type { LeadAttributionDisplay } from "@/modules/socialAttribution/types";
 import type { Event } from "@/types/event";
 import type { Client } from "@/types/client";
 import type { Note } from "@/types/note";
@@ -80,6 +83,8 @@ type LoadState =
       financialStatus: EventFinancialStatus;
       contracts: Contract[];
       assignedServices: EventService[];
+      /** SOCIAL-15D — the originating Lead's own stored attribution, only present when `event.originating_lead_id` resolves to a real Lead. */
+      originatingLeadAttribution: LeadAttributionDisplay | null;
     };
 
 /**
@@ -139,6 +144,13 @@ async function loadEventDetail(eventId: string): Promise<LoadState> {
       },
     );
 
+    // SOCIAL-15D — surfaces the Lead's own stored attribution through the
+    // existing Event -> Originating Lead relationship, never a parallel
+    // attribution concept. No extra fetch when there's no originating Lead.
+    const originatingLeadAttribution = event.originating_lead_id
+      ? await getLeadById(event.originating_lead_id).then(resolveLeadAttribution).catch(() => null)
+      : null;
+
     return {
       status: "ready",
       event,
@@ -153,6 +165,7 @@ async function loadEventDetail(eventId: string): Promise<LoadState> {
       financialStatus,
       contracts,
       assignedServices,
+      originatingLeadAttribution,
     };
   } catch (err) {
     return { status: err instanceof NotFoundError ? "not-found" : "error" };
@@ -200,7 +213,7 @@ export function EventDetailView({ eventId }: { eventId: string }) {
     return <ErrorState message="Could not load this event." onRetry={refetch} />;
   }
 
-  const { event, client, notes, timeline, checklist, schedule, nextAction, health, financialSummary, financialStatus, contracts, assignedServices } =
+  const { event, client, notes, timeline, checklist, schedule, nextAction, health, financialSummary, financialStatus, contracts, assignedServices, originatingLeadAttribution } =
     state;
 
   const checklistStats = computeChecklistStats(checklist);
@@ -273,9 +286,14 @@ export function EventDetailView({ eventId }: { eventId: string }) {
                     <Field
                       label="Originating Lead"
                       value={
-                        <Link href={`/leads/${event.originating_lead_id}`} className="text-accent hover:underline">
-                          View original Lead →
-                        </Link>
+                        <>
+                          <Link href={`/leads/${event.originating_lead_id}`} className="text-accent hover:underline">
+                            View original Lead →
+                          </Link>
+                          {originatingLeadAttribution && originatingLeadAttribution.kind !== "none" ? (
+                            <span className="mt-0.5 block text-xs text-text-muted">{leadAttributionSummary(originatingLeadAttribution)}</span>
+                          ) : null}
+                        </>
                       }
                     />
                   ) : null}
@@ -450,6 +468,20 @@ export function EventDetailView({ eventId }: { eventId: string }) {
       </div>
     </div>
   );
+}
+
+/** SOCIAL-15D — a short, plain-text summary of the originating Lead's own stored attribution — never raw comment/DM content, only the Social Post's own workspace-authored caption when resolvable. */
+function leadAttributionSummary(attribution: LeadAttributionDisplay): string {
+  switch (attribution.kind) {
+    case "social_post":
+      return attribution.socialPost ? `From Instagram post: "${attribution.socialPost.caption}"` : "From an Instagram post";
+    case "instagram_comment":
+      return "From an Instagram comment";
+    case "instagram_conversation":
+      return "From an Instagram DM";
+    case "none":
+      return "";
+  }
 }
 
 function Field({ label, value }: { label: string; value: ReactNode }) {

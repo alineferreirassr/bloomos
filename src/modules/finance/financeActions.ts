@@ -23,6 +23,7 @@ import type { PaymentStatus } from "@/core/enums/paymentStatus";
 import type { ExpenseStatus } from "@/core/enums/expenseStatus";
 import { reconcileFinancialTotals, type ReconciliationResult } from "@/modules/finance/reconciliation";
 import { clockNow } from "@/core/time/clock";
+import { getSocialAttributionReport } from "@/modules/socialAttribution/getSocialAttributionReport";
 
 const GENERIC_ACCESS_ERROR = "You don't have permission to view Finance data.";
 const ACCOUNTING_ACCESS_ERROR = "You don't have permission to view the accounting ledger.";
@@ -51,6 +52,17 @@ export interface FinanceDashboardMetricsView {
   unpaidExpensesCount: number;
   eventsAwaitingDepositCount: number;
   eventsPaidInFullCount: number;
+  /**
+   * SOCIAL-15D — Instagram-content-attributed revenue only (SOCIAL-15B/C's
+   * own stored `leads.social_post_id`/`instagram_comment_id`/
+   * `instagram_conversation_id`), never total company revenue — computed
+   * by `getSocialAttributionReport()`, which reuses `computeClientFinancialSummary`
+   * unchanged. Redacted the same way as every other money-bearing field
+   * here (`finance.amounts.view`).
+   */
+  attributedInvoicedRevenueMinor: number | null;
+  attributedPaidRevenueMinor: number | null;
+  attributedLeadCount: number;
 }
 
 export interface FinanceDashboardInvoiceRow {
@@ -122,7 +134,7 @@ export async function getFinanceDashboardDataAction(): Promise<FinanceDashboardA
   const canViewAmounts = session.permissions.includes("finance.amounts.view");
   const canViewExecutive = session.permissions.includes("finance.executive.view");
 
-  const data = await getFinanceDashboardData();
+  const [data, attributionReport] = await Promise.all([getFinanceDashboardData(), getSocialAttributionReport()]);
 
   return {
     success: true,
@@ -140,6 +152,9 @@ export async function getFinanceDashboardDataAction(): Promise<FinanceDashboardA
         unpaidExpensesCount: data.metrics.unpaidExpensesCount,
         eventsAwaitingDepositCount: data.metrics.eventsAwaitingDepositCount,
         eventsPaidInFullCount: data.metrics.eventsPaidInFullCount,
+        attributedInvoicedRevenueMinor: canViewAmounts ? attributionReport.totals.attributedInvoicedRevenueMinor : null,
+        attributedPaidRevenueMinor: canViewAmounts ? attributionReport.totals.attributedPaidRevenueMinor : null,
+        attributedLeadCount: attributionReport.totals.attributedLeadCount,
       },
       recentInvoices: data.recentInvoices.map((invoice) => ({
         id: invoice.id,

@@ -125,7 +125,7 @@ describe("createSocialStrategistMockProvider — no fabricated metrics, no follo
 describe("createSocialStrategistMockProvider — no PII / no raw Instagram comment/DM/Lead.message leakage", () => {
   it("the entire serialized output never contains any string beyond the context's own safe fields — no first_name/last_name/email/phone/message keys or values could exist since the context itself never carries them", async () => {
     const context = emptyContext({
-      instagramLeads: [{ leadId: "lead_1", status: "new", instagramHandle: "@curious_bride", isAssigned: false, hasConversionIdentity: false, createdAt: "2026-09-01T00:00:00.000Z" }],
+      instagramLeads: [{ leadId: "lead_1", status: "new", instagramHandle: "@curious_bride", isAssigned: false, hasConversionIdentity: false, createdAt: "2026-09-01T00:00:00.000Z", attributionKind: "none", attributedSocialPostId: null }],
     });
     const output = await completeAndParse(context);
     const serialized = JSON.stringify(output);
@@ -139,13 +139,52 @@ describe("createSocialStrategistMockProvider — no PII / no raw Instagram comme
   it("conversion observations reference only real Lead counts, never a specific Lead's identity", async () => {
     const context = emptyContext({
       instagramLeads: [
-        { leadId: "lead_1", status: "new", instagramHandle: "@a", isAssigned: false, hasConversionIdentity: false, createdAt: "2026-09-01T00:00:00.000Z" },
-        { leadId: "lead_2", status: "new", instagramHandle: "@b", isAssigned: true, hasConversionIdentity: true, createdAt: "2026-09-01T00:00:00.000Z" },
+        { leadId: "lead_1", status: "new", instagramHandle: "@a", isAssigned: false, hasConversionIdentity: false, createdAt: "2026-09-01T00:00:00.000Z", attributionKind: "none", attributedSocialPostId: null },
+        { leadId: "lead_2", status: "new", instagramHandle: "@b", isAssigned: true, hasConversionIdentity: true, createdAt: "2026-09-01T00:00:00.000Z", attributionKind: "none", attributedSocialPostId: null },
       ],
       unassignedInstagramLeadCount: 1,
     });
     const output = await completeAndParse(context);
     expect(output.conversionObservations).toEqual(["2 Instagram-sourced Lead(s) tracked; 1 currently unassigned."]);
+  });
+});
+
+describe("createSocialStrategistMockProvider — SOCIAL-15D content attribution observations", () => {
+  it("reports a real, count-only (never a rate/percentage) Post-attribution observation", async () => {
+    const context = emptyContext({
+      instagramLeads: [
+        { leadId: "lead_1", status: "new", instagramHandle: "@a", isAssigned: false, hasConversionIdentity: false, createdAt: "2026-09-01T00:00:00.000Z", attributionKind: "social_post", attributedSocialPostId: "post_1" },
+        { leadId: "lead_2", status: "new", instagramHandle: "@b", isAssigned: false, hasConversionIdentity: false, createdAt: "2026-09-01T00:00:00.000Z", attributionKind: "none", attributedSocialPostId: null },
+      ],
+    });
+    const output = await completeAndParse(context);
+    expect(output.conversionObservations).toContain("1 of 2 Instagram Lead(s) are attributed to a specific Social Post.");
+  });
+
+  it("reports comment-only attribution (no resolved post) separately from Post attribution", async () => {
+    const context = emptyContext({
+      instagramLeads: [{ leadId: "lead_1", status: "new", instagramHandle: "@a", isAssigned: false, hasConversionIdentity: false, createdAt: "2026-09-01T00:00:00.000Z", attributionKind: "instagram_comment", attributedSocialPostId: null }],
+    });
+    const output = await completeAndParse(context);
+    expect(output.conversionObservations).toContain("1 Instagram Lead(s) are attributed to a comment whose post could not be resolved.");
+    expect(output.conversionObservations.some((o) => o.includes("Social Post are"))).toBe(false);
+  });
+
+  it("reports DM-attributed Leads separately, never folding them into the Social Post count", async () => {
+    const context = emptyContext({
+      instagramLeads: [{ leadId: "lead_1", status: "new", instagramHandle: "@a", isAssigned: false, hasConversionIdentity: false, createdAt: "2026-09-01T00:00:00.000Z", attributionKind: "instagram_conversation", attributedSocialPostId: null }],
+    });
+    const output = await completeAndParse(context);
+    expect(output.conversionObservations).toContain("1 Instagram Lead(s) are DM-originated (conversation-attributed only).");
+    expect(output.conversionObservations.some((o) => o.includes("attributed to a specific Social Post"))).toBe(false);
+  });
+
+  it("omits every attribution observation when no Instagram Lead has any attribution at all", async () => {
+    const context = emptyContext({
+      instagramLeads: [{ leadId: "lead_1", status: "new", instagramHandle: "@a", isAssigned: false, hasConversionIdentity: false, createdAt: "2026-09-01T00:00:00.000Z", attributionKind: "none", attributedSocialPostId: null }],
+    });
+    const output = await completeAndParse(context);
+    expect(output.conversionObservations.some((o) => o.includes("attributed"))).toBe(false);
   });
 });
 

@@ -86,6 +86,24 @@ describe("mockInstagramCommentRepository", () => {
     expect(await mockInstagramCommentRepository.getCommentByExternalId("identity_2", "c1")).toBeNull();
   });
 
+  describe("getCommentById — SOCIAL-15C", () => {
+    it("resolves a comment by its internal id, scoped to the correct workspace", async () => {
+      const created = await mockInstagramCommentRepository.createComment(stubInput({ workspaceId: "ws_1" }));
+      if (!created.success) throw new Error("setup failed");
+      expect(await mockInstagramCommentRepository.getCommentById(created.data.id, "ws_1")).toMatchObject({ id: created.data.id });
+    });
+
+    it("returns null for an id that doesn't exist", async () => {
+      expect(await mockInstagramCommentRepository.getCommentById("does_not_exist", "ws_1")).toBeNull();
+    });
+
+    it("never resolves a real comment id when queried under the wrong workspace — workspace isolation at the lookup itself", async () => {
+      const created = await mockInstagramCommentRepository.createComment(stubInput({ workspaceId: "ws_1" }));
+      if (!created.success) throw new Error("setup failed");
+      expect(await mockInstagramCommentRepository.getCommentById(created.data.id, "ws_2")).toBeNull();
+    });
+  });
+
   describe("updateCommentStatus", () => {
     it("flips status from active to removed", async () => {
       const created = await mockInstagramCommentRepository.createComment(stubInput());

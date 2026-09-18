@@ -50,9 +50,14 @@ vi.mock("@/lib/data", () => ({
   getDocumentOwnerSummary: vi.fn(),
   getEvents: vi.fn(),
   getClientFinancialSummary: vi.fn(),
+  getLeadById: vi.fn(),
+}));
+vi.mock("@/modules/socialAttribution/resolveLeadAttribution", () => ({
+  resolveLeadAttribution: vi.fn(),
 }));
 
 import * as dataLayer from "@/lib/data";
+import { resolveLeadAttribution } from "@/modules/socialAttribution/resolveLeadAttribution";
 
 const EMPTY_DOCUMENT_SUMMARY = {
   total: 0,
@@ -158,5 +163,56 @@ describe("ClientDetailView", () => {
     expect(screen.getByText("Finance")).toBeInTheDocument();
     expect(screen.getByText("$5,000.00")).toBeInTheDocument();
     expect(screen.getByText("$2,500.00")).toBeInTheDocument();
+  });
+
+  describe("SOCIAL-15D — originating Lead content attribution", () => {
+    beforeEach(() => {
+      vi.mocked(dataLayer.getLeadById).mockClear();
+      vi.mocked(resolveLeadAttribution).mockClear();
+    });
+
+    it("shows the originating Lead's stored attribution beneath the existing Originating Lead link", async () => {
+      const client = makeClient({ id: "client_1", first_name: "Naomi", last_name: "Whitfield", originating_lead_id: "lead_1" });
+      vi.mocked(dataLayer.getClientById).mockResolvedValue(client);
+      vi.mocked(dataLayer.getNotesByClientId).mockResolvedValue([]);
+      vi.mocked(dataLayer.getTimelineByClientId).mockResolvedValue([]);
+      vi.mocked(dataLayer.getClientNextAction).mockResolvedValue(null);
+      vi.mocked(dataLayer.getLeadById).mockResolvedValue({ id: "lead_1" } as never);
+      vi.mocked(resolveLeadAttribution).mockResolvedValue({ kind: "social_post", socialPost: { id: "post_1", caption: "Behind the scenes" }, comment: null, conversation: null });
+
+      renderClientDetail("client_1");
+
+      expect(await screen.findByRole("link", { name: "View original Lead →" })).toHaveAttribute("href", "/leads/lead_1");
+      expect(screen.getByText('From Instagram post: "Behind the scenes"')).toBeInTheDocument();
+    });
+
+    it("never fetches a Lead or shows attribution when the Client has no originating_lead_id", async () => {
+      const client = makeClient({ id: "client_1", first_name: "Naomi", last_name: "Whitfield", originating_lead_id: null });
+      vi.mocked(dataLayer.getClientById).mockResolvedValue(client);
+      vi.mocked(dataLayer.getNotesByClientId).mockResolvedValue([]);
+      vi.mocked(dataLayer.getTimelineByClientId).mockResolvedValue([]);
+      vi.mocked(dataLayer.getClientNextAction).mockResolvedValue(null);
+
+      renderClientDetail("client_1");
+
+      await screen.findByText("Naomi Whitfield");
+      expect(dataLayer.getLeadById).not.toHaveBeenCalled();
+      expect(screen.queryByRole("link", { name: "View original Lead →" })).not.toBeInTheDocument();
+    });
+
+    it("shows the link but no attribution note when the originating Lead has no stored attribution", async () => {
+      const client = makeClient({ id: "client_1", first_name: "Naomi", last_name: "Whitfield", originating_lead_id: "lead_1" });
+      vi.mocked(dataLayer.getClientById).mockResolvedValue(client);
+      vi.mocked(dataLayer.getNotesByClientId).mockResolvedValue([]);
+      vi.mocked(dataLayer.getTimelineByClientId).mockResolvedValue([]);
+      vi.mocked(dataLayer.getClientNextAction).mockResolvedValue(null);
+      vi.mocked(dataLayer.getLeadById).mockResolvedValue({ id: "lead_1" } as never);
+      vi.mocked(resolveLeadAttribution).mockResolvedValue({ kind: "none", socialPost: null, comment: null, conversation: null });
+
+      renderClientDetail("client_1");
+
+      expect(await screen.findByRole("link", { name: "View original Lead →" })).toBeInTheDocument();
+      expect(screen.queryByText(/from an instagram|from instagram/i)).not.toBeInTheDocument();
+    });
   });
 });

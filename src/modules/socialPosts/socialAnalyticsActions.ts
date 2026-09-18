@@ -3,8 +3,10 @@
 import { resolveMemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 import { listSocialPosts, listLatestSocialPostMetricSnapshotsForWorkspace, listSocialAccountMetricSnapshots } from "@/lib/data";
 import { getOwnProviderConnectionAction } from "@/modules/integrations/manageOAuthConnectionActions";
+import { getSocialAttributionReport } from "@/modules/socialAttribution/getSocialAttributionReport";
 import type { SocialPost } from "@/types/socialPost";
 import type { SocialAccountMetricSnapshot, SocialPostMetricSnapshot } from "@/types/socialMetricSnapshot";
+import type { SocialPostAttributionStats } from "@/modules/socialAttribution/types";
 
 /**
  * SOCIAL-05E — the Analytics tab's own read model. Reads ONLY the
@@ -35,16 +37,68 @@ export type SocialAnalyticsTimeRange = "7d" | "30d" | "90d";
 
 const RANGE_DAYS: Record<SocialAnalyticsTimeRange, number> = { "7d": 7, "30d": 30, "90d": 90 };
 
+/**
+ * SOCIAL-15E — the redacted, client-facing shape of `SocialPostAttributionStats`.
+ * `leadCount`/`clientCount`/`eventCount` are never sensitive (plain
+ * counts, no dollar figure) and are always real; `invoicedRevenueMinor`/
+ * `paidRevenueMinor` are `null` for a caller lacking `finance.amounts.view`
+ * — the exact same redaction discipline `financeActions.ts`'s own
+ * `getFinanceDashboardDataAction` already applies to every other
+ * money-bearing figure. Without this, a Staff member (real permission
+ * matrix: `social.view` without `finance.amounts.view`) could see raw
+ * attributed revenue through Social Analytics despite it being correctly
+ * hidden from them on the Finance Dashboard — the exact bypass this type
+ * exists to close.
+ */
+export interface SocialPostAttributionView {
+  socialPostId: string;
+  leadCount: number;
+  clientCount: number;
+  eventCount: number;
+  invoicedRevenueMinor: number | null;
+  paidRevenueMinor: number | null;
+}
+
+/** The zero-stats default for a post with no entry in `getSocialAttributionReport()`'s own `byPost` — a real, honest zero (no attributed Lead exists), never a placeholder standing in for missing data. Money fields are redacted the same way as every other row via `redactAttribution`. */
+function zeroAttribution(socialPostId: string): SocialPostAttributionStats {
+  return { socialPostId, leadCount: 0, clientCount: 0, eventCount: 0, invoicedRevenueMinor: 0, paidRevenueMinor: 0 };
+}
+
+/** SOCIAL-15E — redacts money fields for a caller without `finance.amounts.view`; counts are always passed through real. */
+function redactAttribution(stats: SocialPostAttributionStats, canViewAmounts: boolean): SocialPostAttributionView {
+  return {
+    socialPostId: stats.socialPostId,
+    leadCount: stats.leadCount,
+    clientCount: stats.clientCount,
+    eventCount: stats.eventCount,
+    invoicedRevenueMinor: canViewAmounts ? stats.invoicedRevenueMinor : null,
+    paidRevenueMinor: canViewAmounts ? stats.paidRevenueMinor : null,
+  };
+}
+
 export interface SocialPostPerformanceRow {
   post: SocialPost;
   /** Null means no snapshot has ever been captured for this post — never a fabricated zero row. */
   snapshot: SocialPostMetricSnapshot | null;
+  /**
+   * SOCIAL-15D — stored attribution only, never inferred from engagement.
+   * Deliberately all-time (not filtered by this action's own `range`
+   * selector) — matches the Finance Dashboard's own all-time convention
+   * for its comparable "Total Invoiced"/"Total Collected" cards, and
+   * avoids silently mixing this row's own engagement-metric date window
+   * with a completely different attribution date dimension.
+   *
+   * SOCIAL-15E — money fields redacted server-side (see
+   * `SocialPostAttributionView`) for a caller without `finance.amounts.view`.
+   */
+  attribution: SocialPostAttributionView;
 }
 
 /** Narrows `snapshot`/`total_interactions` to non-null at the type level — exactly the invariant `topPosts` below actually guarantees at runtime (only posts with a real total_interactions are ever ranked), so the UI never needs an unsafe assertion to read it. */
 export interface RankedSocialPostPerformanceRow {
   post: SocialPost;
   snapshot: SocialPostMetricSnapshot & { total_interactions: number };
+  attribution: SocialPostAttributionView;
 }
 
 export interface SocialAnalyticsDashboardData {
@@ -87,9 +141,19 @@ export async function getSocialAnalyticsDashboardAction(range: SocialAnalyticsTi
   const resolved = await requireActiveSession("social.view");
   if (!resolved.success) return resolved;
   const workspaceId = resolved.session.workspace.id;
+  // SOCIAL-15E — Social Analytics is reachable with only `social.view`
+  // (e.g. the real Staff role), which does not imply `finance.amounts.view`.
+  // Money fields below are redacted server-side via `redactAttribution` so
+  // this permission is enforced at the data layer, not only in the UI.
+  const canViewAmounts = resolved.session.permissions.includes("finance.amounts.view");
 
   try {
-    const [allPosts, identity] = await Promise.all([listSocialPosts(workspaceId), getOwnProviderConnectionAction("meta")]);
+    const [allPosts, identity, attributionReport] = await Promise.all([
+      listSocialPosts(workspaceId),
+      getOwnProviderConnectionAction("meta"),
+      getSocialAttributionReport(),
+    ]);
+    const attributionByPostId = new Map(attributionReport.byPost.map((stats) => [stats.socialPostId, stats]));
 
     const publishedPosts = allPosts.filter((post) => post.status === "published");
     // One bounded query for every published post's latest snapshot (Phase
@@ -103,7 +167,11 @@ export async function getSocialAnalyticsDashboardAction(range: SocialAnalyticsTi
 
     const rangeStart = rangeStartIso(range);
     const postsInRange = publishedPosts.filter((post) => post.published_at !== null && post.published_at >= rangeStart);
-    const postPerformance: SocialPostPerformanceRow[] = postsInRange.map((post) => ({ post, snapshot: snapshotByPostId.get(post.id) ?? null }));
+    const postPerformance: SocialPostPerformanceRow[] = postsInRange.map((post) => ({
+      post,
+      snapshot: snapshotByPostId.get(post.id) ?? null,
+      attribution: redactAttribution(attributionByPostId.get(post.id) ?? zeroAttribution(post.id), canViewAmounts),
+    }));
 
     const topPosts = postPerformance
       .filter((row): row is RankedSocialPostPerformanceRow => row.snapshot !== null && row.snapshot.total_interactions !== null)

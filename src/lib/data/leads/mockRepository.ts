@@ -74,6 +74,12 @@ async function createLead(input: LeadFormInput): Promise<DataResult<Lead>> {
     // concept of an Instagram external id — always null here; only a future
     // social-write path (not built this checkpoint) would ever set it.
     instagram_external_id: null,
+    // SOCIAL-15B — same reasoning: a manually-created Lead has no Social
+    // Post/comment/DM to attribute to; only a future SOCIAL-15C capture
+    // path would ever set these.
+    social_post_id: null,
+    instagram_comment_id: null,
+    instagram_conversation_id: null,
     created_at: timestamp,
     updated_at: timestamp,
     archived_at: null,

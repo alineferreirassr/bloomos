@@ -1302,6 +1302,10 @@ export async function listSocialPosts(workspaceId: string): Promise<SocialPost[]
   return socialPostsRepository().listSocialPosts(workspaceId);
 }
 
+export async function getSocialPostByProviderPostId(workspaceId: string, providerPostId: string): Promise<SocialPost | null> {
+  return socialPostsRepository().getSocialPostByProviderPostId(workspaceId, providerPostId);
+}
+
 export async function getSocialPost(id: string): Promise<SocialPost> {
   return socialPostsRepository().getSocialPost(id);
 }
@@ -1642,6 +1646,10 @@ export async function createInstagramComment(input: CreateInstagramCommentInput)
 
 export async function getInstagramCommentByExternalId(instagramAccountIdentityId: string, externalCommentId: string): Promise<InstagramComment | null> {
   return instagramCommentRepository().getCommentByExternalId(instagramAccountIdentityId, externalCommentId);
+}
+
+export async function getInstagramCommentById(id: string, workspaceId: string): Promise<InstagramComment | null> {
+  return instagramCommentRepository().getCommentById(id, workspaceId);
 }
 
 export async function listInstagramCommentsForWorkspace(workspaceId: string): Promise<InstagramComment[]> {

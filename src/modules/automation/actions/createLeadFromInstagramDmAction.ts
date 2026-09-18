@@ -28,6 +28,20 @@ export const CREATE_LEAD_FROM_INSTAGRAM_DM_ACTION_ID = "create-lead-from-instagr
  * checkpoint), but this Action never trusts that guarantee blindly, the
  * same defense-in-depth discipline every other workspace-scoped check in
  * this pipeline already follows.
+ *
+ * SOCIAL-15C — Content Attribution. `conversation` above is already the
+ * real, workspace-scoped `InstagramConversation` row this Action resolves
+ * for every DM capture (via `listInstagramConversationsForWorkspace`,
+ * unchanged) — its own `id` becomes `Lead.instagram_conversation_id`,
+ * exact-id evidence only, no new repository read required. Deliberately
+ * never resolves or writes a `social_post_id` for a DM: Instagram DMs have
+ * no post relationship in Meta's own model, and this checkpoint's own
+ * authorization explicitly forbids attributing a DM to a Post by
+ * proximity/inference — `DM -> Conversation -> Lead`, never `DM -> Post`.
+ * Like the comment capture Action, `findOrCreateInstagramLead` only ever
+ * writes this field on its own `create` branch — an existing Lead is
+ * returned untouched, so a redelivered DM can never overwrite or alter an
+ * existing Lead's attribution.
  */
 const createLeadFromInstagramDmAction: AutomationActionDefinition = {
   id: CREATE_LEAD_FROM_INSTAGRAM_DM_ACTION_ID,
@@ -63,6 +77,7 @@ const createLeadFromInstagramDmAction: AutomationActionDefinition = {
       source: "Instagram",
       instagramExternalId: conversation.external_participant_id,
       instagram: externalParticipantUsername,
+      instagramConversationId: conversation.id,
       message: messageText,
       firstName: null,
       lastName: null,

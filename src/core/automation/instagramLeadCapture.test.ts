@@ -108,6 +108,67 @@ describe("findOrCreateInstagramLead — mock mode", () => {
     expect(result.data.lead.message).toBeNull();
     expect(result.data.lead.instagram_external_id).toBe("17841400000000042");
   });
+
+  describe("SOCIAL-15C — content attribution", () => {
+    it("a new Lead created from a comment receives instagram_comment_id and social_post_id exactly as provided", async () => {
+      const result = await findOrCreateInstagramLead(input({ instagramCommentId: "comment_1", socialPostId: "post_1" }));
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.lead.instagram_comment_id).toBe("comment_1");
+      expect(result.data.lead.social_post_id).toBe("post_1");
+      expect(result.data.lead.instagram_conversation_id).toBeNull();
+    });
+
+    it("a new Lead created from a DM receives instagram_conversation_id exactly as provided, and never a social_post_id", async () => {
+      const result = await findOrCreateInstagramLead(input({ instagramConversationId: "conversation_1" }));
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.lead.instagram_conversation_id).toBe("conversation_1");
+      expect(result.data.lead.social_post_id).toBeNull();
+      expect(result.data.lead.instagram_comment_id).toBeNull();
+    });
+
+    it("attribution is null by construction when the caller resolved none (a comment with no matching Social Post) — never fabricated", async () => {
+      const result = await findOrCreateInstagramLead(input({ instagramCommentId: "comment_1", socialPostId: null }));
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.lead.instagram_comment_id).toBe("comment_1");
+      expect(result.data.lead.social_post_id).toBeNull();
+    });
+
+    it("redelivery/idempotency — a second capture of the same identity never creates a second Lead, and never overwrites the first Lead's existing attribution with a different (or null) one", async () => {
+      const first = await findOrCreateInstagramLead(input({ instagramExternalId: "17841400000000077", instagramCommentId: "comment_first", socialPostId: "post_first" }));
+      expect(first.success && first.data.created).toBe(true);
+
+      // A redelivered/duplicate webhook for the SAME identity, arriving with
+      // a DIFFERENT (or absent) attribution — simulates the exact risk
+      // Section 8 of this checkpoint warns against.
+      const second = await findOrCreateInstagramLead(input({ instagramExternalId: "17841400000000077", instagramCommentId: "comment_second", socialPostId: null }));
+
+      expect(second.success).toBe(true);
+      if (!second.success || !first.success) return;
+      expect(second.data.created).toBe(false);
+      expect(second.data.lead.id).toBe(first.data.lead.id);
+      // The existing Lead's own attribution is completely untouched.
+      expect(second.data.lead.instagram_comment_id).toBe("comment_first");
+      expect(second.data.lead.social_post_id).toBe("post_first");
+
+      expect(readLeads().filter((l) => l.workspace_id === "ws_1" && l.instagram_external_id === "17841400000000077")).toHaveLength(1);
+    });
+
+    it("a manually-created (non-Instagram) Lead shape — no attribution fields provided at all — still creates cleanly with every attribution field null", async () => {
+      const result = await findOrCreateInstagramLead(input({ instagramExternalId: "17841400000000088" }));
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.lead.social_post_id).toBeNull();
+      expect(result.data.lead.instagram_comment_id).toBeNull();
+      expect(result.data.lead.instagram_conversation_id).toBeNull();
+    });
+  });
 });
 
 describe("findOrCreateInstagramLead — supabase mode", () => {
@@ -138,6 +199,9 @@ describe("findOrCreateInstagramLead — supabase mode", () => {
       status: "new",
       assigned_to: null,
       converted_client_id: null,
+      social_post_id: null,
+      instagram_comment_id: null,
+      instagram_conversation_id: null,
       created_at: "2026-01-01T00:00:00.000Z",
       updated_at: "2026-01-01T00:00:00.000Z",
       archived_at: null,
@@ -199,6 +263,36 @@ describe("findOrCreateInstagramLead — supabase mode", () => {
     expect(result.data.lead.instagram_external_id).toBe("17841400000000001");
     expect(result.data.lead.first_name).toBeNull();
     expect(stub.timelineInsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("SOCIAL-15C — the insert payload carries the exact attribution fields provided, never fabricated or omitted", async () => {
+    let insertPayload: Record<string, unknown> | undefined;
+    const from = vi.fn((table: string) => {
+      if (table === "leads") {
+        const builder: Record<string, unknown> = {};
+        builder.select = vi.fn(() => builder);
+        builder.eq = vi.fn(() => builder);
+        builder.maybeSingle = vi.fn(async () => ({ data: null, error: null }));
+        builder.insert = vi.fn((payload: Record<string, unknown>) => {
+          insertPayload = payload;
+          const insertBuilder: Record<string, unknown> = {};
+          insertBuilder.select = vi.fn(() => insertBuilder);
+          insertBuilder.single = vi.fn(async () => ({ data: leadRow({ social_post_id: "post_1", instagram_comment_id: "comment_1" }), error: null }));
+          return insertBuilder;
+        });
+        return builder;
+      }
+      return { insert: vi.fn(async () => ({ error: null })) };
+    });
+    createClientMock.mockReturnValue({ from });
+
+    const result = await findOrCreateInstagramLead(input({ instagramCommentId: "comment_1", socialPostId: "post_1" }));
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.lead.social_post_id).toBe("post_1");
+    expect(result.data.lead.instagram_comment_id).toBe("comment_1");
+    expect(insertPayload).toMatchObject({ social_post_id: "post_1", instagram_comment_id: "comment_1", instagram_conversation_id: null });
   });
 
   it("recognizes an existing Lead found on the first lookup — never inserts, never calls timeline", async () => {

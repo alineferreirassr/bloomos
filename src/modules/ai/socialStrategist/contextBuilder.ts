@@ -1,6 +1,7 @@
 import { clockNow } from "@/core/time/clock";
 import { SOCIAL_POST_STATUSES, type SocialPostStatus } from "@/core/enums/socialPostStatus";
 import { LEAD_STATUSES, type LeadStatus } from "@/core/enums/leadStatus";
+import { classifyLeadAttribution } from "@/modules/socialAttribution/resolveLeadAttribution";
 import type { SocialStrategistMaterials } from "@/modules/ai/socialStrategist/fetchSocialStrategistContext.server";
 import type {
   SocialStrategistContext,
@@ -113,6 +114,10 @@ function toInstagramLeadSummary(lead: SocialStrategistMaterials["instagramLeads"
     isAssigned: lead.assigned_to !== null,
     hasConversionIdentity: Boolean(lead.first_name && lead.last_name && lead.email),
     createdAt: lead.created_at,
+    // SOCIAL-15D — real, already-classified attribution (SOCIAL-15B/C's own
+    // stored columns), never inferred here.
+    attributionKind: classifyLeadAttribution(lead),
+    attributedSocialPostId: lead.social_post_id ?? null,
   };
 }
 

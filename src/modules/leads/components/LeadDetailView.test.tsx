@@ -10,6 +10,9 @@ vi.mock("@/lib/data", () => ({
   createNote: vi.fn(),
   togglePinNote: vi.fn(),
 }));
+vi.mock("@/modules/socialAttribution/resolveLeadAttribution", () => ({
+  resolveLeadAttribution: vi.fn().mockResolvedValue({ kind: "none", socialPost: null, comment: null, conversation: null }),
+}));
 // Stubbed out — none of these are relevant to the banner this checkpoint
 // adds, and several have their own data-fetching/session dependencies this
 // test deliberately isolates away from.
@@ -20,6 +23,7 @@ vi.mock("@/modules/timeline/components/Timeline", () => ({ Timeline: () => null 
 vi.mock("@/modules/clientJourney/components/LeadJourneySummaryCard", () => ({ LeadJourneySummaryCard: () => null }));
 
 import { getLeadById } from "@/lib/data";
+import { resolveLeadAttribution } from "@/modules/socialAttribution/resolveLeadAttribution";
 
 const BANNER_TEXT = "This Lead needs a name and email before it can be converted to a Client.";
 
@@ -105,5 +109,50 @@ describe("LeadDetailView — SOCIAL-13F operational state visibility", () => {
 
     expect(await screen.findByText("Aline Ferreira")).toBeInTheDocument();
     expect(screen.queryByText("Unassigned")).not.toBeInTheDocument();
+  });
+});
+
+describe("LeadDetailView — SOCIAL-15D content attribution", () => {
+  it("shows a Content Attribution field with the Social Post's own caption for a post-attributed Lead", async () => {
+    const lead = makeLead({ id: "l9", social_post_id: "post_1" });
+    vi.mocked(getLeadById).mockResolvedValue(lead);
+    vi.mocked(resolveLeadAttribution).mockResolvedValue({ kind: "social_post", socialPost: { id: "post_1", caption: "Behind the scenes" }, comment: null, conversation: null });
+
+    render(<LeadDetailView leadId="l9" />);
+
+    expect(await screen.findByText("Content Attribution")).toBeInTheDocument();
+    expect(screen.getByText('From an Instagram post: "Behind the scenes"')).toBeInTheDocument();
+  });
+
+  it("shows a comment-only attribution label when the comment never resolved to a Social Post", async () => {
+    const lead = makeLead({ id: "l10", instagram_comment_id: "comment_1" });
+    vi.mocked(getLeadById).mockResolvedValue(lead);
+    vi.mocked(resolveLeadAttribution).mockResolvedValue({ kind: "instagram_comment", socialPost: null, comment: { id: "comment_1" }, conversation: null });
+
+    render(<LeadDetailView leadId="l10" />);
+
+    expect(await screen.findByText("From an Instagram comment")).toBeInTheDocument();
+  });
+
+  it("shows a DM attribution label, never a Social Post reference", async () => {
+    const lead = makeLead({ id: "l11", instagram_conversation_id: "conversation_1" });
+    vi.mocked(getLeadById).mockResolvedValue(lead);
+    vi.mocked(resolveLeadAttribution).mockResolvedValue({ kind: "instagram_conversation", socialPost: null, comment: null, conversation: { id: "conversation_1" } });
+
+    render(<LeadDetailView leadId="l11" />);
+
+    expect(await screen.findByText("From an Instagram DM")).toBeInTheDocument();
+    expect(screen.queryByText(/instagram post/i)).not.toBeInTheDocument();
+  });
+
+  it("shows no Content Attribution field at all for an unattributed Lead — never a fabricated placeholder", async () => {
+    const lead = makeLead({ id: "l12", first_name: "Priya", last_name: "Nair" });
+    vi.mocked(getLeadById).mockResolvedValue(lead);
+    vi.mocked(resolveLeadAttribution).mockResolvedValue({ kind: "none", socialPost: null, comment: null, conversation: null });
+
+    render(<LeadDetailView leadId="l12" />);
+
+    await screen.findByText("Priya Nair");
+    expect(screen.queryByText("Content Attribution")).not.toBeInTheDocument();
   });
 });

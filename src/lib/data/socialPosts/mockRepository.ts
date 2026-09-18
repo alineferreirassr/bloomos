@@ -20,6 +20,10 @@ async function listSocialPosts(workspaceId: string): Promise<SocialPost[]> {
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
+async function getSocialPostByProviderPostId(workspaceId: string, providerPostId: string): Promise<SocialPost | null> {
+  return readSocialPosts().find((post) => post.workspace_id === workspaceId && post.provider_post_id === providerPostId) ?? null;
+}
+
 async function getSocialPost(id: string): Promise<SocialPost> {
   const post = readSocialPosts().find((p) => p.id === id);
   if (!post) throw new Error(`Social post ${id} was not found`);
@@ -183,6 +187,7 @@ async function markSocialPostFailed(id: string, providerError: string): Promise<
 export const mockSocialPostsRepository: SocialPostsRepository = {
   listSocialPosts,
   getSocialPost,
+  getSocialPostByProviderPostId,
   createSocialPost,
   updateSocialPostDraft,
   beginSocialPostPublish,

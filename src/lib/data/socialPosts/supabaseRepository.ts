@@ -47,6 +47,18 @@ async function getSocialPost(id: string): Promise<SocialPost> {
   return post;
 }
 
+async function getSocialPostByProviderPostId(workspaceId: string, providerPostId: string): Promise<SocialPost | null> {
+  const supabase = createSupabaseClient();
+  const { data, error } = await supabase
+    .from("social_posts")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("provider_post_id", providerPostId)
+    .maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  return data ? mapSocialPostRow(data) : null;
+}
+
 async function createSocialPost(input: CreateSocialPostInput): Promise<DataResult<SocialPost>> {
   const parsed = socialPostDraftSchema.safeParse({ caption: input.caption, asset_id: input.assetId });
   if (!parsed.success) return fail("Please fix the highlighted fields.", fieldErrorsFromZod(parsed.error));
@@ -229,6 +241,7 @@ async function markSocialPostFailed(id: string, providerError: string): Promise<
 export const supabaseSocialPostsRepository: SocialPostsRepository = {
   listSocialPosts,
   getSocialPost,
+  getSocialPostByProviderPostId,
   createSocialPost,
   updateSocialPostDraft,
   beginSocialPostPublish,

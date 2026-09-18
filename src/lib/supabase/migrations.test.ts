@@ -142,6 +142,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // tracked, not-yet-released, unrelated to the Finance release this
   // exact-count assertion describes.
   "20260929100000_notifications_foundation.sql",
+  // SOCIAL-15B — Lead Attribution Data Foundation. Independently-tracked,
+  // not-yet-released, unrelated to the Finance release this exact-count
+  // assertion describes.
+  "20260929100100_lead_attribution_foundation.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {
@@ -6087,6 +6091,82 @@ describe("SOCIAL-11D migration — Instagram Comment / DM Conversation / Message
     expect(code).not.toMatch(/grant execute/);
     expect(code).not.toContain("access_token");
     expect(code).not.toContain("credential");
+    expect(code).not.toContain("openai");
+    expect(code).not.toContain("anthropic");
+  });
+});
+
+describe("SOCIAL-15B migration — Lead Attribution Data Foundation", () => {
+  function sql(): string {
+    return readMigration("20260929100100_lead_attribution_foundation.sql");
+  }
+
+  it("creates no new table — only alters the existing leads table", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/create table/i);
+    expect(code).toMatch(/alter table public\.leads/);
+  });
+
+  it("adds exactly three new nullable columns, each a plain single-column FK with ON DELETE SET NULL — never a composite (workspace_id, id) key", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/add column social_post_id uuid references public\.social_posts \(id\) on delete set null/);
+    expect(code).toMatch(/add column instagram_comment_id uuid references public\.instagram_comments \(id\) on delete set null/);
+    expect(code).toMatch(/add column instagram_conversation_id uuid references public\.instagram_conversations \(id\) on delete set null/);
+    // None of the three declares `not null` anywhere on its own line.
+    expect(code).not.toMatch(/social_post_id uuid not null/);
+    expect(code).not.toMatch(/instagram_comment_id uuid not null/);
+    expect(code).not.toMatch(/instagram_conversation_id uuid not null/);
+  });
+
+  it("adds a partial index for each new column, mirroring leads_workspace_instagram_external_id_idx's own nullable-FK convention", () => {
+    const code = stripSqlComments(sql());
+    expect(code).toMatch(/create index if not exists leads_social_post_id_idx\s*\n\s*on public\.leads \(social_post_id\)\s*\n\s*where social_post_id is not null;/);
+    expect(code).toMatch(/create index if not exists leads_instagram_comment_id_idx\s*\n\s*on public\.leads \(instagram_comment_id\)\s*\n\s*where instagram_comment_id is not null;/);
+    expect(code).toMatch(/create index if not exists leads_instagram_conversation_id_idx\s*\n\s*on public\.leads \(instagram_conversation_id\)\s*\n\s*where instagram_conversation_id is not null;/);
+  });
+
+  it("declares no default value for any of the three new columns — every existing Lead gets NULL by construction, never a backfilled value", () => {
+    const code = stripSqlComments(sql());
+    expect(code).not.toMatch(/social_post_id uuid.*default/i);
+    expect(code).not.toMatch(/instagram_comment_id uuid.*default/i);
+    expect(code).not.toMatch(/instagram_conversation_id uuid.*default/i);
+  });
+
+  it("never performs a backfill — no UPDATE statement, no join against timestamps/usernames/text, no heuristic of any kind", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/\bupdate\s+public\.leads\b/);
+    expect(code).not.toMatch(/\binsert into\b/);
+  });
+
+  it("never creates or alters RLS — no policy, no `enable row level security`, no `alter policy`, on any table", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/create policy/);
+    expect(code).not.toMatch(/alter policy/);
+    expect(code).not.toMatch(/row level security/);
+  });
+
+  it("never alters any table other than public.leads", () => {
+    const code = stripSqlComments(sql());
+    const alterMatches = code.match(/alter table\s+\S+/gi) ?? [];
+    for (const match of alterMatches) {
+      expect(match.toLowerCase()).toContain("public.leads");
+    }
+  });
+
+  it("never touches createLeadFromInstagramCommentAction, createLeadFromInstagramDmAction, InstagramLeadCaptureInput, automation, or webhook processing — data foundation only, no capture write path", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toContain("createleadfrominstagram");
+    expect(code).not.toContain("instagramleadcaptureinput");
+    expect(code).not.toMatch(/create.*function/);
+    expect(code).not.toMatch(/create trigger/);
+  });
+
+  it("never disables RLS, drops a table, deletes rows, grants to service_role, or references AI/a provider", () => {
+    const code = stripSqlComments(sql()).toLowerCase();
+    expect(code).not.toMatch(/disable row level security/);
+    expect(code).not.toMatch(/drop table/);
+    expect(code).not.toMatch(/\bdelete from\b/);
+    expect(code).not.toMatch(/to service_role/);
     expect(code).not.toContain("openai");
     expect(code).not.toContain("anthropic");
   });

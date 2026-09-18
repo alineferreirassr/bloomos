@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { FinanceDashboardView } from "@/modules/finance/components/FinanceDashboardView";
 import { makeInvoice, makePayment, makeExpense, makeAccountingPeriod, makeJournalEntry } from "@/modules/finance/testUtils";
 import { makeClient } from "@/modules/clients/testUtils";
@@ -63,6 +63,9 @@ const emptyMetrics = {
   unpaidExpensesCount: 0,
   eventsAwaitingDepositCount: 0,
   eventsPaidInFullCount: 0,
+  attributedInvoicedRevenueMinor: 0,
+  attributedPaidRevenueMinor: 0,
+  attributedLeadCount: 0,
 };
 
 describe("FinanceDashboardView", () => {
@@ -87,6 +90,9 @@ describe("FinanceDashboardView", () => {
           unpaidExpensesCount: 3,
           eventsAwaitingDepositCount: 2,
           eventsPaidInFullCount: 5,
+          attributedInvoicedRevenueMinor: 0,
+          attributedPaidRevenueMinor: 0,
+          attributedLeadCount: 0,
         },
         recentInvoices: [
           { ...makeInvoice({ id: "invoice_1", invoice_number: "INV-2026-0001", client_id: "client_1", total_minor: 100000 }) },
@@ -230,5 +236,36 @@ describe("FinanceDashboardView", () => {
 
     await screen.findByText(/no invoices yet/i);
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
+  });
+
+  describe("SOCIAL-15D — Instagram-attributed revenue metric", () => {
+    it("renders the Instagram-attributed Revenue card with a real, explicitly-labeled figure — never presented as total revenue", async () => {
+      vi.mocked(dataLayer.getClients).mockResolvedValue([]);
+      mockLedgerSuccess();
+      vi.mocked(financeActions.getFinanceDashboardDataAction).mockResolvedValue({
+        success: true,
+        data: { metrics: { ...emptyMetrics, attributedPaidRevenueMinor: 42500, attributedInvoicedRevenueMinor: 60000, attributedLeadCount: 4 }, recentInvoices: [], recentPayments: [], overdueInvoices: [], unpaidExpenses: [], alerts: [], eventsWithOutstandingBalance: [] },
+      });
+
+      renderDashboard();
+
+      expect(await screen.findByText("Instagram-attributed Revenue")).toBeInTheDocument();
+      const card = screen.getByText("Instagram-attributed Revenue").closest("div");
+      expect(within(card!).getByText("$425.00")).toBeInTheDocument();
+    });
+
+    it("redacts the attributed revenue figure the same way as every other money-bearing metric — '—', never $0.00", async () => {
+      vi.mocked(dataLayer.getClients).mockResolvedValue([]);
+      mockLedgerSuccess();
+      vi.mocked(financeActions.getFinanceDashboardDataAction).mockResolvedValue({
+        success: true,
+        data: { metrics: { ...emptyMetrics, attributedPaidRevenueMinor: null, attributedInvoicedRevenueMinor: null }, recentInvoices: [], recentPayments: [], overdueInvoices: [], unpaidExpenses: [], alerts: [], eventsWithOutstandingBalance: [] },
+      });
+
+      renderDashboard();
+
+      const card = await screen.findByText("Instagram-attributed Revenue").then((el) => el.closest("div"));
+      expect(within(card!).getByText("—")).toBeInTheDocument();
+    });
   });
 });

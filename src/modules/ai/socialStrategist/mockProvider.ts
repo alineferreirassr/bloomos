@@ -105,6 +105,23 @@ export function createSocialStrategistMockProvider(): AIProvider {
       if (context.instagramLeads.length > 0) {
         conversionObservations.push(`${context.instagramLeads.length} Instagram-sourced Lead(s) tracked; ${context.unassignedInstagramLeadCount} currently unassigned.`);
       }
+      // SOCIAL-15D — stored attribution only, counts never a rate/percentage
+      // (this checkpoint's own explicit "do not invent a conversion rate
+      // denominator" instruction). DM-attributed Leads are named separately
+      // and never folded into the Social Post count — a DM is never
+      // attributed to a Post by inference.
+      const postAttributedCount = context.instagramLeads.filter((lead) => lead.attributionKind === "social_post").length;
+      const commentOnlyAttributedCount = context.instagramLeads.filter((lead) => lead.attributionKind === "instagram_comment").length;
+      const dmAttributedCount = context.instagramLeads.filter((lead) => lead.attributionKind === "instagram_conversation").length;
+      if (postAttributedCount > 0) {
+        conversionObservations.push(`${postAttributedCount} of ${context.instagramLeads.length} Instagram Lead(s) are attributed to a specific Social Post.`);
+      }
+      if (commentOnlyAttributedCount > 0) {
+        conversionObservations.push(`${commentOnlyAttributedCount} Instagram Lead(s) are attributed to a comment whose post could not be resolved.`);
+      }
+      if (dmAttributedCount > 0) {
+        conversionObservations.push(`${dmAttributedCount} Instagram Lead(s) are DM-originated (conversation-attributed only).`);
+      }
 
       const realDataPoints = context.posts.length + context.ideas.length + context.inspiration.length + context.instagramLeads.length + (context.accountMetrics ? 1 : 0);
       const confidence = Math.min(100, Math.max(0, realDataPoints === 0 ? 0 : 30 + Math.min(70, realDataPoints * 3)));

@@ -11,8 +11,11 @@ import {
   togglePinNote,
   getEvents,
   getClientFinancialSummary,
+  getLeadById,
 } from "@/lib/data";
+import { resolveLeadAttribution } from "@/modules/socialAttribution/resolveLeadAttribution";
 import type { ClientFinancialSummary } from "@/modules/finance/financialSummary";
+import type { LeadAttributionDisplay } from "@/modules/socialAttribution/types";
 import type { Client } from "@/types/client";
 import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
@@ -53,6 +56,8 @@ type LoadState =
       nextAction: string | null;
       events: Event[];
       financialSummary: ClientFinancialSummary;
+      /** SOCIAL-15D — the originating Lead's own stored attribution, only present when `client.originating_lead_id` resolves to a real Lead. Never fabricated when there's no originating Lead at all. */
+      originatingLeadAttribution: LeadAttributionDisplay | null;
     };
 
 async function loadClientDetail(clientId: string): Promise<LoadState> {
@@ -65,7 +70,14 @@ async function loadClientDetail(clientId: string): Promise<LoadState> {
       getEvents({ clientId }),
       getClientFinancialSummary(clientId),
     ]);
-    return { status: "ready", client, notes, timeline, nextAction, events, financialSummary };
+    // SOCIAL-15D — surfaces the Lead's own stored attribution through the
+    // existing Client -> Originating Lead relationship, never a parallel
+    // attribution concept. No extra fetch at all when there's no
+    // originating Lead.
+    const originatingLeadAttribution = client.originating_lead_id
+      ? await getLeadById(client.originating_lead_id).then(resolveLeadAttribution).catch(() => null)
+      : null;
+    return { status: "ready", client, notes, timeline, nextAction, events, financialSummary, originatingLeadAttribution };
   } catch (err) {
     return { status: err instanceof NotFoundError ? "not-found" : "error" };
   }
@@ -130,7 +142,7 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
     return <ErrorState message="Could not load this client." onRetry={refetch} />;
   }
 
-  const { client, notes, timeline, nextAction, events, financialSummary } = state;
+  const { client, notes, timeline, nextAction, events, financialSummary, originatingLeadAttribution } = state;
   const upcomingEvents = events.filter((e) => e.event_date !== null && new Date(e.event_date) >= new Date()).sort((a, b) => (a.event_date ?? "").localeCompare(b.event_date ?? ""));
   const preferenceFields: { label: string; value: ReactNode }[] = [
     { label: "Color palette", value: client.favorite_colors },
@@ -270,7 +282,16 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
                 <dl className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field
                     label="Originating Lead"
-                    value={client.originating_lead_id ? <Link href={`/leads/${client.originating_lead_id}`} className="text-accent hover:underline">View original Lead →</Link> : null}
+                    value={
+                      client.originating_lead_id ? (
+                        <>
+                          <Link href={`/leads/${client.originating_lead_id}`} className="text-accent hover:underline">View original Lead →</Link>
+                          {originatingLeadAttribution && originatingLeadAttribution.kind !== "none" ? (
+                            <span className="mt-0.5 block text-xs text-luxury-text-muted">{leadAttributionSummary(originatingLeadAttribution)}</span>
+                          ) : null}
+                        </>
+                      ) : null
+                    }
                   />
                   <Field label="Created" value={new Date(client.created_at).toLocaleDateString()} />
                   <Field label="Updated" value={new Date(client.updated_at).toLocaleDateString()} />
@@ -394,6 +415,20 @@ function Snapshot({ label, value, helper }: { label: string; value: ReactNode; h
       {helper ? <p className="text-luxury-metadata text-luxury-text-muted">{helper}</p> : null}
     </div>
   );
+}
+
+/** SOCIAL-15D — a short, plain-text summary of the originating Lead's own stored attribution — never raw comment/DM content, only the Social Post's own workspace-authored caption when resolvable. */
+function leadAttributionSummary(attribution: LeadAttributionDisplay): string {
+  switch (attribution.kind) {
+    case "social_post":
+      return attribution.socialPost ? `From Instagram post: "${attribution.socialPost.caption}"` : "From an Instagram post";
+    case "instagram_comment":
+      return "From an Instagram comment";
+    case "instagram_conversation":
+      return "From an Instagram DM";
+    case "none":
+      return "";
+  }
 }
 
 function Field({ label, value }: { label: string; value: ReactNode }) {

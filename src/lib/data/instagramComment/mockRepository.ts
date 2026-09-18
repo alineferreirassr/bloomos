@@ -40,6 +40,10 @@ async function getCommentByExternalId(instagramAccountIdentityId: string, extern
   return comments.find((c) => c.instagram_account_identity_id === instagramAccountIdentityId && c.external_comment_id === externalCommentId) ?? null;
 }
 
+async function getCommentById(id: string, workspaceId: string): Promise<InstagramComment | null> {
+  return comments.find((c) => c.id === id && c.workspace_id === workspaceId) ?? null;
+}
+
 async function listCommentsForWorkspace(workspaceId: string): Promise<InstagramComment[]> {
   return comments.filter((c) => c.workspace_id === workspaceId);
 }
@@ -56,6 +60,7 @@ async function updateCommentStatus(id: string, status: InstagramCommentStatus): 
 export const mockInstagramCommentRepository: InstagramCommentRepository = {
   createComment,
   getCommentByExternalId,
+  getCommentById,
   listCommentsForWorkspace,
   updateCommentStatus,
 };

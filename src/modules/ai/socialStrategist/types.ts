@@ -4,6 +4,7 @@ import type { IdeaStatus, IdeaPriority } from "@/types/ideaItem";
 import type { InspirationSourceType, InspirationContentFormat } from "@/types/inspirationItem";
 import type { ScriptStatus } from "@/types/scriptItem";
 import type { CarouselStatus } from "@/types/carouselItem";
+import type { LeadAttributionKind } from "@/modules/socialAttribution/types";
 
 /**
  * SOCIAL-14B — Social Strategist Data Context Foundation. This is the
@@ -142,6 +143,16 @@ export interface SocialStrategistInstagramLeadSummary {
   /** True once first_name + last_name + email are all present — the exact same guard `convertLeadToClient()` already enforces; never restates the actual name/email values. */
   hasConversionIdentity: boolean;
   createdAt: string;
+  /**
+   * SOCIAL-15D — the Lead's own stored attribution kind (SOCIAL-15B/C),
+   * classified via `classifyLeadAttribution()`, never inferred here.
+   * `"instagram_comment"` covers a comment-attributed Lead whose comment
+   * never resolved to a Post — this field alone can't distinguish that
+   * from a resolved one; `attributedSocialPostId` does.
+   */
+  attributionKind: LeadAttributionKind;
+  /** The real `social_post_id` when `attributionKind === "social_post"`, otherwise always null — never set for a `"instagram_conversation"`-kind Lead (a DM is never attributed to a Post). */
+  attributedSocialPostId: string | null;
 }
 
 export const SOCIAL_STRATEGIST_DATA_CATEGORIES = ["posts", "postMetrics", "accountMetrics", "ideas", "inspiration", "scripts", "carousels", "instagramLeads"] as const;

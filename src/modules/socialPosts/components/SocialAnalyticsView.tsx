@@ -7,7 +7,8 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CardGridSkeleton, TableSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { getMediaAssetDownloadUrl } from "@/lib/data";
-import { getSocialAnalyticsDashboardAction, type SocialAnalyticsDashboardData, type SocialAnalyticsTimeRange, type SocialPostPerformanceRow } from "@/modules/socialPosts/socialAnalyticsActions";
+import { formatMoney } from "@/lib/money";
+import { getSocialAnalyticsDashboardAction, type SocialAnalyticsDashboardData, type SocialAnalyticsTimeRange, type SocialPostAttributionView, type SocialPostPerformanceRow } from "@/modules/socialPosts/socialAnalyticsActions";
 import { SocialAnalyticsTrendChart } from "@/modules/socialPosts/components/SocialAnalyticsTrendChart";
 
 /**
@@ -60,6 +61,40 @@ function KpiCard({ label, value }: { label: string; value: number | null }) {
 
 function MetricCell({ value }: { value: number | null }) {
   return <span className={value === null ? "text-text-muted" : "text-text"}>{value === null ? "—" : formatNumber(value)}</span>;
+}
+
+/** Matches FinanceDashboardView's own `money()` null-means-redacted convention exactly (`minor === null ? "—" : formatMoney(...)`) — this codebase has no per-post/per-workspace multi-currency tracking anywhere. */
+function money(minor: number | null, currency = "USD"): string {
+  return minor === null ? "—" : formatMoney(minor, currency);
+}
+
+/**
+ * SOCIAL-15D — stored attribution only, deliberately unstyled as a claim of
+ * causation: this never implies the post's engagement "caused" the
+ * revenue, only that a real, already-captured Lead/Client chain traces
+ * back to this exact post. Zero counts/revenue render as real zeros, never
+ * hidden or replaced with "—" (a post genuinely converting nothing is a
+ * meaningful, representable fact, unlike a metric that was never synced).
+ *
+ * SOCIAL-15E — `paidRevenueMinor`/`invoicedRevenueMinor` are `null` when
+ * the server has redacted them for a caller without `finance.amounts.view`
+ * (see `SocialPostAttributionView`). In that case the revenue line renders
+ * as "—" via `money()`, matching the Finance Dashboard's own redaction
+ * convention — the lead count itself is never sensitive and always shows.
+ */
+function AttributionCell({ attribution }: { attribution: SocialPostAttributionView }) {
+  const hasRevenue = attribution.paidRevenueMinor === null || attribution.paidRevenueMinor > 0 || (attribution.invoicedRevenueMinor ?? 0) > 0;
+  return (
+    <div>
+      <span className="text-text">{formatNumber(attribution.leadCount)} lead{attribution.leadCount === 1 ? "" : "s"}</span>
+      {hasRevenue ? (
+        <p className="text-xs text-text-muted">
+          {money(attribution.paidRevenueMinor)} collected
+          {attribution.invoicedRevenueMinor !== attribution.paidRevenueMinor ? ` / ${money(attribution.invoicedRevenueMinor)} invoiced` : ""}
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 function PostThumbnail({ assetId, alt }: { assetId: string; alt: string }) {
@@ -229,6 +264,7 @@ export function SocialAnalyticsView() {
                   <th className="py-2 pr-3 font-medium">Shares</th>
                   <th className="py-2 pr-3 font-medium">Saved</th>
                   <th className="py-2 pr-3 font-medium">Interactions</th>
+                  <th className="py-2 pr-3 font-medium">Attributed Leads &amp; Revenue</th>
                 </tr>
               </thead>
               <tbody>
@@ -266,6 +302,9 @@ export function SocialAnalyticsView() {
                     </td>
                     <td className="py-2.5 pr-3">
                       <MetricCell value={row.snapshot?.total_interactions ?? null} />
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <AttributionCell attribution={row.attribution} />
                     </td>
                   </tr>
                 ))}

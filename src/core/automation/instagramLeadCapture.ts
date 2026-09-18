@@ -75,6 +75,17 @@ function newLeadFields(input: InstagramLeadCaptureInput) {
     status: "new" as const,
     assigned_to: null,
     converted_client_id: null,
+    // SOCIAL-15C — only ever set at Lead-creation time, by construction:
+    // this function is only ever called from the `create` branch of
+    // find-or-create (see `findOrCreateInstagramLeadMock`/`...Supabase`
+    // below), never from the "existing Lead found" branch, which returns
+    // the untouched existing row directly. Defaults to `null` when the
+    // caller didn't resolve one (absent `??` fallback would leave the key
+    // `undefined`, which Supabase would reject on insert) — never a
+    // fabricated or inferred value.
+    social_post_id: input.socialPostId ?? null,
+    instagram_comment_id: input.instagramCommentId ?? null,
+    instagram_conversation_id: input.instagramConversationId ?? null,
   };
 }
 

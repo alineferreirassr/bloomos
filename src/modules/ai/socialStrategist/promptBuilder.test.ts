@@ -68,7 +68,7 @@ describe("buildSocialStrategistPrompt — real data reaches the prompt, safely",
     const prompt = buildSocialStrategistPrompt(
       makeContext({
         posts: [{ postId: "post_1", status: "published", caption: "x", publishedAt: "2026-09-01T00:00:00.000Z", scheduledAt: null, createdAt: "2026-09-01T00:00:00.000Z", metrics: null }],
-        instagramLeads: [{ leadId: "lead_1", status: "new", instagramHandle: "@a", isAssigned: false, hasConversionIdentity: false, createdAt: "2026-09-01T00:00:00.000Z" }],
+        instagramLeads: [{ leadId: "lead_1", status: "new", instagramHandle: "@a", isAssigned: false, hasConversionIdentity: false, createdAt: "2026-09-01T00:00:00.000Z", attributionKind: "none", attributedSocialPostId: null }],
       }),
     );
     expect(prompt[1].content).toContain("postCount: 1");

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { EventDetailView } from "@/modules/events/components/EventDetailView";
 import { makeEvent } from "@/modules/events/testUtils";
@@ -67,6 +67,11 @@ vi.mock("@/lib/data", () => ({
   getOverduePurchases: vi.fn(),
   getPurchase: vi.fn(),
   recordInventoryMovement: vi.fn(),
+  getLeadById: vi.fn(),
+}));
+
+vi.mock("@/modules/socialAttribution/resolveLeadAttribution", () => ({
+  resolveLeadAttribution: vi.fn(),
 }));
 
 vi.mock("@/modules/finance/financeActions", () => ({
@@ -123,6 +128,7 @@ vi.mock("@/modules/communication/comments/components/CommentsPanel", () => ({ Co
 import * as dataLayer from "@/lib/data";
 import * as financeActions from "@/modules/finance/financeActions";
 import * as weatherActions from "@/modules/weather/weatherActions";
+import { resolveLeadAttribution } from "@/modules/socialAttribution/resolveLeadAttribution";
 
 function mockReady(overrides: Partial<ReturnType<typeof makeEvent>> = {}) {
   const event = makeEvent({
@@ -402,5 +408,33 @@ describe("EventDetailView", () => {
       "href",
       "/services/service_9/assignments/es_9",
     );
+  });
+
+  describe("SOCIAL-15D — originating Lead content attribution", () => {
+    beforeEach(() => {
+      vi.mocked(dataLayer.getLeadById).mockClear();
+      vi.mocked(resolveLeadAttribution).mockClear();
+    });
+
+    it("shows the originating Lead's stored attribution beneath the existing Originating Lead link", async () => {
+      mockReady({ originating_lead_id: "lead_1" });
+      vi.mocked(dataLayer.getLeadById).mockResolvedValue({ id: "lead_1" } as never);
+      vi.mocked(resolveLeadAttribution).mockResolvedValue({ kind: "social_post", socialPost: { id: "post_1", caption: "Behind the scenes" }, comment: null, conversation: null });
+
+      renderEventDetail("event_1");
+
+      expect(await screen.findByRole("link", { name: "View original Lead →" })).toHaveAttribute("href", "/leads/lead_1");
+      expect(screen.getByText('From Instagram post: "Behind the scenes"')).toBeInTheDocument();
+    });
+
+    it("never fetches a Lead or shows the Originating Lead field when the Event has no originating_lead_id", async () => {
+      mockReady({ originating_lead_id: null });
+
+      renderEventDetail("event_1");
+
+      await screen.findByText("Malibu Sunset Proposal");
+      expect(dataLayer.getLeadById).not.toHaveBeenCalled();
+      expect(screen.queryByRole("link", { name: "View original Lead →" })).not.toBeInTheDocument();
+    });
   });
 });

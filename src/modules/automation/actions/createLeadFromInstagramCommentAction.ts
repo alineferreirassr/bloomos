@@ -1,4 +1,6 @@
 import { findOrCreateInstagramLead } from "@/core/automation/instagramLeadCapture";
+import { getInstagramCommentById } from "@/lib/data";
+import { resolveSocialPostForInstagramComment } from "@/core/social/resolveSocialPostForInstagramComment";
 import type { AutomationActionDefinition, AutomationActionParams, AutomationActionResultDetail } from "@/types/automation";
 
 export const CREATE_LEAD_FROM_INSTAGRAM_COMMENT_ACTION_ID = "create-lead-from-instagram-comment";
@@ -33,6 +35,28 @@ export const CREATE_LEAD_FROM_INSTAGRAM_COMMENT_ACTION_ID = "create-lead-from-in
  * `{success: true}`, distinguished only by message/resultRef, matching this
  * codebase's own boolean-only Action Result convention rather than
  * inventing a third "duplicate" status the engine doesn't have.
+ *
+ * SOCIAL-15C — Content Attribution. `facts.commentId` was already present
+ * in `instagram.comment_received`'s own facts payload (`metaWebhookProcessing.ts`,
+ * unchanged by this checkpoint) but never read here before now. Resolved
+ * via `getInstagramCommentById(commentId, params.workspaceId)` — a
+ * workspace-scoped lookup at the query level, never a bare id fetch — so
+ * a `commentId` that (somehow) named a row in a different workspace
+ * resolves to `null`, exactly like "doesn't exist." The real,
+ * already-workspace-verified `InstagramComment` row is then handed to
+ * `resolveSocialPostForInstagramComment()` (SOCIAL-15B), which derives its
+ * own scoping from `comment.workspace_id` a second time — belt and
+ * suspenders, never trusting a single check alone. Both `instagram_comment_id`
+ * and `social_post_id` are exact-id evidence only: no timestamp, username,
+ * or text ever factors into either. A comment with no `external_media_id`
+ * yields a real `instagramCommentId` with `socialPostId: null` — a
+ * legitimate partial attribution (Section 5 of this checkpoint's own
+ * authorization), never replaced with a guess. `findOrCreateInstagramLead`
+ * only ever writes these fields on its own `create` branch (see
+ * `instagramLeadCapture.ts`'s own `newLeadFields()`) — an existing Lead
+ * found for this identity is returned completely untouched, so a
+ * redelivered/duplicate comment can never overwrite or alter an existing
+ * Lead's attribution.
  */
 const createLeadFromInstagramCommentAction: AutomationActionDefinition = {
   id: CREATE_LEAD_FROM_INSTAGRAM_COMMENT_ACTION_ID,
@@ -52,12 +76,23 @@ const createLeadFromInstagramCommentAction: AutomationActionDefinition = {
     const externalAuthorUsername = typeof params.facts.externalAuthorUsername === "string" ? params.facts.externalAuthorUsername : null;
     const commentText = typeof params.facts.commentText === "string" ? params.facts.commentText : null;
 
+    // SOCIAL-15C — exact-id attribution only. `commentId` not present or
+    // not shaped as a non-empty string in this comment's own facts (should
+    // not happen in practice, but never assumed) simply yields no
+    // attribution — never an action failure, since Lead capture itself
+    // must still succeed on the identity alone.
+    const commentId = typeof params.facts.commentId === "string" && params.facts.commentId.trim() ? params.facts.commentId : null;
+    const comment = commentId ? await getInstagramCommentById(commentId, params.workspaceId) : null;
+    const socialPost = comment ? await resolveSocialPostForInstagramComment(comment) : null;
+
     const result = await findOrCreateInstagramLead({
       workspaceId: params.workspaceId,
       source: "Instagram",
       instagramExternalId: externalAuthorId,
       instagram: externalAuthorUsername,
       message: commentText,
+      instagramCommentId: comment?.id ?? null,
+      socialPostId: socialPost?.id ?? null,
       firstName: null,
       lastName: null,
       email: null,

@@ -324,7 +324,23 @@ describe("buildSocialStrategistContext — Instagram Lead filtering & null-safe 
     const lead = makeLead({ id: "lead_1", source: "Instagram", status: "new", first_name: null, last_name: null, email: null, instagram: "@curious_bride", assigned_to: null });
     const context = buildSocialStrategistContext(makeMaterials({ instagramLeads: [lead] }), NOW);
 
-    expect(context.instagramLeads[0]).toEqual({ leadId: "lead_1", status: "new", instagramHandle: "@curious_bride", isAssigned: false, hasConversionIdentity: false, createdAt: "2026-01-01T00:00:00.000Z" });
+    expect(context.instagramLeads[0]).toEqual({ leadId: "lead_1", status: "new", instagramHandle: "@curious_bride", isAssigned: false, hasConversionIdentity: false, createdAt: "2026-01-01T00:00:00.000Z", attributionKind: "none", attributedSocialPostId: null });
+  });
+
+  it("SOCIAL-15D — maps a Lead's real stored attribution (social_post_id) into attributionKind/attributedSocialPostId, never inferred", () => {
+    const lead = makeLead({ id: "lead_1", social_post_id: "post_1", instagram_comment_id: "comment_1" });
+    const context = buildSocialStrategistContext(makeMaterials({ instagramLeads: [lead] }), NOW);
+
+    expect(context.instagramLeads[0].attributionKind).toBe("social_post");
+    expect(context.instagramLeads[0].attributedSocialPostId).toBe("post_1");
+  });
+
+  it("SOCIAL-15D — a DM-attributed Lead classifies as instagram_conversation and never carries a social post id", () => {
+    const lead = makeLead({ id: "lead_1", instagram_conversation_id: "conversation_1" });
+    const context = buildSocialStrategistContext(makeMaterials({ instagramLeads: [lead] }), NOW);
+
+    expect(context.instagramLeads[0].attributionKind).toBe("instagram_conversation");
+    expect(context.instagramLeads[0].attributedSocialPostId).toBeNull();
   });
 
   it("hasConversionIdentity is true only once first_name AND last_name AND email are all present", () => {
@@ -374,7 +390,7 @@ describe("buildSocialStrategistContext — no raw DM/comment/Lead.message leakag
     expect(keys).not.toContain("last_name");
     expect(keys).not.toContain("email");
     expect(keys).not.toContain("phone");
-    expect(keys.sort()).toEqual(["createdAt", "hasConversionIdentity", "instagramHandle", "isAssigned", "leadId", "status"].sort());
+    expect(keys.sort()).toEqual(["createdAt", "hasConversionIdentity", "instagramHandle", "isAssigned", "leadId", "status", "attributionKind", "attributedSocialPostId"].sort());
   });
 });
 

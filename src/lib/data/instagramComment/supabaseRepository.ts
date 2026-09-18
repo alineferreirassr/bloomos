@@ -44,6 +44,13 @@ async function getCommentByExternalId(instagramAccountIdentityId: string, extern
   return data ? mapInstagramCommentRow(data) : null;
 }
 
+async function getCommentById(id: string, workspaceId: string): Promise<InstagramComment | null> {
+  const supabase = createSupabaseClient();
+  const { data, error } = await supabase.from("instagram_comments").select("*").eq("id", id).eq("workspace_id", workspaceId).maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  return data ? mapInstagramCommentRow(data) : null;
+}
+
 async function listCommentsForWorkspace(workspaceId: string): Promise<InstagramComment[]> {
   const supabase = createSupabaseClient();
   const { data, error } = await supabase.from("instagram_comments").select("*").eq("workspace_id", workspaceId);
@@ -64,6 +71,7 @@ async function updateCommentStatus(id: string, status: InstagramCommentStatus): 
 export const supabaseInstagramCommentRepository: InstagramCommentRepository = {
   createComment,
   getCommentByExternalId,
+  getCommentById,
   listCommentsForWorkspace,
   updateCommentStatus,
 };

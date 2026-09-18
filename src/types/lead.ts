@@ -50,6 +50,27 @@ export interface Lead {
    * username is not a safe deduplication key.
    */
   instagram_external_id: string | null;
+  /**
+   * SOCIAL-15B — the Social Post this Lead originated from, when known
+   * (resolved via the exact-id Post<->Comment join,
+   * `core/social/resolveSocialPostForInstagramComment.ts` — never
+   * inferred from timestamps/text/proximity). Data-foundation only this
+   * checkpoint: always absent on a Lead constructed by a write path that
+   * predates SOCIAL-15C (optional, not just nullable, so every existing
+   * Lead-construction site — `instagramLeadCapture.ts`'s own
+   * `newLeadFields()` included, deliberately untouched by SOCIAL-15B —
+   * keeps compiling without needing to know about it), and always
+   * present as `string | null` on a Lead actually read back from storage
+   * (a DB row/mock-store object always has every column). No backfill —
+   * every Lead that existed before this migration has this permanently
+   * `null`, and SOCIAL-15C is the only future write path authorized to
+   * ever set it.
+   */
+  social_post_id?: string | null;
+  /** SOCIAL-15B — the Instagram comment this Lead originated from, when known (comment-triggered capture only). See `social_post_id`'s own doc comment for the full reasoning — same optionality, same no-backfill guarantee, same future-writer-only population. */
+  instagram_comment_id?: string | null;
+  /** SOCIAL-15B — the Instagram DM conversation this Lead originated from, when known (DM-triggered capture only). See `social_post_id`'s own doc comment for the full reasoning. */
+  instagram_conversation_id?: string | null;
   created_at: string;
   updated_at: string;
   archived_at: string | null;
@@ -67,6 +88,18 @@ export interface Lead {
  * comment/DM event always carries); `instagram` (the username) and
  * `message` (the comment/DM text) are optional, matching their own
  * real-world availability.
+ *
+ * SOCIAL-15C — three new, deliberately distinct, non-polymorphic
+ * attribution fields (never a single "source ref" field): a Comment
+ * capture can only ever populate `instagramCommentId`/`socialPostId`, a
+ * DM capture can only ever populate `instagramConversationId` — mirroring
+ * exactly `Lead`'s own three separate columns (SOCIAL-15B). Every one of
+ * these is optional/nullable, since the underlying evidence is not always
+ * available (e.g. a comment with no `external_media_id` yields a real
+ * `instagramCommentId` but a `null` `socialPostId` — a legitimate partial
+ * attribution, never backfilled or guessed). None of this changes
+ * `instagramExternalId`'s own meaning — it stays the Meta identity of the
+ * *person*, never repurposed as content attribution.
  */
 export interface InstagramLeadCaptureInput {
   workspaceId: string;
@@ -74,6 +107,12 @@ export interface InstagramLeadCaptureInput {
   instagramExternalId: string;
   instagram: string | null;
   message: string | null;
+  /** SOCIAL-15C — set only by a comment-triggered capture; always `null`/absent for a DM. */
+  instagramCommentId?: string | null;
+  /** SOCIAL-15C — the Social Post resolved from the comment's own `external_media_id` via `resolveSocialPostForInstagramComment()`; `null` whenever no exact-id match exists, never inferred. Always `null`/absent for a DM. */
+  socialPostId?: string | null;
+  /** SOCIAL-15C — set only by a DM-triggered capture; always `null`/absent for a comment. Never a Social Post reference — a DM is never attributed to a post by inference. */
+  instagramConversationId?: string | null;
   firstName: null;
   lastName: null;
   email: null;

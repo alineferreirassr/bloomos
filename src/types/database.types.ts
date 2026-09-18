@@ -414,6 +414,9 @@ export interface Database {
           status: string;
           assigned_to: string | null;
           converted_client_id: string | null;
+          social_post_id: string | null;
+          instagram_comment_id: string | null;
+          instagram_conversation_id: string | null;
           created_at: string;
           updated_at: string;
           archived_at: string | null;
@@ -437,6 +440,9 @@ export interface Database {
           status?: string;
           assigned_to?: string | null;
           converted_client_id?: string | null;
+          social_post_id?: string | null;
+          instagram_comment_id?: string | null;
+          instagram_conversation_id?: string | null;
           created_at?: string;
           updated_at?: string;
           archived_at?: string | null;
@@ -460,6 +466,9 @@ export interface Database {
           status?: string;
           assigned_to?: string | null;
           converted_client_id?: string | null;
+          social_post_id?: string | null;
+          instagram_comment_id?: string | null;
+          instagram_conversation_id?: string | null;
           created_at?: string;
           updated_at?: string;
           archived_at?: string | null;

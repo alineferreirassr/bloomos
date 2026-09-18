@@ -297,3 +297,99 @@ describe("getSocialAnalyticsDashboardAction — no data", () => {
     expect(result.data.accountHistory).toEqual([]);
   });
 });
+
+describe("getSocialAnalyticsDashboardAction — SOCIAL-15D attribution wiring", () => {
+  it("attaches real, stored attribution (leadCount) to the matching post's own postPerformance row, and a real zero to a post with no attributed Lead", async () => {
+    const { writeLeads, resetLeadsStore } = await import("@/lib/data/mock/leadsStore");
+    const { writeClients, resetClientsStore } = await import("@/lib/data/mock/clientsStore");
+    const { makeLead } = await import("@/modules/leads/testUtils");
+    const { makeClient } = await import("@/modules/clients/testUtils");
+    resetLeadsStore();
+    resetClientsStore();
+
+    writeSocialPosts([post({ id: "post_attributed" }), post({ id: "post_unattributed", provider_post_id: "17900000000000002" })]);
+    writeLeads([makeLead({ id: "lead_1", workspace_id: CURRENT_WORKSPACE_ID, social_post_id: "post_attributed", converted_client_id: "client_1" })]);
+    writeClients([makeClient({ id: "client_1", workspace_id: CURRENT_WORKSPACE_ID, originating_lead_id: "lead_1" })]);
+
+    const result = await getSocialAnalyticsDashboardAction();
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    const byId = Object.fromEntries(result.data.postPerformance.map((row) => [row.post.id, row.attribution]));
+    expect(byId.post_attributed).toMatchObject({ leadCount: 1, clientCount: 1 });
+    expect(byId.post_unattributed).toMatchObject({ leadCount: 0, clientCount: 0 });
+
+    resetLeadsStore();
+    resetClientsStore();
+  });
+});
+
+describe("getSocialAnalyticsDashboardAction — SOCIAL-15E hardening: finance.amounts.view redaction", () => {
+  it("never exposes real attributed revenue to a caller with social.view but no finance.amounts.view — leadCount/clientCount/eventCount still visible, invoicedRevenueMinor/paidRevenueMinor redacted to null", async () => {
+    const { writeLeads, resetLeadsStore } = await import("@/lib/data/mock/leadsStore");
+    const { writeClients, resetClientsStore } = await import("@/lib/data/mock/clientsStore");
+    const { writeInvoices, resetInvoicesStore } = await import("@/lib/data/mock/invoicesStore");
+    const { makeLead } = await import("@/modules/leads/testUtils");
+    const { makeClient } = await import("@/modules/clients/testUtils");
+    const { makeInvoice } = await import("@/modules/finance/testUtils");
+    resetLeadsStore();
+    resetClientsStore();
+    resetInvoicesStore();
+
+    writeSocialPosts([post({ id: "post_1" })]);
+    writeLeads([makeLead({ id: "lead_1", workspace_id: CURRENT_WORKSPACE_ID, social_post_id: "post_1", converted_client_id: "client_1" })]);
+    writeClients([makeClient({ id: "client_1", workspace_id: CURRENT_WORKSPACE_ID, originating_lead_id: "lead_1" })]);
+    writeInvoices([makeInvoice({ id: "invoice_1", workspace_id: CURRENT_WORKSPACE_ID, client_id: "client_1", total_minor: 500000, status: "sent" })]);
+
+    // The `session` fixture at the top of this file already carries only
+    // `social.view`/`social.create`/`social.publish` — no finance
+    // permission at all — the exact Staff-equivalent shape the real
+    // permission matrix uses (staff has social.view, not
+    // finance.amounts.view).
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue(session);
+
+    const result = await getSocialAnalyticsDashboardAction();
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    const row = result.data.postPerformance.find((r) => r.post.id === "post_1");
+    expect(row?.attribution.leadCount).toBe(1);
+    expect(row?.attribution.clientCount).toBe(1);
+    expect(row?.attribution.invoicedRevenueMinor).toBeNull();
+    expect(row?.attribution.paidRevenueMinor).toBeNull();
+
+    resetLeadsStore();
+    resetClientsStore();
+    resetInvoicesStore();
+  });
+
+  it("returns the real, unredacted figures for a caller who genuinely holds finance.amounts.view", async () => {
+    const { writeLeads, resetLeadsStore } = await import("@/lib/data/mock/leadsStore");
+    const { writeClients, resetClientsStore } = await import("@/lib/data/mock/clientsStore");
+    const { writeInvoices, resetInvoicesStore } = await import("@/lib/data/mock/invoicesStore");
+    const { makeLead } = await import("@/modules/leads/testUtils");
+    const { makeClient } = await import("@/modules/clients/testUtils");
+    const { makeInvoice } = await import("@/modules/finance/testUtils");
+    resetLeadsStore();
+    resetClientsStore();
+    resetInvoicesStore();
+
+    writeSocialPosts([post({ id: "post_1" })]);
+    writeLeads([makeLead({ id: "lead_1", workspace_id: CURRENT_WORKSPACE_ID, social_post_id: "post_1", converted_client_id: "client_1" })]);
+    writeClients([makeClient({ id: "client_1", workspace_id: CURRENT_WORKSPACE_ID, originating_lead_id: "lead_1" })]);
+    writeInvoices([makeInvoice({ id: "invoice_1", workspace_id: CURRENT_WORKSPACE_ID, client_id: "client_1", total_minor: 500000, status: "sent" })]);
+
+    vi.mocked(resolveMemberSessionSnapshot).mockResolvedValue({ ...session, permissions: [...session.permissions, "finance.amounts.view"] });
+
+    const result = await getSocialAnalyticsDashboardAction();
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    const row = result.data.postPerformance.find((r) => r.post.id === "post_1");
+    expect(row?.attribution.invoicedRevenueMinor).toBe(500000);
+
+    resetLeadsStore();
+    resetClientsStore();
+    resetInvoicesStore();
+  });
+});

@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createNote, getLeadById, getNotesByLeadId, getTimelineByLeadId, togglePinNote } from "@/lib/data";
+import { resolveLeadAttribution } from "@/modules/socialAttribution/resolveLeadAttribution";
 import type { Lead } from "@/types/lead";
 import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
+import type { LeadAttributionDisplay } from "@/modules/socialAttribution/types";
 import { NotFoundError } from "@/core/errors";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -24,7 +26,7 @@ type LoadState =
   | { status: "loading" }
   | { status: "not-found" }
   | { status: "error" }
-  | { status: "ready"; lead: Lead; notes: Note[]; timeline: TimelineActivity[] };
+  | { status: "ready"; lead: Lead; notes: Note[]; timeline: TimelineActivity[]; attribution: LeadAttributionDisplay };
 
 async function loadLeadDetail(leadId: string): Promise<LoadState> {
   try {
@@ -33,9 +35,27 @@ async function loadLeadDetail(leadId: string): Promise<LoadState> {
       getNotesByLeadId(leadId),
       getTimelineByLeadId(leadId),
     ]);
-    return { status: "ready", lead, notes, timeline };
+    // SOCIAL-15D — resolves this Lead's own stored attribution (never an
+    // aggregate, never inferred). Runs after `lead` is known since it reads
+    // `lead.social_post_id`/etc directly off the already-fetched row.
+    const attribution = await resolveLeadAttribution(lead);
+    return { status: "ready", lead, notes, timeline, attribution };
   } catch (err) {
     return { status: err instanceof NotFoundError ? "not-found" : "error" };
+  }
+}
+
+/** SOCIAL-15D — a plain-text summary of `LeadAttributionDisplay`, matching this Field's own `string | null` shape. Never exposes raw comment/DM content — only the Social Post's own workspace-authored caption, when resolvable. */
+function attributionLabel(attribution: LeadAttributionDisplay): string | null {
+  switch (attribution.kind) {
+    case "social_post":
+      return attribution.socialPost ? `From an Instagram post: "${attribution.socialPost.caption}"` : "From an Instagram post";
+    case "instagram_comment":
+      return "From an Instagram comment";
+    case "instagram_conversation":
+      return "From an Instagram DM";
+    case "none":
+      return null;
   }
 }
 
@@ -78,7 +98,7 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
     return <ErrorState message="Could not load this lead." onRetry={refetch} />;
   }
 
-  const { lead, notes, timeline } = state;
+  const { lead, notes, timeline, attribution } = state;
   const isReadOnly = lead.status === "converted";
   const nextAction = getNextRecommendedAction(lead);
   // SOCIAL-13E — mirrors convertLeadToClient()'s own two real guards exactly
@@ -147,6 +167,7 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
               <Field label="Instagram" value={lead.instagram} />
               <Field label="Source" value={lead.source} />
               <Field label="Assigned to" value={lead.assigned_to} emptyLabel="Unassigned" />
+              {attribution.kind !== "none" ? <Field label="Content Attribution" value={attributionLabel(attribution)} /> : null}
             </dl>
           </Card>
 

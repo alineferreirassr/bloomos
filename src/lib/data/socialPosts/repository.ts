@@ -35,6 +35,16 @@ export interface ScheduleSocialPostInput {
 export interface SocialPostsRepository {
   listSocialPosts(workspaceId: string): Promise<SocialPost[]>;
   getSocialPost(id: string): Promise<SocialPost>;
+  /**
+   * SOCIAL-15B — the Post<->Comment read-time join's own repository seam:
+   * exact `provider_post_id` equality only, always scoped to the caller's
+   * own `workspaceId` (never a bare global lookup) — no timestamp, no
+   * username, no text, no proximity, no heuristic. Returns `null` when no
+   * Social Post in this workspace was ever published with that exact
+   * provider-assigned id. See `core/social/resolveSocialPostForInstagramComment.ts`
+   * for the higher-level, comment-shaped caller of this method.
+   */
+  getSocialPostByProviderPostId(workspaceId: string, providerPostId: string): Promise<SocialPost | null>;
   createSocialPost(input: CreateSocialPostInput): Promise<DataResult<SocialPost>>;
   /** Draft only — a published post's caption/asset are immutable in BloomOS (SOCIAL03-S). */
   updateSocialPostDraft(id: string, input: UpdateSocialPostDraftInput): Promise<DataResult<SocialPost>>;

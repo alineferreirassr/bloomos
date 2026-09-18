@@ -42,6 +42,11 @@ function post(overrides: Partial<SocialPost> = {}): SocialPost {
   };
 }
 
+/** SOCIAL-15D — the honest "no attribution evidence" default every fixture below uses unless a test explicitly overrides it. */
+function zeroAttribution(socialPostId = "post_1") {
+  return { socialPostId, leadCount: 0, clientCount: 0, eventCount: 0, invoicedRevenueMinor: 0, paidRevenueMinor: 0 };
+}
+
 function emptyData(overrides: Partial<SocialAnalyticsDashboardData> = {}): SocialAnalyticsDashboardData {
   return {
     hasAnyPublishedPosts: false,
@@ -107,7 +112,7 @@ describe("SocialAnalyticsView — empty states", () => {
   });
 
   it("shows 'no ranked posts yet' when nothing has a real total_interactions", async () => {
-    vi.mocked(getSocialAnalyticsDashboardAction).mockResolvedValue({ success: true, data: emptyData({ hasAnyPublishedPosts: true, postPerformance: [{ post: post(), snapshot: null }] }) });
+    vi.mocked(getSocialAnalyticsDashboardAction).mockResolvedValue({ success: true, data: emptyData({ hasAnyPublishedPosts: true, postPerformance: [{ post: post(), snapshot: null, attribution: zeroAttribution() }] }) });
     vi.mocked(getMediaAssetDownloadUrl).mockResolvedValue({ success: false, error: "not needed" });
     render(<SocialAnalyticsView />);
     expect(await screen.findByText("No ranked posts yet")).toBeInTheDocument();
@@ -137,7 +142,7 @@ describe("SocialAnalyticsView — KPIs, null vs zero", () => {
       success: true,
       data: emptyData({
         hasAnyPublishedPosts: true,
-        postPerformance: [{ post: post(), snapshot: { id: "sp1", workspace_id: "ws_1", social_post_id: "post_1", provider_media_id: "p", captured_at: "2026-09-17T00:00:00Z", snapshot_date: "2026-09-17", views: null, reach: 0, likes: null, comments: null, shares: null, saved: null, total_interactions: null, raw_metrics: {}, created_at: "2026-09-17T00:00:00Z" } }],
+        postPerformance: [{ post: post(), snapshot: { id: "sp1", workspace_id: "ws_1", social_post_id: "post_1", provider_media_id: "p", captured_at: "2026-09-17T00:00:00Z", snapshot_date: "2026-09-17", views: null, reach: 0, likes: null, comments: null, shares: null, saved: null, total_interactions: null, raw_metrics: {}, created_at: "2026-09-17T00:00:00Z" }, attribution: zeroAttribution() }],
       }),
     });
     vi.mocked(getMediaAssetDownloadUrl).mockResolvedValue({ success: false, error: "not needed" });
@@ -155,7 +160,7 @@ describe("SocialAnalyticsView — post performance and top posts", () => {
       success: true,
       data: emptyData({
         hasAnyPublishedPosts: true,
-        postPerformance: [{ post: post({ caption: "Golden hour" }), snapshot: { id: "sp1", workspace_id: "ws_1", social_post_id: "post_1", provider_media_id: "p", captured_at: "2026-09-17T00:00:00Z", snapshot_date: "2026-09-17", views: null, reach: 250, likes: 12, comments: null, shares: null, saved: null, total_interactions: null, raw_metrics: {}, created_at: "2026-09-17T00:00:00Z" } }],
+        postPerformance: [{ post: post({ caption: "Golden hour" }), snapshot: { id: "sp1", workspace_id: "ws_1", social_post_id: "post_1", provider_media_id: "p", captured_at: "2026-09-17T00:00:00Z", snapshot_date: "2026-09-17", views: null, reach: 250, likes: 12, comments: null, shares: null, saved: null, total_interactions: null, raw_metrics: {}, created_at: "2026-09-17T00:00:00Z" }, attribution: zeroAttribution() }],
       }),
     });
     vi.mocked(getMediaAssetDownloadUrl).mockResolvedValue({ success: false, error: "not needed" });
@@ -174,8 +179,8 @@ describe("SocialAnalyticsView — post performance and top posts", () => {
       data: emptyData({
         hasAnyPublishedPosts: true,
         topPosts: [
-          { post: post({ id: "p_high", caption: "Top post" }), snapshot: { id: "s1", workspace_id: "ws_1", social_post_id: "p_high", provider_media_id: "p", captured_at: "x", snapshot_date: "2026-09-17", views: null, reach: null, likes: null, comments: null, shares: null, saved: null, total_interactions: 50, raw_metrics: {}, created_at: "x" } },
-          { post: post({ id: "p_low", caption: "Second post" }), snapshot: { id: "s2", workspace_id: "ws_1", social_post_id: "p_low", provider_media_id: "p", captured_at: "x", snapshot_date: "2026-09-17", views: null, reach: null, likes: null, comments: null, shares: null, saved: null, total_interactions: 5, raw_metrics: {}, created_at: "x" } },
+          { post: post({ id: "p_high", caption: "Top post" }), snapshot: { id: "s1", workspace_id: "ws_1", social_post_id: "p_high", provider_media_id: "p", captured_at: "x", snapshot_date: "2026-09-17", views: null, reach: null, likes: null, comments: null, shares: null, saved: null, total_interactions: 50, raw_metrics: {}, created_at: "x" }, attribution: zeroAttribution("p_high") },
+          { post: post({ id: "p_low", caption: "Second post" }), snapshot: { id: "s2", workspace_id: "ws_1", social_post_id: "p_low", provider_media_id: "p", captured_at: "x", snapshot_date: "2026-09-17", views: null, reach: null, likes: null, comments: null, shares: null, saved: null, total_interactions: 5, raw_metrics: {}, created_at: "x" }, attribution: zeroAttribution("p_low") },
         ],
       }),
     });
@@ -225,5 +230,38 @@ describe("SocialAnalyticsView — time range selector", () => {
 
     await user.click(screen.getByRole("button", { name: "7D" }));
     await waitFor(() => expect(getSocialAnalyticsDashboardAction).toHaveBeenCalledWith("7d"));
+  });
+});
+
+describe("SocialAnalyticsView — SOCIAL-15D attributed Leads & Revenue column", () => {
+  it("shows a real lead count and collected/invoiced revenue for an attributed post", async () => {
+    vi.mocked(getSocialAnalyticsDashboardAction).mockResolvedValue({
+      success: true,
+      data: emptyData({
+        hasAnyPublishedPosts: true,
+        postPerformance: [{ post: post({ caption: "Golden hour" }), snapshot: null, attribution: { socialPostId: "post_1", leadCount: 3, clientCount: 2, eventCount: 1, invoicedRevenueMinor: 80000, paidRevenueMinor: 50000 } }],
+      }),
+    });
+    vi.mocked(getMediaAssetDownloadUrl).mockResolvedValue({ success: false, error: "not needed" });
+    render(<SocialAnalyticsView />);
+
+    const row = await screen.findByText("Golden hour").then((el) => el.closest("tr")!);
+    expect(within(row).getByText("3 leads")).toBeInTheDocument();
+    expect(within(row).getByText(/\$500\.00 collected \/ \$800\.00 invoiced/)).toBeInTheDocument();
+  });
+
+  it("shows a real zero for a post with no attributed Leads — never hidden, never fabricated", async () => {
+    vi.mocked(getSocialAnalyticsDashboardAction).mockResolvedValue({
+      success: true,
+      data: emptyData({
+        hasAnyPublishedPosts: true,
+        postPerformance: [{ post: post({ caption: "No conversions yet" }), snapshot: null, attribution: zeroAttribution() }],
+      }),
+    });
+    vi.mocked(getMediaAssetDownloadUrl).mockResolvedValue({ success: false, error: "not needed" });
+    render(<SocialAnalyticsView />);
+
+    const row = await screen.findByText("No conversions yet").then((el) => el.closest("tr")!);
+    expect(within(row).getByText("0 leads")).toBeInTheDocument();
   });
 });

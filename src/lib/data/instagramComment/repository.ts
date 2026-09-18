@@ -26,6 +26,18 @@ export interface InstagramCommentRepository {
   createComment(input: CreateInstagramCommentInput): Promise<DataResult<InstagramComment>>;
   /** Scoped to one Instagram Account Identity — the entity-level dedup lookup a future ingestion step must call before creating a row. */
   getCommentByExternalId(instagramAccountIdentityId: string, externalCommentId: string): Promise<InstagramComment | null>;
+  /**
+   * SOCIAL-15C — the workspace-safe lookup by internal id the Instagram
+   * comment-triggered Lead-capture Action uses to resolve the real
+   * `InstagramComment` row behind a trigger's own `facts.commentId`,
+   * before handing it to `resolveSocialPostForInstagramComment()`. Always
+   * scoped by the caller's own `workspaceId` at the query level (never a
+   * bare id lookup) — returns `null` both when no row has that id and
+   * when it exists but belongs to a different workspace, so a caller can
+   * never distinguish "doesn't exist" from "exists, wrong workspace" and
+   * is never tempted to trust an unscoped result.
+   */
+  getCommentById(id: string, workspaceId: string): Promise<InstagramComment | null>;
   listCommentsForWorkspace(workspaceId: string): Promise<InstagramComment[]>;
   updateCommentStatus(id: string, status: InstagramCommentStatus): Promise<DataResult<InstagramComment>>;
 }

@@ -123,6 +123,23 @@ describe("supabaseInstagramCommentRepository", () => {
     expect(await supabaseInstagramCommentRepository.getCommentByExternalId("identity_1", "missing")).toBeNull();
   });
 
+  it("getCommentById — SOCIAL-15C — filters by both id and workspace_id, workspace-scoped at the query level", async () => {
+    const { client, calls } = createMockSupabase([{ data: commentRow(), error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+
+    const result = await supabaseInstagramCommentRepository.getCommentById("comment_1", "ws_1");
+    expect(result).toMatchObject({ workspace_id: "ws_1" });
+    const eqCalls = calls.filter((c) => c.method === "eq").map((c) => c.args);
+    expect(eqCalls).toContainEqual(["id", "comment_1"]);
+    expect(eqCalls).toContainEqual(["workspace_id", "ws_1"]);
+  });
+
+  it("getCommentById returns null when no row matches (including a real id in a different workspace)", async () => {
+    const { client } = createMockSupabase([{ data: null, error: null }]);
+    vi.mocked(createClient).mockReturnValue(client as never);
+    expect(await supabaseInstagramCommentRepository.getCommentById("comment_1", "ws_other")).toBeNull();
+  });
+
   it("listCommentsForWorkspace filters by workspace_id", async () => {
     const { client, calls } = createMockSupabase([{ data: [commentRow()], error: null }]);
     vi.mocked(createClient).mockReturnValue(client as never);
