@@ -8,6 +8,7 @@ import { OwnerDashboardView } from "@/modules/dashboard/luxury/components/OwnerD
 import { TeamDashboardView } from "@/modules/dashboard/luxury/components/TeamDashboardView";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { WORKSPACE_MEMBER_ROLE_LABELS } from "@/core/enums/workspaceRole";
+import { getDataMode } from "@/lib/env";
 
 /**
  * Checkpoint 19, Step 4 — `/dashboard` itself is the Dashboard Experience
@@ -29,7 +30,21 @@ export default async function DashboardPage() {
   if (experience === "owner") {
     const result = await getOwnerDashboardData();
     if (!result.success) return <ErrorState message={result.error} />;
-    return <OwnerDashboardView data={result.data} branding={branding} profileName={profileName} profileRoleLabel={profileRoleLabel} profileAvatarUrl={session.profile.avatar_url} />;
+    // VISUAL-01 — both derived from real, already-resolved application state
+    // (never fabricated): `role` is the member's own authenticated
+    // WorkspaceMemberRole, `isSupabaseConnected` is only true when this
+    // request is genuinely running in Supabase data mode.
+    return (
+      <OwnerDashboardView
+        data={result.data}
+        branding={branding}
+        profileName={profileName}
+        profileRoleLabel={profileRoleLabel}
+        profileAvatarUrl={session.profile.avatar_url}
+        role={session.membership.role}
+        isSupabaseConnected={getDataMode() === "supabase"}
+      />
+    );
   }
 
   const result = await getTeamDashboardData();

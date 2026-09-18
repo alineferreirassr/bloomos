@@ -38,6 +38,39 @@ export type WelcomeCopyInput =
  * input is a parameter; `Aline`/`Sophia`/`Michael` exist only in this
  * checkpoint's own test fixtures and browser-verification data.
  */
+/**
+ * VISUAL-01 — the Owner Home header's own small-caps eyebrow date, e.g.
+ * "FRIDAY, SEPTEMBER 18". Always derived from a real `Date` (defaults to
+ * `new Date()`, never a hardcoded string) — the exact same "take a `Date`,
+ * default to now" shape `resolveTimeOfDay` already uses, so a test can
+ * pass a fixed instant. Uppercased by the caller's own CSS (`uppercase`
+ * utility), not here — this returns plain Title Case so the raw string is
+ * still readable in a snapshot/test failure.
+ */
+export function formatStudioDate(now: Date = new Date()): string {
+  return now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+}
+
+/**
+ * VISUAL-01 — the Owner Home header's calm contextual sentence, directly
+ * beneath the greeting. Deliberately the smallest truthful presentation:
+ * reuses `priorities`/`notificationCount`, both already computed by
+ * `getOwnerDashboardData.ts` for other, pre-existing surfaces (Today's
+ * Priority, the notification bell) — no new urgency/intelligence engine,
+ * no AI, no fabricated status. "Everything is calm" is only ever returned
+ * when both real counts are genuinely zero; otherwise a plain, factual
+ * count-based sentence, never a vague "some things need you."
+ */
+export function buildCalmContextualSentence(priorityCount: number, notificationCount: number): string {
+  if (priorityCount === 0 && notificationCount === 0) {
+    return "Everything is calm. Nothing needs you right now.";
+  }
+  const parts: string[] = [];
+  if (priorityCount > 0) parts.push(pluralize(priorityCount, "priority", "priorities"));
+  if (notificationCount > 0) parts.push(pluralize(notificationCount, "notification"));
+  return `You have ${parts.join(" and ")} waiting for you today.`;
+}
+
 export function buildWelcomeCopy(input: WelcomeCopyInput): WelcomeCopy {
   if (input.experience === "client") {
     return {

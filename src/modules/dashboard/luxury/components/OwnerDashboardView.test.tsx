@@ -100,7 +100,7 @@ describe("OwnerDashboardView", () => {
     render(
       <MemberSessionProvider snapshot={ownerSnapshot}>
         <CopilotProvider>
-          <OwnerDashboardView data={data({ welcome: { greeting: "Good evening, there", subtitle: "x" }, firstName: "Aline" })} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} />
+          <OwnerDashboardView data={data({ welcome: { greeting: "Good evening, there", subtitle: "x" }, firstName: "Aline" })} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} role="owner" isSupabaseConnected={false} />
         </CopilotProvider>
       </MemberSessionProvider>,
     );
@@ -116,7 +116,7 @@ describe("OwnerDashboardView", () => {
     render(
       <MemberSessionProvider snapshot={ownerSnapshot}>
         <CopilotProvider>
-          <OwnerDashboardView data={data({ firstName: "there" })} branding={branding} profileName="there" profileRoleLabel="Owner" profileAvatarUrl={null} />
+          <OwnerDashboardView data={data({ firstName: "there" })} branding={branding} profileName="there" profileRoleLabel="Owner" profileAvatarUrl={null} role="owner" isSupabaseConnected={false} />
         </CopilotProvider>
       </MemberSessionProvider>,
     );
@@ -130,7 +130,7 @@ describe("OwnerDashboardView — A little look at today ♡ (World Clock + Weath
     render(
       <MemberSessionProvider snapshot={ownerSnapshot}>
         <CopilotProvider>
-          <OwnerDashboardView data={data({ nextEventWeather: null })} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} />
+          <OwnerDashboardView data={data({ nextEventWeather: null })} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} role="owner" isSupabaseConnected={false} />
         </CopilotProvider>
       </MemberSessionProvider>,
     );
@@ -170,7 +170,7 @@ describe("OwnerDashboardView — A little look at today ♡ (World Clock + Weath
             branding={branding}
             profileName="Aline Ferreira"
             profileRoleLabel="Owner"
-            profileAvatarUrl={null}
+            profileAvatarUrl={null} role="owner" isSupabaseConnected={false}
           />
         </CopilotProvider>
       </MemberSessionProvider>,
@@ -187,7 +187,7 @@ describe("OwnerDashboardView — Dashboard Compact Composition Refinement: Littl
     const { container } = render(
       <MemberSessionProvider snapshot={ownerSnapshot}>
         <CopilotProvider>
-          <OwnerDashboardView data={data({ todaysPriority: null })} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} />
+          <OwnerDashboardView data={data({ todaysPriority: null })} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} role="owner" isSupabaseConnected={false} />
         </CopilotProvider>
       </MemberSessionProvider>,
     );
@@ -211,11 +211,12 @@ describe("OwnerDashboardView — Dashboard Compact Composition Refinement: Littl
     expect(priorityIndex).toBeGreaterThan(myDayIndex);
     expect(upcomingIndex).toBeGreaterThan(priorityIndex);
 
-    // Little Reminder now lives INSIDE the My Day composition (stagger-3), never beside Priority.
+    // VISUAL-01 revision #2 — Little Reminder now lives INSIDE the My Day composition
+    // (stagger-3, after World Clock + Weather moved back to stagger-2), never beside Priority.
     const myDaySection = container.querySelector(".stagger-3");
     expect(myDaySection?.textContent).toContain("Little Reminder ♡");
 
-    // Today's Priority and Upcoming Events belong to the SAME composition row (stagger-4), side by side.
+    // VISUAL-01 revision #2 — Today's Priority and Upcoming Events belong to the SAME composition row (stagger-4), side by side.
     const priorityUpcomingRow = container.querySelector(".stagger-4");
     expect(priorityUpcomingRow?.textContent).toContain("Today's Priority");
     expect(priorityUpcomingRow?.textContent).toContain("Upcoming Events");
@@ -225,7 +226,7 @@ describe("OwnerDashboardView — Dashboard Compact Composition Refinement: Littl
     render(
       <MemberSessionProvider snapshot={ownerSnapshot}>
         <CopilotProvider>
-          <OwnerDashboardView data={data()} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} />
+          <OwnerDashboardView data={data()} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} role="owner" isSupabaseConnected={false} />
         </CopilotProvider>
       </MemberSessionProvider>,
     );
@@ -245,7 +246,7 @@ describe("OwnerDashboardView — Dashboard Compact Composition Refinement: Littl
             branding={branding}
             profileName="Aline Ferreira"
             profileRoleLabel="Owner"
-            profileAvatarUrl={null}
+            profileAvatarUrl={null} role="owner" isSupabaseConnected={false}
           />
         </CopilotProvider>
       </MemberSessionProvider>,
@@ -265,7 +266,7 @@ describe("OwnerDashboardView — Dashboard Compact Composition Refinement: Littl
             branding={branding}
             profileName="Aline Ferreira"
             profileRoleLabel="Owner"
-            profileAvatarUrl={null}
+            profileAvatarUrl={null} role="owner" isSupabaseConnected={false}
           />
         </CopilotProvider>
       </MemberSessionProvider>,
@@ -282,7 +283,7 @@ describe("OwnerDashboardView — My Day composition (Mood + Water only)", () => 
     render(
       <MemberSessionProvider snapshot={ownerSnapshot}>
         <CopilotProvider>
-          <OwnerDashboardView data={data()} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} />
+          <OwnerDashboardView data={data()} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} role="owner" isSupabaseConnected={false} />
         </CopilotProvider>
       </MemberSessionProvider>,
     );
@@ -291,5 +292,174 @@ describe("OwnerDashboardView — My Day composition (Mood + Water only)", () => 
     expect(screen.getByText("A few things just for you.")).toBeInTheDocument();
     // Exactly one Weather card exists on the whole page (in Today at a glance), never a second copy inside My Day.
     expect(screen.getAllByText("♡ Weather")).toHaveLength(1);
+  });
+});
+
+describe("OwnerDashboardView — VISUAL-01 founder-locked header + status row", () => {
+  it("renders the eyebrow, greeting, and calm contextual sentence when there are genuinely no priorities/notifications", () => {
+    render(
+      <MemberSessionProvider snapshot={ownerSnapshot}>
+        <CopilotProvider>
+          <OwnerDashboardView data={data({ priorities: [], notificationCount: 0 })} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} role="owner" isSupabaseConnected={false} />
+        </CopilotProvider>
+      </MemberSessionProvider>,
+    );
+
+    expect(screen.getByText(/Today.s Studio/)).toBeInTheDocument();
+    expect(screen.getByText("Everything is calm. Nothing needs you right now.")).toBeInTheDocument();
+    expect(screen.getByText("Your Day")).toBeInTheDocument();
+  });
+
+  it("renders a truthful, count-based sentence instead of a false 'calm' claim when priorities/notifications exist", () => {
+    render(
+      <MemberSessionProvider snapshot={ownerSnapshot}>
+        <CopilotProvider>
+          <OwnerDashboardView
+            data={data({ priorities: [{ id: "p1", title: "Confirm headcount", dueLabel: "Today", completed: false, urgent: true }], notificationCount: 2 })}
+            branding={branding}
+            profileName="Aline Ferreira"
+            profileRoleLabel="Owner"
+            profileAvatarUrl={null}
+            role="owner"
+            isSupabaseConnected={false}
+          />
+        </CopilotProvider>
+      </MemberSessionProvider>,
+    );
+
+    expect(screen.queryByText("Everything is calm. Nothing needs you right now.")).not.toBeInTheDocument();
+    expect(screen.getByText(/waiting for you today/)).toBeInTheDocument();
+  });
+
+  it("never displays 'Audit active' — explicitly rejected by the founder as not truthfully persistent", () => {
+    render(
+      <MemberSessionProvider snapshot={ownerSnapshot}>
+        <CopilotProvider>
+          <OwnerDashboardView data={data()} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} role="owner" isSupabaseConnected={true} />
+        </CopilotProvider>
+      </MemberSessionProvider>,
+    );
+
+    expect(screen.queryByText("Audit active")).not.toBeInTheDocument();
+  });
+
+  it("always shows Secure session and RLS protected; shows Supabase connected only when genuinely in Supabase mode; shows Founder access only for role=owner", () => {
+    render(
+      <MemberSessionProvider snapshot={ownerSnapshot}>
+        <CopilotProvider>
+          <OwnerDashboardView data={data()} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} role="owner" isSupabaseConnected={true} />
+        </CopilotProvider>
+      </MemberSessionProvider>,
+    );
+
+    expect(screen.getByText("Secure session")).toBeInTheDocument();
+    expect(screen.getByText("RLS protected")).toBeInTheDocument();
+    expect(screen.getByText("Supabase connected")).toBeInTheDocument();
+    expect(screen.getByText("Founder access")).toBeInTheDocument();
+  });
+
+  it("never claims Supabase connected in mock mode", () => {
+    render(
+      <MemberSessionProvider snapshot={ownerSnapshot}>
+        <CopilotProvider>
+          <OwnerDashboardView data={data()} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Owner" profileAvatarUrl={null} role="owner" isSupabaseConnected={false} />
+        </CopilotProvider>
+      </MemberSessionProvider>,
+    );
+
+    expect(screen.queryByText("Supabase connected")).not.toBeInTheDocument();
+  });
+
+  it("never claims Founder access for an Admin, who reaches this same Owner-experience view but is not literally the Owner", () => {
+    render(
+      <MemberSessionProvider snapshot={ownerSnapshot}>
+        <CopilotProvider>
+          <OwnerDashboardView data={data()} branding={branding} profileName="Aline Ferreira" profileRoleLabel="Admin" profileAvatarUrl={null} role="admin" isSupabaseConnected={false} />
+        </CopilotProvider>
+      </MemberSessionProvider>,
+    );
+
+    expect(screen.queryByText("Founder access")).not.toBeInTheDocument();
+    expect(screen.getByText("Secure session")).toBeInTheDocument();
+  });
+
+  it("positions the KPI grid after the daily operational content, under an 'At a Glance' / 'The studio today' section — never directly under the greeting", () => {
+    const { container } = render(
+      <MemberSessionProvider snapshot={ownerSnapshot}>
+        <CopilotProvider>
+          <OwnerDashboardView
+            data={data({ metrics: [{ id: "revenue", label: "Revenue This Month", value: "$12,000", icon: "DollarSign" }] })}
+            branding={branding}
+            profileName="Aline Ferreira"
+            profileRoleLabel="Owner"
+            profileAvatarUrl={null}
+            role="owner"
+            isSupabaseConnected={false}
+          />
+        </CopilotProvider>
+      </MemberSessionProvider>,
+    );
+
+    expect(screen.getByText("At a Glance")).toBeInTheDocument();
+    expect(screen.getByText("The studio today")).toBeInTheDocument();
+
+    const headings = Array.from(container.querySelectorAll("h2")).map((h) => h.textContent);
+    const glanceIndex = headings.indexOf("A little look at today ♡");
+    const studioIndex = headings.indexOf("The studio today");
+    const priorityIndex = headings.indexOf("Today's Priority");
+    expect(studioIndex).toBeGreaterThan(glanceIndex);
+    expect(studioIndex).toBeGreaterThan(priorityIndex);
+  });
+});
+
+describe("OwnerDashboardView — VISUAL-01 revision #2: founder-locked section order (World Clock + Weather return to the top)", () => {
+  it("locks Your Day < World Clock/Weather < My Day < Priority/Upcoming < Timeline/Pulse < At a Glance/KPI grid — must never regress", () => {
+    const { container } = render(
+      <MemberSessionProvider snapshot={ownerSnapshot}>
+        <CopilotProvider>
+          <OwnerDashboardView
+            data={data({ metrics: [{ id: "revenue", label: "Revenue This Month", value: "$12,000", icon: "DollarSign" }] })}
+            branding={branding}
+            profileName="Aline Ferreira"
+            profileRoleLabel="Owner"
+            profileAvatarUrl={null}
+            role="owner"
+            isSupabaseConnected={false}
+          />
+        </CopilotProvider>
+      </MemberSessionProvider>,
+    );
+
+    const text = container.textContent ?? "";
+    const yourDayIndex = text.indexOf("A little look at today ♡");
+    const worldClockIndex = text.indexOf("World Clock");
+    const weatherIndex = text.indexOf("♡ Weather");
+    const myDayIndex = text.indexOf("My Day");
+    const priorityIndex = text.indexOf("Today's Priority");
+    const upcomingIndex = text.indexOf("Upcoming Events");
+    const timelineIndex = text.indexOf("Today's Timeline");
+    const pulseIndex = text.indexOf("Today's Pulse");
+    const glanceIndex = text.indexOf("At a Glance");
+    const studioIndex = text.indexOf("The studio today");
+
+    for (const index of [yourDayIndex, worldClockIndex, weatherIndex, myDayIndex, priorityIndex, upcomingIndex, timelineIndex, pulseIndex, glanceIndex, studioIndex]) {
+      expect(index).toBeGreaterThanOrEqual(0);
+    }
+
+    // Founder correction (VISUAL-01 revision #2): World Clock + Weather were never meant to
+    // move — only the five business KPIs move lower. Clock/Weather's position beneath "Your Day"
+    // is now founder-locked, directly ahead of My Day.
+    expect(worldClockIndex).toBeGreaterThan(yourDayIndex);
+    expect(weatherIndex).toBeGreaterThan(yourDayIndex);
+    expect(myDayIndex).toBeGreaterThan(worldClockIndex);
+    expect(myDayIndex).toBeGreaterThan(weatherIndex);
+    expect(priorityIndex).toBeGreaterThan(myDayIndex);
+    expect(upcomingIndex).toBeGreaterThan(myDayIndex);
+    expect(timelineIndex).toBeGreaterThan(priorityIndex);
+    expect(timelineIndex).toBeGreaterThan(upcomingIndex);
+    expect(pulseIndex).toBeGreaterThan(priorityIndex);
+    expect(glanceIndex).toBeGreaterThan(timelineIndex);
+    expect(glanceIndex).toBeGreaterThan(pulseIndex);
+    expect(studioIndex).toBeGreaterThan(glanceIndex);
   });
 });
