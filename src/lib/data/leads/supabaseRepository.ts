@@ -220,6 +220,7 @@ async function updateLead(id: string, input: LeadFormInput): Promise<DataResult<
     "lead_updated",
     "Lead information updated",
   );
+  dispatchLeadAssigned(updated.workspace_id, id, existing.assigned_to, parsed.data.assigned_to);
 
   return ok(updated);
 }

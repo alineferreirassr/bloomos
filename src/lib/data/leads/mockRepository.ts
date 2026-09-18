@@ -153,6 +153,7 @@ async function updateLead(id: string, input: LeadFormInput): Promise<DataResult<
 
   writeLeads(readLeads().map((l) => (l.id === id ? updated : l)));
   recordTimelineActivity(existing.workspace_id, "lead", id, "lead_updated", "Lead information updated");
+  dispatchLeadAssigned(existing.workspace_id, id, existing.assigned_to, parsed.data.assigned_to);
 
   return ok(updated);
 }

@@ -106,11 +106,84 @@ describe("updateLead", () => {
     if (!created.success) throw new Error("setup failed");
     const converted = await convertLeadToClient(created.data.id);
     expect(converted.success).toBe(true);
+    dispatchMock.mockClear();
 
     const result = await updateLead(created.data.id, { ...validInput, first_name: "Should Not Apply" });
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error).toMatch(/read-only/i);
+    // SOCIAL-19C — the converted-Lead read-only guard already rejects the
+    // whole call before any dispatch could occur, for any field.
+    expect(callsOfType("lead.assigned")).toHaveLength(0);
+  });
+
+  describe("lead.assigned — SOCIAL-19C (full-form edit path)", () => {
+    it("null -> user dispatches exactly once with the correct leadId/previousAssignee/newAssignee", async () => {
+      const created = await createLead(validInput);
+      if (!created.success) throw new Error("setup failed");
+      dispatchMock.mockClear();
+
+      const result = await updateLead(created.data.id, { ...validInput, assigned_to: "Aline Ferreira" });
+      expect(result.success).toBe(true);
+
+      const calls = callsOfType("lead.assigned");
+      expect(calls).toHaveLength(1);
+      expect(calls[0][0]).toEqual(
+        expect.objectContaining({ type: "lead.assigned", workspaceId: created.data.workspace_id, facts: { leadId: created.data.id, previousAssignee: null, newAssignee: "Aline Ferreira" } }),
+      );
+    });
+
+    it("user A -> user B (reassignment) dispatches exactly once with both real values", async () => {
+      const created = await createLead({ ...validInput, assigned_to: "Aline Ferreira" });
+      if (!created.success) throw new Error("setup failed");
+      dispatchMock.mockClear();
+
+      const result = await updateLead(created.data.id, { ...validInput, assigned_to: "Jamie Rivera" });
+      expect(result.success).toBe(true);
+
+      const calls = callsOfType("lead.assigned");
+      expect(calls).toHaveLength(1);
+      expect(calls[0][0]).toEqual(
+        expect.objectContaining({ type: "lead.assigned", workspaceId: created.data.workspace_id, facts: { leadId: created.data.id, previousAssignee: "Aline Ferreira", newAssignee: "Jamie Rivera" } }),
+      );
+    });
+
+    it("user -> null (empty/normalized value) dispatches exactly once with newAssignee null", async () => {
+      const created = await createLead({ ...validInput, assigned_to: "Aline Ferreira" });
+      if (!created.success) throw new Error("setup failed");
+      dispatchMock.mockClear();
+
+      const result = await updateLead(created.data.id, { ...validInput, assigned_to: "" });
+      expect(result.success).toBe(true);
+
+      const calls = callsOfType("lead.assigned");
+      expect(calls).toHaveLength(1);
+      expect(calls[0][0]).toEqual(
+        expect.objectContaining({ type: "lead.assigned", workspaceId: created.data.workspace_id, facts: { leadId: created.data.id, previousAssignee: "Aline Ferreira", newAssignee: null } }),
+      );
+    });
+
+    it("resubmitting the same assignee never dispatches", async () => {
+      const created = await createLead({ ...validInput, assigned_to: "Aline Ferreira" });
+      if (!created.success) throw new Error("setup failed");
+      dispatchMock.mockClear();
+
+      const result = await updateLead(created.data.id, { ...validInput, assigned_to: "Aline Ferreira" });
+      expect(result.success).toBe(true);
+      expect(callsOfType("lead.assigned")).toHaveLength(0);
+    });
+
+    it("editing an unrelated field only, with assigned_to unchanged, never dispatches", async () => {
+      const created = await createLead({ ...validInput, assigned_to: "Aline Ferreira" });
+      if (!created.success) throw new Error("setup failed");
+      dispatchMock.mockClear();
+
+      const result = await updateLead(created.data.id, { ...validInput, assigned_to: "Aline Ferreira", first_name: "Jamie-Updated" });
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.first_name).toBe("Jamie-Updated");
+      expect(callsOfType("lead.assigned")).toHaveLength(0);
+    });
   });
 });
 
