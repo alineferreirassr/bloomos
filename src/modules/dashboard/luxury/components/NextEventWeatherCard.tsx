@@ -11,8 +11,17 @@ const WEATHER_PIN_SIZE = 108;
 const RAIN_CONDITIONS: readonly WeatherCondition[] = ["RAIN", "LIGHT_RAIN_DRIZZLE", "THUNDERSTORM"];
 const CLEAR_CONDITIONS: readonly WeatherCondition[] = ["SUNNY", "PARTLY_CLOUDY", "NIGHT_CLEAR"];
 
-/** A one-line operational read of the forecast, derived only from the condition/precipitation values already on the snapshot — never a fixed per-condition string bank that could drift from what a given day's numbers actually show, and never rendered when neither signal gives a confident read (e.g. plain CLOUDY with no precipitation data). */
-function operationalNote(condition: WeatherCondition, precipitationProbability: number | null): string | null {
+/**
+ * A one-line operational read of the forecast, derived only from the
+ * condition/precipitation values already on the snapshot — never a fixed
+ * per-condition string bank that could drift from what a given day's
+ * numbers actually show, and never rendered when neither signal gives a
+ * confident read (e.g. plain CLOUDY with no precipitation data). Exported
+ * (VISUAL-01 Revision C) so `OwnerWeatherCard` — the Owner-Home-only
+ * refined Weather layout — reuses this exact real-data logic instead of
+ * duplicating it; this card's own rendering is unchanged by the export.
+ */
+export function operationalNote(condition: WeatherCondition, precipitationProbability: number | null): string | null {
   if (RAIN_CONDITIONS.includes(condition) || (precipitationProbability !== null && precipitationProbability >= 50)) {
     return "Rain possible — review outdoor setups.";
   }

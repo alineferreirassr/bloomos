@@ -12,7 +12,6 @@ import { DashboardDateSelector } from "@/modules/dashboard/luxury/components/Das
 import { NotificationButton } from "@/modules/dashboard/luxury/components/NotificationButton";
 import { MessageButton } from "@/modules/dashboard/luxury/components/MessageButton";
 import { ProfileMenu } from "@/modules/dashboard/luxury/components/ProfileMenu";
-import { LuxuryMetricCard } from "@/modules/dashboard/luxury/components/LuxuryMetricCard";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { EventPreviewCard } from "@/modules/dashboard/luxury/components/EventPreviewCard";
@@ -23,7 +22,7 @@ import { RevenueTrendChart } from "@/modules/dashboard/luxury/components/Revenue
 import { RecentMessagesCard } from "@/modules/dashboard/luxury/components/RecentMessagesCard";
 import { TeamActivityCard } from "@/modules/dashboard/luxury/components/TeamActivityCard";
 import { OwnerAIBriefCard } from "@/modules/dashboard/luxury/components/OwnerAIBriefCard";
-import { NextEventWeatherCard } from "@/modules/dashboard/luxury/components/NextEventWeatherCard";
+import { OwnerWeatherCard } from "@/modules/dashboard/luxury/components/OwnerWeatherCard";
 import { WorldClockCard } from "@/modules/dashboard/luxury/components/WorldClockCard";
 import { MyDaySection } from "@/modules/dashboard/luxury/components/MyDaySection";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -50,29 +49,31 @@ interface OwnerDashboardViewProps {
  * refinement) — the Founder's personal daily workspace, not a
  * business-report landing page.
  *
- * VISUAL-01 order (revision #2 — World Clock/Weather founder-locked back
- * to the top): `OwnerHomeHeader` (eyebrow date, greeting, truthful calm
- * sentence, quiet status row — replaces the shared
- * `PersonalizedWelcomeHeader` for Owner only) → "Your Day" eyebrow → World
- * Clock + Weather (unchanged, ~75/25 — this is the one section that was
- * NEVER meant to move; only the five business KPIs move lower) →
- * `MyDaySection` (the shared Founder/Team My Day composition — compact
- * pill-based Mood beside a stacked Water Tracker + Little Reminder,
- * exactly one instance, never duplicated; see that component's own doc
- * comment) → Today's Priority (the single most urgent open item from
- * `data.priorities`, mirroring AF's own `pickTodaysPriority`) beside
+ * VISUAL-01 order (revision B — the operational "At a Glance"/"The studio
+ * today" KPI grid moved off Home entirely, onto Workspace, per the
+ * founder's own Home/Workspace split: Home is the personal + executive
+ * daily experience, Workspace is the operational command center — see
+ * `WorkspaceHomeView.tsx`'s own doc comment): `OwnerHomeHeader` (eyebrow
+ * date, greeting, truthful calm sentence, quiet status row — replaces the
+ * shared `PersonalizedWelcomeHeader` for Owner only) → "Your Day" eyebrow
+ * → World Clock + blush Weather (unchanged position, ~75/25 — see
+ * `.luxury-weather-blush` in globals.css for the founder's soft-pink
+ * treatment) → `MyDaySection` (the shared Founder/Team My Day composition
+ * — compact pill-based Mood beside a stacked Water Tracker + Little
+ * Reminder, exactly one instance, never duplicated; see that component's
+ * own doc comment) → Today's Priority (the single most urgent open item
+ * from `data.priorities`, mirroring AF's own `pickTodaysPriority`) beside
  * Upcoming Events (~40/60) → Today's Timeline (today's own Events, a
  * coarser workspace-wide equivalent of Team's per-member schedule) beside
  * Today's Pulse (Priorities/Today's Events/Proposals Pending — real
  * counts already computed elsewhere on this page, reused rather than
- * recomputed) → "At a Glance"/"The studio today" eyebrow + the five
- * business KPIs (moved down from directly under the greeting, same
- * unmodified `LuxuryMetricCard`, only this page's own grid/section framing
- * changed) → Revenue Overview/Recent Messages/Team Activity → AI
- * Executive Brief. The dashboard Calendar card that used to sit beside
- * Weather remains removed per an earlier Founder correction.
- * Date/Notifications/Messages live in the shell's persistent
- * `LuxuryTopbar`.
+ * recomputed) → Revenue Overview/Recent Messages/Team Activity → AI
+ * Executive Brief. `data.metrics` (the five business KPIs) is still
+ * fetched by `getOwnerDashboardData.ts` — only this page's own rendering
+ * of them was removed; the underlying data capability is untouched. The
+ * dashboard Calendar card that used to sit beside Weather remains removed
+ * per an earlier Founder correction. Date/Notifications/Messages live in
+ * the shell's persistent `LuxuryTopbar`.
  */
 export function OwnerDashboardView({ data, branding, profileName, profileRoleLabel, profileAvatarUrl, role, isSupabaseConnected }: OwnerDashboardViewProps) {
   const router = useRouter();
@@ -130,17 +131,24 @@ export function OwnerDashboardView({ data, branding, profileName, profileRoleLab
         {/*
           VISUAL-01 revision #2 — the founder-locked "first part of Home":
           World Clock + Weather return here, directly below the Your Day
-          heading, ahead of My Day. Only the five business KPIs (below) were
-          ever meant to move lower — Clock/Weather's position is now
-          founder-locked to this spot, its internals untouched (VISUAL-03
-          scope).
+          heading, ahead of My Day. Only the five business KPIs (moved to
+          Workspace in Revision B) were ever meant to move lower —
+          Clock/Weather's position is founder-locked to this spot.
+          Revision C rebalances the column split (was 3/4-1/4, now 3/5-2/5)
+          so Weather has real room to breathe instead of a thin strip, and
+          both get their own scoped token overrides — see
+          `.luxury-worldclock-light`/`.luxury-weather-blush` in globals.css
+          — World Clock/Weather's own shared components stay untouched;
+          Weather itself is now `OwnerWeatherCard`, an Owner-only refined
+          layout (see its own doc comment for why it's a new component
+          rather than a `NextEventWeatherCard` change).
         */}
-        <div className="animate-fade-up stagger-2 grid grid-cols-1 items-start gap-4 lg:grid-cols-4">
-          <div className="lg:col-span-3">
+        <div className="animate-fade-up stagger-2 grid grid-cols-1 items-start gap-5 lg:grid-cols-5">
+          <div className="luxury-worldclock-light lg:col-span-3">
             <WorldClockCard />
           </div>
-          <div className="lg:col-span-1">
-            <NextEventWeatherCard data={data.nextEventWeather} fallback={data.homeWeatherFallback ? { locationLabel: "Honolulu", forecast: data.homeWeatherFallback } : null} />
+          <div className="luxury-weather-blush lg:col-span-2">
+            <OwnerWeatherCard data={data.nextEventWeather} fallback={data.homeWeatherFallback ? { locationLabel: "Honolulu", forecast: data.homeWeatherFallback } : null} />
           </div>
         </div>
 
@@ -171,23 +179,6 @@ export function OwnerDashboardView({ data, branding, profileName, profileRoleLab
         <div className="animate-fade-up stagger-5 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
           <TodaysTimelineCard items={data.todaysTimeline} className="lg:col-span-2" />
           <TodaysPulseCard metrics={data.todaysPulse} />
-        </div>
-
-        {/*
-          VISUAL-01 — the five business KPIs, repositioned below the daily
-          content per the founder's own direction (no longer directly under
-          the greeting). Same LuxuryMetricCard component, unmodified — only
-          this page-scoped wrapper's own section framing/grid/gap changed,
-          never the shared card's own styling.
-        */}
-        <div className="animate-fade-up stagger-6">
-          <p className="text-luxury-metadata font-semibold tracking-wide text-luxury-coral uppercase">At a Glance</p>
-          <h2 className="mt-1 font-luxury-display text-luxury-page font-semibold text-luxury-text">The studio today</h2>
-          <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-5">
-            {data.metrics.map((metric) => (
-              <LuxuryMetricCard key={metric.id} data={metric} />
-            ))}
-          </div>
         </div>
 
         <div className="animate-fade-up stagger-6 grid grid-cols-1 gap-4 lg:grid-cols-3">

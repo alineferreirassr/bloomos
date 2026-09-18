@@ -47,6 +47,7 @@ import type {
   WorkspaceRecommendation,
   WorkspaceWidgetPreference,
 } from "@/types/smartWorkspace";
+import type { OperationalKpiSnapshot } from "@/types/operationsCenter";
 
 /**
  * v2.0 Checkpoint 38, Step 10 — the Smart Workspace Platform's module
@@ -71,6 +72,8 @@ export interface WorkspaceSummary {
   favorites: WorkspaceFavorite[];
   recentItems: WorkspaceRecentItem[];
   health: WorkspaceHealthSummary;
+  /** VISUAL-01 Revision B — the real Operations Center KPI figures, already computed for the `operational_overview` widget's health score below but previously discarded past that one field. Backs the new "At a Glance / The studio today" section. `null` only when the Operations Center evaluation itself failed/is unavailable. */
+  kpis: OperationalKpiSnapshot | null;
   activityDigest: WorkspaceActivityDigest;
   recentActivity: ActivityEntry[];
   recommendations: WorkspaceRecommendation[];
@@ -159,6 +162,7 @@ export async function getWorkspaceSummaryAction(): Promise<WorkspaceActionResult
     favorites,
     recentItems,
     health,
+    kpis: operationsResult.success ? operationsResult.data.kpis : null,
     activityDigest,
     recentActivity: activityEntries.slice(0, 20),
     recommendations,

@@ -383,8 +383,8 @@ describe("OwnerDashboardView — VISUAL-01 founder-locked header + status row", 
     expect(screen.getByText("Secure session")).toBeInTheDocument();
   });
 
-  it("positions the KPI grid after the daily operational content, under an 'At a Glance' / 'The studio today' section — never directly under the greeting", () => {
-    const { container } = render(
+  it("VISUAL-01 Revision B — no longer renders the 'At a Glance' / 'The studio today' operational KPI grid on Home; that section moved to Workspace", () => {
+    render(
       <MemberSessionProvider snapshot={ownerSnapshot}>
         <CopilotProvider>
           <OwnerDashboardView
@@ -400,20 +400,14 @@ describe("OwnerDashboardView — VISUAL-01 founder-locked header + status row", 
       </MemberSessionProvider>,
     );
 
-    expect(screen.getByText("At a Glance")).toBeInTheDocument();
-    expect(screen.getByText("The studio today")).toBeInTheDocument();
-
-    const headings = Array.from(container.querySelectorAll("h2")).map((h) => h.textContent);
-    const glanceIndex = headings.indexOf("A little look at today ♡");
-    const studioIndex = headings.indexOf("The studio today");
-    const priorityIndex = headings.indexOf("Today's Priority");
-    expect(studioIndex).toBeGreaterThan(glanceIndex);
-    expect(studioIndex).toBeGreaterThan(priorityIndex);
+    expect(screen.queryByText("At a Glance")).not.toBeInTheDocument();
+    expect(screen.queryByText("The studio today")).not.toBeInTheDocument();
+    expect(screen.queryByText("Revenue This Month")).not.toBeInTheDocument();
   });
 });
 
 describe("OwnerDashboardView — VISUAL-01 revision #2: founder-locked section order (World Clock + Weather return to the top)", () => {
-  it("locks Your Day < World Clock/Weather < My Day < Priority/Upcoming < Timeline/Pulse < At a Glance/KPI grid — must never regress", () => {
+  it("locks Your Day < World Clock/Weather < My Day < Priority/Upcoming < Timeline/Pulse — must never regress", () => {
     const { container } = render(
       <MemberSessionProvider snapshot={ownerSnapshot}>
         <CopilotProvider>
@@ -439,10 +433,8 @@ describe("OwnerDashboardView — VISUAL-01 revision #2: founder-locked section o
     const upcomingIndex = text.indexOf("Upcoming Events");
     const timelineIndex = text.indexOf("Today's Timeline");
     const pulseIndex = text.indexOf("Today's Pulse");
-    const glanceIndex = text.indexOf("At a Glance");
-    const studioIndex = text.indexOf("The studio today");
 
-    for (const index of [yourDayIndex, worldClockIndex, weatherIndex, myDayIndex, priorityIndex, upcomingIndex, timelineIndex, pulseIndex, glanceIndex, studioIndex]) {
+    for (const index of [yourDayIndex, worldClockIndex, weatherIndex, myDayIndex, priorityIndex, upcomingIndex, timelineIndex, pulseIndex]) {
       expect(index).toBeGreaterThanOrEqual(0);
     }
 
@@ -458,8 +450,9 @@ describe("OwnerDashboardView — VISUAL-01 revision #2: founder-locked section o
     expect(timelineIndex).toBeGreaterThan(priorityIndex);
     expect(timelineIndex).toBeGreaterThan(upcomingIndex);
     expect(pulseIndex).toBeGreaterThan(priorityIndex);
-    expect(glanceIndex).toBeGreaterThan(timelineIndex);
-    expect(glanceIndex).toBeGreaterThan(pulseIndex);
-    expect(studioIndex).toBeGreaterThan(glanceIndex);
+
+    // VISUAL-01 Revision B: the operational KPI grid no longer exists on Home at all.
+    expect(text).not.toContain("At a Glance");
+    expect(text).not.toContain("The studio today");
   });
 });

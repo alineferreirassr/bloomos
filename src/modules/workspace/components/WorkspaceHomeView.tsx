@@ -23,6 +23,8 @@ import { WorkspaceHealthWidget } from "@/modules/workspace/components/widgets/Wo
 import { KnowledgeGraphWidget } from "@/modules/workspace/components/widgets/KnowledgeGraphWidget";
 import { RecommendationsWidget } from "@/modules/workspace/components/widgets/RecommendationsWidget";
 import { ReportsOverviewWidget } from "@/modules/workspace/components/widgets/ReportsOverviewWidget";
+import { StudioTodaySection } from "@/modules/workspace/components/StudioTodaySection";
+import { RecentActivitySection } from "@/modules/workspace/components/RecentActivitySection";
 
 registerDefaultWorkspaceCommands();
 
@@ -35,6 +37,16 @@ registerDefaultWorkspaceCommands();
  * already-real platform action (see each widget's own doc comment for its
  * specific reuse). Favorites, Recent Items, and widget layout itself are
  * the only genuinely new state this checkpoint introduces.
+ *
+ * VISUAL-01 Revision B — Workspace is now the operational command center
+ * half of the founder's Home/Workspace split (Home stays personal +
+ * executive). `StudioTodaySection` ("At a Glance / The studio today", real
+ * Operations Center KPIs) and `RecentActivitySection` (real activity feed,
+ * editorial AF-inspired presentation) are fixed PRIMARY content above the
+ * customizable widget grid — the grid itself, and every existing widget in
+ * it (including the pre-existing `operational_overview`/`activity_feed`
+ * widgets that cover related ground), is untouched and still fully
+ * user-customizable exactly as before.
  */
 export function WorkspaceHomeView() {
   const [summary, setSummary] = useState<WorkspaceSummary | null>(null);
@@ -148,6 +160,20 @@ export function WorkspaceHomeView() {
           </div>
         }
       />
+
+      {/*
+        VISUAL-01 Revision B, Parts C/D — the founder's new PRIMARY
+        Workspace section: real Operations Center KPIs, then real recent
+        activity, both fixed above the existing customizable widget grid
+        (never inside it — this is the page's own new top-level content,
+        not a 14th togglable widget). The grid below is untouched: the
+        `operational_overview` and `activity_feed` widgets a member may
+        already have pinned/reordered there still work exactly as before;
+        this section is additive, not a replacement of that per-member
+        persisted layout.
+      */}
+      {summary.kpis ? <StudioTodaySection kpis={summary.kpis} /> : null}
+      <RecentActivitySection entries={summary.recentActivity} />
 
       {customizing && allHiddenWidgets.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface p-3 text-sm">
