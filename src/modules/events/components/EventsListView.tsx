@@ -1,17 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentType, type SVGProps } from "react";
 import Link from "next/link";
 import { getEvents, getClients, getChecklistByEventId, getEventNextAction } from "@/lib/data";
 import { getDataPersistenceMessage } from "@/lib/dataModeCopy";
 import type { Event } from "@/types/event";
 import type { Client } from "@/types/client";
 import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { KpiCard } from "@/components/ui/KpiCard";
 import { ModuleInsightCard } from "@/components/ui/ModuleInsightCard";
 import { EventsIcon, PipelineIcon, AutomationIcon, CheckIcon } from "@/components/ui/icons";
 import { EventFilters, type EventFiltersValue } from "@/modules/events/components/EventFilters";
@@ -28,6 +28,32 @@ export interface EventListRow {
   checklistCompleted: number;
   checklistTotal: number;
   nextAction: string | null;
+}
+
+interface EventStatProps {
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  tint: string;
+  value: string;
+  label: string;
+}
+
+/** GLOBAL-VISUAL-02C.1 — one stat block within a single "Event Overview"
+ * card, instead of four disconnected KPI cards. */
+function EventStat({ icon: Icon, tint, value, label }: EventStatProps) {
+  return (
+    <div className="flex items-center gap-3 py-4 first:pt-0 last:pb-0 sm:px-5 sm:py-1 sm:first:pl-0 sm:last:pr-0">
+      <span
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+        style={{ backgroundColor: `color-mix(in srgb, ${tint} 16%, var(--color-surface))` }}
+      >
+        <Icon className="h-[18px] w-[18px]" style={{ color: tint }} aria-hidden="true" />
+      </span>
+      <div className="min-w-0">
+        <p className="font-serif text-[1.375rem] leading-none font-semibold text-text tabular-nums">{value}</p>
+        <p className="mt-1 text-xs text-text-muted">{label}</p>
+      </div>
+    </div>
+  );
 }
 
 function buildEventsInsight(rows: EventListRow[]): string | null {
@@ -176,21 +202,19 @@ export function EventsListView() {
         }
       />
 
-      {/* GLOBAL-VISUAL-02B pilot — Total/Upcoming (what's ahead) lead at full
-          size; In Progress/Completed (status, more historical) render
-          compact, so four real metrics read with hierarchy instead of one
-          equal-weight row. Same four metrics, same values — presentation only. */}
+      {/* GLOBAL-VISUAL-02C.1 — the four real metrics now live as one composed
+          "Event Overview" card instead of four disconnected KPI cards (the
+          prior primary/compact split read as too subtle). Same four values,
+          same data — presentation only. */}
       {kpis ? (
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-4 sm:max-w-md">
-            <KpiCard icon={EventsIcon} label="Total Events" value={kpis.total.toLocaleString()} tint="var(--color-accent)" />
-            <KpiCard icon={PipelineIcon} label="Upcoming" value={kpis.upcoming.toLocaleString()} tint="var(--color-accent-2)" />
+        <Card>
+          <div className="grid grid-cols-2 divide-y divide-border/50 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+            <EventStat icon={EventsIcon} tint="var(--color-accent)" value={kpis.total.toLocaleString()} label="Total Events" />
+            <EventStat icon={PipelineIcon} tint="var(--color-accent-2)" value={kpis.upcoming.toLocaleString()} label="Upcoming" />
+            <EventStat icon={AutomationIcon} tint="var(--color-warning)" value={kpis.inProgress.toLocaleString()} label="In Progress" />
+            <EventStat icon={CheckIcon} tint="var(--color-success)" value={kpis.completed.toLocaleString()} label="Completed" />
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:max-w-md">
-            <KpiCard icon={AutomationIcon} label="In Progress" value={kpis.inProgress.toLocaleString()} tint="var(--color-warning)" compact />
-            <KpiCard icon={CheckIcon} label="Completed" value={kpis.completed.toLocaleString()} tint="var(--color-success)" compact />
-          </div>
-        </div>
+        </Card>
       ) : null}
 
       {insight ? <ModuleInsightCard tone="warning" insight={insight} /> : null}

@@ -191,9 +191,11 @@ describe("FinanceDashboardView", () => {
 
     expect(await screen.findByText(/no invoices yet/i)).toBeInTheDocument();
     expect(screen.getByText(/no payments yet/i)).toBeInTheDocument();
-    expect(screen.getByText(/no overdue invoices/i)).toBeInTheDocument();
-    expect(screen.getByText(/no unpaid expenses/i)).toBeInTheDocument();
-    expect(screen.getByText(/no events currently have an outstanding balance/i)).toBeInTheDocument();
+    // GLOBAL-VISUAL-02C.1 — Overdue Invoices/Unpaid Expenses/Events With
+    // Outstanding Balances no longer render three separate "No X" messages
+    // in three separate boxes; the "Attention" card collapses to one calm
+    // line when all three are empty.
+    expect(screen.getByText(/nothing needs attention right now/i)).toBeInTheDocument();
     expect(await screen.findByText(/no journal entries yet/i)).toBeInTheDocument();
     expect(screen.getByText(/no open period/i)).toBeInTheDocument();
   });

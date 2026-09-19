@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { CheckCircle2 } from "lucide-react";
 import { getClients } from "@/lib/data";
 import {
   getFinanceDashboardDataAction,
@@ -308,171 +309,189 @@ export function FinanceDashboardView() {
         </div>
       ) : null}
 
+      {/* GLOBAL-VISUAL-02C.1 — five equal-weight boxes (Recent Invoices/Recent
+          Payments/Overdue Invoices/Unpaid Expenses/Events With Outstanding
+          Balances) regrouped into two: "Recent Activity" (routine, what
+          happened) and "Attention" (exceptions, what needs a look), each one
+          composed card with labeled subsections instead of five independent
+          bordered rectangles. Same data, same links, same badges, same rows —
+          only the outer grouping changed. Attention collapses to one calm
+          line when every one of its three lists is empty, instead of three
+          separate "No X" boxes. */}
       <div>
         <SectionHeader title="Overview" />
         <div className="animate-fade-up stagger-2 grid grid-cols-1 gap-6 lg:grid-cols-2">
           <LuxuryCard>
-            <div className="flex items-center justify-between">
-              <h3 className="font-serif text-[17px] font-semibold text-text">Recent Invoices</h3>
-              <Link href="/finance/invoices" className="text-xs text-accent hover:underline">
-                View all
-              </Link>
+            <p className="text-[11px] font-semibold tracking-wide text-text-muted uppercase">Recent Activity</p>
+            <div className="mt-3 space-y-5">
+              <div>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-serif text-[15px] font-semibold text-text">Invoices</h3>
+                  <Link href="/finance/invoices" className="text-xs text-accent hover:underline">
+                    View all
+                  </Link>
+                </div>
+                {recentInvoices.length === 0 ? (
+                  <p className="mt-2 text-sm text-text-muted">No invoices yet.</p>
+                ) : (
+                  <ul className="mt-2 divide-y divide-border/50">
+                    {recentInvoices.map((invoice) => (
+                      <li key={invoice.id}>
+                        <Link
+                          href={`/finance/invoices/${invoice.id}`}
+                          className="flex items-center justify-between gap-3 rounded-md px-1 py-2 transition-colors duration-150 hover:bg-accent/5"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-text">{invoice.invoice_number}</p>
+                            <p className="mt-0.5 text-xs text-text-muted">{clientName(clientsById, invoice.client_id)}</p>
+                          </div>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            <span className="text-sm text-text">{money(invoice.total_minor, invoice.currency)}</span>
+                            <InvoiceStatusBadge status={invoice.status} />
+                          </div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-serif text-[15px] font-semibold text-text">Payments</h3>
+                  <Link href="/finance/payments" className="text-xs text-accent hover:underline">
+                    View all
+                  </Link>
+                </div>
+                {recentPayments.length === 0 ? (
+                  <p className="mt-2 text-sm text-text-muted">No payments yet.</p>
+                ) : (
+                  <ul className="mt-2 divide-y divide-border/50">
+                    {recentPayments.map((payment) => (
+                      <li key={payment.id}>
+                        <Link
+                          href={`/finance/payments/${payment.id}`}
+                          className="flex items-center justify-between gap-3 rounded-md px-1 py-2 transition-colors duration-150 hover:bg-accent/5"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-text">
+                              {clientName(clientsById, payment.client_id)}
+                            </p>
+                            <p className="mt-0.5 text-xs text-text-muted">{formatEventDate(payment.transaction_date)}</p>
+                          </div>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            <span className="text-sm text-text">{money(payment.amount_minor, payment.currency)}</span>
+                            <PaymentStatusBadge status={payment.status} />
+                          </div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
-            {recentInvoices.length === 0 ? (
-              <p className="mt-3 text-sm text-text-muted">No invoices yet.</p>
-            ) : (
-              <ul className="mt-3 space-y-2">
-                {recentInvoices.map((invoice) => (
-                  <li key={invoice.id}>
-                    <Link
-                      href={`/finance/invoices/${invoice.id}`}
-                      className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 hover:border-accent/50"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-text">{invoice.invoice_number}</p>
-                        <p className="mt-0.5 text-xs text-text-muted">{clientName(clientsById, invoice.client_id)}</p>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1">
-                        <span className="text-sm text-text">{money(invoice.total_minor, invoice.currency)}</span>
-                        <InvoiceStatusBadge status={invoice.status} />
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
           </LuxuryCard>
 
           <LuxuryCard>
-            <div className="flex items-center justify-between">
-              <h3 className="font-serif text-[17px] font-semibold text-text">Recent Payments</h3>
-              <Link href="/finance/payments" className="text-xs text-accent hover:underline">
-                View all
-              </Link>
-            </div>
-            {recentPayments.length === 0 ? (
-              <p className="mt-3 text-sm text-text-muted">No payments yet.</p>
+            <p className="text-[11px] font-semibold tracking-wide text-text-muted uppercase">Attention</p>
+            {overdueInvoices.length === 0 && unpaidExpenses.length === 0 && eventsWithOutstandingBalance.length === 0 ? (
+              <div className="mt-3 flex items-center gap-2 text-sm text-text-muted">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-hidden="true" />
+                Nothing needs attention right now.
+              </div>
             ) : (
-              <ul className="mt-3 space-y-2">
-                {recentPayments.map((payment) => (
-                  <li key={payment.id}>
-                    <Link
-                      href={`/finance/payments/${payment.id}`}
-                      className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 hover:border-accent/50"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-text">
-                          {clientName(clientsById, payment.client_id)}
-                        </p>
-                        <p className="mt-0.5 text-xs text-text-muted">{formatEventDate(payment.transaction_date)}</p>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1">
-                        <span className="text-sm text-text">{money(payment.amount_minor, payment.currency)}</span>
-                        <PaymentStatusBadge status={payment.status} />
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </LuxuryCard>
+              <div className="mt-3 space-y-5">
+                {overdueInvoices.length > 0 ? (
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-serif text-[15px] font-semibold text-text">Overdue Invoices</h3>
+                      <Link href="/finance/invoices" className="text-xs text-accent hover:underline">
+                        View all
+                      </Link>
+                    </div>
+                    <ul className="mt-2 divide-y divide-border/50">
+                      {overdueInvoices.map((invoice) => (
+                        <li key={invoice.id}>
+                          <Link
+                            href={`/finance/invoices/${invoice.id}`}
+                            className="flex items-center justify-between gap-3 rounded-md px-1 py-2 transition-colors duration-150 hover:bg-accent/5"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-text">{invoice.invoice_number}</p>
+                              <p className="mt-0.5 text-xs text-text-muted">
+                                {clientName(clientsById, invoice.client_id)} · Due {formatEventDate(invoice.due_date)}
+                              </p>
+                            </div>
+                            <span className="shrink-0 text-sm text-danger">
+                              {money(invoice.balance_minor, invoice.currency)}
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
 
-          <LuxuryCard>
-            <div className="flex items-center justify-between">
-              <h3 className="font-serif text-[17px] font-semibold text-text">Overdue Invoices</h3>
-              <Link href="/finance/invoices" className="text-xs text-accent hover:underline">
-                View all
-              </Link>
-            </div>
-            {overdueInvoices.length === 0 ? (
-              <p className="mt-3 text-sm text-text-muted">No overdue invoices.</p>
-            ) : (
-              <ul className="mt-3 space-y-2">
-                {overdueInvoices.map((invoice) => (
-                  <li key={invoice.id}>
-                    <Link
-                      href={`/finance/invoices/${invoice.id}`}
-                      className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 hover:border-accent/50"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-text">{invoice.invoice_number}</p>
-                        <p className="mt-0.5 text-xs text-text-muted">
-                          {clientName(clientsById, invoice.client_id)} · Due {formatEventDate(invoice.due_date)}
-                        </p>
-                      </div>
-                      <span className="shrink-0 text-sm text-danger">
-                        {money(invoice.balance_minor, invoice.currency)}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </LuxuryCard>
+                {unpaidExpenses.length > 0 ? (
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-serif text-[15px] font-semibold text-text">Unpaid Expenses</h3>
+                      <Link href="/finance/expenses" className="text-xs text-accent hover:underline">
+                        View all
+                      </Link>
+                    </div>
+                    <ul className="mt-2 divide-y divide-border/50">
+                      {unpaidExpenses.map((expense) => (
+                        <li key={expense.id}>
+                          <Link
+                            href={`/finance/expenses/${expense.id}`}
+                            className="flex items-center justify-between gap-3 rounded-md px-1 py-2 transition-colors duration-150 hover:bg-accent/5"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-text">{expense.description}</p>
+                              <p className="mt-0.5 text-xs text-text-muted">Due {formatEventDate(expense.due_date)}</p>
+                            </div>
+                            <div className="flex shrink-0 flex-col items-end gap-1">
+                              <span className="text-sm text-text">{money(expense.amount_minor, expense.currency)}</span>
+                              <ExpenseStatusBadge status={expense.status} />
+                            </div>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
 
-          <LuxuryCard>
-            <div className="flex items-center justify-between">
-              <h3 className="font-serif text-[17px] font-semibold text-text">Unpaid Expenses</h3>
-              <Link href="/finance/expenses" className="text-xs text-accent hover:underline">
-                View all
-              </Link>
-            </div>
-            {unpaidExpenses.length === 0 ? (
-              <p className="mt-3 text-sm text-text-muted">No unpaid expenses.</p>
-            ) : (
-              <ul className="mt-3 space-y-2">
-                {unpaidExpenses.map((expense) => (
-                  <li key={expense.id}>
-                    <Link
-                      href={`/finance/expenses/${expense.id}`}
-                      className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 hover:border-accent/50"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-text">{expense.description}</p>
-                        <p className="mt-0.5 text-xs text-text-muted">
-                          Due {formatEventDate(expense.due_date)}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1">
-                        <span className="text-sm text-text">{money(expense.amount_minor, expense.currency)}</span>
-                        <ExpenseStatusBadge status={expense.status} />
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </LuxuryCard>
-
-          <LuxuryCard className="lg:col-span-2">
-            <div className="flex items-center justify-between">
-              <h3 className="font-serif text-[17px] font-semibold text-text">Events With Outstanding Balances</h3>
-              <Link href="/events" className="text-xs text-accent hover:underline">
-                View all
-              </Link>
-            </div>
-            {eventsWithOutstandingBalance.length === 0 ? (
-              <p className="mt-3 text-sm text-text-muted">No events currently have an outstanding balance.</p>
-            ) : (
-              <ul className="mt-3 space-y-2">
-                {eventsWithOutstandingBalance.map(({ event, outstandingMinor, status }) => (
-                  <li key={event.id}>
-                    <Link
-                      href={`/events/${event.id}`}
-                      className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 hover:border-accent/50"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-text">{event.title}</p>
-                        <p className="mt-0.5 text-xs text-text-muted">{formatEventDate(event.event_date)}</p>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1">
-                        <span className="text-sm text-text">{money(outstandingMinor)}</span>
-                        <EventFinancialStatusBadge status={status} />
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+                {eventsWithOutstandingBalance.length > 0 ? (
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-serif text-[15px] font-semibold text-text">Events With Outstanding Balances</h3>
+                      <Link href="/events" className="text-xs text-accent hover:underline">
+                        View all
+                      </Link>
+                    </div>
+                    <ul className="mt-2 divide-y divide-border/50">
+                      {eventsWithOutstandingBalance.map(({ event, outstandingMinor, status }) => (
+                        <li key={event.id}>
+                          <Link
+                            href={`/events/${event.id}`}
+                            className="flex items-center justify-between gap-3 rounded-md px-1 py-2 transition-colors duration-150 hover:bg-accent/5"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-text">{event.title}</p>
+                              <p className="mt-0.5 text-xs text-text-muted">{formatEventDate(event.event_date)}</p>
+                            </div>
+                            <div className="flex shrink-0 flex-col items-end gap-1">
+                              <span className="text-sm text-text">{money(outstandingMinor)}</span>
+                              <EventFinancialStatusBadge status={status} />
+                            </div>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
             )}
           </LuxuryCard>
         </div>

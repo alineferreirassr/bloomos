@@ -51,6 +51,7 @@ describe("EventFilters", () => {
     const onChange = vi.fn();
     render(<EventFilters value={baseValue} onChange={onChange} />);
 
+    await user.click(screen.getByRole("button", { name: /more filters/i }));
     await user.selectOptions(screen.getByLabelText(/filter by event type/i), "proposal");
 
     expect(onChange).toHaveBeenCalledWith({ ...baseValue, eventType: "proposal" });
@@ -61,15 +62,18 @@ describe("EventFilters", () => {
     const onChange = vi.fn();
     render(<EventFilters value={baseValue} onChange={onChange} />);
 
+    await user.click(screen.getByRole("button", { name: /more filters/i }));
     await user.selectOptions(screen.getByLabelText(/filter by priority/i), "critical");
 
     expect(onChange).toHaveBeenCalledWith({ ...baseValue, priority: "critical" });
   });
 
-  it("calls onChange with the selected date range", () => {
+  it("calls onChange with the selected date range", async () => {
+    const user = userEvent.setup();
     const onChange = vi.fn();
     render(<EventFilters value={baseValue} onChange={onChange} />);
 
+    await user.click(screen.getByRole("button", { name: /more filters/i }));
     fireEvent.change(screen.getByLabelText(/from date/i), { target: { value: "2026-08-01" } });
 
     expect(onChange).toHaveBeenCalledWith({ ...baseValue, dateFrom: "2026-08-01" });
@@ -80,6 +84,7 @@ describe("EventFilters", () => {
     const onChange = vi.fn();
     render(<EventFilters value={baseValue} onChange={onChange} />);
 
+    await user.click(screen.getByRole("button", { name: /more filters/i }));
     await user.click(screen.getByLabelText(/show archived events/i));
 
     expect(onChange).toHaveBeenCalledWith({ ...baseValue, includeArchived: true });
@@ -90,8 +95,17 @@ describe("EventFilters", () => {
     const onChange = vi.fn();
     render(<EventFilters value={baseValue} onChange={onChange} />);
 
+    await user.click(screen.getByRole("button", { name: /more filters/i }));
     await user.selectOptions(screen.getByLabelText(/sort by event date/i), "desc");
 
     expect(onChange).toHaveBeenCalledWith({ ...baseValue, sortDirection: "desc" });
+  });
+
+  it("opens the disclosure automatically when a secondary filter is already active", () => {
+    const onChange = vi.fn();
+    render(<EventFilters value={{ ...baseValue, priority: "critical" }} onChange={onChange} />);
+
+    expect(screen.getByLabelText(/filter by priority/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /fewer filters/i })).toBeInTheDocument();
   });
 });

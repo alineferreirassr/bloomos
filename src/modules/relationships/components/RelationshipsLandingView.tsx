@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type ReactNode, type SVGProps } from "react";
 import Link from "next/link";
+import { TrendingUp, Users, FileSignature, Mail, CheckCircle2 } from "lucide-react";
 import { getLeads, getClients, getContracts, getClientInvitations } from "@/lib/data";
 import type { Lead } from "@/types/lead";
 import type { Client } from "@/types/client";
@@ -12,9 +13,8 @@ import { getFullName } from "@/lib/personName";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
-import { LuxuryMetricCard, type LuxuryMetricCardData } from "@/modules/dashboard/luxury/components/LuxuryMetricCard";
+import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { LeadStatusBadge } from "@/modules/leads/components/LeadStatusBadge";
 import { ContractStatusBadge } from "@/modules/contracts/components/ContractStatusBadge";
@@ -43,6 +43,32 @@ const AWAITING_SIGNATURE_CONTRACT_STATUSES = new Set(["sent", "viewed"]);
 
 function formatMoney(amount: number): string {
   return `$${amount.toLocaleString()}`;
+}
+
+interface SnapshotStatProps {
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  tint: string;
+  value: string;
+  label: string;
+}
+
+/** GLOBAL-VISUAL-02C.1 — one stat block within the single "Relationship
+ * Snapshot" card, instead of three disconnected full cards. */
+function SnapshotStat({ icon: Icon, tint, value, label }: SnapshotStatProps) {
+  return (
+    <div className="flex items-center gap-3 py-4 first:pt-0 last:pb-0 sm:px-5 sm:py-1 sm:first:pl-0 sm:last:pr-0">
+      <span
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+        style={{ backgroundColor: `color-mix(in srgb, ${tint} 16%, var(--luxury-surface))` }}
+      >
+        <Icon className="h-[18px] w-[18px]" style={{ color: tint }} aria-hidden="true" />
+      </span>
+      <div className="min-w-0">
+        <p className="font-luxury-display text-[1.375rem] leading-none font-semibold text-luxury-text tabular-nums">{value}</p>
+        <p className="mt-1 text-luxury-small text-luxury-text-muted">{label}</p>
+      </div>
+    </div>
+  );
 }
 
 
@@ -151,11 +177,7 @@ export function RelationshipsLandingView() {
     return (
       <div className="space-y-8">
         <Skeleton className="h-16 w-full" />
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, index) => (
-            <Skeleton key={index} className="h-24 w-full" />
-          ))}
-        </div>
+        <Skeleton className="h-24 w-full" />
         <Skeleton className="h-64 w-full" />
       </div>
     );
@@ -164,23 +186,6 @@ export function RelationshipsLandingView() {
   if (state.status === "error" || !summary) {
     return <ErrorState onRetry={load} />;
   }
-
-  /**
-   * GLOBAL-VISUAL-02B pilot — primary (the headline pipeline figure plus the
-   * two core relationship counts) at full size; supporting (more procedural
-   * figures) rendered compact, so five real metrics read with hierarchy
-   * instead of one equal-weight wall of cards. Same five metrics, same
-   * values, same hrefs-none-changed — presentation only.
-   */
-  const primaryMetrics: LuxuryMetricCardData[] = [
-    { id: "active-pipeline-value", label: "Active Pipeline Value", value: formatMoney(summary.pipelineValue), icon: "Revenue", tint: "var(--luxury-rose)" },
-    { id: "active-leads", label: "Active Leads", value: String(summary.activeLeads.length), icon: "Users", tint: "var(--luxury-coral)" },
-    { id: "active-clients", label: "Active Clients", value: String(summary.activeClients.length), icon: "Users", tint: "var(--luxury-success)" },
-  ];
-  const supportingMetrics: LuxuryMetricCardData[] = [
-    { id: "contracts-in-progress", label: "Contracts In Progress", value: String(summary.contractsInProgress.length), icon: "Document", tint: "var(--luxury-coral)" },
-    { id: "pending-invitations", label: "Pending Invitations", value: String(summary.pendingInvitations.length), icon: "Mail", tint: "var(--luxury-warning)" },
-  ];
 
   return (
     <div className="space-y-8">
@@ -191,26 +196,40 @@ export function RelationshipsLandingView() {
         subtitle="The people and conversations that need your attention."
       />
 
+      {/* GLOBAL-VISUAL-02C.1 — the three core relationship figures (pipeline
+          value, active leads, active clients) now live as one composed
+          "Relationship Snapshot" card instead of three disconnected full-size
+          cards; the two more procedural figures (contracts in progress,
+          pending invitations) sit below as a single quiet inline stat row,
+          not two more cards. Same five real metrics, same values — only the
+          outer composition changed. */}
       <div className="space-y-3">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {primaryMetrics.map((metric) => (
-            <LuxuryMetricCard key={metric.id} data={metric} />
-          ))}
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:max-w-md">
-          {supportingMetrics.map((metric) => (
-            <LuxuryMetricCard key={metric.id} data={metric} compact />
-          ))}
+        <LuxuryCard>
+          <div className="grid grid-cols-1 divide-y divide-border/50 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            <SnapshotStat icon={TrendingUp} tint="var(--luxury-rose)" value={formatMoney(summary.pipelineValue)} label="Active Pipeline Value" />
+            <SnapshotStat icon={Users} tint="var(--luxury-coral)" value={String(summary.activeLeads.length)} label="Active Leads" />
+            <SnapshotStat icon={Users} tint="var(--luxury-success)" value={String(summary.activeClients.length)} label="Active Clients" />
+          </div>
+        </LuxuryCard>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 px-1 text-luxury-small text-luxury-text-muted">
+          <span className="flex items-center gap-1.5">
+            <FileSignature className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--luxury-coral)" }} aria-hidden="true" />
+            Contracts In Progress <strong className="font-semibold text-luxury-text">{summary.contractsInProgress.length}</strong>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Mail className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--luxury-warning)" }} aria-hidden="true" />
+            Pending Invitations <strong className="font-semibold text-luxury-text">{summary.pendingInvitations.length}</strong>
+          </span>
         </div>
       </div>
 
       <div>
         <SectionHeader title="Needs your attention" />
         {attention.length === 0 ? (
-          <EmptyState
-            title="All caught up"
-            description="Nothing in Leads, Contracts, or Invitations needs action right now."
-          />
+          <div className="flex items-center gap-2 rounded-2xl border border-border/40 bg-surface-tint px-5 py-3.5 text-sm text-text-muted">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-hidden="true" />
+            All caught up — nothing in Leads, Contracts, or Invitations needs action right now.
+          </div>
         ) : (
           <div className="overflow-hidden rounded-2xl bg-surface shadow-luxury-sm">
             <ul className="divide-y divide-border/60">
