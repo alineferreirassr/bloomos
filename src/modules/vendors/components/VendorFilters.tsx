@@ -36,7 +36,7 @@ interface VendorFiltersProps {
 
 export function VendorFilters({ value, onChange }: VendorFiltersProps) {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+    <div className="grid grid-cols-1 gap-3 rounded-2xl border border-border/50 bg-surface/70 p-5 sm:grid-cols-2 lg:grid-cols-6">
       <Input
         placeholder="Search company, contact, email, phone, tax ID…"
         value={value.search}

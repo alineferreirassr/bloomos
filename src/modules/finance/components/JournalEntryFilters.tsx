@@ -26,7 +26,7 @@ interface JournalEntryFiltersProps {
 
 export function JournalEntryFilters({ value, onChange }: JournalEntryFiltersProps) {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-3 rounded-2xl border border-border/50 bg-surface/70 p-5 sm:grid-cols-2 lg:grid-cols-4">
       <Input
         type="date"
         aria-label="Date from"

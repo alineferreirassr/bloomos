@@ -22,7 +22,7 @@ interface GeneralLedgerFiltersProps {
 /** source_type is free-form (see JournalEntry's own doc comment), matching JournalEntryFilters' identical text-input treatment. */
 export function GeneralLedgerFilters({ value, onChange, accounts }: GeneralLedgerFiltersProps) {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+    <div className="grid grid-cols-1 gap-3 rounded-2xl border border-border/50 bg-surface/70 p-5 sm:grid-cols-2 lg:grid-cols-5">
       <Input
         type="date"
         aria-label="Start date"

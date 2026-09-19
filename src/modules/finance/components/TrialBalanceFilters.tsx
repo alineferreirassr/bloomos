@@ -15,7 +15,7 @@ interface TrialBalanceFiltersProps {
 
 export function TrialBalanceFilters({ value, onChange }: TrialBalanceFiltersProps) {
   return (
-    <div className="flex flex-wrap items-end gap-4">
+    <div className="flex flex-wrap items-end gap-4 rounded-2xl border border-border/50 bg-surface/70 p-5">
       <div className="max-w-xs">
         <Input
           type="date"

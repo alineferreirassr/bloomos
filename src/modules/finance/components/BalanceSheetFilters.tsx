@@ -13,7 +13,7 @@ interface BalanceSheetFiltersProps {
 
 export function BalanceSheetFilters({ value, onChange }: BalanceSheetFiltersProps) {
   return (
-    <div className="max-w-xs">
+    <div className="max-w-xs rounded-2xl border border-border/50 bg-surface/70 p-5">
       <Input
         type="date"
         aria-label="As-of date"

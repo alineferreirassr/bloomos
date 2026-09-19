@@ -190,41 +190,41 @@ export function FinanceDashboardView() {
   /** `null` means the server redacted this figure for the current session's permissions (see `financeActions.ts`) — rendered as "—", never as $0.00. */
   const money = (minor: number | null, currency = "USD") => (minor === null ? "—" : formatMoney(minor, currency));
 
-  const metricCards = [
-    { label: "Total Invoiced", value: money(metrics.totalInvoicedMinor), href: "/finance/invoices" },
-    { label: "Total Collected", value: money(metrics.totalCollectedMinor), href: "/finance/payments" },
-    {
-      label: "Outstanding Receivables",
-      value: money(metrics.outstandingReceivablesMinor),
-      href: "/finance/invoices",
-    },
-    {
-      label: "Overdue Receivables",
-      value: money(metrics.overdueReceivablesMinor),
-      href: "/finance/invoices",
-    },
-    { label: "Deposits Pending", value: money(metrics.depositsPendingMinor), href: "/finance/invoices" },
-    {
-      label: "Expenses This Month",
-      value: money(metrics.expensesThisMonthMinor),
-      href: "/finance/expenses",
-    },
+  /**
+   * GLOBAL-VISUAL-02B — the same 13 real metrics `getFinanceDashboardDataAction`
+   * already computed, presentationally regrouped by existing semantics
+   * (profitability leads, since that's the headline figure; then revenue/
+   * receivables, expenses, event payment status, attribution) instead of one
+   * flat 13-tile grid with no hierarchy. No metric added, removed, renamed,
+   * or recalculated — every href/value is identical to before.
+   */
+  const profitabilityMetrics = [
     { label: "Gross Profit", value: money(metrics.grossProfitMinor), href: "/finance" },
     { label: "Net Profit", value: money(metrics.netProfitMinor), href: "/finance" },
-    {
-      label: "Refunds This Month",
-      value: money(metrics.refundsThisMonthMinor),
-      href: "/finance/payments",
-    },
-    // SOCIAL-15D — Instagram-content-attributed revenue only (never total
-    // company revenue, and never implying engagement "caused" the
-    // revenue — this is stored attribution, all-time). Label explicitly
-    // names the channel per this checkpoint's own "never make attributed
-    // revenue look like total revenue" instruction.
-    { label: "Instagram-attributed Revenue", value: money(metrics.attributedPaidRevenueMinor), href: "/social-strategist" },
+  ];
+  const receivablesMetrics = [
+    { label: "Total Invoiced", value: money(metrics.totalInvoicedMinor), href: "/finance/invoices" },
+    { label: "Total Collected", value: money(metrics.totalCollectedMinor), href: "/finance/payments" },
+    { label: "Outstanding Receivables", value: money(metrics.outstandingReceivablesMinor), href: "/finance/invoices" },
+    { label: "Overdue Receivables", value: money(metrics.overdueReceivablesMinor), href: "/finance/invoices" },
+    { label: "Deposits Pending", value: money(metrics.depositsPendingMinor), href: "/finance/invoices" },
+  ];
+  const expenseMetrics = [
+    { label: "Expenses This Month", value: money(metrics.expensesThisMonthMinor), href: "/finance/expenses" },
     { label: "Unpaid Expenses", value: String(metrics.unpaidExpensesCount), href: "/finance/expenses" },
+    { label: "Refunds This Month", value: money(metrics.refundsThisMonthMinor), href: "/finance/payments" },
+  ];
+  const eventStatusMetrics = [
     { label: "Events Awaiting Deposit", value: String(metrics.eventsAwaitingDepositCount), href: "/events" },
     { label: "Events Paid in Full", value: String(metrics.eventsPaidInFullCount), href: "/events" },
+  ];
+  // SOCIAL-15D — Instagram-content-attributed revenue only (never total
+  // company revenue, and never implying engagement "caused" the revenue —
+  // this is stored attribution, all-time). Label explicitly names the
+  // channel per this checkpoint's own "never make attributed revenue look
+  // like total revenue" instruction.
+  const attributionMetrics = [
+    { label: "Instagram-attributed Revenue", value: money(metrics.attributedPaidRevenueMinor), href: "/social-strategist" },
   ];
 
   return (
@@ -236,10 +236,52 @@ export function FinanceDashboardView() {
 
       <FinanceLedgerNav />
 
-      <div className="animate-fade-up grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {metricCards.map((metric) => (
-          <MetricCard key={metric.label} {...metric} />
-        ))}
+      <div className="animate-fade-up space-y-6">
+        <div>
+          <p className="mb-2 text-[11px] font-semibold tracking-wide text-accent uppercase">Profitability</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {profitabilityMetrics.map((metric) => (
+              <MetricCard key={metric.label} {...metric} />
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-[11px] font-semibold tracking-wide text-text-muted uppercase">Revenue &amp; Receivables</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {receivablesMetrics.map((metric) => (
+              <MetricCard key={metric.label} {...metric} />
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-[11px] font-semibold tracking-wide text-text-muted uppercase">Expenses</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {expenseMetrics.map((metric) => (
+              <MetricCard key={metric.label} {...metric} />
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <div>
+            <p className="mb-2 text-[11px] font-semibold tracking-wide text-text-muted uppercase">Event Payment Status</p>
+            <div className="grid grid-cols-2 gap-4">
+              {eventStatusMetrics.map((metric) => (
+                <MetricCard key={metric.label} {...metric} />
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-[11px] font-semibold tracking-wide text-text-muted uppercase">Attribution</p>
+            <div className="grid grid-cols-1 gap-4">
+              {attributionMetrics.map((metric) => (
+                <MetricCard key={metric.label} {...metric} />
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       <PaymentForecastCard />

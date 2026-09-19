@@ -18,7 +18,7 @@ interface ProfitAndLossFiltersProps {
 
 export function ProfitAndLossFilters({ value, onChange }: ProfitAndLossFiltersProps) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 rounded-2xl border border-border/50 bg-surface/70 p-5">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Input
           type="date"

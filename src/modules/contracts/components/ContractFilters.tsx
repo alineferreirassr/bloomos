@@ -50,7 +50,7 @@ interface ContractFiltersProps {
 /* Relationships/CRM visual pass — quiet tinted surface, matches Leads/Clients. */
 export function ContractFilters({ value, onChange }: ContractFiltersProps) {
   return (
-    <div className="space-y-3 rounded-2xl bg-surface/70 p-4">
+    <div className="space-y-3 rounded-2xl border border-border/50 bg-surface/70 p-5">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Input
           placeholder="Search number, title, client, event…"

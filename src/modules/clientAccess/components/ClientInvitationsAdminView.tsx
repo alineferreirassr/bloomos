@@ -135,7 +135,7 @@ export function ClientInvitationsAdminView() {
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-3 rounded-2xl bg-surface/70 p-4">
+      <div className="flex flex-wrap gap-3 rounded-2xl border border-border/50 bg-surface/70 p-5">
         <input
           type="search"
           aria-label="Search client invitations"

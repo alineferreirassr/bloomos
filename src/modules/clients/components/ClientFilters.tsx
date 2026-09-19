@@ -23,7 +23,7 @@ interface ClientFiltersProps {
 /* Relationships/CRM visual pass — quiet tinted surface, matches Leads. */
 export function ClientFilters({ value, onChange }: ClientFiltersProps) {
   return (
-    <div className="grid grid-cols-1 gap-3 rounded-2xl bg-surface/70 p-4 sm:grid-cols-2 lg:grid-cols-6">
+    <div className="grid grid-cols-1 gap-3 rounded-2xl border border-border/50 bg-surface/70 p-5 sm:grid-cols-2 lg:grid-cols-6">
       <Input
         placeholder="Search name, email, phone, partner…"
         value={value.search}
