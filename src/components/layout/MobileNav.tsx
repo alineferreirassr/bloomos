@@ -24,6 +24,10 @@ interface MobileNavProps {
  * Sidebar's own GLOBAL-VISUAL-03B update (monogram badge + small logo +
  * tagline), so the mobile shell doesn't diverge from desktop the way it
  * did before.
+ *
+ * GLOBAL-VISUAL-04R — matches desktop Sidebar's own correction: the "AB"
+ * badge removed, logo enlarged to be the single mark. See Sidebar.tsx's
+ * own doc comment for the full rationale.
  */
 export function MobileNav({ open, onClose, workspaceDisplayName }: MobileNavProps) {
   const pathname = usePathname();
@@ -50,18 +54,16 @@ export function MobileNav({ open, onClose, workspaceDisplayName }: MobileNavProp
       >
         <div className="mb-3 flex items-center justify-between border-b border-border/50 px-5 pb-4">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-medium text-white">
-              AB
-            </span>
+            <Image
+              src="/brand/amore-bloom-app-logo.png"
+              alt="Amoré Bloom"
+              width={670}
+              height={670}
+              className="h-10 w-10 shrink-0"
+            />
             <div className="min-w-0">
-              <Image
-                src="/brand/amore-bloom-app-logo.png"
-                alt="Amoré Bloom"
-                width={670}
-                height={670}
-                className="h-auto max-h-6 w-auto"
-              />
-              <p className="mt-1 text-[10px] tracking-[0.06em] text-text/55 uppercase">
+              <p className="truncate text-sm font-semibold text-text">Amoré Bloom</p>
+              <p className="truncate text-[10px] tracking-[0.06em] text-text/55 uppercase">
                 Luxury Proposal &amp; Event Studio
               </p>
             </div>

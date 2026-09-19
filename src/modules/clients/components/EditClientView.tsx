@@ -7,6 +7,7 @@ import type { Client } from "@/types/client";
 import { NotFoundError } from "@/core/errors";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ClientForm } from "@/modules/clients/components/ClientForm";
 import { clientToFormInput } from "@/modules/clients/mappers";
 
@@ -37,7 +38,7 @@ export function EditClientView({ clientId }: { clientId: string }) {
 
   if (state.status === "loading") {
     return (
-      <div className="space-y-4">
+      <div className="mx-auto max-w-6xl space-y-4">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-96 w-full" />
       </div>
@@ -53,10 +54,17 @@ export function EditClientView({ clientId }: { clientId: string }) {
   }
 
   return (
-    <div>
-      <h2 className="text-3xl font-semibold text-text">
-        Edit {state.client.first_name} {state.client.last_name}
-      </h2>
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        eyebrow="Client"
+        title={`Edit ${state.client.first_name} ${state.client.last_name}`}
+        breadcrumb={[
+          { label: "Home", href: "/dashboard" },
+          { label: "Clients", href: "/clients" },
+          { label: `${state.client.first_name} ${state.client.last_name}`, href: `/clients/${clientId}` },
+          { label: "Edit" },
+        ]}
+      />
       <div className="mt-6 max-w-3xl">
         <ClientForm
           submitLabel="Save changes"

@@ -52,7 +52,7 @@ describe("LeadDetailView — SOCIAL-13E conversion-readiness indication", () => 
 
     render(<LeadDetailView leadId="l3" />);
 
-    await screen.findByText("Priya Nair");
+    await screen.findByRole("heading", { name: "Priya Nair" });
     expect(screen.queryByText(BANNER_TEXT)).not.toBeInTheDocument();
   });
 
@@ -152,7 +152,7 @@ describe("LeadDetailView — SOCIAL-15D content attribution", () => {
 
     render(<LeadDetailView leadId="l12" />);
 
-    await screen.findByText("Priya Nair");
+    await screen.findByRole("heading", { name: "Priya Nair" });
     expect(screen.queryByText("Content Attribution")).not.toBeInTheDocument();
   });
 });

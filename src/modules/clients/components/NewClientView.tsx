@@ -2,17 +2,21 @@
 
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/data";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ClientForm } from "@/modules/clients/components/ClientForm";
 
 export function NewClientView() {
   const router = useRouter();
 
   return (
-    <div>
-      <h2 className="text-3xl font-semibold text-text">New Client</h2>
-      <p className="mt-1 text-sm text-text-muted">
-        Creating a Client here does not require an originating Lead.
-      </p>
+    // GLOBAL-VISUAL-04R — same AF-ported form pattern as Leads' New/Edit.
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        eyebrow="Client"
+        title="New Client"
+        subtitle="Creating a Client here does not require an originating Lead."
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Clients", href: "/clients" }, { label: "New" }]}
+      />
       <div className="mt-6 max-w-3xl">
         <ClientForm
           submitLabel="Create Client"

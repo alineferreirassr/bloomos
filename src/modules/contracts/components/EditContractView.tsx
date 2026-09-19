@@ -8,6 +8,7 @@ import type { Contract } from "@/types/contract";
 import { NotFoundError } from "@/core/errors";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ContractForm } from "@/modules/contracts/components/ContractForm";
 import { contractFormToInput } from "@/modules/contracts/schema";
 import { contractToFormInput } from "@/modules/contracts/mappers";
@@ -49,7 +50,7 @@ export function EditContractView({ contractId }: { contractId: string }) {
 
   if (state.status === "loading") {
     return (
-      <div className="space-y-4">
+      <div className="mx-auto max-w-6xl space-y-4">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-96 w-full" />
       </div>
@@ -68,8 +69,12 @@ export function EditContractView({ contractId }: { contractId: string }) {
 
   if (isContractFullyLocked(contract.status)) {
     return (
-      <div>
-        <h2 className="font-serif text-3xl font-semibold text-text">Edit {contract.title}</h2>
+      <div className="mx-auto max-w-6xl">
+        <PageHeader
+          eyebrow="Contract"
+          title={`Edit ${contract.title}`}
+          breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Contracts", href: "/contracts" }, { label: contract.title, href: `/contracts/${contractId}` }, { label: "Edit" }]}
+        />
         <p className="mt-4 text-sm text-text-muted">
           This contract is {CONTRACT_STATUS_LABELS[contract.status].toLowerCase()} and can&apos;t be edited.
         </p>
@@ -81,8 +86,12 @@ export function EditContractView({ contractId }: { contractId: string }) {
   }
 
   return (
-    <div>
-      <h2 className="font-serif text-3xl font-semibold text-text">Edit {contract.title}</h2>
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        eyebrow="Contract"
+        title={`Edit ${contract.title}`}
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Contracts", href: "/contracts" }, { label: contract.title, href: `/contracts/${contractId}` }, { label: "Edit" }]}
+      />
       <div className="mt-6 max-w-3xl">
         <ContractForm
           submitLabel="Save changes"

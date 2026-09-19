@@ -126,7 +126,7 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
 
   if (state.status === "loading") {
     return (
-      <div className="space-y-4">
+      <div className="mx-auto max-w-6xl space-y-4">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-32 w-full" />
         <Skeleton className="h-32 w-full" />
@@ -164,7 +164,24 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
   ].filter((f) => f.value);
 
   return (
-    <div className="mx-auto max-w-[1280px] space-y-8">
+    // GLOBAL-VISUAL-04R — this page was already a separately-approved
+    // editorial "client dossier" (LuxuryCard-based, its own founder-directed
+    // reorganization checkpoint), not legacy default styling — left as-is
+    // rather than rebuilt against AF's plainer detail-page pattern, given
+    // it already reads as luxury/editorial/soft. Only content width aligned
+    // to the same max-w-6xl the rest of the migrated CRM now uses, and a
+    // breadcrumb added (previously missing entirely).
+    <div className="mx-auto max-w-6xl space-y-8">
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-text-muted">
+        <Link href="/dashboard" className="hover:text-text">Home</Link>
+        <span>/</span>
+        <Link href="/clients" className="hover:text-text">Clients</Link>
+        <span>/</span>
+        <span className="text-text">
+          {client.first_name} {client.last_name}
+        </span>
+      </nav>
+
       {/* 01 — Client Hero */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-wrap items-center gap-3">

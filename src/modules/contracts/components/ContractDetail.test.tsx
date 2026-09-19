@@ -126,7 +126,7 @@ describe("ContractDetailView", () => {
     mockReady();
     renderContractDetail("contract_1");
 
-    expect(await screen.findByText("Malibu Sunset Proposal — Event Services Agreement")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Malibu Sunset Proposal — Event Services Agreement" })).toBeInTheDocument();
     expect(screen.getByText("CT-2026-0001")).toBeInTheDocument();
     // "Jordan Ellis"/"Malibu Sunset Proposal" links appear twice each: once in the header intro line, once in the Client/Event sections below.
     for (const link of screen.getAllByRole("link", { name: "Jordan Ellis" })) {
@@ -167,7 +167,7 @@ describe("ContractDetailView", () => {
     mockReady({ status: "signed" });
     renderContractDetail("contract_1");
 
-    await screen.findByText("Malibu Sunset Proposal — Event Services Agreement");
+    await screen.findByRole("heading", { name: "Malibu Sunset Proposal — Event Services Agreement" });
     // NotesSection renders an "Add note" affordance when not read-only.
     expect(screen.getByRole("button", { name: /add note/i })).toBeInTheDocument();
   });
@@ -176,7 +176,7 @@ describe("ContractDetailView", () => {
     mockReady({ status: "archived", archived_at: "2026-01-01T00:00:00.000Z" });
     renderContractDetail("contract_1");
 
-    await screen.findByText("Malibu Sunset Proposal — Event Services Agreement");
+    await screen.findByRole("heading", { name: "Malibu Sunset Proposal — Event Services Agreement" });
     expect(screen.queryByRole("button", { name: /add note/i })).not.toBeInTheDocument();
   });
 
@@ -184,7 +184,7 @@ describe("ContractDetailView", () => {
     mockReady({ status: "signed" });
     renderContractDetail("contract_1");
 
-    await screen.findByText("Malibu Sunset Proposal — Event Services Agreement");
+    await screen.findByRole("heading", { name: "Malibu Sunset Proposal — Event Services Agreement" });
     expect(screen.queryByRole("button", { name: /add exhibit/i })).not.toBeInTheDocument();
   });
 
@@ -192,7 +192,7 @@ describe("ContractDetailView", () => {
     mockReady({ status: "draft", signature_status: "unsigned" });
     renderContractDetail("contract_1");
 
-    await screen.findByText("Malibu Sunset Proposal — Event Services Agreement");
+    await screen.findByRole("heading", { name: "Malibu Sunset Proposal — Event Services Agreement" });
     expect(screen.getByRole("button", { name: /add exhibit/i })).toBeInTheDocument();
   });
 

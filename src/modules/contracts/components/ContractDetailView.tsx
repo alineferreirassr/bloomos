@@ -26,7 +26,7 @@ import type { ContractExhibit } from "@/types/contractExhibit";
 import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
 import { NotFoundError } from "@/core/errors";
-import { Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { NotesSection } from "@/modules/notes/components/NotesSection";
@@ -104,7 +104,7 @@ export function ContractDetailView({ contractId }: { contractId: string }) {
 
   if (state.status === "loading") {
     return (
-      <div className="space-y-4">
+      <div className="mx-auto max-w-6xl space-y-4">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-32 w-full" />
         <Skeleton className="h-32 w-full" />
@@ -126,17 +126,24 @@ export function ContractDetailView({ contractId }: { contractId: string }) {
   const exhibitsReadOnly = isContractCommercialLocked(contract.status);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <Link href="/contracts" className="text-sm text-accent hover:underline">
-          ← Back to Contracts
-        </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <h2 className="font-serif text-3xl font-semibold text-text">{contract.title}</h2>
-          <ContractStatusBadge status={contract.status} />
-          <SignatureStatusBadge status={contract.signature_status} />
-        </div>
-        <p className="mt-1 text-sm text-text-muted">
+    // GLOBAL-VISUAL-04R — same AF-ported detail-page pattern as
+    // LeadDetailView (real PageHeader + breadcrumb, unboxed `divide-y`
+    // sections instead of a Card per field group). Embedded self-contained
+    // components (ContractDocumentSection/VersionHistorySection/
+    // ExhibitsSection/ContractFinanceSummaryCard/DocumentsSummarySection)
+    // left exactly as-is — their own internal structure isn't owned by
+    // this view.
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        eyebrow="Contract"
+        title={contract.title}
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Contracts", href: "/contracts" }, { label: contract.title }]}
+      />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <ContractStatusBadge status={contract.status} />
+        <SignatureStatusBadge status={contract.signature_status} />
+        <span className="text-sm text-text-muted">
           {contract.contract_number}
           {client ? (
             <>
@@ -156,38 +163,30 @@ export function ContractDetailView({ contractId }: { contractId: string }) {
           ) : null}
           {" · v"}
           {contract.version}
-        </p>
-        <p className="mt-1 text-sm text-text">
-          {formatContractValue(contract.total_value, contract.currency)}
-          {contract.deposit_required ? (
-            <span className="text-text-muted">
-              {" "}
-              · Deposit {formatContractValue(contract.deposit_amount, contract.currency)}
-            </span>
-          ) : null}
-          <span className="text-text-muted">
-            {" "}
-            · Remaining {formatContractValue(contract.remaining_balance, contract.currency)}
-          </span>
-        </p>
-
-        <div className="mt-4">
-          <ContractActions contract={contract} onChanged={refetch} />
-        </div>
+        </span>
       </div>
+      <p className="text-sm text-text">
+        {formatContractValue(contract.total_value, contract.currency)}
+        {contract.deposit_required ? (
+          <span className="text-text-muted"> · Deposit {formatContractValue(contract.deposit_amount, contract.currency)}</span>
+        ) : null}
+        <span className="text-text-muted"> · Remaining {formatContractValue(contract.remaining_balance, contract.currency)}</span>
+      </p>
+
+      <ContractActions contract={contract} onChanged={refetch} />
 
       {nextAction ? (
-        <Card className="border-accent/40 bg-accent/5">
+        <div className="rounded-xl border border-accent/30 bg-accent-100/40 px-4 py-3">
           <p className="text-xs font-medium uppercase tracking-wide text-accent">Next recommended action</p>
           <p className="mt-1 text-sm text-text">{nextAction}</p>
-        </Card>
+        </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Commercial Summary</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[20rem_1fr]">
+        <div className="space-y-6">
+          <section>
+            <h2 className="mb-2 font-serif text-xl text-text">Commercial Summary</h2>
+            <dl className="divide-y divide-border/60">
               <Field label="Contract number" value={contract.contract_number} />
               <Field label="Status" value={<ContractStatusBadge status={contract.status} />} />
               <Field label="Signature status" value={<SignatureStatusBadge status={contract.signature_status} />} />
@@ -196,12 +195,12 @@ export function ContractDetailView({ contractId }: { contractId: string }) {
               <Field label="Updated" value={new Date(contract.updated_at).toLocaleDateString()} />
               <Field label="Description" value={contract.description} />
             </dl>
-          </Card>
+          </section>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Client</h3>
+          <section className="border-t border-border/60 pt-6">
+            <h2 className="mb-2 font-serif text-xl text-text">Client</h2>
             {client ? (
-              <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <dl className="divide-y divide-border/60">
                 <Field
                   label="Name"
                   value={
@@ -214,14 +213,14 @@ export function ContractDetailView({ contractId }: { contractId: string }) {
                 <Field label="Phone" value={client.phone} />
               </dl>
             ) : (
-              <p className="mt-2 text-sm text-text-muted">Client not found.</p>
+              <p className="text-sm text-text-muted">Client not found.</p>
             )}
-          </Card>
+          </section>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Event</h3>
+          <section className="border-t border-border/60 pt-6">
+            <h2 className="mb-2 font-serif text-xl text-text">Event</h2>
             {event ? (
-              <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <dl className="divide-y divide-border/60">
                 <Field
                   label="Title"
                   value={
@@ -234,15 +233,13 @@ export function ContractDetailView({ contractId }: { contractId: string }) {
                 <Field label="Location" value={event.location_name} />
               </dl>
             ) : (
-              <p className="mt-2 text-sm text-text-muted">
-                No linked event — this contract stands on its own.
-              </p>
+              <p className="text-sm text-text-muted">No linked event — this contract stands on its own.</p>
             )}
-          </Card>
+          </section>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Dates</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <section className="border-t border-border/60 pt-6">
+            <h2 className="mb-2 font-serif text-xl text-text">Dates</h2>
+            <dl className="divide-y divide-border/60">
               <Field label="Effective date" value={formatEventDate(contract.effective_date)} />
               <Field label="Expiration date" value={formatEventDate(contract.expiration_date)} />
               <Field label="Sent" value={contract.sent_at ? new Date(contract.sent_at).toLocaleString() : null} />
@@ -252,11 +249,11 @@ export function ContractDetailView({ contractId }: { contractId: string }) {
               <Field label="Cancelled" value={contract.cancelled_at ? new Date(contract.cancelled_at).toLocaleString() : null} />
               <Field label="Archived" value={contract.archived_at ? new Date(contract.archived_at).toLocaleString() : null} />
             </dl>
-          </Card>
+          </section>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Financial Terms</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <section className="border-t border-border/60 pt-6">
+            <h2 className="mb-2 font-serif text-xl text-text">Financial Terms</h2>
+            <dl className="divide-y divide-border/60">
               <Field label="Total value" value={formatContractValue(contract.total_value, contract.currency)} />
               <Field label="Currency" value={contract.currency} />
               <Field label="Deposit required" value={contract.deposit_required ? "Yes" : "No"} />
@@ -264,52 +261,53 @@ export function ContractDetailView({ contractId }: { contractId: string }) {
                 label="Deposit amount"
                 value={contract.deposit_required ? formatContractValue(contract.deposit_amount, contract.currency) : null}
               />
-              <Field
-                label="Remaining balance"
-                value={formatContractValue(contract.remaining_balance, contract.currency)}
-              />
+              <Field label="Remaining balance" value={formatContractValue(contract.remaining_balance, contract.currency)} />
             </dl>
-          </Card>
+          </section>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Template</h3>
+          <section className="border-t border-border/60 pt-6">
+            <h2 className="mb-2 font-serif text-xl text-text">Template</h2>
             {template ? (
-              <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <dl className="divide-y divide-border/60">
                 <Field label="Name" value={template.name} />
                 <Field label="Category" value={CONTRACT_TEMPLATE_CATEGORY_LABELS[template.category]} />
                 <Field label="Active" value={template.active ? "Yes" : "No"} />
               </dl>
             ) : (
-              <p className="mt-2 text-sm text-text-muted">No template selected.</p>
+              <p className="text-sm text-text-muted">No template selected.</p>
             )}
-          </Card>
+          </section>
 
-          <ContractDocumentSection contractId={contract.id} />
+          <div className="border-t border-border/60 pt-6">
+            <ContractDocumentSection contractId={contract.id} />
+          </div>
 
-          <VersionHistorySection contract={contract} />
+          <div className="border-t border-border/60 pt-6">
+            <VersionHistorySection contract={contract} />
+          </div>
 
-          <ExhibitsSection
-            contractId={contract.id}
-            exhibits={exhibits}
-            readOnly={exhibitsReadOnly}
-            onChanged={refetch}
-          />
+          <div className="border-t border-border/60 pt-6">
+            <ExhibitsSection
+              contractId={contract.id}
+              exhibits={exhibits}
+              readOnly={exhibitsReadOnly}
+              onChanged={refetch}
+            />
+          </div>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
-            <div className="mt-3">
-              <NotesSection
-                workspaceId={contract.workspace_id}
-                ownerType="contract"
-                ownerId={contract.id}
-                notes={notes}
-                onCreateNote={(input) => createContractNote(contract.id, input)}
-                onTogglePin={togglePinNote}
-                readOnly={notesReadOnly}
-                onNotesChanged={refetch}
-              />
-            </div>
-          </Card>
+          <section className="border-t border-border/60 pt-6">
+            <h2 className="mb-3 font-serif text-xl text-text">Notes</h2>
+            <NotesSection
+              workspaceId={contract.workspace_id}
+              ownerType="contract"
+              ownerId={contract.id}
+              notes={notes}
+              onCreateNote={(input) => createContractNote(contract.id, input)}
+              onTogglePin={togglePinNote}
+              readOnly={notesReadOnly}
+              onNotesChanged={refetch}
+            />
+          </section>
         </div>
 
         <div className="space-y-6">
@@ -322,21 +320,19 @@ export function ContractDetailView({ contractId }: { contractId: string }) {
             newDocumentParams={{ contractId: contract.id, clientId: contract.client_id }}
           />
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
-            <div className="mt-3">
-              <Timeline activities={timeline} />
-            </div>
-          </Card>
+          <section className="border-t border-border/60 pt-6">
+            <h2 className="mb-3 font-serif text-xl text-text">Timeline</h2>
+            <Timeline activities={timeline} />
+          </section>
 
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Document &amp; Signature</h3>
-            <p className="mt-2 text-xs text-text-muted">
+          <section className="border-t border-border/60 pt-6">
+            <h2 className="mb-2 font-serif text-xl text-text">Document &amp; Signature</h2>
+            <p className="text-xs text-text-muted">
               Download a PDF of this contract anytime from the actions above. &ldquo;Send for Signature&rdquo; routes it through
               your workspace&apos;s connected DocuSign account for a real e-signature request — &ldquo;Check Signature
               Status&rdquo; confirms with DocuSign once the client has signed.
             </p>
-          </Card>
+          </section>
         </div>
       </div>
     </div>
@@ -345,9 +341,9 @@ export function ContractDetailView({ contractId }: { contractId: string }) {
 
 function Field({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div>
-      <dt className="text-xs text-text-muted">{label}</dt>
-      <dd className="text-sm text-text">{value || "—"}</dd>
+    <div className="flex items-start justify-between gap-4 py-1.5">
+      <dt className="text-sm text-text-muted">{label}</dt>
+      <dd className="text-right text-sm font-medium text-text">{value || "—"}</dd>
     </div>
   );
 }

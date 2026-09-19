@@ -7,6 +7,7 @@ import type { Lead } from "@/types/lead";
 import { NotFoundError } from "@/core/errors";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { LeadForm } from "@/modules/leads/components/LeadForm";
 import { leadToFormInput } from "@/modules/leads/mappers";
 
@@ -37,7 +38,7 @@ export function EditLeadView({ leadId }: { leadId: string }) {
 
   if (state.status === "loading") {
     return (
-      <div className="space-y-4">
+      <div className="mx-auto max-w-6xl space-y-4">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-96 w-full" />
       </div>
@@ -59,10 +60,17 @@ export function EditLeadView({ leadId }: { leadId: string }) {
   }
 
   return (
-    <div>
-      <h2 className="text-3xl font-semibold text-text">
-        Edit {state.lead.first_name} {state.lead.last_name}
-      </h2>
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        eyebrow="Lead"
+        title={`Edit ${state.lead.first_name} ${state.lead.last_name}`}
+        breadcrumb={[
+          { label: "Home", href: "/dashboard" },
+          { label: "Leads", href: "/leads" },
+          { label: `${state.lead.first_name} ${state.lead.last_name}`, href: `/leads/${leadId}` },
+          { label: "Edit" },
+        ]}
+      />
       <div className="mt-6 max-w-3xl">
         <LeadForm
           submitLabel="Save changes"

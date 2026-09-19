@@ -195,7 +195,7 @@ describe("ClientDetailView", () => {
 
       renderClientDetail("client_1");
 
-      await screen.findByText("Naomi Whitfield");
+      await screen.findByRole("heading", { name: "Naomi Whitfield" });
       expect(dataLayer.getLeadById).not.toHaveBeenCalled();
       expect(screen.queryByRole("link", { name: "View original Lead →" })).not.toBeInTheDocument();
     });

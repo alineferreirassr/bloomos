@@ -9,7 +9,7 @@ import type { Note } from "@/types/note";
 import type { TimelineActivity } from "@/types/timelineActivity";
 import type { LeadAttributionDisplay } from "@/modules/socialAttribution/types";
 import { NotFoundError } from "@/core/errors";
-import { Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -82,7 +82,7 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
 
   if (state.status === "loading") {
     return (
-      <div className="space-y-4">
+      <div className="mx-auto max-w-6xl space-y-4">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-32 w-full" />
         <Skeleton className="h-32 w-full" />
@@ -111,14 +111,24 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
   const needsIdentityForConversion = !lead.first_name || !lead.last_name || !lead.email;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <div className="flex flex-wrap items-center gap-3">
-          <h2 className="text-3xl font-semibold text-text">{getLeadDisplayName(lead)}</h2>
-          <LeadStatusBadge status={lead.status} />
-          {lead.source === "Instagram" ? <Badge tone="neutral">Instagram</Badge> : null}
-        </div>
-        <p className="mt-1 text-sm text-text-muted">{lead.email}</p>
+    // GLOBAL-VISUAL-04R — AF's own real detail-page pattern
+    // (app/(app)/app/leads/[id]/page.tsx, HEAD 1587d1f): the simpler design-
+    // system `PageHeader` (not ModuleHero — AF itself only uses ModuleHero
+    // on hub pages), a plain status/badge row underneath (no card), and
+    // content sections separated by a `border-t pt-6` divider with a
+    // `font-serif text-xl` heading instead of each one living in its own
+    // bordered Card. Same data, same actions, same permissions.
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        eyebrow="Lead"
+        title={getLeadDisplayName(lead)}
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Leads", href: "/leads" }, { label: getLeadDisplayName(lead) }]}
+      />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <LeadStatusBadge status={lead.status} />
+        {lead.source === "Instagram" ? <Badge tone="neutral">Instagram</Badge> : null}
+        <span className="text-sm text-text-muted">{lead.email}</span>
       </div>
 
       {isReadOnly ? (
@@ -147,38 +157,31 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
       ) : null}
 
       {nextAction && !isReadOnly ? (
-        <Card className="border-accent/40 bg-accent/5">
-          <p className="text-xs font-medium uppercase tracking-wide text-accent">
-            Next recommended action
-          </p>
+        <div className="rounded-xl border border-accent/30 bg-accent-100/40 px-4 py-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-accent">Next recommended action</p>
           <p className="mt-1 text-sm text-text">{nextAction}</p>
-        </Card>
+        </div>
       ) : null}
 
       {!isReadOnly ? <LeadJourneySummaryCard leadId={lead.id} /> : null}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Contact information</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[20rem_1fr]">
+        <div className="space-y-6">
+          <section>
+            <h2 className="mb-2 font-serif text-xl text-text">Status</h2>
+            <LeadStatusSelect leadId={lead.id} status={lead.status} onChanged={refetch} />
+          </section>
+          <section className="border-t border-border/60 pt-6">
+            <h2 className="mb-2 font-serif text-xl text-text">Details</h2>
+            <dl className="divide-y divide-border/60">
               <Field label="Email" value={lead.email} />
               <Field label="Phone" value={lead.phone} />
               <Field label="Instagram" value={lead.instagram} />
               <Field label="Source" value={lead.source} />
               <Field label="Assigned to" value={lead.assigned_to} emptyLabel="Unassigned" />
               {attribution.kind !== "none" ? <Field label="Content Attribution" value={attributionLabel(attribution)} /> : null}
-            </dl>
-          </Card>
-
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Event information</h3>
-            <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Event type" value={lead.event_type} />
-              <Field
-                label="Event date"
-                value={lead.event_date ? new Date(lead.event_date).toLocaleDateString() : null}
-              />
+              <Field label="Event date" value={lead.event_date ? new Date(lead.event_date).toLocaleDateString() : null} />
               <Field label="Location" value={lead.location} />
               <Field label="Budget" value={formatBudget(lead.budget_min, lead.budget_max)} />
             </dl>
@@ -188,49 +191,41 @@ export function LeadDetailView({ leadId }: { leadId: string }) {
                 <p className="mt-1 text-sm text-text">{lead.message}</p>
               </div>
             ) : null}
-          </Card>
-
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Notes</h3>
-            <div className="mt-3">
-              <NotesSection
-                workspaceId={lead.workspace_id}
-                ownerType="lead"
-                ownerId={lead.id}
-                notes={notes}
-                onCreateNote={(input) => createNote(lead.id, input)}
-                onTogglePin={togglePinNote}
-                readOnly={isReadOnly}
-                onNotesChanged={refetch}
-              />
-            </div>
-          </Card>
+          </section>
         </div>
 
         <div className="space-y-6">
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Status</h3>
-            <div className="mt-3">
-              <LeadStatusSelect leadId={lead.id} status={lead.status} onChanged={refetch} />
-            </div>
-          </Card>
-          <Card>
-            <h3 className="font-serif text-[17px] font-semibold text-text">Timeline</h3>
-            <div className="mt-3">
-              <Timeline activities={timeline} />
-            </div>
-          </Card>
+          <section>
+            <h2 className="mb-3 font-serif text-xl text-text">Notes</h2>
+            <NotesSection
+              workspaceId={lead.workspace_id}
+              ownerType="lead"
+              ownerId={lead.id}
+              notes={notes}
+              onCreateNote={(input) => createNote(lead.id, input)}
+              onTogglePin={togglePinNote}
+              readOnly={isReadOnly}
+              onNotesChanged={refetch}
+            />
+          </section>
+          <section className="border-t border-border/60 pt-6">
+            <h2 className="mb-3 font-serif text-xl text-text">Timeline</h2>
+            <Timeline activities={timeline} />
+          </section>
         </div>
       </div>
     </div>
   );
 }
 
+// GLOBAL-VISUAL-04R — matches AF's own `Info` row in its real Lead detail
+// page: a plain `dt`/`dd` pair inside a `divide-y` list, not a boxed grid
+// cell.
 function Field({ label, value, emptyLabel = "—" }: { label: string; value: string | null; emptyLabel?: string }) {
   return (
-    <div>
-      <dt className="text-xs text-text-muted">{label}</dt>
-      <dd className="text-sm text-text">{value || emptyLabel}</dd>
+    <div className="flex items-start justify-between gap-4 py-1.5">
+      <dt className="text-sm text-text-muted">{label}</dt>
+      <dd className="text-right text-sm font-medium text-text">{value || emptyLabel}</dd>
     </div>
   );
 }

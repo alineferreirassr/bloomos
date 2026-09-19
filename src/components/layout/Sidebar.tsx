@@ -50,6 +50,14 @@ interface SidebarProps {
  * change explicitly authorized to ripple beyond the CRM (Sidebar serves
  * every Classical route), verified against a non-CRM route (Events) for
  * regression before deploy. No route, permission, or destination changed.
+ *
+ * GLOBAL-VISUAL-04R — founder correction: the "AB" circle beside the real
+ * logo was redundant/wrong, not a second brand mark. Removed; the logo
+ * (already the app's own square crest, `/brand/amore-bloom-app-logo.png`)
+ * is now the single mark and sized up (24px -> 40px) to fill the space the
+ * badge freed, matching AF's own brand-row proportion (a compact mark sized
+ * to the h-16 row, not a tiny icon lost beside a big empty badge). Same
+ * logo asset, not redrawn.
  */
 export function Sidebar({ workspaceDisplayName }: SidebarProps) {
   const pathname = usePathname();
@@ -59,19 +67,17 @@ export function Sidebar({ workspaceDisplayName }: SidebarProps) {
   return (
     <aside className="font-crm-sans hidden md:flex md:w-64 md:flex-col md:overflow-hidden md:bg-sidebar md:border-r md:border-border/50">
       <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-border/50 px-5">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-medium text-white">
-          AB
-        </span>
+        <Image
+          src="/brand/amore-bloom-app-logo.png"
+          alt="Amoré Bloom"
+          width={670}
+          height={670}
+          priority
+          className="h-10 w-10 shrink-0"
+        />
         <div className="min-w-0">
-          <Image
-            src="/brand/amore-bloom-app-logo.png"
-            alt="Amoré Bloom"
-            width={670}
-            height={670}
-            priority
-            className="h-auto max-h-6 w-auto"
-          />
-          <p className="mt-1 text-[10px] tracking-[0.06em] text-text/55 uppercase">
+          <p className="truncate text-sm font-semibold text-text">Amoré Bloom</p>
+          <p className="truncate text-[10px] tracking-[0.06em] text-text/55 uppercase">
             Luxury Proposal &amp; Event Studio
           </p>
         </div>
