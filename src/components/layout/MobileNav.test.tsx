@@ -9,6 +9,11 @@ import { MobileNav } from "@/components/layout/MobileNav";
 import { MemberSessionProvider } from "@/components/providers/MemberSessionProvider";
 import type { MemberSessionSnapshot } from "@/lib/auth/memberSessionSnapshot";
 
+/** Opens a collapsed nav group ("Relationships", "Business", ...) by clicking its accordion header — every group but "Workspace" starts collapsed unless it contains the active route (see NavigationTree.tsx). */
+function openGroup(label: string) {
+  fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${label}`) }));
+}
+
 const staffSnapshot: MemberSessionSnapshot = {
   kind: "active",
   user: { id: "user_4", email: "sofia@amorebloom.com" },
@@ -38,17 +43,22 @@ describe("MobileNav", () => {
     );
 
     expect(screen.queryByText("Team")).not.toBeInTheDocument();
+
+    openGroup("Relationships");
     expect(screen.getByRole("link", { name: "Leads" })).toBeInTheDocument();
   });
 
-  it("renders the CRM module expanded by default with Client Accounts and Client Invitations children", () => {
+  it("renders the Relationships group collapsed by default, opening to reveal Client Accounts and Client Invitations", () => {
     render(
       <MemberSessionProvider snapshot={staffSnapshot}>
         <MobileNav open onClose={() => {}} workspaceDisplayName="Amoré Bloom Team" />
       </MemberSessionProvider>,
     );
 
-    expect(screen.getByText("CRM")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Client Accounts" })).not.toBeInTheDocument();
+
+    openGroup("Relationships");
+
     expect(screen.getByRole("link", { name: "Client Accounts" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Client Invitations" })).toBeInTheDocument();
   });
@@ -61,6 +71,7 @@ describe("MobileNav", () => {
       </MemberSessionProvider>,
     );
 
+    openGroup("Relationships");
     fireEvent.click(screen.getByRole("link", { name: "Leads" }));
 
     expect(onClose).toHaveBeenCalled();
@@ -80,7 +91,7 @@ describe("MobileNav", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("toggles a default-expanded module's children closed and back open on click, without closing the drawer", () => {
+  it("toggles a nav group open and closed on click, without closing the drawer", () => {
     const onClose = vi.fn();
     render(
       <MemberSessionProvider snapshot={staffSnapshot}>
@@ -88,13 +99,13 @@ describe("MobileNav", () => {
       </MemberSessionProvider>,
     );
 
-    expect(screen.getByRole("link", { name: "Leads" })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /CRM/ }));
     expect(screen.queryByRole("link", { name: "Leads" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /CRM/ }));
+    openGroup("Relationships");
     expect(screen.getByRole("link", { name: "Leads" })).toBeInTheDocument();
+
+    openGroup("Relationships");
+    expect(screen.queryByRole("link", { name: "Leads" })).not.toBeInTheDocument();
 
     expect(onClose).not.toHaveBeenCalled();
   });

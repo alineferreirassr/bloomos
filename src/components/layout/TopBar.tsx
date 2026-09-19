@@ -15,7 +15,7 @@ export function TopBar({ onMenuClick }: TopBarProps) {
   const { toggle } = useCopilotPanel();
 
   return (
-    <header className="flex h-[72px] min-h-[72px] items-center gap-3 bg-background px-4 shadow-sm md:px-7">
+    <header className="flex h-[72px] min-h-[72px] items-center gap-3 border-b border-border/40 bg-background px-4 md:px-7">
       <button
         type="button"
         onClick={onMenuClick}
@@ -38,7 +38,7 @@ export function TopBar({ onMenuClick }: TopBarProps) {
       <button
         type="button"
         onClick={toggle}
-        className="hidden items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm font-medium text-text transition-colors duration-150 hover:bg-accent-100 hover:text-accent md:flex"
+        className="hidden items-center gap-1.5 rounded-full border border-border/50 px-3 py-1.5 text-sm font-medium text-text transition-colors duration-150 hover:bg-accent-100 hover:text-accent md:flex"
       >
         <BloomAiIcon className="h-4 w-4" aria-hidden="true" />
         Bloom AI

@@ -4,35 +4,38 @@ import { useState } from "react";
 import Image from "next/image";
 
 /**
- * Sidebar/MobileNav identity avatar — the official Amoré Bloom logo inside
- * a 30px circular frame, falling back to "AB" initials only if the image
- * fails to load. No background tint sits behind the real logo (only the
- * text fallback gets one, so it still reads as a chip) — the transparent
- * artwork shows directly against the sidebar's own background, never a
- * white/beige/colored box. A small inset (~2.5px each side) keeps the mark
- * at roughly 80% of the frame rather than touching the circular clip edge.
- * Extracted as one shared component since Sidebar and MobileNav render
- * byte-identical markup for this element.
+ * Sidebar/MobileNav identity avatar — the official Amoré Bloom logo, falling
+ * back to "AB" initials only if the image fails to load.
+ *
+ * GLOBAL-VISUAL-01 Round 4.5 — founder correction: the logo artwork already
+ * contains its own circular composition, so clipping it into a second
+ * `rounded-full` frame produced a visible "circle inside a circle." The
+ * circular frame is now applied ONLY to the text fallback (where it's
+ * actually needed — "AB" initials need a shape to read as a chip); the real
+ * logo renders unclipped, at its own natural transparency/aspect ratio, no
+ * added round border or background plate.
  */
 export function WorkspaceAvatar() {
   const [imageFailed, setImageFailed] = useState(false);
 
-  return (
-    <div
-      className={`relative flex h-[30px] w-[30px] shrink-0 items-center justify-center overflow-hidden rounded-full ${imageFailed ? "bg-accent/10" : ""}`}
-    >
-      {imageFailed ? (
+  if (imageFailed) {
+    return (
+      <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-accent/10">
         <span className="font-serif text-[13px] font-semibold text-accent">AB</span>
-      ) : (
-        <Image
-          src="/brand/amore-bloom-app-logo.png"
-          alt="Amoré Bloom"
-          fill
-          sizes="30px"
-          className="object-contain p-[2.5px]"
-          onError={() => setImageFailed(true)}
-        />
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative h-[30px] w-[30px] shrink-0">
+      <Image
+        src="/brand/amore-bloom-app-logo.png"
+        alt="Amoré Bloom"
+        fill
+        sizes="30px"
+        className="object-contain"
+        onError={() => setImageFailed(true)}
+      />
     </div>
   );
 }

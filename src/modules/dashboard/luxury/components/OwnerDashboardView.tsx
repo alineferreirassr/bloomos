@@ -25,7 +25,6 @@ import { OwnerAIBriefCard } from "@/modules/dashboard/luxury/components/OwnerAIB
 import { OwnerWeatherCard } from "@/modules/dashboard/luxury/components/OwnerWeatherCard";
 import { OwnerWorldClockCard } from "@/modules/dashboard/luxury/components/OwnerWorldClockCard";
 import { MyDaySection } from "@/modules/dashboard/luxury/components/MyDaySection";
-import { LuxuryMetricCard } from "@/modules/dashboard/luxury/components/LuxuryMetricCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatMoney } from "@/lib/money";
 import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
@@ -59,17 +58,20 @@ interface OwnerDashboardViewProps {
  * locked, do not touch) → "Around Your Day" eyebrow over `MyDaySection`
  * (compact pill-based Mood beside a stacked Water Tracker + Little
  * Reminder — exactly one instance, never duplicated) and Today's Priority
- * beside Upcoming Events (~40/60) → "At a Glance" eyebrow + the real
- * five-metric KPI grid (`data.metrics` — revenue this month, upcoming
- * events, new leads, proposals pending, outstanding payments; fetched by
- * `getOwnerDashboardData.ts` all along, VISUAL-01 revision B only removed
- * this page's own *rendering* of it, reintroduced here per the founder's
- * explicit Round 4.3 correction "it was supposed to move lower, not
- * disappear") → Today's Timeline beside Today's Pulse → Revenue Overview/
- * Recent Messages/Team Activity → AI Executive Brief. The dashboard
- * Calendar card that used to sit beside Weather remains removed per an
- * earlier Founder correction. Date/Notifications/Messages live in the
- * shell's persistent `LuxuryTopbar`.
+ * beside Upcoming Events (~40/60) → Today's Timeline beside Today's Pulse →
+ * Revenue Overview/Recent Messages/Team Activity → AI Executive Brief. The
+ * dashboard Calendar card that used to sit beside Weather remains removed
+ * per an earlier Founder correction. Date/Notifications/Messages live in
+ * the shell's persistent `LuxuryTopbar`.
+ *
+ * GLOBAL-VISUAL-01 Round 4.5 — the "At a Glance" five-metric KPI grid
+ * (`data.metrics`) that Round 4.3 reintroduced here was removed again by
+ * explicit founder decision: Workspace already has its own separate,
+ * pre-existing "At a Glance / The studio today" section, and rendering the
+ * same concept twice under two different names in two different places
+ * was the actual problem, not where on Home it sat. This removes only this
+ * page's *rendering* of `data.metrics` — the computation itself stays in
+ * `getOwnerDashboardData.ts` untouched, since other views may still use it.
  */
 export function OwnerDashboardView({ data, branding, profileName, profileRoleLabel, profileAvatarUrl, role, isSupabaseConnected }: OwnerDashboardViewProps) {
   const router = useRouter();
@@ -196,32 +198,12 @@ export function OwnerDashboardView({ data, branding, profileName, profileRoleLab
           </div>
         </div>
 
-        {/*
-          GLOBAL-VISUAL-01 Round 4.3 — "At a Glance" eyebrow + the real
-          five-metric KPI grid (`data.metrics`), already computed by
-          `getOwnerDashboardData.ts` (revenue this month, upcoming events,
-          new leads, proposals pending, outstanding payments) but unrendered
-          on Home since VISUAL-01 revision B moved its *rendering* to
-          Workspace. Reintroduced here, lower on the page per the founder's
-          explicit correction, using the exact same `LuxuryMetricCard` +
-          grid pattern TeamDashboardView already renders its own metrics
-          with — no second metrics system, no new calculation.
-        */}
-        <div className="animate-fade-up stagger-4">
-          <p className="text-luxury-metadata font-semibold tracking-wide text-luxury-rose uppercase">At a Glance</p>
-          <div className="mt-3 grid grid-cols-2 gap-4 lg:grid-cols-5">
-            {data.metrics.map((metric) => (
-              <LuxuryMetricCard key={metric.id} data={metric} />
-            ))}
-          </div>
-        </div>
-
-        <div className="animate-fade-up stagger-5 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+        <div className="animate-fade-up stagger-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
           <TodaysTimelineCard items={data.todaysTimeline} className="lg:col-span-2" />
           <TodaysPulseCard metrics={data.todaysPulse} />
         </div>
 
-        <div className="animate-fade-up stagger-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="animate-fade-up stagger-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
           <LuxuryCard className="lg:col-span-2">
             <SectionHeader title="Revenue Overview" action={<span className="text-luxury-small text-luxury-text-muted">This month</span>} />
             <p className="font-luxury-display text-luxury-display font-semibold text-luxury-text">{formatMoney(data.revenueSeries[data.revenueSeries.length - 1]?.valueMinor ?? 0, "USD")}</p>

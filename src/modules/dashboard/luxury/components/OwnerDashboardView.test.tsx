@@ -384,7 +384,7 @@ describe("OwnerDashboardView — VISUAL-01 founder-locked header + status row", 
     expect(screen.getByText("Secure session")).toBeInTheDocument();
   });
 
-  it("GLOBAL-VISUAL-01 Round 4.3 — renders the real 'At a Glance' KPI grid (data.metrics) lower on Home, reversing VISUAL-01 Revision B per the founder's explicit correction; 'The studio today' (AF's own label) is still never used", () => {
+  it("GLOBAL-VISUAL-01 Round 4.5 — never renders an 'At a Glance' KPI grid on Home again; Workspace owns that section, Dashboard does not duplicate it", () => {
     render(
       <MemberSessionProvider snapshot={ownerSnapshot}>
         <CopilotProvider>
@@ -401,10 +401,10 @@ describe("OwnerDashboardView — VISUAL-01 founder-locked header + status row", 
       </MemberSessionProvider>,
     );
 
-    expect(screen.getByText("At a Glance")).toBeInTheDocument();
+    expect(screen.queryByText("At a Glance")).not.toBeInTheDocument();
     expect(screen.queryByText("The studio today")).not.toBeInTheDocument();
-    expect(screen.getByText("Revenue This Month")).toBeInTheDocument();
-    expect(screen.getByText("$12,000")).toBeInTheDocument();
+    expect(screen.queryByText("Revenue This Month")).not.toBeInTheDocument();
+    expect(screen.queryByText("$12,000")).not.toBeInTheDocument();
   });
 });
 
@@ -434,11 +434,10 @@ describe("OwnerDashboardView — VISUAL-01 revision #2: founder-locked section o
     const myDayIndex = text.indexOf("My Day");
     const priorityIndex = text.indexOf("Today's Priority");
     const upcomingIndex = text.indexOf("Upcoming Events");
-    const atAGlanceIndex = text.indexOf("At a Glance");
     const timelineIndex = text.indexOf("Today's Timeline");
     const pulseIndex = text.indexOf("Today's Pulse");
 
-    for (const index of [yourDayIndex, worldClockIndex, weatherIndex, aroundYourDayIndex, myDayIndex, priorityIndex, upcomingIndex, atAGlanceIndex, timelineIndex, pulseIndex]) {
+    for (const index of [yourDayIndex, worldClockIndex, weatherIndex, aroundYourDayIndex, myDayIndex, priorityIndex, upcomingIndex, timelineIndex, pulseIndex]) {
       expect(index).toBeGreaterThanOrEqual(0);
     }
 
@@ -453,17 +452,15 @@ describe("OwnerDashboardView — VISUAL-01 revision #2: founder-locked section o
     expect(priorityIndex).toBeGreaterThan(myDayIndex);
     expect(upcomingIndex).toBeGreaterThan(myDayIndex);
 
-    // GLOBAL-VISUAL-01 Round 4.3 — founder correction reversing VISUAL-01 Revision B: the real
-    // "At a Glance" KPI grid returns to Home, positioned after Priority/Upcoming Events and
-    // before Today's Timeline/Pulse, never immediately under the greeting.
-    expect(atAGlanceIndex).toBeGreaterThan(priorityIndex);
-    expect(atAGlanceIndex).toBeGreaterThan(upcomingIndex);
-    expect(timelineIndex).toBeGreaterThan(atAGlanceIndex);
+    // GLOBAL-VISUAL-01 Round 4.5 — founder correction: "At a Glance" is removed from Home again,
+    // this time permanently — Workspace owns that concept, Dashboard does not duplicate it.
+    // Today's Timeline/Pulse now follow directly after Priority/Upcoming Events.
     expect(timelineIndex).toBeGreaterThan(priorityIndex);
     expect(timelineIndex).toBeGreaterThan(upcomingIndex);
     expect(pulseIndex).toBeGreaterThan(priorityIndex);
+    expect(text).not.toContain("At a Glance");
 
-    // AF's own literal label is still never used, even though the KPI grid itself is back.
+    // AF's own literal label is still never used.
     expect(text).not.toContain("The studio today");
   });
 });

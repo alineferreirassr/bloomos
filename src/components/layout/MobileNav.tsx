@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { getVisibleNavigationModules } from "@/config/navigation";
+import { groupVisibleNavigationModules } from "@/config/navigation";
 import { NavigationTree } from "@/components/layout/NavigationTree";
 import { CloseIcon } from "@/components/ui/icons";
 import { WorkspaceAvatar } from "@/components/layout/WorkspaceAvatar";
@@ -15,10 +15,11 @@ interface MobileNavProps {
   workspaceDisplayName: string;
 }
 
+/** GLOBAL-VISUAL-01 Round 4.5 — same grouped/compact navigation as the desktop Sidebar (see its own doc comment); the drawer must not diverge into the old flat list either. */
 export function MobileNav({ open, onClose, workspaceDisplayName }: MobileNavProps) {
   const pathname = usePathname();
   const { can } = useMemberSession();
-  const navigationModules = getVisibleNavigationModules(can);
+  const groups = groupVisibleNavigationModules(can);
 
   return (
     <div
@@ -38,7 +39,7 @@ export function MobileNav({ open, onClose, workspaceDisplayName }: MobileNavProp
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="mb-4 flex items-center justify-between border-b border-border px-[23px] pb-[23px]">
+        <div className="mb-4 flex items-center justify-between border-b border-border/50 px-[23px] pb-[23px]">
           <div>
             <Image
               src="/brand/amore-bloom-app-logo.png"
@@ -60,11 +61,11 @@ export function MobileNav({ open, onClose, workspaceDisplayName }: MobileNavProp
             <CloseIcon className="h-5 w-5" />
           </button>
         </div>
-        <NavigationTree modules={navigationModules} pathname={pathname} onNavigate={onClose} />
+        <NavigationTree groups={groups} pathname={pathname} onNavigate={onClose} />
         <Link
           href="/account"
           onClick={onClose}
-          className="mt-3 flex items-center gap-2.5 border-t border-border px-[23px] pt-4 transition-colors duration-150 hover:bg-accent/7"
+          className="mt-3 flex items-center gap-2.5 border-t border-border/50 px-[23px] pt-4 transition-colors duration-150 hover:bg-accent/7"
         >
           <WorkspaceAvatar />
           <div className="leading-tight">

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",
@@ -17,6 +17,11 @@ function renderSidebar(snapshot: MemberSessionSnapshot) {
   );
 }
 
+/** Opens a collapsed nav group ("Relationships", "Business", ...) by clicking its accordion header — every group but "Workspace" starts collapsed unless it contains the active route (see NavigationTree.tsx). */
+function openGroup(label: string) {
+  fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${label}`) }));
+}
+
 const ownerSnapshot: MemberSessionSnapshot = {
   kind: "active",
   user: { id: "user_1", email: "owner@amorebloom.com" },
@@ -27,7 +32,6 @@ const ownerSnapshot: MemberSessionSnapshot = {
     "workspace.view",
     "workspace.manage",
     "team.view",
-    "team.invite",
     "leads.view",
     "clients.view",
     "events.view",
@@ -40,15 +44,37 @@ const ownerSnapshot: MemberSessionSnapshot = {
 };
 
 describe("Sidebar", () => {
-  it("shows every top-level module and every default-expanded child for an owner with every *.view permission", () => {
+  it("shows every top-level module for an owner with every *.view permission, once each group is opened", () => {
     renderSidebar(ownerSnapshot);
 
-    for (const label of ["Dashboard", "CRM", "Inventory", "Vendors", "Finance", "Documents", "Team", "Services", "Bloom AI", "Settings"]) {
-      expect(screen.getByText(label)).toBeInTheDocument();
+    // "Workspace" is the only group that renders flat/always-open (see NavigationTree.tsx).
+    expect(screen.getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
+
+    // Every other group starts collapsed on "/dashboard" (it isn't the active route for any of them).
+    for (const groupLabel of ["Relationships", "Business", "Knowledge", "Team", "System"]) {
+      openGroup(groupLabel);
     }
-    // "Events" is both the module label and its default-expanded "Events" child leaf label.
-    expect(screen.getAllByText("Events").length).toBe(2);
-    for (const label of ["Leads", "Clients", "Commercial Pipeline", "Contracts", "Client Accounts", "Client Invitations"]) {
+
+    // getByRole("link") throughout — several of these labels are shared by their own
+    // group's accordion header (e.g. the "Relationships" module link vs. the "Relationships"
+    // group header button), so a plain getByText would match both and throw.
+    for (const label of [
+      "Relationships",
+      "Inventory",
+      "Vendors",
+      "Finance",
+      "Documents",
+      "Team",
+      "Services",
+      "Bloom AI",
+      "Settings",
+      "Leads",
+      "Clients",
+      "Commercial Pipeline",
+      "Contracts",
+      "Client Accounts",
+      "Client Invitations",
+    ]) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
   });
@@ -63,13 +89,15 @@ describe("Sidebar", () => {
     expect(screen.getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
   });
 
-  it("drops Client Accounts/Client Invitations, but keeps CRM and its other children, for a member without clients.portal_view", () => {
+  it("drops Client Accounts/Client Invitations, but keeps the rest of Relationships, for a member without clients.portal_view", () => {
     renderSidebar({
       ...ownerSnapshot,
       permissions: ownerSnapshot.permissions.filter((p) => p !== "clients.portal_view"),
     });
 
-    expect(screen.getByText("CRM")).toBeInTheDocument();
+    openGroup("Relationships");
+
+    expect(screen.getByRole("link", { name: "Relationships" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Leads" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Client Accounts" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Client Invitations" })).not.toBeInTheDocument();
@@ -77,24 +105,28 @@ describe("Sidebar", () => {
 
   it("renders the now-activated Settings module as a real link, no longer showing a Soon badge", () => {
     renderSidebar(ownerSnapshot);
+    openGroup("System");
 
     expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
   });
 
   it("renders the now-activated Inventory module as a real link", () => {
     renderSidebar(ownerSnapshot);
+    openGroup("Business");
 
     expect(screen.getByRole("link", { name: "Inventory" })).toHaveAttribute("href", "/inventory");
   });
 
   it("renders the now-activated Services module as a real link", () => {
     renderSidebar(ownerSnapshot);
+    openGroup("Business");
 
     expect(screen.getByRole("link", { name: "Services" })).toHaveAttribute("href", "/services");
   });
 
   it("renders the now-activated Bloom AI module as a real link, no longer showing a Soon badge", () => {
     renderSidebar(ownerSnapshot);
+    openGroup("System");
 
     const bloomAiLink = screen.getByRole("link", { name: "Bloom AI" });
     expect(bloomAiLink).toHaveAttribute("href", "/bloom-ai");
@@ -104,5 +136,19 @@ describe("Sidebar", () => {
     renderSidebar(ownerSnapshot);
 
     expect(screen.getByRole("link", { name: /Amoré Bloom/ })).toHaveAttribute("href", "/account");
+  });
+
+  it("auto-opens only the group containing the active route, leaving other groups collapsed", () => {
+    renderSidebar(ownerSnapshot);
+
+    // "/dashboard" belongs to "Workspace" (always open) — every other group stays collapsed
+    // until its own header is clicked, so navigating to Calendar doesn't also dump Relationships/
+    // Business/etc. open at once (GLOBAL-VISUAL-01 Round 4.5 "sidebar must remain compact" fix).
+    expect(screen.queryByRole("link", { name: "Leads" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Settings" })).not.toBeInTheDocument();
+
+    openGroup("Relationships");
+    expect(screen.getByRole("link", { name: "Leads" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Settings" })).not.toBeInTheDocument();
   });
 });
