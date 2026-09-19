@@ -1,6 +1,23 @@
 import type { WeatherCondition } from "@/types/weather";
 import { WEATHER_CONDITION_LABEL } from "@/types/weather";
 
+/**
+ * Round 4.1 founder palette correction — "too dark, still not the soft pink
+ * tone I want." The `--luxury-coral`/`--luxury-coral-foreground` tokens this
+ * component originally read are misleadingly named: they actually resolve
+ * to gold (`#bf9a52`, BloomOS's own `--color-accent-2`) and dark wine
+ * (`#5c2530`) respectively — used correctly elsewhere (StudioTodayCard,
+ * StudioTodaySection, OwnerHomeHeader all depend on those exact values), so
+ * they are NOT touched here. This pin needed its own soft-blush palette
+ * instead, defined locally so the shared `--luxury-*` design system and its
+ * other consumers are unaffected — a palette refinement scoped to this one
+ * component, not a token rewrite.
+ */
+const PIN_BLUSH = "#fbe4ea";
+const PIN_ROSE = "#f2b9c9";
+const GLYPH_STROKE = "#c9829a";
+const HEART_PINK = "#e8869f";
+
 interface WeatherPinProps {
   condition: WeatherCondition;
   /** Pixel size of the rendered square; the pin's own aspect ratio (5:6) is preserved inside it. Defaults to 40. */
@@ -12,11 +29,10 @@ interface WeatherPinProps {
  * The Amoré Bloom Weather Pin — "Soft Editorial Pin" (Option B), the
  * Founder-approved direction from the Weather Visual Polish comparison
  * (three options shown, B selected). A location-pin silhouette with a
- * blush→coral gradient body, a gold heart accent at its point, a "glass"
- * inset with a fine gold ring, gold-filled sun/moon glyphs, and wine-toned
- * line glyphs for every other condition (cloud, raindrops, snowflakes,
- * lightning, fog lines, wind swoosh) — all existing `--luxury-*`/
- * `--color-accent-*` tokens, no new colors introduced. Same
+ * blush→soft-rose gradient body, a gold heart accent at its point, a
+ * "glass" inset with a fine gold ring, gold-filled sun/moon glyphs, and
+ * soft-rose line glyphs for every other condition (cloud, raindrops,
+ * snowflakes, lightning, fog lines, wind swoosh). Same
  * hand-authored-inline-SVG pattern `BloomIllustration.tsx` established for
  * this codebase, rather than a generic weather-icon library.
  */
@@ -33,8 +49,8 @@ export function WeatherPin({ condition, size = 40, className = "" }: WeatherPinP
       <defs>
         <linearGradient id="weatherPinBody" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="var(--luxury-warm-white)" />
-          <stop offset="60%" stopColor="var(--luxury-blush)" />
-          <stop offset="100%" stopColor="var(--luxury-coral)" />
+          <stop offset="55%" stopColor={PIN_BLUSH} />
+          <stop offset="100%" stopColor={PIN_ROSE} />
         </linearGradient>
         <radialGradient id="weatherPinGlass" cx="35%" cy="30%" r="75%">
           <stop offset="0%" stopColor="var(--luxury-warm-white)" />
@@ -42,22 +58,24 @@ export function WeatherPin({ condition, size = 40, className = "" }: WeatherPinP
         </radialGradient>
       </defs>
 
-      {/* Pin silhouette: rounded head tapering to a point, glossy fill + wine outline. AF → BloomOS Clock +
-          Weather Visual Parity — restored to a more substantial outline (AF's own pin uses a real, visible
-          contour, not a hairline) so the pin reads as decorative and sophisticated rather than thin. */}
+      {/* Pin silhouette: rounded head tapering to a point, soft-pink glossy fill + a thin GOLD outline
+          ("gold-trimmed", per the founder's Round 4.1 correction — gold now behaves purely as a refined
+          rim rather than a heavy wine contour). */}
       <path
         d="M50 6 C73 6 91 24 91 47 C91 68 62 100 52 116 C51 118 49 118 48 116 C38 100 9 68 9 47 C9 24 27 6 50 6 Z"
         fill="url(#weatherPinBody)"
-        stroke="var(--color-accent)"
-        strokeWidth="2"
+        stroke="var(--luxury-warning)"
+        strokeWidth="1.5"
         strokeLinejoin="round"
       />
 
-      {/* Small heart accent near the pin's point — brand vocabulary, restrained gold per Option B. */}
+      {/* Small heart accent near the pin's point — Round 4.2 founder correction: the reference art's heart
+          reads as soft pink, not gold (gold is reserved for the rim/ring per §3's hierarchy), so this
+          switched from `--luxury-warning` to the same soft-rose family as the pin body. */}
       <path
         d="M50 108 c-3.5-3.4-6-6.2-6-9 0-2 1.6-3.6 3.6-3.6 1 0 2 .5 2.4 1.3.4-.8 1.4-1.3 2.4-1.3 2 0 3.6 1.6 3.6 3.6 0 2.8-2.5 5.6-6 9z"
-        fill="var(--luxury-warning)"
-        opacity="0.9"
+        fill={HEART_PINK}
+        opacity="0.95"
       />
 
       {/* A double gold rim around the "glass" inset — AF's own pin anatomy pairs a fine outer contour with
@@ -65,7 +83,7 @@ export function WeatherPin({ condition, size = 40, className = "" }: WeatherPinP
       <circle cx="50" cy="46" r="31.5" fill="none" stroke="var(--luxury-warning)" strokeWidth="0.6" opacity="0.5" />
       <circle cx="50" cy="46" r="29" fill="url(#weatherPinGlass)" stroke="var(--luxury-warning)" strokeWidth="1.2" opacity="0.95" />
 
-      <g fill="none" stroke="var(--luxury-coral-foreground)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <g fill="none" stroke={GLYPH_STROKE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <WeatherGlyph condition={condition} />
       </g>
     </svg>
