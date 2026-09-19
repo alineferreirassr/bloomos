@@ -48,8 +48,15 @@ export function AppShell({ children, workspaceDisplayName }: AppShellProps) {
         {/* GLOBAL-VISUAL-03B.2 — gutter ported to AF Digital Studio OS's own
             real shell padding (`px-5 py-8 sm:px-8`, app/(app)/_shell/app-shell.tsx,
             HEAD 1587d1f). Dashboard/Team render their own LuxuryDashboardShell,
-            unaffected. */}
-        <main className="flex-1 overflow-y-auto px-5 py-8 sm:px-8">{children}</main>
+            unaffected. GLOBAL-VISUAL-08 — `pb-24 md:pb-8` reserves safe-area
+            space for CopilotLauncher's global mobile FAB (`fixed right-4
+            bottom-4 h-14 w-14`, hidden at `md:` and up, same breakpoint used
+            here), a real, confirmed overlap: without this reserve, whatever
+            content a given page happens to end with sits directly under the
+            56px button on every mobile route, since the FAB is mounted once
+            at the layout level, outside any single page's control. Fixed
+            once at the shared shell rather than padding every page. */}
+        <main className="flex-1 overflow-y-auto px-5 pt-8 pb-24 sm:px-8 md:pb-8">{children}</main>
       </div>
     </div>
   );

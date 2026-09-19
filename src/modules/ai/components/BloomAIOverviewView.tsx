@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { ModuleHero } from "@/components/ui/ModuleHero";
+import { ConnectedRail } from "@/components/ui/ConnectedRail";
 import { getBloomAIOverview, type BloomAIOverviewData } from "@/modules/ai/getBloomAIOverview";
 import { BloomAISkillPicker } from "@/modules/ai/components/BloomAISkillPicker";
 import { browseAIMemory } from "@/modules/ai/memory/browseAIMemory";
@@ -143,10 +144,16 @@ export function BloomAIOverviewView() {
   }, []);
 
   return (
-    <div>
-      <PageHeader
+    // GLOBAL-VISUAL-08 (System) — mechanically compared against AF's real
+    // "Ask AF" hub page (app/(app)/app/ai/page.tsx, HEAD 1587d1f), the
+    // direct semantic equivalent of Bloom AI: AF's own AI hero is the
+    // full, non-compact ModuleHero (not PageHeader) + ConnectedRail.
+    <div className="mx-auto max-w-6xl">
+      <ModuleHero
+        eyebrow="Studio Intelligence"
         title="Bloom AI"
-        subtitle="The central entry point for every AI capability inside BloomOS — grounded in the business's own data, never speculative, and never authoritative until a human explicitly reviews and approves it."
+        purpose="The central entry point for every AI capability inside BloomOS — grounded in the business's own data, never speculative, and never authoritative until a human explicitly reviews and approves it."
+        breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Bloom AI" }]}
         actions={
           <>
             <BloomAISkillPicker />
@@ -154,6 +161,17 @@ export function BloomAIOverviewView() {
           </>
         }
       />
+
+      <section aria-label="Where Bloom AI sits in your workflow" className="mt-8">
+        <ConnectedRail
+          items={[
+            { label: "Bloom AI", current: true },
+            { label: "Analytics", href: "/analytics" },
+            { label: "Automation", href: "/automation" },
+            { label: "Workspace", href: "/workspace" },
+          ]}
+        />
+      </section>
 
       {state.status === "loading" ? (
         <div className="mt-6 space-y-3">

@@ -8,7 +8,8 @@ import { Tabs, TabList, Tab, TabPanel } from "@/components/ui/Tabs";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { ModuleHero } from "@/components/ui/ModuleHero";
+import { ConnectedRail } from "@/components/ui/ConnectedRail";
 import { KpiCard } from "@/modules/analytics/components/KpiCard";
 import { TrendWindowPicker } from "@/modules/analytics/components/TrendWindowPicker";
 import { AnalyticsExecutiveSummaryCard } from "@/modules/analytics/components/AnalyticsExecutiveSummaryCard";
@@ -78,12 +79,30 @@ export function AnalyticsDashboardView() {
   }, [router]);
 
   return (
-    <div className="space-y-6">
-      <PageHeader
+    // GLOBAL-VISUAL-08 (Insights) — mechanically compared against AF's
+    // real Analytics page (app/(app)/app/analytics/page.tsx, HEAD 1587d1f):
+    // AF's own Analytics hero is the full, non-compact ModuleHero (not
+    // PageHeader) + ConnectedRail, same "hub page" category as Calendar/
+    // Commercial Pipeline.
+    <div className="mx-auto max-w-6xl space-y-6">
+      <ModuleHero
+        eyebrow="Insights"
         title="Analytics"
-        subtitle="The executive view of business performance, financial health, and engagement across every module."
+        purpose="The executive view of business performance, financial health, and engagement across every module."
+        breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Analytics" }]}
         actions={<TrendWindowPicker value={windowKey} onChange={setWindowKey} />}
       />
+
+      <section aria-label="Where Analytics sits in your workflow">
+        <ConnectedRail
+          items={[
+            { label: "Analytics", current: true },
+            { label: "Reports", href: "/reports" },
+            { label: "Notifications", href: "/notifications" },
+            { label: "Communications", href: "/communications" },
+          ]}
+        />
+      </section>
 
       {state.status === "loading" ? (
         <div aria-live="polite" aria-busy="true" className="space-y-4">

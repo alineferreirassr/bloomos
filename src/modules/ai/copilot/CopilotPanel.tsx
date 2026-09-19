@@ -21,6 +21,7 @@ import { logCopilotActivity } from "@/modules/ai/copilot/activityLog";
 import { CloseIcon, BloomAiIcon } from "@/components/ui/icons";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { Input } from "@/components/ui/Input";
 import type { ExecutiveBrief, TeamBrief, BriefLine, CommunicationBrief } from "@/modules/ai/copilot/briefs/types";
 import type { CopilotSuggestion } from "@/core/ai/copilot/suggestionEngine";
 import type { CommandAction } from "@/core/commandPalette/types";
@@ -194,13 +195,12 @@ export function CopilotPanel() {
             </p>
           ) : null}
 
-          <input
+          <Input
             autoFocus
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search or run a command…"
             aria-label="Search or run a command"
-            className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-muted focus-visible:border-accent focus-visible:outline-none"
           />
 
           {query.trim() !== "" ? (

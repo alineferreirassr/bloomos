@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { registerCommand, unregisterCommand } from "@/core/commandPalette";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { ModuleHero } from "@/components/ui/ModuleHero";
+import { ConnectedRail } from "@/components/ui/ConnectedRail";
 import { Card } from "@/components/ui/Card";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -101,16 +102,37 @@ export function IntegrationsDashboardView() {
   const { data } = state;
 
   return (
-    <div className="space-y-6">
-      <PageHeader
+    // GLOBAL-VISUAL-08 (System) — mechanically compared against AF's real
+    // Integrations page (app/(app)/app/integrations/page.tsx, HEAD
+    // 1587d1f): AF's own hero is the full, non-compact ModuleHero (not
+    // PageHeader) + ConnectedRail. BloomOS's page is deliberately a
+    // read-only summary dashboard (connection management lives at
+    // /developer, a real "dashboard = summary, console = action" split
+    // this page's own doc comment documents) — that body structure is
+    // untouched, only the shell.
+    <div className="mx-auto max-w-6xl space-y-6">
+      <ModuleHero
+        eyebrow="System"
         title="Integrations"
-        subtitle="A workspace-wide read of every provider connection, its health, and the platform's own queue, sync, and audit activity."
+        purpose="A workspace-wide read of every provider connection, its health, and the platform's own queue, sync, and audit activity."
+        breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Integrations" }]}
         actions={
           <Link href="/developer" className="text-sm text-accent underline">
             Manage in Developer Console
           </Link>
         }
       />
+
+      <section aria-label="Where Integrations sits in your workflow">
+        <ConnectedRail
+          items={[
+            { label: "Integrations", current: true },
+            { label: "Developer Console", href: "/developer" },
+            { label: "Webhooks", href: "/developer" },
+            { label: "Marketplace", href: "/marketplace" },
+          ]}
+        />
+      </section>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <MetricCard label="Providers available" value={data.providerCount.toString()} href="/developer" />

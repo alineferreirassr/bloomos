@@ -30,6 +30,12 @@ export function AgendaList({ events, pinnedSourceKeys, onTogglePin, pinPending }
   const sortedKeys = [...grouped.keys()].sort();
 
   return (
+    // GLOBAL-VISUAL-08 (Calendar/Scheduling) — mechanically compared
+    // against AF's own real Calendar page (app/(app)/app/calendar/page.tsx,
+    // HEAD 1587d1f), which literally IS a day-grouped agenda list like this
+    // one: day heading is `font-serif text-xl` (not a small sans uppercase
+    // label), and each day's items sit in one flat `divide-y` bordered
+    // list rather than individually card-bordered rows. Ported both here.
     <div className="flex flex-col gap-6 rounded-lg border border-border bg-surface p-4 shadow-sm sm:p-5">
       {sortedKeys.map((key) => {
         const [year, month, day] = key.split("-").map(Number);
@@ -39,13 +45,13 @@ export function AgendaList({ events, pinnedSourceKeys, onTogglePin, pinPending }
         return (
           <div key={key}>
             <div className="mb-2.5 flex items-center gap-3">
-              <p className="shrink-0 text-sm font-semibold tracking-wide text-text uppercase">
+              <p className="shrink-0 font-serif text-xl text-text">
                 {date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
               </p>
               <span className="h-px flex-1 bg-border" />
               {weatherPoint ? <DayWeatherBadge latitude={weatherPoint.latitude} longitude={weatherPoint.longitude} timezone={weatherPoint.timezone} date={key} size={16} /> : null}
             </div>
-            <ul className="flex flex-col gap-1.5">
+            <ul className="divide-y divide-border rounded-xl border border-border">
               {items.map((event) => {
                 const Icon = CATEGORY_ICON[event.category];
                 const isPinned = pinnedSourceKeys?.has(`${event.sourceType}:${event.sourceId}`) ?? false;
@@ -58,7 +64,7 @@ export function AgendaList({ events, pinnedSourceKeys, onTogglePin, pinPending }
                   </>
                 );
                 return (
-                  <li key={event.id} className="flex items-center gap-2.5 rounded-lg border border-border bg-surface-tint/50 p-2.5 transition-colors duration-150 hover:bg-text/5">
+                  <li key={event.id} className="flex items-center gap-2.5 px-4 py-3 transition-colors duration-150 hover:bg-text/5">
                     {event.href ? (
                       <Link href={event.href} className="flex min-w-0 flex-1 items-center gap-2.5">
                         {rowContent}

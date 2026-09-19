@@ -309,7 +309,7 @@ describe("BloomAIOverviewView", () => {
     vi.mocked(getBloomAIOverview).mockResolvedValue({ success: true, data: makeData() } satisfies GetBloomAIOverviewResult);
     vi.mocked(browseAIMemory).mockResolvedValue({ success: true, data: { memories: [makeMemory({ title: "Browsed memory" })] } });
     render(<BloomAIOverviewView />);
-    await waitFor(() => expect(screen.getByText("Bloom AI")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Bloom AI" })).toBeInTheDocument());
 
     const runner = getSkillRunner(BROWSE_AI_MEMORY_SKILL_ID);
     expect(runner).toBeDefined();
@@ -323,7 +323,7 @@ describe("BloomAIOverviewView", () => {
     vi.mocked(getBloomAIOverview).mockResolvedValue({ success: true, data: makeData() } satisfies GetBloomAIOverviewResult);
     vi.mocked(browseAIMemory).mockResolvedValue({ success: false, error: "AI Memory isn't available right now. You may not have access to it." });
     render(<BloomAIOverviewView />);
-    await waitFor(() => expect(screen.getByText("Bloom AI")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Bloom AI" })).toBeInTheDocument());
 
     const runner = getSkillRunner(BROWSE_AI_MEMORY_SKILL_ID);
     await runner?.();

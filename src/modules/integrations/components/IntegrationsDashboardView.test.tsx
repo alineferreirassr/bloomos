@@ -77,7 +77,7 @@ describe("IntegrationsDashboardView", () => {
   it("renders the dashboard on a successful result", async () => {
     vi.mocked(getIntegrationsDashboardData).mockResolvedValue({ success: true, data: READY_DATA });
     render(<IntegrationsDashboardView />);
-    expect(await screen.findByText("Integrations")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Integrations" })).toBeInTheDocument();
     expect(screen.getByText("No connections yet")).toBeInTheDocument();
   });
 
@@ -106,7 +106,7 @@ describe("IntegrationsDashboardView", () => {
     vi.mocked(getIntegrationsDashboardData).mockResolvedValueOnce({ success: true, data: READY_DATA });
     await user.click(screen.getByRole("button", { name: /try again/i }));
 
-    expect(await screen.findByText("Integrations")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Integrations" })).toBeInTheDocument();
     expect(vi.mocked(getIntegrationsDashboardData)).toHaveBeenCalledTimes(2);
   });
 
@@ -119,6 +119,6 @@ describe("IntegrationsDashboardView", () => {
     vi.mocked(getIntegrationsDashboardData).mockResolvedValueOnce({ success: true, data: READY_DATA });
     await user.click(screen.getByRole("button", { name: /try again/i }));
 
-    expect(await screen.findByText("Integrations")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Integrations" })).toBeInTheDocument();
   });
 });

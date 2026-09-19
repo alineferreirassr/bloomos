@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Checkbox } from "@/components/ui/Checkbox";
 import type { BadgeTone } from "@/components/ui/Badge";
 import { replayAllDeadLetterDeliveriesAction, replayWebhookDeliveryAction } from "@/modules/webhooks/manageWebhookDeliveriesActions";
 import type { WebhookDelivery, WebhookDeliverySummary } from "@/types/webhookDelivery";
@@ -106,7 +107,7 @@ export function DeliveriesTab({ deliveries, summary, endpoints, onChanged }: Del
           <h3 className="font-serif text-[17px] font-semibold text-text">Deliveries</h3>
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-2 text-xs text-text-muted">
-              <input type="checkbox" checked={dlqOnly} onChange={(event) => setDlqOnly(event.target.checked)} aria-label="Show Dead Letter Queue only" />
+              <Checkbox checked={dlqOnly} onChange={(event) => setDlqOnly(event.target.checked)} aria-label="Show Dead Letter Queue only" />
               Dead Letter Queue only
             </label>
             {summary.deadLetterCount > 0 ? (

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { ModuleHero } from "@/components/ui/ModuleHero";
+import { ConnectedRail } from "@/components/ui/ConnectedRail";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -43,11 +44,16 @@ export function ReportsDashboardView() {
   }, []);
 
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
+    // GLOBAL-VISUAL-08 (Insights) — same hub-page shell as Analytics
+    // (AF has no direct "/reports" page; Analytics is AF's own closest
+    // real documented hub-page pattern, same precedent already used for
+    // Contracts/Client Accounts having no direct AF equivalent).
+    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+      <ModuleHero
+        eyebrow="Insights"
         title="Reports"
-        subtitle="Composed, saved reports over every module's own metrics."
-        icon={ReportsIcon}
+        purpose="Composed, saved reports over every module's own metrics."
+        breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Reports" }]}
         actions={
           <div className="flex gap-2">
             <Link href="/reports/templates">
@@ -59,6 +65,17 @@ export function ReportsDashboardView() {
           </div>
         }
       />
+
+      <section aria-label="Where Reports sits in your workflow">
+        <ConnectedRail
+          items={[
+            { label: "Analytics", href: "/analytics" },
+            { label: "Reports", current: true },
+            { label: "Notifications", href: "/notifications" },
+            { label: "Communications", href: "/communications" },
+          ]}
+        />
+      </section>
 
       {analytics ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

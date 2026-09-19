@@ -22,9 +22,18 @@ interface LuxuryDashboardShellProps {
   children: ReactNode;
 }
 
+// GLOBAL-VISUAL-08 — bottom padding reserves safe-area space for
+// CopilotLauncher's global mobile FAB (`fixed right-4 bottom-4 h-14 w-14`,
+// hidden at `md:` and up — this shell renders it too, per its own doc
+// comment). Written with explicit px/pt/pb longhands at every breakpoint
+// rather than the `p-4 sm:p-6 md:p-8` shorthand it replaces, so there's no
+// shorthand-vs-longhand cascade ambiguity between the base padding and the
+// pb-24 override (the same class of bug already caught once this
+// checkpoint in Button.tsx's border-color conflict) — px/pt values are
+// otherwise byte-identical to the original.
 const MAIN_PADDING_CLASS: Record<"default" | "compact", string> = {
-  default: "p-4 sm:p-6 md:p-8",
-  compact: "p-2.5 sm:p-6 md:p-8",
+  default: "px-4 pt-4 pb-24 sm:px-6 sm:pt-6 sm:pb-24 md:px-8 md:pt-8 md:pb-8",
+  compact: "px-2.5 pt-2.5 pb-24 sm:px-6 sm:pt-6 sm:pb-24 md:px-8 md:pt-8 md:pb-8",
 };
 
 /**

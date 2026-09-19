@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { ModuleHero } from "@/components/ui/ModuleHero";
+import { ConnectedRail } from "@/components/ui/ConnectedRail";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { EventsIcon } from "@/components/ui/icons";
 import { CalendarNavigationBar } from "@/modules/calendar/components/CalendarNavigationBar";
@@ -135,13 +136,32 @@ export function AdvancedCalendarView() {
   }
 
   return (
-    <div>
-      <PageHeader
+    // GLOBAL-VISUAL-08 (Calendar/Scheduling) — mechanically verified
+    // against AF's real Calendar page (app/(app)/app/calendar/page.tsx,
+    // HEAD 1587d1f): AF's own Calendar hero is the full, non-compact
+    // ModuleHero (not PageHeader) + ConnectedRail, even though the page
+    // body itself is a different pattern (AF's is a chronological agenda
+    // list; BloomOS's is a real month/week/day/agenda calendar) — same
+    // "hub tool page keeps the full hero regardless of body shape"
+    // precedent already established for Commercial Pipeline.
+    <div className="mx-auto max-w-6xl space-y-8">
+      <ModuleHero
+        eyebrow="Calendar"
         title="Calendar"
-        subtitle="Events, tasks, and deadlines across Amoré Bloom's operations."
-        icon={EventsIcon}
-        breadcrumb={[{ label: "Calendar" }]}
+        purpose="Events, tasks, and deadlines across Amoré Bloom's operations."
+        breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Calendar" }]}
+        status={events ? [{ label: "In this range", value: filteredEvents.length, icon: EventsIcon }] : undefined}
       />
+
+      <section aria-label="Where Calendar sits in your workflow">
+        <ConnectedRail
+          items={[
+            { label: "Events", href: "/events" },
+            { label: "Calendar", current: true },
+            { label: "Scheduling", href: "/scheduling" },
+          ]}
+        />
+      </section>
 
       <div className="rounded-xl border border-border bg-surface-tint/60 p-3 sm:p-4">
         <div className="mb-4 rounded-lg border border-border bg-surface p-3 shadow-sm sm:p-4">
