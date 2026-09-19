@@ -65,7 +65,7 @@ export function EventLifecycleSelect({ eventId, stage, onChanged }: EventLifecyc
         ))}
       </Select>
       {error ? (
-        <p role="alert" className="mt-1.5 text-xs text-rose-600 dark:text-rose-400">
+        <p role="alert" className="mt-1.5 text-xs text-danger">
           {error}
         </p>
       ) : null}

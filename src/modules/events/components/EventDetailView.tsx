@@ -224,7 +224,23 @@ export function EventDetailView({ eventId }: { eventId: string }) {
   const notesReadOnly = event.status === "archived" || event.status === "cancelled";
 
   return (
-    <div className="space-y-8">
+    // GLOBAL-VISUAL-05 (Events) — this page is already an elaborate,
+    // deliberately-designed "operational command center" (LuxuryCard-based,
+    // integrating Weather/AI/Finance/Command Center sub-panels) — same
+    // category as ClientDetailView's "separately-approved dossier," not
+    // legacy default styling, so its card system is left as-is rather than
+    // rebuilt against AF's plainer detail-page pattern. Only content width
+    // aligned to max-w-6xl and a breadcrumb added (previously missing
+    // entirely), matching ClientDetailView's own light-touch precedent.
+    <div className="mx-auto max-w-6xl space-y-8">
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-text-muted">
+        <Link href="/dashboard" className="hover:text-text">Home</Link>
+        <span>/</span>
+        <Link href="/events" className="hover:text-text">Events</Link>
+        <span>/</span>
+        <span className="text-text">{event.title}</span>
+      </nav>
+
       <div>
         <h2 className="font-serif text-3xl font-semibold text-text">{event.title}</h2>
         <div className="mt-2 flex flex-wrap items-center gap-2">

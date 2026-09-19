@@ -11,7 +11,8 @@ import { Card } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { ModuleHero } from "@/components/ui/ModuleHero";
+import { ConnectedRail } from "@/components/ui/ConnectedRail";
 import { ModuleInsightCard } from "@/components/ui/ModuleInsightCard";
 import { EventsIcon, PipelineIcon, AutomationIcon, CheckIcon } from "@/components/ui/icons";
 import { EventFilters, type EventFiltersValue } from "@/modules/events/components/EventFilters";
@@ -188,11 +189,16 @@ export function EventsListView() {
   const insight = state.status === "ready" ? buildEventsInsight(state.rows) : null;
 
   return (
-    <div className="space-y-8">
-      <PageHeader
+    // GLOBAL-VISUAL-05 (Events) — same AF-ported dense-list shell as
+    // Leads/Clients/Contracts (ModuleHero compact + ConnectedRail),
+    // replacing the older PageHeader-only shell this page still had.
+    <div className="mx-auto max-w-6xl space-y-8">
+      <ModuleHero
+        compact
         eyebrow="Events"
         title="Events"
-        subtitle={`The operational center for every engagement Amoré Bloom is planning. ${getDataPersistenceMessage()}`}
+        purpose="The operational center for every engagement Amoré Bloom is planning."
+        breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Events" }]}
         actions={
           canCreate ? (
             <Link href="/events/new">
@@ -200,7 +206,24 @@ export function EventsListView() {
             </Link>
           ) : null
         }
+        source={
+          <p className="flex items-center gap-1.5 text-xs text-text-muted/80">
+            <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
+            {getDataPersistenceMessage()}
+          </p>
+        }
       />
+
+      <section aria-label="Where Events sits in your workflow">
+        <ConnectedRail
+          items={[
+            { label: "Clients", href: "/clients" },
+            { label: "Commercial Pipeline", href: "/pipeline/commercial" },
+            { label: "Events", current: true },
+            { label: "Operational Pipeline", href: "/pipeline/operational" },
+          ]}
+        />
+      </section>
 
       {/* GLOBAL-VISUAL-02C.1 — the four real metrics now live as one composed
           "Event Overview" card instead of four disconnected KPI cards (the

@@ -237,7 +237,7 @@ describe("EventDetailView", () => {
 
     renderEventDetail("event_1");
 
-    expect(await screen.findByText("Malibu Sunset Proposal")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Malibu Sunset Proposal" })).toBeInTheDocument();
     // Badge text and Status/Lifecycle/Priority select option text legitimately
     // repeat on this page (header badge + the transition select's options),
     // so use getAllByText rather than asserting a single match.
@@ -385,7 +385,7 @@ describe("EventDetailView", () => {
   it("never shows the EventArchivedBanner for a confirmed event", async () => {
     mockReady({ status: "confirmed" });
     renderEventDetail("event_1");
-    await screen.findByText("Malibu Sunset Proposal");
+    await screen.findByRole("heading", { name: "Malibu Sunset Proposal" });
     expect(screen.queryByText(/This Event is archived/)).not.toBeInTheDocument();
   });
 
@@ -432,7 +432,7 @@ describe("EventDetailView", () => {
 
       renderEventDetail("event_1");
 
-      await screen.findByText("Malibu Sunset Proposal");
+      await screen.findByRole("heading", { name: "Malibu Sunset Proposal" });
       expect(dataLayer.getLeadById).not.toHaveBeenCalled();
       expect(screen.queryByRole("link", { name: "View original Lead →" })).not.toBeInTheDocument();
     });

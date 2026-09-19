@@ -7,6 +7,7 @@ import type { Event } from "@/types/event";
 import { NotFoundError } from "@/core/errors";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { EventForm } from "@/modules/events/components/EventForm";
 import { eventToFormInput } from "@/modules/events/mappers";
 
@@ -59,8 +60,14 @@ export function EditEventView({ eventId }: { eventId: string }) {
   }
 
   return (
-    <div>
-      <h2 className="font-serif text-3xl font-semibold text-text">Edit {state.event.title}</h2>
+    // GLOBAL-VISUAL-05 (Events) — same AF-ported detail/form pattern as
+    // NewEventView/EditLeadView (real PageHeader + breadcrumb, max-w-6xl).
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        eyebrow="Event"
+        title={`Edit ${state.event.title}`}
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Events", href: "/events" }, { label: state.event.title, href: `/events/${eventId}` }, { label: "Edit" }]}
+      />
       <div className="mt-6 max-w-3xl">
         <EventForm
           submitLabel="Save changes"

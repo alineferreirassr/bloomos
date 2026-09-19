@@ -2,14 +2,22 @@
 
 import { useRouter } from "next/navigation";
 import { createEvent } from "@/lib/data";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { EventForm } from "@/modules/events/components/EventForm";
 
 export function NewEventView() {
   const router = useRouter();
 
   return (
-    <div>
-      <h2 className="text-3xl font-semibold text-text">New Event</h2>
+    // GLOBAL-VISUAL-05 (Events) — same AF-ported detail/form pattern
+    // already established for Leads/Clients/Contracts (real PageHeader +
+    // breadcrumb, max-w-6xl content width).
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        eyebrow="Event"
+        title="New Event"
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Events", href: "/events" }, { label: "New" }]}
+      />
       <div className="mt-6 max-w-3xl">
         <EventForm
           submitLabel="Create Event"

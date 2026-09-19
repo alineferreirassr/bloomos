@@ -64,7 +64,7 @@ export function EventActions({ event, onChanged }: EventActionsProps) {
           {restoring ? "Restoring…" : "Restore"}
         </Button>
         {restoreError ? (
-          <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
+          <p role="alert" className="text-sm text-danger">
             {restoreError}
           </p>
         ) : null}
