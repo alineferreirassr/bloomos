@@ -15,7 +15,16 @@ interface MobileNavProps {
   workspaceDisplayName: string;
 }
 
-/** GLOBAL-VISUAL-01 Round 4.5 — same grouped/compact navigation as the desktop Sidebar (see its own doc comment); the drawer must not diverge into the old flat list either. */
+/**
+ * GLOBAL-VISUAL-01 Round 4.5 — same grouped/compact navigation as the
+ * desktop Sidebar (see its own doc comment); the drawer must not diverge
+ * into the old flat list either.
+ *
+ * GLOBAL-VISUAL-03B — branding header compacted to match the desktop
+ * Sidebar's own GLOBAL-VISUAL-03B update (monogram badge + small logo +
+ * tagline), so the mobile shell doesn't diverge from desktop the way it
+ * did before.
+ */
 export function MobileNav({ open, onClose, workspaceDisplayName }: MobileNavProps) {
   const pathname = usePathname();
   const { can } = useMemberSession();
@@ -39,17 +48,22 @@ export function MobileNav({ open, onClose, workspaceDisplayName }: MobileNavProp
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="mb-4 flex items-center justify-between border-b border-border/50 px-[23px] pb-[23px]">
-          <div>
-            <Image
-              src="/brand/amore-bloom-app-logo.png"
-              alt="Amoré Bloom"
-              width={670}
-              height={670}
-              className="h-auto w-24"
-            />
-            <div className="mt-1 text-[11px] tracking-[0.06em] text-text/55 uppercase">
-              Luxury Proposal &amp; Event Studio
+        <div className="mb-3 flex items-center justify-between border-b border-border/50 px-5 pb-4">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-medium text-white">
+              AB
+            </span>
+            <div className="min-w-0">
+              <Image
+                src="/brand/amore-bloom-app-logo.png"
+                alt="Amoré Bloom"
+                width={670}
+                height={670}
+                className="h-auto max-h-6 w-auto"
+              />
+              <p className="mt-1 text-[10px] tracking-[0.06em] text-text/55 uppercase">
+                Luxury Proposal &amp; Event Studio
+              </p>
             </div>
           </div>
           <button

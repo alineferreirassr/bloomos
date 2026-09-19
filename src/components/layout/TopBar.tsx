@@ -1,8 +1,7 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import { findActiveNavLabel } from "@/config/navigation";
-import { MenuIcon, BloomAiIcon } from "@/components/ui/icons";
+import { MenuIcon, BloomAiIcon, SearchIcon } from "@/components/ui/icons";
+import { dispatchOpenCommandPalette } from "@/core/commandPalette/openCommandPaletteEvent";
 import { useCopilotPanel } from "@/modules/ai/copilot/CopilotProvider";
 
 interface TopBarProps {
@@ -10,49 +9,51 @@ interface TopBarProps {
 }
 
 /**
- * GLOBAL-VISUAL-03A — routes whose own PageHeader now renders a real
- * breadcrumb (matching the AF Digital Studio OS reference's "Home > Page"
- * pattern) no longer need this topbar label too; showing both stacked the
- * same wayfinding twice. Scoped to Relationships only — every other route
- * keeps this label exactly as before.
+ * GLOBAL-VISUAL-03B — rebuilt as the Classical-token twin of
+ * `LuxuryTopbar` (Dashboard/Team's shell), not a bespoke redesign: same
+ * search trigger (`dispatchOpenCommandPalette`, the same event
+ * `CommandPalette.tsx` already listens for) and the same Bloom AI trigger
+ * (`useCopilotPanel().toggle`, the same hook the floating FAB uses) — a
+ * second entry point into each existing singleton, nothing new built. This
+ * replaces the old muted page-title label entirely: the founder's target
+ * grammar has the page's own `PageHeader` own the title (with an optional
+ * breadcrumb), so a second, smaller copy of it here was always redundant,
+ * not just on Relationships. No functionality removed — every route that
+ * showed a title still shows one, once, in the page body.
  */
-const SUPPRESS_TOPBAR_LABEL_PREFIXES = ["/relationships"];
-
 export function TopBar({ onMenuClick }: TopBarProps) {
-  const pathname = usePathname();
-  const activeLabel = findActiveNavLabel(pathname);
-  const suppressLabel = SUPPRESS_TOPBAR_LABEL_PREFIXES.some((prefix) => pathname.startsWith(prefix));
   const { toggle } = useCopilotPanel();
 
   return (
-    <header className="flex h-[72px] min-h-[72px] items-center gap-3 border-b border-border/40 bg-background px-4 md:px-7">
+    <header className="flex h-[72px] min-h-[72px] items-center justify-between gap-2 border-b border-border/40 bg-background px-4 md:justify-end md:px-7">
       <button
         type="button"
         onClick={onMenuClick}
-        className="-ml-1 flex h-9 w-9 items-center justify-center rounded-md text-text-muted transition-colors duration-150 hover:bg-text/7 hover:text-text md:hidden"
+        className="-ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors duration-150 hover:bg-text/7 hover:text-text md:hidden"
         aria-label="Open navigation menu"
       >
         <MenuIcon className="h-5 w-5" />
       </button>
-      {/*
-        The approved Header mockup puts the 24px serif page title here, with
-        no separate title inside the page body. This app's page bodies (e.g.
-        ClientsListView, DashboardPage) already render their own large serif
-        h2 title just below — duplicating it here would show the same title
-        twice stacked on screen. Kept small/muted instead, functioning as a
-        breadcrumb, so the one large title stays where it already lives.
-      */}
-      <p className="flex-1 text-sm font-medium tracking-tight text-text-muted">
-        {suppressLabel ? "" : (activeLabel ?? "Amoré Bloom")}
-      </p>
-      <button
-        type="button"
-        onClick={toggle}
-        className="hidden items-center gap-1.5 rounded-full border border-border/50 px-3 py-1.5 text-sm font-medium text-text transition-colors duration-150 hover:bg-accent-100 hover:text-accent md:flex"
-      >
-        <BloomAiIcon className="h-4 w-4" aria-hidden="true" />
-        Bloom AI
-      </button>
+      <div className="flex flex-1 items-center justify-end gap-2 md:flex-none">
+        <button
+          type="button"
+          onClick={dispatchOpenCommandPalette}
+          aria-label="Search BloomOS"
+          className="flex h-10 items-center gap-2 rounded-[10px] border border-border bg-surface-tint px-3.5 text-sm font-medium text-text-muted transition-colors duration-150 hover:text-text md:w-60"
+        >
+          <SearchIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="hidden flex-1 text-left sm:inline">Search...</span>
+          <span className="hidden rounded-[4px] border border-border bg-surface px-1.5 py-0.5 text-[10px] font-semibold text-text-muted sm:inline">⌘K</span>
+        </button>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label="Open Bloom AI"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-accent shadow-sm transition-colors duration-150 hover:bg-accent-100"
+        >
+          <BloomAiIcon className="h-[18px] w-[18px]" aria-hidden="true" />
+        </button>
+      </div>
     </header>
   );
 }

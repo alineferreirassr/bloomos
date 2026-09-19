@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ComponentType, type ReactNode, type SVGProps } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { TrendingUp, Users, FileSignature, Mail, CheckCircle2 } from "lucide-react";
 import { getLeads, getClients, getContracts, getClientInvitations } from "@/lib/data";
@@ -14,6 +14,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Badge } from "@/components/ui/Badge";
+import { MetricStat } from "@/components/ui/MetricStat";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { LeadStatusBadge } from "@/modules/leads/components/LeadStatusBadge";
@@ -44,33 +45,6 @@ const AWAITING_SIGNATURE_CONTRACT_STATUSES = new Set(["sent", "viewed"]);
 function formatMoney(amount: number): string {
   return `$${amount.toLocaleString()}`;
 }
-
-interface SnapshotStatProps {
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
-  tint: string;
-  value: string;
-  label: string;
-}
-
-/** GLOBAL-VISUAL-02C.1 — one stat block within the single "Relationship
- * Snapshot" card, instead of three disconnected full cards. */
-function SnapshotStat({ icon: Icon, tint, value, label }: SnapshotStatProps) {
-  return (
-    <div className="flex items-center gap-3 py-4 first:pt-0 last:pb-0 sm:px-5 sm:py-1 sm:first:pl-0 sm:last:pr-0">
-      <span
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
-        style={{ backgroundColor: `color-mix(in srgb, ${tint} 16%, var(--luxury-surface))` }}
-      >
-        <Icon className="h-[18px] w-[18px]" style={{ color: tint }} aria-hidden="true" />
-      </span>
-      <div className="min-w-0">
-        <p className="font-luxury-display text-[1.375rem] leading-none font-semibold text-luxury-text tabular-nums">{value}</p>
-        <p className="mt-1 text-luxury-small text-luxury-text-muted">{label}</p>
-      </div>
-    </div>
-  );
-}
-
 
 interface AttentionItem {
   key: string;
@@ -210,36 +184,29 @@ export function RelationshipsLandingView() {
         <SectionHeader title="Relationship overview" />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1.2fr_1fr]">
           <LuxuryCard>
-            <div className="flex h-full items-center gap-4">
-              <span
-                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full"
-                style={{ backgroundColor: "color-mix(in srgb, var(--luxury-rose) 16%, var(--luxury-surface))" }}
-              >
-                <TrendingUp className="h-6 w-6" style={{ color: "var(--luxury-rose)" }} aria-hidden="true" />
-              </span>
-              <div className="min-w-0">
-                <p className="font-luxury-display text-[2.125rem] leading-none font-semibold text-luxury-text tabular-nums">
-                  {formatMoney(summary.pipelineValue)}
-                </p>
-                <p className="mt-2 text-luxury-small text-luxury-text-muted">Active Pipeline Value</p>
-              </div>
-            </div>
+            <MetricStat
+              size="primary"
+              icon={TrendingUp}
+              tint="var(--color-accent)"
+              value={formatMoney(summary.pipelineValue)}
+              label="Active Pipeline Value"
+            />
           </LuxuryCard>
           <LuxuryCard>
             <div className="grid h-full grid-cols-2 divide-x divide-border/50">
-              <SnapshotStat icon={Users} tint="var(--luxury-coral)" value={String(summary.activeLeads.length)} label="Active Leads" />
-              <SnapshotStat icon={Users} tint="var(--luxury-success)" value={String(summary.activeClients.length)} label="Active Clients" />
+              <MetricStat icon={Users} tint="var(--color-accent-2)" value={String(summary.activeLeads.length)} label="Active Leads" />
+              <MetricStat icon={Users} tint="var(--color-success)" value={String(summary.activeClients.length)} label="Active Clients" />
             </div>
           </LuxuryCard>
         </div>
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 px-1 text-luxury-small text-luxury-text-muted">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 px-1 text-xs text-text-muted">
           <span className="flex items-center gap-1.5">
-            <FileSignature className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--luxury-coral)" }} aria-hidden="true" />
-            Contracts In Progress <strong className="font-semibold text-luxury-text">{summary.contractsInProgress.length}</strong>
+            <FileSignature className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--color-accent-2)" }} aria-hidden="true" />
+            Contracts In Progress <strong className="font-semibold text-text">{summary.contractsInProgress.length}</strong>
           </span>
           <span className="flex items-center gap-1.5">
-            <Mail className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--luxury-warning)" }} aria-hidden="true" />
-            Pending Invitations <strong className="font-semibold text-luxury-text">{summary.pendingInvitations.length}</strong>
+            <Mail className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--color-warning)" }} aria-hidden="true" />
+            Pending Invitations <strong className="font-semibold text-text">{summary.pendingInvitations.length}</strong>
           </span>
         </div>
       </div>
