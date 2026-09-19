@@ -44,6 +44,12 @@ interface SidebarProps {
  * `py-6` wrapper padding is removed in favor of AF's own per-region
  * padding (nav's own `py-4`, footer's own `p-3`) so the brand row can sit
  * flush at the very top like AF's does.
+ *
+ * GLOBAL-VISUAL-04 addendum — `font-crm-sans` (AF's real Manrope interface
+ * sans) applied at the shell level: a shared-primitive geometry/typography
+ * change explicitly authorized to ripple beyond the CRM (Sidebar serves
+ * every Classical route), verified against a non-CRM route (Events) for
+ * regression before deploy. No route, permission, or destination changed.
  */
 export function Sidebar({ workspaceDisplayName }: SidebarProps) {
   const pathname = usePathname();
@@ -51,7 +57,7 @@ export function Sidebar({ workspaceDisplayName }: SidebarProps) {
   const groups = groupVisibleNavigationModules(can);
 
   return (
-    <aside className="hidden md:flex md:w-64 md:flex-col md:overflow-hidden md:bg-sidebar md:border-r md:border-border/50">
+    <aside className="font-crm-sans hidden md:flex md:w-64 md:flex-col md:overflow-hidden md:bg-sidebar md:border-r md:border-border/50">
       <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-border/50 px-5">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-medium text-white">
           AB

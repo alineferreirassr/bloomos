@@ -16,6 +16,15 @@ interface ModuleHeroProps {
   actions?: ReactNode;
   status?: StatusSummaryItem[];
   source?: ReactNode;
+  /**
+   * AF's real compact hero variant, used by every dense list/detail work
+   * screen (Leads, Contracts — verified against AF's own
+   * app/(app)/app/leads/page.tsx): smaller title, a quieter one-line
+   * purpose, tighter spacing so the work surface (table/board) arrives
+   * sooner. Hub/landing pages (Relationships) keep the full editorial
+   * hero — default false.
+   */
+  compact?: boolean;
 }
 
 /**
@@ -37,9 +46,13 @@ interface ModuleHeroProps {
  * Pipeline): every one of them passes exactly ONE status item — this prop
  * is for a single headline figure, not a metrics dashboard.
  */
-export function ModuleHero({ eyebrow, title, purpose, breadcrumbs, actions, status, source }: ModuleHeroProps) {
+export function ModuleHero({ eyebrow, title, purpose, breadcrumbs, actions, status, source, compact = false }: ModuleHeroProps) {
   return (
-    <header className="animate-fade-down">
+    // font-crm-sans (AF's real Manrope interface sans, GLOBAL-VISUAL-04
+    // addendum) cascades to every non-heading text here; the h1 below
+    // keeps its own explicit font-serif (Cormorant, direct rule always
+    // wins over an inherited family — not a specificity gamble).
+    <header className="animate-fade-down font-crm-sans">
       {breadcrumbs && breadcrumbs.length > 0 ? (
         <nav aria-label="Breadcrumb" className="mb-2 flex flex-wrap items-center gap-1 text-xs text-text-muted">
           {breadcrumbs.map((item, index) => {
@@ -62,17 +75,27 @@ export function ModuleHero({ eyebrow, title, purpose, breadcrumbs, actions, stat
 
       <p className="text-xs font-semibold tracking-[0.16em] text-accent uppercase">{eyebrow}</p>
 
-      <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
+      <div className={`flex flex-wrap items-end justify-between gap-4 ${compact ? "mt-2" : "mt-2"}`}>
         <div className="min-w-0">
-          <h1 className="font-serif text-[2rem] leading-[1.08] text-balance sm:text-[2.75rem]">{title}</h1>
-          <p className="mt-3 max-w-xl text-lg leading-relaxed text-text-muted text-pretty">{purpose}</p>
+          <h1
+            className={`font-serif text-balance ${
+              compact ? "text-[1.6rem] leading-tight sm:text-[2rem]" : "text-[2rem] leading-[1.08] sm:text-[2.75rem]"
+            }`}
+          >
+            {title}
+          </h1>
+          {compact ? (
+            <p className="mt-1.5 max-w-2xl text-sm text-text-muted">{purpose}</p>
+          ) : (
+            <p className="mt-3 max-w-xl text-lg leading-relaxed text-text-muted text-pretty">{purpose}</p>
+          )}
 
-          {status && status.length > 0 ? <StatusSummary items={status} className="mt-6" /> : null}
+          {status && status.length > 0 ? <StatusSummary items={status} className={compact ? "mt-4" : "mt-6"} /> : null}
         </div>
         {actions ? <div className="flex flex-wrap items-center gap-2.5">{actions}</div> : null}
       </div>
 
-      {source ? <div className="mt-5">{source}</div> : null}
+      {source ? <div className={compact ? "mt-3" : "mt-5"}>{source}</div> : null}
     </header>
   );
 }

@@ -44,7 +44,7 @@ export function MobileNav({ open, onClose, workspaceDisplayName }: MobileNavProp
         }`}
       />
       <div
-        className={`absolute inset-y-0 left-0 flex w-64 flex-col bg-sidebar py-6 shadow-md transition-transform duration-200 ${
+        className={`font-crm-sans absolute inset-y-0 left-0 flex w-64 flex-col bg-sidebar py-6 shadow-md transition-transform duration-200 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >

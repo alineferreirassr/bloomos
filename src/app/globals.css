@@ -69,6 +69,12 @@
 
   --font-heading-family: var(--font-cormorant), "Cormorant Garamond", Georgia, serif;
   --font-body-family: var(--font-lora), "Lora", Georgia, serif;
+  /* GLOBAL-VISUAL-04 addendum — AF Digital Studio OS's own real interface
+     sans (Manrope), CRM-scoped only via the `font-crm-sans` utility
+     (mapped below in the @theme inline block). Not wired into
+     --font-body-family/--font-sans: those also back Dashboard's own
+     Luxury shell, which stays explicitly out of scope. */
+  --crm-font-sans: var(--font-manrope), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
   --radius-sm-px: 8px;
   --radius-md-px: 14px;
@@ -220,6 +226,7 @@
   --color-luxury-pending-foreground: var(--luxury-pending-foreground);
   --font-luxury-display: var(--luxury-font-display);
   --font-luxury-body: var(--luxury-font-body);
+  --font-crm-sans: var(--crm-font-sans);
   --radius-luxury-sm: var(--luxury-radius-sm);
   --radius-luxury-md: var(--luxury-radius-md);
   --radius-luxury-lg: var(--luxury-radius-lg);

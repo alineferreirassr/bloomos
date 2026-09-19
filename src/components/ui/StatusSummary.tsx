@@ -20,7 +20,7 @@ export interface StatusSummaryItem {
 export function StatusSummary({ items, className }: { items: StatusSummaryItem[]; className?: string }) {
   if (items.length === 0) return null;
   return (
-    <dl className={`flex flex-wrap items-center gap-x-6 gap-y-3 ${className ?? ""}`}>
+    <dl className={`font-crm-sans flex flex-wrap items-center gap-x-6 gap-y-3 ${className ?? ""}`}>
       {items.map((item) => {
         const Icon = item.icon;
         return (

@@ -16,7 +16,7 @@ import Link from "next/link";
 export function SimpleListCard({ title, action, children }: { title?: string; action?: ReactNode; children: ReactNode }) {
   return (
     <section
-      className="rounded-[1.75rem] border border-border bg-surface p-5"
+      className="font-crm-sans rounded-[1.75rem] border border-border bg-surface p-5"
       style={{ boxShadow: "0 1px 2px rgba(59,43,41,0.05), 0 1px 1px rgba(59,43,41,0.04)" }}
     >
       {title ? (

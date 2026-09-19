@@ -21,7 +21,7 @@ export function ConnectedRail({ items }: { items: ConnectedRailStep[] }) {
   return (
     <nav
       aria-label="Where this sits in your workflow"
-      className="flex items-center gap-2 overflow-x-auto [mask-image:linear-gradient(to_right,#000_calc(100%-1.75rem),transparent)] sm:[mask-image:none]"
+      className="font-crm-sans flex items-center gap-2 overflow-x-auto [mask-image:linear-gradient(to_right,#000_calc(100%-1.75rem),transparent)] sm:[mask-image:none]"
     >
       {items.map((step, index) => {
         const chip = (

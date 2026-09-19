@@ -31,12 +31,15 @@ interface TopBarProps {
  * (AF's own equivalent trigger is a bare icon button) — a deliberate brand
  * distinction, not an oversight: Bloom AI is BloomOS's own signature
  * feature, not a literal copy of AF's notification bell.
+ *
+ * GLOBAL-VISUAL-04 addendum — `font-crm-sans` applied at the shell level,
+ * same rationale as Sidebar's own addendum note.
  */
 export function TopBar({ onMenuClick }: TopBarProps) {
   const { toggle } = useCopilotPanel();
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 min-h-16 items-center justify-between gap-3 border-b border-border bg-background/85 px-5 backdrop-blur-sm md:justify-end md:px-8">
+    <header className="font-crm-sans sticky top-0 z-20 flex h-16 min-h-16 items-center justify-between gap-3 border-b border-border bg-background/85 px-5 backdrop-blur-sm md:justify-end md:px-8">
       <button
         type="button"
         onClick={onMenuClick}
