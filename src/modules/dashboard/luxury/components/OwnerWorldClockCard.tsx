@@ -35,10 +35,20 @@ const CLOCK_FACE_SIZE = 60;
  * matching the prototype's density — instead of three separate boxes.
  * `AnalogClockFace` itself (the locked clock face) is untouched; only its
  * rendered `size` and the surrounding chrome shrank.
+ *
+ * GLOBAL-VISUAL-01 Round 4.4 addendum — founder correction: Revision A went
+ * too far in removing the per-city surface entirely. The approved reference
+ * nests each city in its own light card inside the outer World Clock panel
+ * (outer panel → individual card → clock content), it never floats three
+ * clocks directly on the outer panel's own tint. Restored at Round 4.4's
+ * density (not Revision A's predecessor 28px/px-5 py-6 oversized card):
+ * `bg-luxury-surface` (lighter/creamier than the outer panel's own
+ * `bg-luxury-surface-tint`), a faint `/40` border, 10px radius, restrained
+ * padding.
  */
 function CityCard({ display }: { display: WorldClockDisplay }) {
   return (
-    <div className="flex flex-col items-center px-2 py-2 text-center">
+    <div className="flex flex-col items-center rounded-[10px] border border-luxury-border/40 bg-luxury-surface px-3 py-3 text-center">
       <AnalogClockFace hour24={display.hour24} minute={display.minute} size={CLOCK_FACE_SIZE} />
       <p className="mt-2 font-luxury-display text-[1.0625rem] leading-tight font-semibold text-luxury-text">{display.city}</p>
       <p className="mt-0.5 flex items-center text-luxury-status font-medium tracking-[0.1em] text-luxury-text-muted uppercase">{display.region}</p>
@@ -76,13 +86,13 @@ export function OwnerWorldClockCard() {
     <div className="rounded-[14px] border border-luxury-border/70 bg-luxury-surface-tint p-5">
       <p className="px-1 text-luxury-status font-medium tracking-[0.14em] text-luxury-text-muted uppercase">♡ World Clock</p>
       {now ? (
-        <div className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-2">
+        <div className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3">
           {buildWorldClockDisplays(now).map((display) => (
             <CityCard key={display.locationId} display={display} />
           ))}
         </div>
       ) : (
-        <div className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-2" aria-hidden="true">
+        <div className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3" aria-hidden="true">
           {WORLD_CLOCK_LOCATIONS.map((location) => (
             <div key={location.id} className="h-[9.5rem] rounded-[10px] bg-luxury-surface" />
           ))}
