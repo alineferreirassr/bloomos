@@ -81,7 +81,7 @@ export function ApplyFolderTemplateModal({ open, onClose, folder, onApplied }: A
       </div>
       {successMessage ? <p className="mt-3 text-sm text-accent">{successMessage}</p> : null}
       {error ? (
-        <p role="alert" className="mt-3 text-sm text-rose-600 dark:text-rose-400">
+        <p role="alert" className="mt-3 text-sm text-danger">
           {error}
         </p>
       ) : null}

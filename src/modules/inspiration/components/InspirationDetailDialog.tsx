@@ -134,7 +134,7 @@ export function InspirationDetailDialog({ item, onClose, canManage, onChanged, o
         <ContentIntelligencePanel sourceEntityType="inspiration_item" sourceEntityId={item.id} canManage={canManage} sourceArchived={!!item.archived_at} />
 
         {error ? (
-          <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
+          <p role="alert" className="text-sm text-danger">
             {error}
           </p>
         ) : null}

@@ -263,7 +263,7 @@ function CarouselSlideRow({ carouselId, slide, onChanged, onRemoved, canManage }
       ) : null}
 
       {error ? (
-        <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       ) : null}

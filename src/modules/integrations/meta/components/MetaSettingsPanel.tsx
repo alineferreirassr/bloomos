@@ -194,7 +194,7 @@ export function MetaSettingsPanel() {
 
       {callbackMessage ? (
         <Card>
-          <p className={callbackMessage.tone === "error" ? "text-sm text-rose-600 dark:text-rose-400" : "text-sm text-emerald-600 dark:text-emerald-400"}>{callbackMessage.text}</p>
+          <p className={callbackMessage.tone === "error" ? "text-sm text-danger" : "text-sm text-emerald-600 dark:text-emerald-400"}>{callbackMessage.text}</p>
         </Card>
       ) : null}
 
@@ -230,7 +230,7 @@ export function MetaSettingsPanel() {
           </div>
 
           {discoverError ? (
-            <p role="alert" className="mt-2 text-sm text-rose-600 dark:text-rose-400">
+            <p role="alert" className="mt-2 text-sm text-danger">
               {discoverError}
             </p>
           ) : null}

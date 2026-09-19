@@ -347,7 +347,7 @@ export function EditIdeaDialog({ item, onClose, onSaved }: EditIdeaDialogProps) 
         </div>
 
         {error ? (
-          <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
+          <p role="alert" className="text-sm text-danger">
             {error}
           </p>
         ) : null}

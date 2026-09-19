@@ -256,7 +256,7 @@ export function AssetDetailView({ asset: initialAsset }: { asset: MediaAsset }) 
                 </Button>
               </div>
               {statusError ? (
-                <p role="alert" className="mt-2 text-xs text-rose-600 dark:text-rose-400">
+                <p role="alert" className="mt-2 text-xs text-danger">
                   {statusError}
                 </p>
               ) : null}

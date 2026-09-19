@@ -154,7 +154,7 @@ export function ContentIntelligencePanel({ sourceEntityType, sourceEntityId, can
       </div>
 
       {analyzeError ? (
-        <p role="alert" className="mb-2 text-sm text-rose-600 dark:text-rose-400">
+        <p role="alert" className="mb-2 text-sm text-danger">
           {analyzeError}
         </p>
       ) : null}
@@ -204,7 +204,7 @@ export function ContentIntelligencePanel({ sourceEntityType, sourceEntityId, can
               )}
 
               {reviewError ? (
-                <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
+                <p role="alert" className="text-sm text-danger">
                   {reviewError}
                 </p>
               ) : null}

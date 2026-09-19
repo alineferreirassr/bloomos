@@ -63,7 +63,7 @@ export function InstalledConnectorsTable({ installations, catalog, onChanged }: 
   return (
     <Card>
       {actionError ? (
-        <div role="alert" className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
+        <div role="alert" className="mb-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
           {actionError}
         </div>
       ) : null}

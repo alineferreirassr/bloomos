@@ -59,7 +59,7 @@ export function FolderActions({ folder, childCount, onChanged }: FolderActionsPr
           </Button>
         </div>
         {actionError ? (
-          <p role="alert" className="text-xs text-rose-600 dark:text-rose-400">
+          <p role="alert" className="text-xs text-danger">
             {actionError}
           </p>
         ) : null}
@@ -102,7 +102,7 @@ export function FolderActions({ folder, childCount, onChanged }: FolderActionsPr
       </div>
 
       {actionError ? (
-        <p role="alert" className="text-xs text-rose-600 dark:text-rose-400">
+        <p role="alert" className="text-xs text-danger">
           {actionError}
         </p>
       ) : null}

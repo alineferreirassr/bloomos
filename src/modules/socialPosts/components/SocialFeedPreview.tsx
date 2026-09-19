@@ -229,7 +229,7 @@ function SocialFeedPostDetail({ post, onClose, onSchedule, onReschedule, onCance
         {post.status === "scheduled" && post.scheduled_at ? <p className="text-xs text-text-muted">Scheduled for {formatInstant(post.scheduled_at, post.scheduled_timezone)}</p> : null}
         {post.status === "published" && post.published_at ? <p className="text-xs text-text-muted">Published {formatInstant(post.published_at, null)}</p> : null}
         {post.status === "failed" && post.provider_error ? (
-          <p role="alert" className="text-xs text-rose-600 dark:text-rose-400">
+          <p role="alert" className="text-xs text-danger">
             {post.provider_error}
           </p>
         ) : null}
