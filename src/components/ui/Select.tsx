@@ -4,6 +4,10 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   invalid?: boolean;
 }
 
+// GLOBAL-VISUAL-04R — geometry ported to AF's real Select primitive
+// (src/design-system/primitives/select.tsx, HEAD 1587d1f): same `h-10
+// px-3 py-2`, border-color-only focus, no shadow/ring — see Input.tsx for
+// the full rationale, which applies identically here.
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
   { className = "", invalid = false, ...props },
   ref,
@@ -12,7 +16,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
     <select
       ref={ref}
       aria-invalid={invalid || undefined}
-      className={`w-full min-h-9 rounded-md border bg-surface px-2.5 py-1.5 text-sm text-text shadow-sm transition-colors duration-150 hover:border-text/45 focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:outline-none ${
+      className={`w-full h-10 rounded-md border bg-surface px-3 py-2 text-sm text-text transition-colors duration-150 hover:border-text/45 focus-visible:border-accent disabled:cursor-not-allowed disabled:opacity-55 ${
         invalid ? "border-danger" : "border-border"
       } ${className}`}
       {...props}

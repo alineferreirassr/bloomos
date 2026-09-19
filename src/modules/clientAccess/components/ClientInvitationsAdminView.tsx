@@ -16,6 +16,9 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { ModuleHero } from "@/components/ui/ModuleHero";
 import { ConnectedRail } from "@/components/ui/ConnectedRail";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/components/ui/Table";
 import { getFullName } from "@/lib/personName";
 
 type LoadState =
@@ -163,19 +166,19 @@ export function ClientInvitationsAdminView() {
       ) : null}
 
       <div className="flex flex-wrap gap-3 rounded-2xl border border-border/50 bg-surface/70 p-5">
-        <input
+        <Input
           type="search"
           aria-label="Search client invitations"
           placeholder="Search by email or client name…"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          className="min-w-[220px] flex-1 rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text placeholder:text-text-muted"
+          className="min-w-[220px] flex-1"
         />
-        <select
+        <Select
           aria-label="Filter by status"
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-          className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-text"
+          className="w-auto"
         >
           <option value="all">All statuses</option>
           {INVITATION_STATUSES.map((status) => (
@@ -183,7 +186,7 @@ export function ClientInvitationsAdminView() {
               {INVITATION_STATUS_LABELS[status]}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
       {filtered.length === 0 ? (
@@ -192,80 +195,80 @@ export function ClientInvitationsAdminView() {
           description={state.invitations.length === 0 ? "Invite a client from their Client Detail page to get started." : "Try a different search or filter."}
         />
       ) : (
-        <div className="overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-border/70">
-                <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Client</th>
-                <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Email</th>
-                <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Status</th>
-                <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Expires</th>
-                {canInvite ? <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Actions</th> : null}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/60">
-              {filtered.map((invitation) => {
-                const client = clientById.get(invitation.client_id);
-                return (
-                  <tr key={invitation.id} className="transition-colors duration-150 hover:bg-accent-100/25">
-                    <td className="px-5 py-4">
-                      {client ? (
-                        <Link href={`/clients/${client.id}`} className="text-[15px] font-medium text-text hover:text-accent">
-                          {clientName(client)}
-                        </Link>
-                      ) : (
-                        <span className="text-text-muted">Unknown client</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 text-text-muted">{invitation.email}</td>
-                    <td className="px-5 py-4">
-                      <Badge tone={invitation.status === "pending" ? "outline" : invitation.status === "accepted" ? "success" : "neutral"}>
-                        {INVITATION_STATUS_LABELS[invitation.status]}
-                      </Badge>
-                    </td>
-                    <td className="px-5 py-4 text-text-muted">{formatDate(invitation.expires_at)}</td>
-                    {canInvite ? (
-                      <td className="px-5 py-4">
-                        {invitation.status === "pending" ? (
-                          <div className="flex gap-2">
-                            <Button
-                              variant="secondary"
-                              disabled={busyId === invitation.id}
-                              onClick={async () => {
-                                setBusyId(invitation.id);
-                                setActionError(null);
-                                const result = await resendClientInvitation(invitation.id);
-                                setBusyId(null);
-                                if (!result.success) {
-                                  setActionError(result.error);
-                                  return;
-                                }
-                                setCopiedLink({
-                                  email: result.data.invitation.email,
-                                  url: `${window.location.origin}/client-invitations/${result.data.token}`,
-                                });
-                                load();
-                              }}
-                            >
-                              Resend
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              disabled={busyId === invitation.id}
-                              onClick={() => runAction(invitation.id, () => revokeClientInvitation(invitation.id))}
-                            >
-                              Revoke
-                            </Button>
-                          </div>
-                        ) : null}
-                      </td>
-                    ) : null}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHead>
+            <tr>
+              <TableHeaderCell>Client</TableHeaderCell>
+              <TableHeaderCell>Email</TableHeaderCell>
+              <TableHeaderCell>Status</TableHeaderCell>
+              <TableHeaderCell>Expires</TableHeaderCell>
+              {canInvite ? <TableHeaderCell>Actions</TableHeaderCell> : null}
+            </tr>
+          </TableHead>
+          <TableBody>
+            {filtered.map((invitation) => {
+              const client = clientById.get(invitation.client_id);
+              return (
+                <TableRow key={invitation.id}>
+                  <TableCell>
+                    {client ? (
+                      <Link href={`/clients/${client.id}`} className="text-[15px] font-medium text-text hover:text-accent">
+                        {clientName(client)}
+                      </Link>
+                    ) : (
+                      <span className="text-text-muted">Unknown client</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-text-muted">{invitation.email}</TableCell>
+                  <TableCell>
+                    <Badge tone={invitation.status === "pending" ? "outline" : invitation.status === "accepted" ? "success" : "neutral"}>
+                      {INVITATION_STATUS_LABELS[invitation.status]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-text-muted">{formatDate(invitation.expires_at)}</TableCell>
+                  {canInvite ? (
+                    <TableCell>
+                      {invitation.status === "pending" ? (
+                        <div className="flex gap-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={busyId === invitation.id}
+                            onClick={async () => {
+                              setBusyId(invitation.id);
+                              setActionError(null);
+                              const result = await resendClientInvitation(invitation.id);
+                              setBusyId(null);
+                              if (!result.success) {
+                                setActionError(result.error);
+                                return;
+                              }
+                              setCopiedLink({
+                                email: result.data.invitation.email,
+                                url: `${window.location.origin}/client-invitations/${result.data.token}`,
+                              });
+                              load();
+                            }}
+                          >
+                            Resend
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={busyId === invitation.id}
+                            onClick={() => runAction(invitation.id, () => revokeClientInvitation(invitation.id))}
+                          >
+                            Revoke
+                          </Button>
+                        </div>
+                      ) : null}
+                    </TableCell>
+                  ) : null}
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
       )}
     </div>
   );

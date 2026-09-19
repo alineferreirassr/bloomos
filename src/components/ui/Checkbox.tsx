@@ -15,7 +15,11 @@ interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "typ
  * prop for it, so it's applied imperatively to the underlying node via
  * `useEffect`, the standard way every native indeterminate-checkbox
  * implementation handles this (e.g. a "select all" checkbox whose rows are
- * only partially selected).
+ * only partially selected). GLOBAL-VISUAL-04R — AF's own real Checkbox
+ * primitive (src/design-system/primitives/checkbox.tsx, HEAD 1587d1f) is a
+ * bare native checkbox styled only via `accent-color`, no custom box/border
+ * or focus ring; ported that same minimal styling here, while keeping this
+ * `indeterminate` behavior AF's simpler version doesn't have.
  */
 export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Checkbox(
   { indeterminate = false, className = "", ...props },
@@ -35,7 +39,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
         if (typeof forwardedRef === "function") forwardedRef(node);
         else if (forwardedRef) forwardedRef.current = node;
       }}
-      className={`h-4 w-4 shrink-0 rounded-[4px] border border-border text-accent accent-accent transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-45 ${className}`}
+      className={`size-4 shrink-0 cursor-pointer rounded-[0.3rem] accent-accent disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-55 ${className}`}
       {...props}
     />
   );
