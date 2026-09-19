@@ -30,7 +30,7 @@ export function StudioTodaySection({ kpis }: { kpis: OperationalKpiSnapshot }) {
     <div>
       <p className="text-luxury-metadata font-semibold tracking-wide text-luxury-coral uppercase">At a Glance</p>
       <h2 className="mt-1 font-luxury-display text-luxury-page font-semibold text-luxury-text">The studio today</h2>
-      <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((card) => (
           <StudioTodayCard key={card.id} data={card} />
         ))}

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type ReactNode, type SVGProps } from "react";
 import Link from "next/link";
+import { UserPlus, Users, FileSignature, Mail, TrendingUp } from "lucide-react";
 import { getLeads, getClients, getContracts, getClientInvitations } from "@/lib/data";
 import type { Lead } from "@/types/lead";
 import type { Client } from "@/types/client";
@@ -43,6 +44,34 @@ const AWAITING_SIGNATURE_CONTRACT_STATUSES = new Set(["sent", "viewed"]);
 
 function formatMoney(amount: number): string {
   return `$${amount.toLocaleString()}`;
+}
+
+interface RelationshipMetricCardProps {
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  tint: string;
+  label: string;
+  value: string;
+  tone?: "surface" | "tint";
+}
+
+/** GLOBAL-VISUAL-02B — an icon medallion above label/value, matching the same
+ * icon-forward pattern `StudioTodayCard`/Dashboard's own metric cards already
+ * use, so these five read as part of the same product instead of bare
+ * text-only KPI boxes. Reuses the existing `--luxury-*` tint tokens only —
+ * no new colors. */
+function RelationshipMetricCard({ icon: Icon, tint, label, value, tone }: RelationshipMetricCardProps) {
+  return (
+    <LuxuryCard tone={tone}>
+      <span
+        className="flex h-9 w-9 items-center justify-center rounded-luxury-md"
+        style={{ backgroundColor: `color-mix(in srgb, ${tint} 16%, transparent)`, color: tint }}
+      >
+        <Icon className="h-4 w-4" aria-hidden="true" />
+      </span>
+      <p className="mt-3 text-[11px] font-medium tracking-wide text-text-muted uppercase">{label}</p>
+      <p className="mt-1 text-2xl font-medium text-text tabular-nums">{value}</p>
+    </LuxuryCard>
+  );
 }
 
 interface AttentionItem {
@@ -169,26 +198,11 @@ export function RelationshipsLandingView() {
       <PageHeader title="Relationships" subtitle="Who needs your attention today." />
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <LuxuryCard>
-          <p className="text-[11px] font-medium tracking-wide text-text-muted uppercase">Active Leads</p>
-          <p className="mt-2 text-2xl font-medium text-text tabular-nums">{summary.activeLeads.length}</p>
-        </LuxuryCard>
-        <LuxuryCard>
-          <p className="text-[11px] font-medium tracking-wide text-text-muted uppercase">Active Clients</p>
-          <p className="mt-2 text-2xl font-medium text-text tabular-nums">{summary.activeClients.length}</p>
-        </LuxuryCard>
-        <LuxuryCard>
-          <p className="text-[11px] font-medium tracking-wide text-text-muted uppercase">Contracts In Progress</p>
-          <p className="mt-2 text-2xl font-medium text-text tabular-nums">{summary.contractsInProgress.length}</p>
-        </LuxuryCard>
-        <LuxuryCard>
-          <p className="text-[11px] font-medium tracking-wide text-text-muted uppercase">Pending Invitations</p>
-          <p className="mt-2 text-2xl font-medium text-text tabular-nums">{summary.pendingInvitations.length}</p>
-        </LuxuryCard>
-        <LuxuryCard tone="tint">
-          <p className="text-[11px] font-medium tracking-wide text-text-muted uppercase">Active Pipeline Value</p>
-          <p className="mt-2 text-2xl font-medium text-text tabular-nums">{formatMoney(summary.pipelineValue)}</p>
-        </LuxuryCard>
+        <RelationshipMetricCard icon={UserPlus} tint="var(--luxury-rose)" label="Active Leads" value={String(summary.activeLeads.length)} />
+        <RelationshipMetricCard icon={Users} tint="var(--luxury-success)" label="Active Clients" value={String(summary.activeClients.length)} />
+        <RelationshipMetricCard icon={FileSignature} tint="var(--luxury-coral)" label="Contracts In Progress" value={String(summary.contractsInProgress.length)} />
+        <RelationshipMetricCard icon={Mail} tint="var(--luxury-warning)" label="Pending Invitations" value={String(summary.pendingInvitations.length)} />
+        <RelationshipMetricCard icon={TrendingUp} tint="var(--luxury-rose)" label="Active Pipeline Value" value={formatMoney(summary.pipelineValue)} tone="tint" />
       </div>
 
       <div>

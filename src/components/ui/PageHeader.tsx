@@ -32,7 +32,7 @@ interface PageHeaderProps {
  */
 export function PageHeader({ title, subtitle, actions, icon: Icon, breadcrumb, aiInsight, date }: PageHeaderProps) {
   return (
-    <div className="animate-fade-down mb-6 flex flex-col gap-4">
+    <div className="animate-fade-down mb-7 flex flex-col gap-5">
       {breadcrumb && breadcrumb.length > 0 ? (
         <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-text-muted">
           {breadcrumb.map((item, index) => {
@@ -54,15 +54,19 @@ export function PageHeader({ title, subtitle, actions, icon: Icon, breadcrumb, a
       ) : null}
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex items-start gap-3">
+        <div className="flex items-start gap-3.5">
           {Icon ? (
-            <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-accent-100">
+            <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-accent-100">
               <Icon className="h-5 w-5 text-accent" aria-hidden="true" />
             </span>
           ) : null}
           <div>
-            <h1 className="font-serif text-2xl font-semibold text-text text-balance">{title}</h1>
-            {subtitle ? <p className="mt-1.5 text-sm text-text-muted">{subtitle}</p> : null}
+            {/* GLOBAL-VISUAL-02B — 1.75rem matches --luxury-text-page-size exactly (the
+                same page-title scale Dashboard's own OwnerHomeHeader uses), replacing the
+                smaller generic text-2xl so every inner page's title reads at the same
+                weight as Dashboard's, without adopting its personalized greeting copy. */}
+            <h1 className="font-serif text-[1.75rem] leading-tight font-semibold text-text text-balance">{title}</h1>
+            {subtitle ? <p className="mt-2 text-sm text-text-muted">{subtitle}</p> : null}
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-3">

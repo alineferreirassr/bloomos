@@ -50,12 +50,12 @@ export function StudioTodayCard({ data }: { data: StudioTodayCardData }) {
   const Icon = data.icon;
 
   const card = (
-    <div className="flex h-full flex-col gap-5 rounded-luxury-lg border border-luxury-border bg-luxury-surface p-7 shadow-luxury-sm">
-      <div className="flex items-start justify-between gap-3">
-        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-luxury-md ${TONE_ICON_CLASS[tone]}`} style={TONE_ICON_BACKGROUND[tone] ? { backgroundColor: TONE_ICON_BACKGROUND[tone] } : undefined}>
-          <Icon className="h-5 w-5" aria-hidden="true" />
+    <div className="flex h-full flex-col gap-3.5 rounded-luxury-lg border border-luxury-border/70 bg-luxury-surface p-5 shadow-luxury-sm">
+      <div className="flex items-center justify-between gap-3">
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-luxury-md ${TONE_ICON_CLASS[tone]}`} style={TONE_ICON_BACKGROUND[tone] ? { backgroundColor: TONE_ICON_BACKGROUND[tone] } : undefined}>
+          <Icon className="h-4 w-4" aria-hidden="true" />
         </span>
-        {data.meta ? <span className="mt-1 text-luxury-small text-luxury-text-muted">{data.meta}</span> : null}
+        {data.meta ? <span className="text-luxury-small text-luxury-text-muted">{data.meta}</span> : null}
       </div>
       <div>
         <p className="font-luxury-display text-luxury-numeric font-semibold text-luxury-text">{data.value}</p>

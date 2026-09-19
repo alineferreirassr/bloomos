@@ -24,7 +24,7 @@ interface EmptyStateProps {
 
 export function EmptyState({ title, description, action, icon: Icon, illustration, secondaryAction }: EmptyStateProps) {
   return (
-    <div className="animate-fade-up flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface-tint px-6 py-16 text-center">
+    <div className="animate-fade-up flex flex-col items-center justify-center rounded-lg border border-dashed border-border/70 bg-surface-tint px-6 py-16 text-center">
       {illustration ? (
         <BloomIllustration variant={illustration} className="mb-4" />
       ) : Icon ? (

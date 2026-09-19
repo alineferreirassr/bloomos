@@ -6,10 +6,18 @@ interface TableProps extends TableHTMLAttributes<HTMLTableElement> {
   children: ReactNode;
 }
 
-/** Wraps in its own horizontally-scrolling container, same pattern every hand-built `*ListTable.tsx` in this codebase already reaches for — a wide table must never force the page itself to scroll sideways. */
+/**
+ * Wraps in its own horizontally-scrolling container, same pattern every
+ * hand-built `*ListTable.tsx` in this codebase already reaches for — a wide
+ * table must never force the page itself to scroll sideways. GLOBAL-VISUAL-02B
+ * — the outer soft card treatment (rounded corners, warm surface, resting
+ * shadow) also matches what those same hand-built tables already do by hand
+ * (e.g. `ClientListTable.tsx`'s `rounded-2xl bg-surface shadow-luxury-sm`),
+ * so a page composing this primitive directly gets the same result instead
+ * of a bare, unstyled `<table>`. */
 export function Table({ className = "", children, ...props }: TableProps) {
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto rounded-lg border border-border/70 bg-surface shadow-sm">
       <table className={`w-full border-collapse text-left text-sm ${className}`} {...props}>
         {children}
       </table>
@@ -18,7 +26,7 @@ export function Table({ className = "", children, ...props }: TableProps) {
 }
 
 export function TableHead({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <thead className={`border-b border-border text-xs tracking-wide text-text-muted uppercase ${className}`}>{children}</thead>;
+  return <thead className={`border-b border-border/70 text-xs tracking-wide text-text-muted uppercase ${className}`}>{children}</thead>;
 }
 
 export function TableBody({ children, className = "" }: { children?: ReactNode; className?: string }) {
@@ -32,7 +40,7 @@ interface TableRowProps extends HTMLAttributes<HTMLTableRowElement> {
 
 export function TableRow({ children, selected = false, className = "", ...props }: TableRowProps) {
   return (
-    <tr aria-selected={selected || undefined} className={`border-b border-border/60 last:border-0 ${selected ? "bg-accent/8" : ""} ${className}`} {...props}>
+    <tr aria-selected={selected || undefined} className={`border-b border-border/50 last:border-0 ${selected ? "bg-accent/8" : ""} ${className}`} {...props}>
       {children}
     </tr>
   );
