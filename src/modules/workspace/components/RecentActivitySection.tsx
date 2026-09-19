@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { EditorialSectionHeader } from "@/components/ui/EditorialSectionHeader";
 import type { ActivityEntry } from "@/types/smartWorkspace";
 
 function formatRelativeTime(iso: string): string {
@@ -27,16 +28,24 @@ function formatRelativeTime(iso: string): string {
  * existing destination for the full unified activity feed (the same one
  * `ActivityFeedWidget` already links to as "Open full Activity Feed →"),
  * so this reuses that truthful route with an honest label instead.
+ *
+ * GLOBAL-VISUAL-03B.1 — heading rebuilt onto the same `EditorialSectionHeader`
+ * Relationships and "The studio today" now use, instead of a bare `h2`, so
+ * the transition from the KPI section into this one reads as one consistent
+ * editorial system rather than two different heading treatments stacked.
  */
 export function RecentActivitySection({ entries }: { entries: ActivityEntry[] }) {
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <h2 className="font-luxury-display text-luxury-page font-semibold text-luxury-text">Recent activity</h2>
-        <Link href="/inbox" className="text-luxury-small font-medium text-luxury-rose">
-          View all →
-        </Link>
-      </div>
+      <EditorialSectionHeader
+        eyebrow="Activity"
+        title="Recent activity"
+        action={
+          <Link href="/inbox" className="text-luxury-small font-medium text-luxury-rose">
+            View all →
+          </Link>
+        }
+      />
       <div className="mt-4 rounded-luxury-lg border border-luxury-border bg-luxury-surface shadow-luxury-sm">
         {entries.length === 0 ? (
           <div className="p-7">

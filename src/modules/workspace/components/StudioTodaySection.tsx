@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { Activity, AlertTriangle, CalendarClock, ClipboardCheck, Route, Siren } from "lucide-react";
-import { StudioTodayCard, type StudioTodayCardData } from "@/modules/workspace/components/StudioTodayCard";
+import { MetricStat } from "@/components/ui/MetricStat";
+import { EditorialSectionHeader } from "@/components/ui/EditorialSectionHeader";
 import type { OperationalKpiSnapshot } from "@/types/operationsCenter";
 
 /**
@@ -13,27 +15,52 @@ import type { OperationalKpiSnapshot } from "@/types/operationsCenter";
  * the full `kpis` object through (previously only `health.overallOperationsCenterHealth`
  * was read from it). No new query, no fabricated figure, no duplication
  * of Home's own (unrelated) Revenue/Leads/Proposals/Events/Outstanding
- * KPIs. `meta` is intentionally omitted on every card — none of these six
- * counts have a truthful "next 14 days"-style qualifier to show.
+ * KPIs.
+ *
+ * GLOBAL-VISUAL-03B.1 — rebuilt off the same editorial hierarchy
+ * Relationships now uses, replacing six equal-weight bordered cards ("SIX
+ * VALUES ≠ SIX IDENTICAL CARDS" per the founder's explicit correction).
+ * "Active Operations" is the studio's one genuine headline figure (how much
+ * is in motion right now) — PRIMARY, bare typography. Approvals Waiting/
+ * Scheduling Conflicts/High-Risk Routes are routine operational counts a
+ * founder checks but aren't urgent by themselves — SECONDARY, a quiet
+ * tinted strip. Open Incidents/Critical Alerts are the two counts that are
+ * actually urgent when nonzero — kept TERTIARY in scale (small, inline,
+ * same treatment Relationships gives Contracts/Invitations) but never
+ * demoted in color: a nonzero count still renders in the rose/critical tone
+ * so it can't visually disappear the way shrinking an urgent count to grey
+ * inline text would. Same six real figures, same `computeOperationalKpis()`
+ * values, same destinations — presentation only.
  */
 export function StudioTodaySection({ kpis }: { kpis: OperationalKpiSnapshot }) {
-  const cards: StudioTodayCardData[] = [
-    { id: "active-operations", label: "Active Operations", value: String(kpis.activeOperations), icon: Activity, href: "/operations-center", tone: "blush" },
-    { id: "approvals-waiting", label: "Approvals Waiting", value: String(kpis.pendingAcceptances), icon: ClipboardCheck, href: "/operations-center", tone: "champagne" },
-    { id: "scheduling-conflicts", label: "Scheduling Conflicts", value: String(kpis.schedulingConflicts), icon: CalendarClock, href: "/operations-center", tone: "champagne" },
-    { id: "high-risk-routes", label: "High-Risk Routes", value: String(kpis.highRiskRoutes), icon: Route, href: "/route-optimization", tone: "champagne" },
-    { id: "open-incidents", label: "Open Incidents", value: String(kpis.openIncidents), icon: AlertTriangle, href: "/operations-center", tone: "rose" },
-    { id: "critical-alerts", label: "Critical Alerts", value: String(kpis.criticalAlerts), icon: Siren, href: "/operations-center", tone: "rose" },
-  ];
+  const hasUrgent = kpis.openIncidents > 0 || kpis.criticalAlerts > 0;
 
   return (
-    <div>
-      <p className="text-luxury-metadata font-semibold tracking-wide text-luxury-coral uppercase">At a Glance</p>
-      <h2 className="mt-1 font-luxury-display text-luxury-page font-semibold text-luxury-text">The studio today</h2>
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {cards.map((card) => (
-          <StudioTodayCard key={card.id} data={card} />
-        ))}
+    <div className="space-y-6">
+      <EditorialSectionHeader eyebrow="At a glance" title="The studio today" />
+
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-[1.1fr_1.4fr] md:items-center">
+        <Link href="/operations-center" className="block rounded-2xl transition-opacity duration-150 hover:opacity-80">
+          <MetricStat size="primary" icon={Activity} tint="var(--color-accent)" value={String(kpis.activeOperations)} label="Active Operations" />
+        </Link>
+        <div className="grid grid-cols-1 divide-y divide-border/40 rounded-2xl bg-surface-tint sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <MetricStat icon={ClipboardCheck} tint="var(--color-accent-2)" value={String(kpis.pendingAcceptances)} label="Approvals Waiting" />
+          <MetricStat icon={CalendarClock} tint="var(--color-accent-2)" value={String(kpis.schedulingConflicts)} label="Scheduling Conflicts" />
+          <MetricStat icon={Route} tint="var(--color-accent-2)" value={String(kpis.highRiskRoutes)} label="High-Risk Routes" />
+        </div>
+      </div>
+
+      <div
+        className={`flex flex-wrap items-center gap-x-6 gap-y-1.5 text-xs ${hasUrgent ? "text-danger" : "text-text-muted"}`}
+      >
+        <Link href="/operations-center" className="flex items-center gap-1.5 hover:underline">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" style={{ color: hasUrgent ? "var(--color-danger)" : "var(--color-text-muted)" }} aria-hidden="true" />
+          Open Incidents <strong className="font-semibold">{kpis.openIncidents}</strong>
+        </Link>
+        <Link href="/operations-center" className="flex items-center gap-1.5 hover:underline">
+          <Siren className="h-3.5 w-3.5 shrink-0" style={{ color: hasUrgent ? "var(--color-danger)" : "var(--color-text-muted)" }} aria-hidden="true" />
+          Critical Alerts <strong className="font-semibold">{kpis.criticalAlerts}</strong>
+        </Link>
       </div>
     </div>
   );

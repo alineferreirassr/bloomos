@@ -61,8 +61,13 @@ export function WorkspaceHomeView() {
 
   if (!summary) {
     return (
-      <div className="flex flex-col gap-4">
-        <PageHeader title="Workspace" subtitle="Your unified home for BloomOS." />
+      <div className="mx-auto flex max-w-[1240px] flex-col gap-4">
+        <PageHeader
+          breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Workspace" }]}
+          eyebrow="Workspace"
+          title="Workspace"
+          subtitle="Your unified home for BloomOS."
+        />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, index) => (
             <Skeleton key={index} className="h-48 w-full" />
@@ -143,8 +148,12 @@ export function WorkspaceHomeView() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    // GLOBAL-VISUAL-03B.1 — content column capped to Dashboard's own
+    // measured 1240px, matching Relationships' identical wrapper.
+    <div className="mx-auto flex max-w-[1240px] flex-col gap-6">
       <PageHeader
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Workspace" }]}
+        eyebrow="Workspace"
         title="Workspace"
         subtitle="Your unified home for BloomOS — search, health, activity, and priorities in one place."
         actions={
