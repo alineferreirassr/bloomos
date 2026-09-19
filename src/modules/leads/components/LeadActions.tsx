@@ -92,7 +92,7 @@ export function LeadActions({ lead, onChanged, onConverted }: LeadActionsProps) 
       </div>
 
       {feedback ? <p className="mt-2 text-sm text-emerald-600 dark:text-emerald-400">{feedback}</p> : null}
-      {error ? <p role="alert" className="mt-2 text-sm text-rose-600 dark:text-rose-400">{error}</p> : null}
+      {error ? <p role="alert" className="mt-2 text-sm text-danger">{error}</p> : null}
 
       <ConvertToClientModal
         lead={lead}

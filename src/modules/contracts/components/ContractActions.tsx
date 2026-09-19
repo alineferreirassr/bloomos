@@ -123,7 +123,7 @@ export function ContractActions({ contract, onChanged }: ContractActionsProps) {
         {duplicating ? "Duplicating…" : "Duplicate"}
       </Button>
       {duplicateError ? (
-        <p role="alert" className="mt-1.5 text-xs text-rose-600 dark:text-rose-400">
+        <p role="alert" className="mt-1.5 text-xs text-danger">
           {duplicateError}
         </p>
       ) : null}
@@ -140,7 +140,7 @@ export function ContractActions({ contract, onChanged }: ContractActionsProps) {
                 {restoring ? "Restoring…" : "Restore"}
               </Button>
               {restoreError ? (
-                <p role="alert" className="mt-1.5 text-xs text-rose-600 dark:text-rose-400">
+                <p role="alert" className="mt-1.5 text-xs text-danger">
                   {restoreError}
                 </p>
               ) : null}
@@ -176,7 +176,7 @@ export function ContractActions({ contract, onChanged }: ContractActionsProps) {
               {checkingStatus ? "Checking…" : "Check Signature Status"}
             </Button>
             {checkStatusError ? (
-              <p role="alert" className="mt-1.5 text-xs text-rose-600 dark:text-rose-400">
+              <p role="alert" className="mt-1.5 text-xs text-danger">
                 {checkStatusError}
               </p>
             ) : null}
@@ -191,7 +191,7 @@ export function ContractActions({ contract, onChanged }: ContractActionsProps) {
               {viewing ? "Marking…" : "Mark Viewed"}
             </Button>
             {viewError ? (
-              <p role="alert" className="mt-1.5 text-xs text-rose-600 dark:text-rose-400">
+              <p role="alert" className="mt-1.5 text-xs text-danger">
                 {viewError}
               </p>
             ) : null}

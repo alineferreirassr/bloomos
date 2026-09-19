@@ -53,7 +53,7 @@ export function AssignTeamModal({ lead, open, onClose, onAssigned }: AssignTeamM
         />
       </label>
       {error ? (
-        <p role="alert" className="mt-3 text-sm text-rose-600 dark:text-rose-400">
+        <p role="alert" className="mt-3 text-sm text-danger">
           {error}
         </p>
       ) : null}
