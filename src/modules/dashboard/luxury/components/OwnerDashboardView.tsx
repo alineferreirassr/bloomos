@@ -109,7 +109,16 @@ export function OwnerDashboardView({ data, branding, profileName, profileRoleLab
         </>
       }
     >
-      <div className="luxury-home-light space-y-7">
+      <div className="luxury-home-light mx-auto max-w-[1240px] space-y-7">
+        {/* GLOBAL-VISUAL-01 Round 4.4 — the approved prototype constrains its content column to
+            1240px and leads with a quiet "Home / Dashboard" breadcrumb; production had neither,
+            letting content stretch the full remaining viewport width with no wayfinding row. */}
+        <div className="flex items-center gap-1.5 text-luxury-small text-luxury-text-muted">
+          <span>Home</span>
+          <span>/</span>
+          <span>Dashboard</span>
+        </div>
+
         {/*
           VISUAL-01 — founder-locked top hierarchy: eyebrow date, greeting,
           truthful calm sentence, quiet status row. Replaces

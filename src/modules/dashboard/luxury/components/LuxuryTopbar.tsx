@@ -45,15 +45,17 @@ export function LuxuryTopbar({ actions, onOpenMobileNav }: { actions?: ReactNode
         </button>
       ) : null}
       <div className="flex flex-1 items-center justify-end gap-2 md:flex-none">
+        {/* GLOBAL-VISUAL-01 Round 4.4 — restyled to the approved prototype's bordered search-box
+            composition (was a rounded-full pill button). Same trigger, same command palette. */}
         <button
           type="button"
           onClick={dispatchOpenCommandPalette}
           aria-label="Search BloomOS"
-          className="flex h-10 items-center gap-2 rounded-luxury-full border border-luxury-border bg-luxury-surface px-4 text-luxury-small font-medium text-luxury-text-muted shadow-luxury-sm transition-colors duration-150 hover:text-luxury-text"
+          className="flex h-10 items-center gap-2 rounded-[10px] border border-luxury-border bg-luxury-surface-tint px-3.5 text-luxury-small font-medium text-luxury-text-muted transition-colors duration-150 hover:text-luxury-text md:w-60"
         >
           <SearchIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span className="hidden sm:inline">Search...</span>
-          <span className="hidden rounded-luxury-sm border border-luxury-border px-1.5 py-0.5 text-[10px] font-semibold text-luxury-text-muted sm:inline">⌘K</span>
+          <span className="hidden flex-1 text-left sm:inline">Search...</span>
+          <span className="hidden rounded-[4px] border border-luxury-border bg-luxury-surface px-1.5 py-0.5 text-[10px] font-semibold text-luxury-text-muted sm:inline">⌘K</span>
         </button>
         <button
           type="button"

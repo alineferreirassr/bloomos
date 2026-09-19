@@ -12,16 +12,44 @@ export interface LuxuryMetricCardData {
   icon: string;
 }
 
+/**
+ * GLOBAL-VISUAL-01 Round 4.4 — the approved `visual-system/round4`
+ * prototype's `KpiCard` gives each metric its own tinted icon medallion
+ * (varied color, not one uniform blush for every icon) — a real,
+ * structural presentation difference from this card's prior single-tint
+ * treatment, not just a sizing one. Mapped by icon name to the closest
+ * semantically-fitting *existing* `--luxury-*` token (no new tokens
+ * introduced) so every consumer (Owner Dashboard, Team Dashboard) picks
+ * this up automatically.
+ */
+const ICON_TINT: Record<string, string> = {
+  Revenue: "var(--luxury-coral)",
+  Calendar: "var(--luxury-rose)",
+  Users: "var(--luxury-success)",
+  Task: "var(--luxury-warning)",
+  Payment: "var(--luxury-critical)",
+};
+
 function CardBody({ data, compact = false }: { data: LuxuryMetricCardData; compact?: boolean }) {
-  const iconSize = compact ? "h-4 w-4 lg:h-5 lg:w-5" : "h-5 w-5";
-  const iconElement = createElement(resolveLuxuryIcon(data.icon), { className: `${iconSize} text-luxury-rose`, "aria-hidden": true });
-  const valueSize = compact ? "text-luxury-card-heading lg:text-luxury-numeric" : "text-luxury-numeric";
+  const iconSize = compact ? "h-4 w-4 lg:h-5 lg:w-5" : "h-[18px] w-[18px]";
+  const tint = ICON_TINT[data.icon] ?? "var(--luxury-rose)";
+  const iconElement = createElement(resolveLuxuryIcon(data.icon), { className: iconSize, style: { color: tint }, "aria-hidden": true });
+  const valueSize = compact ? "text-luxury-card-heading lg:text-luxury-numeric" : "text-[1.625rem]";
   return (
-    <LuxuryCard padding={compact ? "compact" : "default"} className={`flex items-start gap-2 lg:gap-3 ${compact ? "lg:p-5" : ""}`}>
-      <span className={`flex shrink-0 items-center justify-center rounded-luxury-md bg-luxury-blush ${compact ? "h-8 w-8 lg:h-11 lg:w-11" : "h-11 w-11"}`}>{iconElement}</span>
+    <LuxuryCard
+      padding={compact ? "compact" : "default"}
+      className={`flex flex-col items-start gap-3.5 ${compact ? "lg:p-5" : "p-5"}`}
+      style={{ borderRadius: 14 }}
+    >
+      <span
+        className={`flex shrink-0 items-center justify-center rounded-full ${compact ? "h-8 w-8 lg:h-10 lg:w-10" : "h-10 w-10"}`}
+        style={{ background: `color-mix(in srgb, ${tint} 16%, var(--luxury-surface))` }}
+      >
+        {iconElement}
+      </span>
       <div className="min-w-0">
-        <p className="line-clamp-3 text-[0.6875rem] leading-tight font-medium break-words text-luxury-text-muted uppercase sm:text-luxury-metadata sm:tracking-wide lg:line-clamp-1">{data.label}</p>
-        <p className={`mt-1 font-luxury-display font-semibold break-words text-luxury-text ${valueSize}`}>{data.value}</p>
+        <p className={`font-luxury-display leading-none font-medium break-words text-luxury-text ${valueSize}`}>{data.value}</p>
+        <p className="mt-1.5 text-luxury-status leading-tight break-words text-luxury-text-muted">{data.label}</p>
         {data.helper ? <p className="mt-0.5 text-luxury-small text-luxury-text-muted">{data.helper}</p> : null}
       </div>
     </LuxuryCard>
