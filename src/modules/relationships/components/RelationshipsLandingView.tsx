@@ -165,22 +165,43 @@ export function RelationshipsLandingView() {
     return <ErrorState onRetry={load} />;
   }
 
-  const metrics: LuxuryMetricCardData[] = [
-    { id: "active-leads", label: "Active Leads", value: String(summary.activeLeads.length), icon: "Users", tint: "var(--luxury-rose)" },
+  /**
+   * GLOBAL-VISUAL-02B pilot — primary (the headline pipeline figure plus the
+   * two core relationship counts) at full size; supporting (more procedural
+   * figures) rendered compact, so five real metrics read with hierarchy
+   * instead of one equal-weight wall of cards. Same five metrics, same
+   * values, same hrefs-none-changed — presentation only.
+   */
+  const primaryMetrics: LuxuryMetricCardData[] = [
+    { id: "active-pipeline-value", label: "Active Pipeline Value", value: formatMoney(summary.pipelineValue), icon: "Revenue", tint: "var(--luxury-rose)" },
+    { id: "active-leads", label: "Active Leads", value: String(summary.activeLeads.length), icon: "Users", tint: "var(--luxury-coral)" },
     { id: "active-clients", label: "Active Clients", value: String(summary.activeClients.length), icon: "Users", tint: "var(--luxury-success)" },
+  ];
+  const supportingMetrics: LuxuryMetricCardData[] = [
     { id: "contracts-in-progress", label: "Contracts In Progress", value: String(summary.contractsInProgress.length), icon: "Document", tint: "var(--luxury-coral)" },
     { id: "pending-invitations", label: "Pending Invitations", value: String(summary.pendingInvitations.length), icon: "Mail", tint: "var(--luxury-warning)" },
-    { id: "active-pipeline-value", label: "Active Pipeline Value", value: formatMoney(summary.pipelineValue), icon: "Revenue", tint: "var(--luxury-rose)" },
   ];
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Relationships" subtitle="Who needs your attention today." />
+      <PageHeader
+        eyebrow="Relationships"
+        title="Relationships"
+        heart
+        subtitle="The people and conversations that need your attention."
+      />
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        {metrics.map((metric) => (
-          <LuxuryMetricCard key={metric.id} data={metric} />
-        ))}
+      <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {primaryMetrics.map((metric) => (
+            <LuxuryMetricCard key={metric.id} data={metric} />
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:max-w-md">
+          {supportingMetrics.map((metric) => (
+            <LuxuryMetricCard key={metric.id} data={metric} compact />
+          ))}
+        </div>
       </div>
 
       <div>

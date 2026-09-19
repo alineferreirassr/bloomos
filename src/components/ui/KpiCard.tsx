@@ -24,6 +24,11 @@ export interface KpiCardProps {
    * to the existing flat accent tint, so every current call site (all without
    * this prop) renders with the same accent color it always has. */
   tint?: string;
+  /** GLOBAL-VISUAL-02B — same opt-in sizing step-down as LuxuryMetricCard's own
+   * `compact`, for a caller that wants to give a subset of its metrics less
+   * visual weight (secondary/supporting figures) instead of one equal-weight
+   * card wall. Defaults to false — no existing caller's size changes. */
+  compact?: boolean;
 }
 
 const TREND_TONE: Record<KpiCardTrend["direction"], string> = {
@@ -63,21 +68,23 @@ function Sparkline({ points }: { points: number[] }) {
   );
 }
 
-function CardBody({ label, value, helper, icon: Icon, trend, sparkline, tint }: Omit<KpiCardProps, "href">) {
+function CardBody({ label, value, helper, icon: Icon, trend, sparkline, tint, compact }: Omit<KpiCardProps, "href">) {
   const iconTint = tint ?? "var(--color-accent)";
+  const iconSize = compact ? "h-8 w-8" : "h-10 w-10";
+  const valueSize = compact ? "text-lg" : "text-[1.625rem]";
   return (
-    <Card className="flex flex-col items-start gap-3.5" style={{ borderRadius: 14 }}>
+    <Card className={`flex flex-col items-start ${compact ? "gap-2.5 p-3.5" : "gap-3.5"}`} style={{ borderRadius: 14 }}>
       <div className="flex w-full items-start justify-between gap-2">
         <span
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+          className={`flex shrink-0 items-center justify-center rounded-full ${iconSize}`}
           style={{ backgroundColor: `color-mix(in srgb, ${iconTint} 16%, var(--color-surface))` }}
         >
-          <Icon className="h-[18px] w-[18px]" style={{ color: iconTint }} aria-hidden="true" />
+          <Icon className={compact ? "h-3.5 w-3.5" : "h-[18px] w-[18px]"} style={{ color: iconTint }} aria-hidden="true" />
         </span>
         {sparkline ? <Sparkline points={sparkline} /> : null}
       </div>
       <div className="min-w-0">
-        <p className="font-serif text-[1.625rem] leading-none font-semibold text-text tabular-nums">{value}</p>
+        <p className={`font-serif leading-none font-semibold text-text tabular-nums ${valueSize}`}>{value}</p>
         <p className="mt-1.5 truncate text-xs font-medium tracking-wide text-text-muted uppercase">{label}</p>
         {helper ? <p className="mt-0.5 text-xs text-text-muted">{helper}</p> : null}
         {trend ? (

@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode, SVGProps } from "react";
 import Link from "next/link";
+import { Heart } from "lucide-react";
 import { NavChevronIcon } from "@/components/ui/icons";
 
 export interface PageHeaderBreadcrumbItem {
@@ -19,6 +20,17 @@ interface PageHeaderProps {
   aiInsight?: ReactNode;
   /** A real, already-known date string (e.g. "Tuesday, July 28") — never a fake/interactive date picker. */
   date?: string;
+  /**
+   * GLOBAL-VISUAL-02B pilot — a short uppercase domain label directly above
+   * the title (e.g. "RELATIONSHIPS"), the same eyebrow grammar Dashboard's
+   * own "TODAY'S STUDIO · {date}" uses (tracked-out, small, --color-accent-2
+   * — the exact Classical-token equivalent of Dashboard's --luxury-coral,
+   * confirmed identical in globals.css). Opt-in: every existing caller
+   * without it renders identically.
+   */
+  eyebrow?: string;
+  /** Opt-in — appends the same LuxuryHeartIcon Dashboard's own greeting uses. Only pass this where it genuinely reads as consistent with the page's own tone (see PageHeader's own doc comment); never applied automatically. */
+  heart?: boolean;
 }
 
 /**
@@ -30,7 +42,7 @@ interface PageHeaderProps {
  * a large serif title, an elegant muted subtitle, and an optional actions
  * slot, all with luxury spacing.
  */
-export function PageHeader({ title, subtitle, actions, icon: Icon, breadcrumb, aiInsight, date }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, actions, icon: Icon, breadcrumb, aiInsight, date, eyebrow, heart }: PageHeaderProps) {
   return (
     <div className="animate-fade-down mb-7 flex flex-col gap-5">
       {breadcrumb && breadcrumb.length > 0 ? (
@@ -61,11 +73,15 @@ export function PageHeader({ title, subtitle, actions, icon: Icon, breadcrumb, a
             </span>
           ) : null}
           <div>
+            {eyebrow ? <p className="text-[11px] font-medium tracking-[0.16em] text-accent-2 uppercase">{eyebrow}</p> : null}
             {/* GLOBAL-VISUAL-02B — 1.75rem matches --luxury-text-page-size exactly (the
                 same page-title scale Dashboard's own OwnerHomeHeader uses), replacing the
                 smaller generic text-2xl so every inner page's title reads at the same
                 weight as Dashboard's, without adopting its personalized greeting copy. */}
-            <h1 className="font-serif text-[1.75rem] leading-tight font-semibold text-text text-balance">{title}</h1>
+            <h1 className={`flex items-center gap-2.5 font-serif text-[1.75rem] leading-tight font-semibold text-text text-balance ${eyebrow ? "mt-1.5" : ""}`}>
+              {title}
+              {heart ? <Heart className="h-5 w-5 shrink-0 text-accent" aria-hidden="true" strokeWidth={2} /> : null}
+            </h1>
             {subtitle ? <p className="mt-2 text-sm text-text-muted">{subtitle}</p> : null}
           </div>
         </div>

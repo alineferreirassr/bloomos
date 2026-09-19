@@ -230,6 +230,7 @@ export function FinanceDashboardView() {
   return (
     <div className="space-y-8">
       <PageHeader
+        eyebrow="Business"
         title="Finance"
         subtitle={`Invoices, payments, and expenses across the workspace. ${getDataPersistenceMessage()}`}
       />
@@ -264,20 +265,23 @@ export function FinanceDashboardView() {
           </div>
         </div>
 
+        {/* GLOBAL-VISUAL-02B pilot — the two smallest, most supporting groups render
+            compact, quieter than Profitability/Revenue/Expenses above, so the page
+            doesn't end in another full-weight card row. */}
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <div>
             <p className="mb-2 text-[11px] font-semibold tracking-wide text-text-muted uppercase">Event Payment Status</p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               {eventStatusMetrics.map((metric) => (
-                <MetricCard key={metric.label} {...metric} />
+                <MetricCard key={metric.label} {...metric} compact />
               ))}
             </div>
           </div>
           <div>
             <p className="mb-2 text-[11px] font-semibold tracking-wide text-text-muted uppercase">Attribution</p>
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 gap-3">
               {attributionMetrics.map((metric) => (
-                <MetricCard key={metric.label} {...metric} />
+                <MetricCard key={metric.label} {...metric} compact />
               ))}
             </div>
           </div>

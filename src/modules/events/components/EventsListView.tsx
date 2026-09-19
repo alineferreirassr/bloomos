@@ -164,6 +164,7 @@ export function EventsListView() {
   return (
     <div className="space-y-8">
       <PageHeader
+        eyebrow="Events"
         title="Events"
         subtitle={`The operational center for every engagement Amoré Bloom is planning. ${getDataPersistenceMessage()}`}
         actions={
@@ -175,12 +176,20 @@ export function EventsListView() {
         }
       />
 
+      {/* GLOBAL-VISUAL-02B pilot — Total/Upcoming (what's ahead) lead at full
+          size; In Progress/Completed (status, more historical) render
+          compact, so four real metrics read with hierarchy instead of one
+          equal-weight row. Same four metrics, same values — presentation only. */}
       {kpis ? (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <KpiCard icon={EventsIcon} label="Total Events" value={kpis.total.toLocaleString()} tint="var(--color-accent)" />
-          <KpiCard icon={PipelineIcon} label="Upcoming" value={kpis.upcoming.toLocaleString()} tint="var(--color-accent-2)" />
-          <KpiCard icon={AutomationIcon} label="In Progress" value={kpis.inProgress.toLocaleString()} tint="var(--color-warning)" />
-          <KpiCard icon={CheckIcon} label="Completed" value={kpis.completed.toLocaleString()} tint="var(--color-success)" />
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-4 sm:max-w-md">
+            <KpiCard icon={EventsIcon} label="Total Events" value={kpis.total.toLocaleString()} tint="var(--color-accent)" />
+            <KpiCard icon={PipelineIcon} label="Upcoming" value={kpis.upcoming.toLocaleString()} tint="var(--color-accent-2)" />
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:max-w-md">
+            <KpiCard icon={AutomationIcon} label="In Progress" value={kpis.inProgress.toLocaleString()} tint="var(--color-warning)" compact />
+            <KpiCard icon={CheckIcon} label="Completed" value={kpis.completed.toLocaleString()} tint="var(--color-success)" compact />
+          </div>
         </div>
       ) : null}
 
