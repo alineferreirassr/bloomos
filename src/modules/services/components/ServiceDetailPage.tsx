@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useServiceEditor } from "@/modules/services/hooks/useServiceEditor";
 import { useServiceCategories } from "@/modules/services/hooks/useServiceCategories";
@@ -130,7 +131,19 @@ export function ServiceDetailPage({ serviceId }: ServiceDetailPageProps) {
   const readOnlyReason = isArchived ? "Archived Services are read-only. Restore it first." : (permissions.disabledReason ?? undefined);
 
   return (
-    <div className="space-y-4">
+    // GLOBAL-VISUAL-06 (Business) — light-touch precedent: this page's own
+    // header/tab system is already a well-built, shared-primitive-based
+    // sophisticated detail view, not legacy — only a breadcrumb (previously
+    // missing entirely) and max-w-6xl were added.
+    <div className="mx-auto max-w-6xl space-y-4">
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-text-muted">
+        <Link href="/dashboard" className="hover:text-text">Home</Link>
+        <span>/</span>
+        <Link href="/services" className="hover:text-text">Services</Link>
+        <span>/</span>
+        <span className="text-text">{service.name}</span>
+      </nav>
+
       <ServiceDetailHeader
         service={service}
         categoryName={categoryName}

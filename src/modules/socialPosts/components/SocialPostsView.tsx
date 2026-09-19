@@ -329,7 +329,7 @@ export function SocialPostsView() {
           </div>
 
           {formError ? (
-            <p role="alert" className="mt-3 text-sm text-rose-600 dark:text-rose-400">
+            <p role="alert" className="mt-3 text-sm text-danger">
               {formError}
             </p>
           ) : null}
@@ -366,7 +366,7 @@ export function SocialPostsView() {
                     <p className="mt-1 text-xs text-text-muted">Scheduled for {formatScheduledInstant(post.scheduled_at, post.scheduled_timezone)}</p>
                   ) : null}
                   {post.status === "failed" && post.provider_error ? (
-                    <p role="alert" className="mt-1 text-xs text-rose-600 dark:text-rose-400">
+                    <p role="alert" className="mt-1 text-xs text-danger">
                       {post.provider_error}
                     </p>
                   ) : null}
@@ -374,12 +374,12 @@ export function SocialPostsView() {
                     <p className="mt-1 text-xs text-text-muted">Retry scheduled for {formatScheduledInstant(post.next_attempt_at, post.scheduled_timezone)}</p>
                   ) : null}
                   {publishError?.id === post.id ? (
-                    <p role="alert" className="mt-1 text-xs text-rose-600 dark:text-rose-400">
+                    <p role="alert" className="mt-1 text-xs text-danger">
                       {publishError.message}
                     </p>
                   ) : null}
                   {actionError?.id === post.id ? (
-                    <p role="alert" className="mt-1 text-xs text-rose-600 dark:text-rose-400">
+                    <p role="alert" className="mt-1 text-xs text-danger">
                       {actionError.message}
                     </p>
                   ) : null}
@@ -391,7 +391,7 @@ export function SocialPostsView() {
                   {post.status === "published" ? (
                     <div className="mt-2">
                       {insightsError?.id === post.id ? (
-                        <p role="alert" className="text-xs text-rose-600 dark:text-rose-400">
+                        <p role="alert" className="text-xs text-danger">
                           {insightsError.message}
                         </p>
                       ) : insightsById[post.id] ? (

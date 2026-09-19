@@ -17,6 +17,8 @@ import { ServiceCardGrid } from "@/modules/services/components/ServiceCardGrid";
 import { ServiceListTable } from "@/modules/services/components/ServiceListTable";
 import { ServicesLoadingSkeleton, ServicesCatalogEmptyState, ServicesCatalogErrorState } from "@/modules/services/components/ServicesStates";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ModuleHero } from "@/components/ui/ModuleHero";
+import { ConnectedRail } from "@/components/ui/ConnectedRail";
 import type { ActionMenuAction } from "@/components/ui/ActionMenu";
 import type { ServiceCatalogRow } from "@/lib/queries/services/types";
 import { HEALTH_ATTENTION_THRESHOLD } from "@/lib/queries/services/health";
@@ -117,11 +119,27 @@ export function ServicesCatalogPage() {
   const someSelected = selectedIds.size > 0;
 
   return (
-    <div className="space-y-4">
-      <header>
-        <h1 className="font-serif text-2xl font-semibold text-text">Services</h1>
-        <p className="mt-1 text-sm text-text-muted">Your reusable catalog of bookable Services.</p>
-      </header>
+    // GLOBAL-VISUAL-06 (Business) — same AF-ported dense-list shell as
+    // Leads/Events/Inventory (ModuleHero compact + ConnectedRail).
+    <div className="mx-auto max-w-6xl space-y-4">
+      <ModuleHero
+        compact
+        eyebrow="Business"
+        title="Services"
+        purpose="Your reusable catalog of bookable Services."
+        breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Services" }]}
+      />
+
+      <section aria-label="Where Services sits in your workflow">
+        <ConnectedRail
+          items={[
+            { label: "Vendors", href: "/vendors" },
+            { label: "Inventory", href: "/inventory" },
+            { label: "Services", current: true },
+            { label: "Finance", href: "/finance" },
+          ]}
+        />
+      </section>
 
       <ServicesCatalogFilterBar value={filters} onChange={setFilters} categories={categories} />
 
