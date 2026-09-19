@@ -25,6 +25,7 @@ import { OwnerAIBriefCard } from "@/modules/dashboard/luxury/components/OwnerAIB
 import { OwnerWeatherCard } from "@/modules/dashboard/luxury/components/OwnerWeatherCard";
 import { OwnerWorldClockCard } from "@/modules/dashboard/luxury/components/OwnerWorldClockCard";
 import { MyDaySection } from "@/modules/dashboard/luxury/components/MyDaySection";
+import { LuxuryMetricCard } from "@/modules/dashboard/luxury/components/LuxuryMetricCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatMoney } from "@/lib/money";
 import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
@@ -45,35 +46,30 @@ interface OwnerDashboardViewProps {
  * Checkpoint 19, Step 6, then several visual-correction passes, then the
  * AF-Inspired "Today, at a Glance" Reconstruction, then the "My Day ♡
  * Position + Team Wellness" correction, then the "Dashboard Compact
- * Composition Refinement", then VISUAL-01 (Home/Dashboard editorial
- * refinement) — the Founder's personal daily workspace, not a
- * business-report landing page.
+ * Composition Refinement", then VISUAL-01, then GLOBAL-VISUAL-01 Round 4.3
+ * (promoting the founder-approved isolated `visual-system/round4`
+ * prototype into this real view) — the Founder's personal daily workspace,
+ * not a business-report landing page.
  *
- * VISUAL-01 order (revision B — the operational "At a Glance"/"The studio
- * today" KPI grid moved off Home entirely, onto Workspace, per the
- * founder's own Home/Workspace split: Home is the personal + executive
- * daily experience, Workspace is the operational command center — see
- * `WorkspaceHomeView.tsx`'s own doc comment): `OwnerHomeHeader` (eyebrow
- * date, greeting, truthful calm sentence, quiet status row — replaces the
- * shared `PersonalizedWelcomeHeader` for Owner only) → "Your Day" eyebrow
- * → World Clock + blush Weather (unchanged position, ~75/25 — see
- * `.luxury-weather-blush` in globals.css for the founder's soft-pink
- * treatment) → `MyDaySection` (the shared Founder/Team My Day composition
- * — compact pill-based Mood beside a stacked Water Tracker + Little
- * Reminder, exactly one instance, never duplicated; see that component's
- * own doc comment) → Today's Priority (the single most urgent open item
- * from `data.priorities`, mirroring AF's own `pickTodaysPriority`) beside
- * Upcoming Events (~40/60) → Today's Timeline (today's own Events, a
- * coarser workspace-wide equivalent of Team's per-member schedule) beside
- * Today's Pulse (Priorities/Today's Events/Proposals Pending — real
- * counts already computed elsewhere on this page, reused rather than
- * recomputed) → Revenue Overview/Recent Messages/Team Activity → AI
- * Executive Brief. `data.metrics` (the five business KPIs) is still
- * fetched by `getOwnerDashboardData.ts` — only this page's own rendering
- * of them was removed; the underlying data capability is untouched. The
- * dashboard Calendar card that used to sit beside Weather remains removed
- * per an earlier Founder correction. Date/Notifications/Messages live in
- * the shell's persistent `LuxuryTopbar`.
+ * Round 4.3 order: `OwnerHomeHeader` (eyebrow date, greeting, truthful calm
+ * sentence, quiet status row) → "Your Day" eyebrow → World Clock + blush
+ * Weather (side-by-side from `md:`/768px up, never stacking before genuine
+ * mobile — see the grid below; `.luxury-weather-blush` in globals.css for
+ * the founder's soft-pink treatment, WeatherPin's own palette is founder-
+ * locked, do not touch) → "Around Your Day" eyebrow over `MyDaySection`
+ * (compact pill-based Mood beside a stacked Water Tracker + Little
+ * Reminder — exactly one instance, never duplicated) and Today's Priority
+ * beside Upcoming Events (~40/60) → "At a Glance" eyebrow + the real
+ * five-metric KPI grid (`data.metrics` — revenue this month, upcoming
+ * events, new leads, proposals pending, outstanding payments; fetched by
+ * `getOwnerDashboardData.ts` all along, VISUAL-01 revision B only removed
+ * this page's own *rendering* of it, reintroduced here per the founder's
+ * explicit Round 4.3 correction "it was supposed to move lower, not
+ * disappear") → Today's Timeline beside Today's Pulse → Revenue Overview/
+ * Recent Messages/Team Activity → AI Executive Brief. The dashboard
+ * Calendar card that used to sit beside Weather remains removed per an
+ * earlier Founder correction. Date/Notifications/Messages live in the
+ * shell's persistent `LuxuryTopbar`.
  */
 export function OwnerDashboardView({ data, branding, profileName, profileRoleLabel, profileAvatarUrl, role, isSupabaseConnected }: OwnerDashboardViewProps) {
   const router = useRouter();
@@ -138,26 +134,37 @@ export function OwnerDashboardView({ data, branding, profileName, profileRoleLab
           (`OwnerWorldClockCard`/`OwnerWeatherCard` — see their own doc
           comments for why, given `WorldClockCard`/`NextEventWeatherCard`
           stay shared with Team).
-          Revision E — side-by-side now only starts at `xl:` (1280px)
-          instead of `lg:` (1024px): between those widths, Weather stacks
-          below World Clock rather than squeezing 3 city cards into too
-          little room. The split itself moves to ~70/30
-          (`xl:grid-cols-10`, 7/3) — World Clock's own inner city grid is
-          now `auto-fit`/`minmax`-based (see OwnerWorldClockCard.tsx), so
-          it reflows off whatever width this column actually renders at
-          rather than assuming one.
+          GLOBAL-VISUAL-01 Round 4.3 — founder correction: the prior `xl:`
+          (1280px) breakpoint let Weather drop underneath World Clock as an
+          oversized standalone block between 768-1280px, exactly the
+          composition the founder rejected. Moved to `md:` (768px) — the
+          same breakpoint the founder approved in the isolated
+          `visual-system/round4` prototype — so the two stay side-by-side
+          at every normal desktop/laptop width and only stack at genuine
+          mobile widths. The 7/3 split and World Clock's own `auto-fit`
+          inner city grid (OwnerWorldClockCard.tsx) are unchanged.
         */}
-        <div className="animate-fade-up stagger-2 grid grid-cols-1 items-start gap-5 xl:grid-cols-10">
-          <div className="xl:col-span-7">
+        <div className="animate-fade-up stagger-2 grid grid-cols-1 items-start gap-5 md:grid-cols-10">
+          <div className="md:col-span-7">
             <OwnerWorldClockCard />
           </div>
-          <div className="luxury-weather-blush xl:col-span-3">
+          <div className="luxury-weather-blush md:col-span-3">
             <OwnerWeatherCard data={data.nextEventWeather} fallback={data.homeWeatherFallback ? { locationLabel: "Honolulu", forecast: data.homeWeatherFallback } : null} />
           </div>
         </div>
 
+        {/*
+          GLOBAL-VISUAL-01 Round 4.3 — "Around Your Day" eyebrow, promoted
+          from the approved prototype. Purely an organizing label over the
+          existing real personal-daily-context content below (MyDaySection,
+          Today's Priority, Upcoming Events) — no data changed, nothing
+          removed, nothing fabricated.
+        */}
         <div className="animate-fade-up stagger-3">
-          <MyDaySection littleReminder={data.littleReminder} privacyDetail="Your mood and water tracker are personal to you and are never visible to your team." />
+          <p className="text-luxury-metadata font-semibold tracking-wide text-luxury-rose uppercase">Around Your Day</p>
+          <div className="mt-3">
+            <MyDaySection littleReminder={data.littleReminder} privacyDetail="Your mood and water tracker are personal to you and are never visible to your team." />
+          </div>
         </div>
 
         <div className="animate-fade-up stagger-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-5">
@@ -177,6 +184,26 @@ export function OwnerDashboardView({ data, branding, profileName, profileRoleLab
                 </div>
               )}
             </LuxuryCard>
+          </div>
+        </div>
+
+        {/*
+          GLOBAL-VISUAL-01 Round 4.3 — "At a Glance" eyebrow + the real
+          five-metric KPI grid (`data.metrics`), already computed by
+          `getOwnerDashboardData.ts` (revenue this month, upcoming events,
+          new leads, proposals pending, outstanding payments) but unrendered
+          on Home since VISUAL-01 revision B moved its *rendering* to
+          Workspace. Reintroduced here, lower on the page per the founder's
+          explicit correction, using the exact same `LuxuryMetricCard` +
+          grid pattern TeamDashboardView already renders its own metrics
+          with — no second metrics system, no new calculation.
+        */}
+        <div className="animate-fade-up stagger-4">
+          <p className="text-luxury-metadata font-semibold tracking-wide text-luxury-rose uppercase">At a Glance</p>
+          <div className="mt-3 grid grid-cols-2 gap-4 lg:grid-cols-5">
+            {data.metrics.map((metric) => (
+              <LuxuryMetricCard key={metric.id} data={metric} />
+            ))}
           </div>
         </div>
 
