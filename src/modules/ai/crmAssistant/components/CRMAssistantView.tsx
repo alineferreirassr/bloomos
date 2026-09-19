@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Toast } from "@/components/ui/Toast";
+import { ModuleHero } from "@/components/ui/ModuleHero";
+import { ConnectedRail } from "@/components/ui/ConnectedRail";
 import { registerSkillRunner, unregisterSkillRunner } from "@/core/ai/skills/runnerRegistry";
 import { generateCRMAssistantBrief } from "@/modules/ai/crmAssistant/generateCRMAssistantBrief";
 import { CRM_ASSISTANT_SKILL_ID } from "@/modules/ai/crmAssistant/registerCRMAssistantSkill";
@@ -97,22 +99,37 @@ export function CRMAssistantView() {
   }, []);
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 ref={headingRef} tabIndex={-1} className="font-serif text-3xl font-semibold text-text">
-            CRM Assistant
-          </h2>
-          <p className="mt-2 max-w-prose text-sm text-text-muted">
-            Bloom AI reads this Workspace&apos;s Clients, Leads, Contracts, Payments, Events, and its own AI Memory to
-            surface who needs attention, what&apos;s at risk, and what to prioritize next. It never sends anything or
-            changes any record — review every suggestion before acting on it.
-          </p>
-        </div>
-        <Button type="button" variant="secondary" onClick={handleGenerate} disabled={status === "loading"} aria-label={result ? "Refresh CRM report" : "Generate CRM report"}>
-          {status === "loading" ? "Generating…" : result ? "Refresh" : "Generate"}
-        </Button>
-      </div>
+    // GLOBAL-VISUAL-04 — AF's own real "Ask AF" page
+    // (app/(app)/app/ai/page.tsx, HEAD 1587d1f) is the closest real AF
+    // assistant/tool pattern: non-compact ModuleHero + ConnectedRail.
+    // Presentation only — the report cards below (LuxuryCard-based) are
+    // unchanged; no AI functionality touched.
+    <div className="mx-auto max-w-6xl space-y-8">
+      <ModuleHero
+        eyebrow="CRM Assistant"
+        title="CRM Assistant"
+        purpose="Bloom AI reads this Workspace's Clients, Leads, Contracts, Payments, Events, and its own AI Memory to surface who needs attention, what's at risk, and what to prioritize next. It never sends anything or changes any record — review every suggestion before acting on it."
+        breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Relationships", href: "/relationships" }, { label: "CRM Assistant" }]}
+        actions={
+          <Button type="button" variant="secondary" onClick={handleGenerate} disabled={status === "loading"} aria-label={result ? "Refresh CRM report" : "Generate CRM report"}>
+            {status === "loading" ? "Generating…" : result ? "Refresh" : "Generate"}
+          </Button>
+        }
+      />
+      <h2 ref={headingRef} tabIndex={-1} className="sr-only">
+        CRM Assistant
+      </h2>
+
+      <section aria-label="Where CRM Assistant sits in your workflow">
+        <ConnectedRail
+          items={[
+            { label: "Relationships", href: "/relationships" },
+            { label: "Leads", href: "/leads" },
+            { label: "Clients", href: "/clients" },
+            { label: "CRM Assistant", current: true },
+          ]}
+        />
+      </section>
 
       <div aria-live="polite">
         {status === "loading" ? (

@@ -14,7 +14,9 @@ import {
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { ModuleHero } from "@/components/ui/ModuleHero";
+import { ConnectedRail } from "@/components/ui/ConnectedRail";
+import { PipelineIcon } from "@/components/ui/icons";
 import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 import { getLeads, updateLeadStatus, archiveLead } from "@/lib/data";
 import type { Lead } from "@/types/lead";
@@ -158,7 +160,7 @@ export function CommercialPipelineBoard() {
 
   if (loadState.status === "loading") {
     return (
-      <div className="space-y-3 p-4">
+      <div className="mx-auto max-w-6xl space-y-3">
         <Skeleton className="h-9 w-full" />
         <div className="flex gap-3">
           {[1, 2, 3, 4].map((i) => (
@@ -171,7 +173,7 @@ export function CommercialPipelineBoard() {
 
   if (loadState.status === "error") {
     return (
-      <div className="p-4">
+      <div className="mx-auto max-w-6xl">
         <ErrorState message="Could not load the Commercial Pipeline." onRetry={load} />
       </div>
     );
@@ -180,11 +182,30 @@ export function CommercialPipelineBoard() {
   const isBoardEmpty = leads.length === 0;
 
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <PageHeader
+    // GLOBAL-VISUAL-04 — same AF-ported page shell as Leads/Clients/
+    // Relationships. ModuleHero here is NOT compact, matching AF's own
+    // real Pipeline hero (app/(app)/app/pipeline/page.tsx, HEAD 1587d1f),
+    // which uses the full editorial hero even though the page body is a
+    // board, not a table.
+    <div className="mx-auto flex max-w-6xl flex-col gap-8">
+      <ModuleHero
+        eyebrow="Pipeline"
         title="Commercial Pipeline"
-        subtitle="Leads move through this board — Booking creates a Client and Event."
+        purpose="See every opportunity by stage and move it forward — Booking creates a Client and Event."
+        breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Commercial Pipeline" }]}
+        status={[{ label: "Leads on the board", value: leads.length, icon: PipelineIcon }]}
       />
+
+      <section aria-label="Where the Commercial Pipeline sits in your workflow">
+        <ConnectedRail
+          items={[
+            { label: "Leads", href: "/leads" },
+            { label: "Clients", href: "/clients" },
+            { label: "Commercial Pipeline", current: true },
+            { label: "Contracts", href: "/contracts" },
+          ]}
+        />
+      </section>
 
       {pendingRecovery ? (
         <PendingRecoveryAlert notice={pendingRecovery} onDismiss={() => setPendingRecovery(null)} />

@@ -10,8 +10,9 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { KpiCard } from "@/components/ui/KpiCard";
+import { ModuleHero } from "@/components/ui/ModuleHero";
+import { ConnectedRail } from "@/components/ui/ConnectedRail";
+import { StatusSummary } from "@/components/ui/StatusSummary";
 import { ModuleInsightCard } from "@/components/ui/ModuleInsightCard";
 import { ClientsIcon, CheckIcon, BloomAiIcon } from "@/components/ui/icons";
 import { ClientFilters, type ClientFiltersValue } from "@/modules/clients/components/ClientFilters";
@@ -115,10 +116,17 @@ export function ClientsListView() {
   const insight = state.status === "ready" ? buildClientsInsight(state.clients) : null;
 
   return (
-    <div>
-      <PageHeader
+    // GLOBAL-VISUAL-04 — same AF-ported page shell as Leads/Relationships:
+    // ModuleHero(compact) with one headline status figure, ConnectedRail,
+    // remaining real KPIs as a secondary StatusSummary row.
+    <div className="mx-auto max-w-6xl space-y-8">
+      <ModuleHero
+        compact
+        eyebrow="Clients"
         title="Clients"
-        subtitle={`Ongoing relationships with Amoré Bloom, converted from Leads or added directly. ${getDataPersistenceMessage()}`}
+        purpose="Ongoing relationships with Amoré Bloom, converted from Leads or added directly."
+        breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Clients" }]}
+        status={kpis ? [{ label: "Total Clients", value: kpis.total, icon: ClientsIcon }] : undefined}
         actions={
           canCreate ? (
             <Link href="/clients/new">
@@ -126,9 +134,25 @@ export function ClientsListView() {
             </Link>
           ) : null
         }
+        source={
+          <p className="flex items-center gap-1.5 text-xs text-text-muted/80">
+            <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
+            {getDataPersistenceMessage()}
+          </p>
+        }
       />
 
-      <div className="space-y-8">
+      <section aria-label="Where Clients sits in your workflow">
+        <ConnectedRail
+          items={[
+            { label: "Leads", href: "/leads" },
+            { label: "Clients", current: true },
+            { label: "Contracts", href: "/contracts" },
+            { label: "Client Accounts", href: "/client-portal/accounts" },
+          ]}
+        />
+      </section>
+
       {insight ? (
         <div className="animate-fade-up">
           <ModuleInsightCard insight={insight} />
@@ -136,11 +160,12 @@ export function ClientsListView() {
       ) : null}
 
       {kpis ? (
-        <div className="animate-fade-up stagger-1 grid grid-cols-2 gap-3 md:grid-cols-3">
-          <KpiCard icon={ClientsIcon} label="Total Clients" value={kpis.total.toLocaleString()} />
-          <KpiCard icon={CheckIcon} label="Active" value={kpis.active.toLocaleString()} />
-          <KpiCard icon={BloomAiIcon} label="VIP" value={kpis.vip.toLocaleString()} />
-        </div>
+        <StatusSummary
+          items={[
+            { label: "Active", value: kpis.active, icon: CheckIcon },
+            { label: "VIP", value: kpis.vip, icon: BloomAiIcon },
+          ]}
+        />
       ) : null}
 
       <ClientFilters value={filters} onChange={handleFiltersChange} />
@@ -177,7 +202,6 @@ export function ClientsListView() {
             <ClientListCards clients={state.clients} nextActionByClientId={state.nextActionByClientId} />
           </div>
         )}
-      </div>
       </div>
     </div>
   );

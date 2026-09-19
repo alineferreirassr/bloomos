@@ -13,8 +13,9 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { KpiCard } from "@/components/ui/KpiCard";
+import { ModuleHero } from "@/components/ui/ModuleHero";
+import { ConnectedRail } from "@/components/ui/ConnectedRail";
+import { StatusSummary } from "@/components/ui/StatusSummary";
 import { ModuleInsightCard } from "@/components/ui/ModuleInsightCard";
 import { ContractsIcon, CheckIcon, FinanceIcon } from "@/components/ui/icons";
 import { formatMoney, majorToMinor, sumMinor } from "@/lib/money";
@@ -185,10 +186,17 @@ export function ContractsListView() {
   const insight = state.status === "ready" ? buildContractsInsight(state.rows) : null;
 
   return (
-    <div>
-      <PageHeader
+    // GLOBAL-VISUAL-04 — AF has no direct Contracts page; closest real
+    // documented pattern is AF's own dense-list ModuleHero(compact) usage
+    // (Leads/Pipeline), applied here per the same established rationale.
+    <div className="mx-auto max-w-6xl space-y-8">
+      <ModuleHero
+        compact
+        eyebrow="Contracts"
         title="Contracts"
-        subtitle={`Every agreement closing the commercial cycle from Client through Event. ${getDataPersistenceMessage()}`}
+        purpose="Every agreement closing the commercial cycle, from Client through Event."
+        breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Contracts" }]}
+        status={kpis ? [{ label: "Total Contracts", value: kpis.total, icon: ContractsIcon }] : undefined}
         actions={
           canCreate ? (
             <Link href="/contracts/new">
@@ -196,9 +204,25 @@ export function ContractsListView() {
             </Link>
           ) : null
         }
+        source={
+          <p className="flex items-center gap-1.5 text-xs text-text-muted/80">
+            <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
+            {getDataPersistenceMessage()}
+          </p>
+        }
       />
 
-      <div className="space-y-8">
+      <section aria-label="Where Contracts sits in your workflow">
+        <ConnectedRail
+          items={[
+            { label: "Clients", href: "/clients" },
+            { label: "Commercial Pipeline", href: "/pipeline/commercial" },
+            { label: "Contracts", current: true },
+            { label: "Client Invitations", href: "/client-portal/invitations" },
+          ]}
+        />
+      </section>
+
       {insight ? (
         <div className="animate-fade-up">
           <ModuleInsightCard insight={insight} tone="warning" />
@@ -206,11 +230,12 @@ export function ContractsListView() {
       ) : null}
 
       {kpis ? (
-        <div className="animate-fade-up stagger-1 grid grid-cols-2 gap-3 md:grid-cols-3">
-          <KpiCard icon={ContractsIcon} label="Total Contracts" value={kpis.total.toLocaleString()} />
-          <KpiCard icon={CheckIcon} label="Signed" value={kpis.signed.toLocaleString()} />
-          <KpiCard icon={FinanceIcon} label="Signed Value" value={kpis.totalValue} />
-        </div>
+        <StatusSummary
+          items={[
+            { label: "Signed", value: kpis.signed, icon: CheckIcon },
+            { label: "Signed Value", value: kpis.totalValue, icon: FinanceIcon },
+          ]}
+        />
       ) : null}
 
       <ContractFilters value={filters} onChange={handleFiltersChange} />
@@ -247,7 +272,6 @@ export function ContractsListView() {
             <ContractListCards rows={state.rows} />
           </div>
         )}
-      </div>
       </div>
     </div>
   );

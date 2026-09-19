@@ -14,7 +14,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { ModuleHero } from "@/components/ui/ModuleHero";
+import { ConnectedRail } from "@/components/ui/ConnectedRail";
 import { getFullName } from "@/lib/personName";
 
 type LoadState =
@@ -90,7 +91,7 @@ export function ClientInvitationsAdminView() {
 
   if (state.status === "loading") {
     return (
-      <div className="space-y-3">
+      <div className="mx-auto max-w-6xl space-y-3">
         <Skeleton className="h-16 w-full" />
         <Skeleton className="h-64 w-full" />
       </div>
@@ -98,7 +99,11 @@ export function ClientInvitationsAdminView() {
   }
 
   if (state.status === "error") {
-    return <ErrorState onRetry={load} />;
+    return (
+      <div className="mx-auto max-w-6xl">
+        <ErrorState onRetry={load} />
+      </div>
+    );
   }
 
   const runAction = async (id: string, action: () => Promise<{ success: boolean; error?: string }>) => {
@@ -114,11 +119,33 @@ export function ClientInvitationsAdminView() {
   };
 
   return (
-    <div className="space-y-6">
-      <PageHeader
+    // GLOBAL-VISUAL-04 — same AF-ported dense-list shell as Client
+    // Accounts/Leads/Contracts.
+    <div className="mx-auto max-w-6xl space-y-6">
+      <ModuleHero
+        compact
+        eyebrow="Client Invitations"
         title="Client Invitations"
-        subtitle={`Every Client Portal invitation across the Workspace. ${getDataPersistenceMessage()}`}
+        purpose="Every Client Portal invitation across the Workspace."
+        breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Relationships", href: "/relationships" }, { label: "Client Invitations" }]}
+        source={
+          <p className="flex items-center gap-1.5 text-xs text-text-muted/80">
+            <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
+            {getDataPersistenceMessage()}
+          </p>
+        }
       />
+
+      <section aria-label="Where Client Invitations sits in your workflow">
+        <ConnectedRail
+          items={[
+            { label: "Relationships", href: "/relationships" },
+            { label: "Clients", href: "/clients" },
+            { label: "Client Accounts", href: "/client-portal/accounts" },
+            { label: "Client Invitations", current: true },
+          ]}
+        />
+      </section>
 
       {actionError ? (
         <div

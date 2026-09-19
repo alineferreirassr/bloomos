@@ -10,8 +10,9 @@ import { Button } from "@/components/ui/Button";
 import { CardGridSkeleton, TableSkeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { KpiCard } from "@/components/ui/KpiCard";
+import { ModuleHero } from "@/components/ui/ModuleHero";
+import { ConnectedRail } from "@/components/ui/ConnectedRail";
+import { StatusSummary } from "@/components/ui/StatusSummary";
 import { ModuleInsightCard } from "@/components/ui/ModuleInsightCard";
 import { LeadsIcon, PlusIcon, CheckIcon, ClientsIcon } from "@/components/ui/icons";
 import { useSetCopilotPageContext } from "@/modules/ai/copilot/CopilotPageContextProvider";
@@ -120,10 +121,25 @@ export function LeadsListView() {
   const insight = state.status === "ready" ? buildLeadsInsight(state.leads) : null;
 
   return (
-    <div>
-      <PageHeader
+    // GLOBAL-VISUAL-04 — content capped to AF's own measured max-w-6xl
+    // (1152px), same as Relationships (GLOBAL-VISUAL-03B.2/03B.3).
+    <div className="mx-auto max-w-6xl space-y-8">
+      {/* GLOBAL-VISUAL-04 — ModuleHero(compact), matching AF's own real
+          Leads page (app/(app)/app/leads/page.tsx, HEAD 1587d1f), which
+          uses the compact hero for every dense list/work screen. AF's own
+          Leads hero carries exactly ONE status figure ("Leads in view");
+          the New/Qualified/Converted breakdown AF's page doesn't show is
+          real BloomOS data worth keeping, so it moves to a secondary
+          StatusSummary row below — the same real component, the same
+          pattern already established for Relationships' own secondary
+          figures, not a new invention. */}
+      <ModuleHero
+        compact
+        eyebrow="Leads"
         title="Leads"
-        subtitle={`Prospective clients moving through the Amoré Bloom pipeline. ${getDataPersistenceMessage()}`}
+        purpose="Prospective clients moving through the Amoré Bloom pipeline, from first contact to a signed engagement."
+        breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Leads" }]}
+        status={kpis ? [{ label: "Total Leads", value: kpis.total, icon: LeadsIcon }] : undefined}
         actions={
           canCreate ? (
             <Link href="/leads/new">
@@ -131,27 +147,42 @@ export function LeadsListView() {
             </Link>
           ) : null
         }
+        source={
+          <p className="flex items-center gap-1.5 text-xs text-text-muted/80">
+            <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
+            {getDataPersistenceMessage()}
+          </p>
+        }
       />
 
-      <div className="space-y-8">
+      <section aria-label="Where Leads sits in your workflow">
+        <ConnectedRail
+          items={[
+            { label: "Relationships", href: "/relationships" },
+            { label: "Leads", current: true },
+            { label: "Clients", href: "/clients" },
+            { label: "Commercial Pipeline", href: "/pipeline/commercial" },
+          ]}
+        />
+      </section>
+
       {insight ? (
         <div className="animate-fade-up">
           <ModuleInsightCard insight={insight} />
         </div>
       ) : null}
 
-      <div>
-        {kpis ? (
-          <div className="animate-fade-up stagger-1 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <KpiCard icon={LeadsIcon} label="Total Leads" value={kpis.total.toLocaleString()} />
-            <KpiCard icon={PlusIcon} label="New" value={kpis.new.toLocaleString()} />
-            <KpiCard icon={CheckIcon} label="Qualified" value={kpis.qualified.toLocaleString()} />
-            <KpiCard icon={ClientsIcon} label="Converted" value={kpis.converted.toLocaleString()} />
-          </div>
-        ) : state.status === "loading" ? (
-          <CardGridSkeleton count={4} />
-        ) : null}
-      </div>
+      {kpis ? (
+        <StatusSummary
+          items={[
+            { label: "New", value: kpis.new, icon: PlusIcon },
+            { label: "Qualified", value: kpis.qualified, icon: CheckIcon },
+            { label: "Converted", value: kpis.converted, icon: ClientsIcon },
+          ]}
+        />
+      ) : state.status === "loading" ? (
+        <CardGridSkeleton count={3} />
+      ) : null}
 
       <LeadFilters value={filters} onChange={handleFiltersChange} />
 
@@ -184,7 +215,6 @@ export function LeadsListView() {
             <LeadListCards leads={state.leads} />
           </div>
         )}
-      </div>
       </div>
     </div>
   );
