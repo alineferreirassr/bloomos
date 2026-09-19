@@ -188,29 +188,50 @@ export function RelationshipsLandingView() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-9">
       <PageHeader
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Relationships" }]}
         eyebrow="Relationships"
         title="Relationships"
         heart
         subtitle="The people and conversations that need your attention."
       />
 
-      {/* GLOBAL-VISUAL-02C.1 — the three core relationship figures (pipeline
-          value, active leads, active clients) now live as one composed
-          "Relationship Snapshot" card instead of three disconnected full-size
-          cards; the two more procedural figures (contracts in progress,
-          pending invitations) sit below as a single quiet inline stat row,
-          not two more cards. Same five real metrics, same values — only the
-          outer composition changed. */}
-      <div className="space-y-3">
-        <LuxuryCard>
-          <div className="grid grid-cols-1 divide-y divide-border/50 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            <SnapshotStat icon={TrendingUp} tint="var(--luxury-rose)" value={formatMoney(summary.pipelineValue)} label="Active Pipeline Value" />
-            <SnapshotStat icon={Users} tint="var(--luxury-coral)" value={String(summary.activeLeads.length)} label="Active Leads" />
-            <SnapshotStat icon={Users} tint="var(--luxury-success)" value={String(summary.activeClients.length)} label="Active Clients" />
-          </div>
-        </LuxuryCard>
+      {/* GLOBAL-VISUAL-03A — rebuilt from the ground up against real AF
+          Digital Studio OS screenshots + the current BloomOS Dashboard, not
+          an incremental patch of the prior "Relationship Snapshot" card row.
+          Pipeline Value now reads as the genuine primary figure (its own
+          hero card, largest type on the page after the title) instead of
+          sharing equal visual weight with Leads/Clients; those two sit one
+          step down in a secondary card; Contracts/Invitations stay a quiet
+          inline row. Same five real metrics, same values — presentation
+          only. */}
+      <div className="space-y-5">
+        <SectionHeader title="Relationship overview" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1.2fr_1fr]">
+          <LuxuryCard>
+            <div className="flex h-full items-center gap-4">
+              <span
+                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full"
+                style={{ backgroundColor: "color-mix(in srgb, var(--luxury-rose) 16%, var(--luxury-surface))" }}
+              >
+                <TrendingUp className="h-6 w-6" style={{ color: "var(--luxury-rose)" }} aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="font-luxury-display text-[2.125rem] leading-none font-semibold text-luxury-text tabular-nums">
+                  {formatMoney(summary.pipelineValue)}
+                </p>
+                <p className="mt-2 text-luxury-small text-luxury-text-muted">Active Pipeline Value</p>
+              </div>
+            </div>
+          </LuxuryCard>
+          <LuxuryCard>
+            <div className="grid h-full grid-cols-2 divide-x divide-border/50">
+              <SnapshotStat icon={Users} tint="var(--luxury-coral)" value={String(summary.activeLeads.length)} label="Active Leads" />
+              <SnapshotStat icon={Users} tint="var(--luxury-success)" value={String(summary.activeClients.length)} label="Active Clients" />
+            </div>
+          </LuxuryCard>
+        </div>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 px-1 text-luxury-small text-luxury-text-muted">
           <span className="flex items-center gap-1.5">
             <FileSignature className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--luxury-coral)" }} aria-hidden="true" />
@@ -226,7 +247,7 @@ export function RelationshipsLandingView() {
       <div>
         <SectionHeader title="Needs your attention" />
         {attention.length === 0 ? (
-          <div className="flex items-center gap-2 rounded-2xl border border-border/40 bg-surface-tint px-5 py-3.5 text-sm text-text-muted">
+          <div className="flex items-center justify-center gap-2 rounded-2xl bg-surface-tint px-5 py-9 text-center text-sm text-text-muted">
             <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-hidden="true" />
             All caught up — nothing in Leads, Contracts, or Invitations needs action right now.
           </div>

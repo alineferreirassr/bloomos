@@ -9,9 +9,19 @@ interface TopBarProps {
   onMenuClick: () => void;
 }
 
+/**
+ * GLOBAL-VISUAL-03A — routes whose own PageHeader now renders a real
+ * breadcrumb (matching the AF Digital Studio OS reference's "Home > Page"
+ * pattern) no longer need this topbar label too; showing both stacked the
+ * same wayfinding twice. Scoped to Relationships only — every other route
+ * keeps this label exactly as before.
+ */
+const SUPPRESS_TOPBAR_LABEL_PREFIXES = ["/relationships"];
+
 export function TopBar({ onMenuClick }: TopBarProps) {
   const pathname = usePathname();
   const activeLabel = findActiveNavLabel(pathname);
+  const suppressLabel = SUPPRESS_TOPBAR_LABEL_PREFIXES.some((prefix) => pathname.startsWith(prefix));
   const { toggle } = useCopilotPanel();
 
   return (
@@ -33,7 +43,7 @@ export function TopBar({ onMenuClick }: TopBarProps) {
         breadcrumb, so the one large title stays where it already lives.
       */}
       <p className="flex-1 text-sm font-medium tracking-tight text-text-muted">
-        {activeLabel ?? "Amoré Bloom"}
+        {suppressLabel ? "" : (activeLabel ?? "Amoré Bloom")}
       </p>
       <button
         type="button"
