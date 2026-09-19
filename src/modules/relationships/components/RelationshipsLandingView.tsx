@@ -12,7 +12,7 @@ import { LEAD_STATUS_LABELS } from "@/core/enums/leadStatus";
 import { getFullName } from "@/lib/personName";
 import { ModuleHero } from "@/components/ui/ModuleHero";
 import { ConnectedRail } from "@/components/ui/ConnectedRail";
-import { MetricRail, StatTile } from "@/components/ui/StatTile";
+import { StatusSummary } from "@/components/ui/StatusSummary";
 import { SimpleListCard, SimpleListEmpty, RowLink } from "@/components/ui/SimpleListCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -167,15 +167,16 @@ export function RelationshipsLandingView() {
     // src/design-system/patterns/experience.tsx), not BloomOS Dashboard's
     // 1240px — this checkpoint ports AF's real values directly.
     <div className="mx-auto max-w-6xl space-y-8">
+      {/* GLOBAL-VISUAL-03B.3 — every real AF ModuleHero call site
+          (Notifications/Leads/Pipeline) passes exactly ONE status item, the
+          page's single headline figure. Pipeline Value is that figure here —
+          same role Pipeline's own hero gives "Leads on the board". */}
       <ModuleHero
         eyebrow="Relationships"
         title="Relationships"
         purpose="The people and conversations that need your attention — every active lead, client, and follow-up in one calm place."
         breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Relationships" }]}
-        status={[
-          { label: "Contracts In Progress", value: summary.contractsInProgress.length, icon: FileSignature },
-          { label: "Pending Invitations", value: summary.pendingInvitations.length, icon: Mail },
-        ]}
+        status={[{ label: "Active Pipeline Value", value: formatMoney(summary.pipelineValue), icon: TrendingUp }]}
         source={
           <p className="flex items-center gap-1.5 text-xs text-text-muted/80">
             <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
@@ -184,6 +185,11 @@ export function RelationshipsLandingView() {
         }
       />
 
+      {/* GLOBAL-VISUAL-03B.3 — trimmed to 4 items, matching the exact
+          cardinality/shape of AF's own real within-domain rails (Pipeline:
+          Leads/Pipeline(current)/Clients/Projects; Leads: Contacts/
+          Leads(current)/Pipeline/Clients) rather than listing every sibling
+          route. */}
       <section aria-label="Where Relationships sits in your workflow">
         <ConnectedRail
           items={[
@@ -191,24 +197,28 @@ export function RelationshipsLandingView() {
             { label: "Relationships", current: true },
             { label: "Clients", href: "/clients" },
             { label: "Contracts", href: "/contracts" },
-            { label: "Client Invitations", href: "/client-portal/invitations" },
           ]}
         />
       </section>
 
-      {/* GLOBAL-VISUAL-03B.2 — a direct structural port of AF Digital
-          Studio OS's own `MetricRail`/`StatTile` grammar (the real AF
-          metric-card component, not a BloomOS "no card" reinterpretation):
-          three equal StatTiles for Pipeline Value/Active Leads/Active
-          Clients. Contracts In Progress/Pending Invitations live in
-          ModuleHero's own `status` row above, matching how AF's Notifications
-          page uses that exact slot for its own smaller counts. Same five
-          real metrics, same values, same calculations as every prior round. */}
-      <MetricRail>
-        <StatTile icon={TrendingUp} value={formatMoney(summary.pipelineValue)} label="Active Pipeline Value" />
-        <StatTile icon={Users} value={String(summary.activeLeads.length)} label="Active Leads" />
-        <StatTile icon={Users} value={String(summary.activeClients.length)} label="Active Clients" />
-      </MetricRail>
+      {/* GLOBAL-VISUAL-03B.3 — the prior MetricRail/StatTile card grid is
+          removed: verified against every real AF page, `MetricRail`/
+          `StatTile` is used exactly once in the whole AF codebase (its own
+          Home/`/app` executive summary), never on a CRM inner page — using
+          it here mixed two unrelated AF page archetypes into one
+          composition that doesn't correspond to any real AF page. The
+          remaining figures now render as a second `StatusSummary` row (the
+          same real AF component ModuleHero's own status slot uses),
+          matching how a genuine AF hub composes secondary figures without a
+          card grid. Same four real values, same calculations. */}
+      <StatusSummary
+        items={[
+          { label: "Active Leads", value: summary.activeLeads.length, icon: Users },
+          { label: "Active Clients", value: summary.activeClients.length, icon: Users },
+          { label: "Contracts In Progress", value: summary.contractsInProgress.length, icon: FileSignature },
+          { label: "Pending Invitations", value: summary.pendingInvitations.length, icon: Mail },
+        ]}
+      />
 
       {/* GLOBAL-VISUAL-03B.2 — a direct structural port of AF's own
           Workspace "Needs your attention" Card (app/(app)/app/workspace/page.tsx),

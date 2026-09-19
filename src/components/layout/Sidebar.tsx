@@ -37,6 +37,13 @@ interface SidebarProps {
  * instead of BloomOS's prior 224px — also brings it in line with this app's
  * own mobile drawer (`MobileNav.tsx`), which was already 256px. Dashboard/
  * Team render their own separate `LuxurySidebar`, unaffected.
+ *
+ * GLOBAL-VISUAL-03B.3 — remaining geometry ported to AF's real sidebar:
+ * brand row is now a fixed `h-16` (64px, matching AF's own brand row and
+ * this app's own TopBar height) instead of content-sized; the outer
+ * `py-6` wrapper padding is removed in favor of AF's own per-region
+ * padding (nav's own `py-4`, footer's own `p-3`) so the brand row can sit
+ * flush at the very top like AF's does.
  */
 export function Sidebar({ workspaceDisplayName }: SidebarProps) {
   const pathname = usePathname();
@@ -44,8 +51,8 @@ export function Sidebar({ workspaceDisplayName }: SidebarProps) {
   const groups = groupVisibleNavigationModules(can);
 
   return (
-    <aside className="hidden md:flex md:w-64 md:flex-col md:bg-sidebar md:border-r md:border-border/50 md:py-6">
-      <div className="mb-3 flex items-center gap-2.5 border-b border-border/50 px-5 pb-4">
+    <aside className="hidden md:flex md:w-64 md:flex-col md:overflow-hidden md:bg-sidebar md:border-r md:border-border/50">
+      <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-border/50 px-5">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-medium text-white">
           AB
         </span>
@@ -68,12 +75,12 @@ export function Sidebar({ workspaceDisplayName }: SidebarProps) {
 
       <Link
         href="/account"
-        className="mt-3 flex items-center gap-2.5 border-t border-border/50 px-[23px] pt-4 transition-colors duration-150 hover:bg-accent/7"
+        className="flex shrink-0 items-center gap-2.5 border-t border-border/50 p-3 transition-colors duration-150 hover:bg-accent/7"
       >
         <WorkspaceAvatar />
-        <div className="leading-tight">
-          <div className="text-[13px] text-text">{workspaceDisplayName}</div>
-          <div className="text-[11.5px] text-text/55">Amoré Bloom</div>
+        <div className="min-w-0 leading-tight">
+          <div className="truncate text-[13px] text-text">{workspaceDisplayName}</div>
+          <div className="truncate text-[11.5px] text-text/55">Amoré Bloom</div>
         </div>
       </Link>
     </aside>
