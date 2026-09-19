@@ -164,7 +164,10 @@ export function RelationshipsLandingView() {
     // GLOBAL-VISUAL-03B.1 — content column capped to Dashboard's own
     // measured 1240px (OwnerDashboardView.tsx: `mx-auto max-w-[1240px]`),
     // restrained instead of stretching the full remaining sidebar width.
-    <div className="mx-auto max-w-[1240px] space-y-8">
+    // `pb-20` — this page is now genuinely short; without it, the last
+    // section's own bottom edge can land directly under the fixed Bloom AI
+    // FAB at common mobile viewport heights.
+    <div className="mx-auto max-w-[1240px] space-y-8 pb-20">
       <PageHeader
         breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Relationships" }]}
         eyebrow="Relationships"
