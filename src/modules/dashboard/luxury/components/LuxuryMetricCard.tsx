@@ -10,6 +10,12 @@ export interface LuxuryMetricCardData {
   helper?: string | null;
   href?: string | null;
   icon: string;
+  /** GLOBAL-VISUAL-02B — an explicit per-metric tint override (a CSS color value,
+   * e.g. "var(--luxury-success)"), for a consumer with several cards that share
+   * one icon name but need distinct colors (icon name alone can't differentiate
+   * them via ICON_TINT). Falls back to ICON_TINT[icon] when omitted, so every
+   * existing caller renders unchanged. */
+  tint?: string;
 }
 
 /**
@@ -32,7 +38,7 @@ const ICON_TINT: Record<string, string> = {
 
 function CardBody({ data, compact = false }: { data: LuxuryMetricCardData; compact?: boolean }) {
   const iconSize = compact ? "h-4 w-4 lg:h-5 lg:w-5" : "h-[18px] w-[18px]";
-  const tint = ICON_TINT[data.icon] ?? "var(--luxury-rose)";
+  const tint = data.tint ?? ICON_TINT[data.icon] ?? "var(--luxury-rose)";
   const iconElement = createElement(resolveLuxuryIcon(data.icon), { className: iconSize, style: { color: tint }, "aria-hidden": true });
   const valueSize = compact ? "text-luxury-card-heading lg:text-luxury-numeric" : "text-[1.625rem]";
   return (

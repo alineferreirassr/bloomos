@@ -176,11 +176,11 @@ export function EventsListView() {
       />
 
       {kpis ? (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <KpiCard icon={EventsIcon} label="Total Events" value={kpis.total.toLocaleString()} />
-          <KpiCard icon={PipelineIcon} label="Upcoming" value={kpis.upcoming.toLocaleString()} />
-          <KpiCard icon={AutomationIcon} label="In Progress" value={kpis.inProgress.toLocaleString()} />
-          <KpiCard icon={CheckIcon} label="Completed" value={kpis.completed.toLocaleString()} />
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <KpiCard icon={EventsIcon} label="Total Events" value={kpis.total.toLocaleString()} tint="var(--color-accent)" />
+          <KpiCard icon={PipelineIcon} label="Upcoming" value={kpis.upcoming.toLocaleString()} tint="var(--color-accent-2)" />
+          <KpiCard icon={AutomationIcon} label="In Progress" value={kpis.inProgress.toLocaleString()} tint="var(--color-warning)" />
+          <KpiCard icon={CheckIcon} label="Completed" value={kpis.completed.toLocaleString()} tint="var(--color-success)" />
         </div>
       ) : null}
 

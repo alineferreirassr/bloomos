@@ -33,7 +33,6 @@ import { DashboardDateSelector } from "@/modules/dashboard/luxury/components/Das
 import { ProfileMenu } from "@/modules/dashboard/luxury/components/ProfileMenu";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
-import { LuxuryMetricCard, type LuxuryMetricCardData } from "@/modules/dashboard/luxury/components/LuxuryMetricCard";
 import { CompactClockWeatherPanel } from "@/modules/dashboard/luxury/components/CompactClockWeatherPanel";
 import { MyDaySection } from "@/modules/dashboard/luxury/components/MyDaySection";
 import { TodaysPriorityCard } from "@/modules/dashboard/luxury/components/TodaysPriorityCard";
@@ -169,27 +168,6 @@ export function TeamView({ branding, profileName, profileRoleLabel, profileAvata
     load();
   };
 
-  const kpis =
-    state.status === "ready"
-      ? {
-          total: state.members.length,
-          owner: state.members.filter((member) => member.role === "owner").length,
-          admin: state.members.filter((member) => member.role === "admin").length,
-          manager: state.members.filter((member) => member.role === "manager").length,
-          staff: state.members.filter((member) => member.role === "staff").length,
-        }
-      : null;
-
-  const metrics: LuxuryMetricCardData[] = kpis
-    ? [
-        { id: "total-members", label: "Total Members", value: kpis.total.toLocaleString(), icon: "Users" },
-        { id: "owner", label: "Owner", value: kpis.owner.toLocaleString(), icon: "Users" },
-        { id: "admin", label: "Admin", value: kpis.admin.toLocaleString(), icon: "Users" },
-        { id: "manager", label: "Manager", value: kpis.manager.toLocaleString(), icon: "Users" },
-        { id: "staff", label: "Staff", value: kpis.staff.toLocaleString(), icon: "Users" },
-      ]
-    : [];
-
   return (
     <LuxuryDashboardShell
       branding={branding}
@@ -200,15 +178,7 @@ export function TeamView({ branding, profileName, profileRoleLabel, profileAvata
       <div className="space-y-6">
         <PersonalizedWelcomeHeader copy={{ greeting: "Team", subtitle: `Amoré Bloom's internal team members and invitations. ${getDataPersistenceMessage()}` }} />
 
-        {metrics.length > 0 ? (
-          <div className="animate-fade-up stagger-1 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
-            {metrics.map((metric) => (
-              <LuxuryMetricCard key={metric.id} data={metric} />
-            ))}
-          </div>
-        ) : null}
-
-        <div className="animate-fade-up stagger-2">
+        <div className="animate-fade-up stagger-1">
           <p className="text-luxury-metadata font-semibold tracking-wide text-luxury-rose uppercase">Today</p>
           <h2 className="mt-1 font-luxury-display text-luxury-page font-semibold text-luxury-text">A little look at today ♡</h2>
         </div>

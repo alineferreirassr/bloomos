@@ -18,6 +18,12 @@ export interface KpiCardProps {
   trend?: KpiCardTrend;
   /** Step 7 — a short real numeric series (oldest first) rendered as a tiny inline sparkline. */
   sparkline?: number[];
+  /** GLOBAL-VISUAL-02B — an optional per-metric tint (a CSS color value, e.g.
+   * "var(--color-success)") for the icon medallion, the same differentiation
+   * LuxuryMetricCard's own ICON_TINT gives Dashboard/Team's cards. Falls back
+   * to the existing flat accent tint, so every current call site (all without
+   * this prop) renders with the same accent color it always has. */
+  tint?: string;
 }
 
 const TREND_TONE: Record<KpiCardTrend["direction"], string> = {
@@ -57,18 +63,22 @@ function Sparkline({ points }: { points: number[] }) {
   );
 }
 
-function CardBody({ label, value, helper, icon: Icon, trend, sparkline }: Omit<KpiCardProps, "href">) {
+function CardBody({ label, value, helper, icon: Icon, trend, sparkline, tint }: Omit<KpiCardProps, "href">) {
+  const iconTint = tint ?? "var(--color-accent)";
   return (
-    <Card className="flex items-start gap-3">
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-accent-100">
-        <Icon className="h-5 w-5 text-accent" aria-hidden="true" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-medium tracking-wide text-text-muted uppercase">{label}</p>
-        <div className="mt-1 flex items-end justify-between gap-2">
-          <p className="font-serif text-2xl font-semibold text-text tabular-nums">{value}</p>
-          {sparkline ? <Sparkline points={sparkline} /> : null}
-        </div>
+    <Card className="flex flex-col items-start gap-3.5" style={{ borderRadius: 14 }}>
+      <div className="flex w-full items-start justify-between gap-2">
+        <span
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+          style={{ backgroundColor: `color-mix(in srgb, ${iconTint} 16%, var(--color-surface))` }}
+        >
+          <Icon className="h-[18px] w-[18px]" style={{ color: iconTint }} aria-hidden="true" />
+        </span>
+        {sparkline ? <Sparkline points={sparkline} /> : null}
+      </div>
+      <div className="min-w-0">
+        <p className="font-serif text-[1.625rem] leading-none font-semibold text-text tabular-nums">{value}</p>
+        <p className="mt-1.5 truncate text-xs font-medium tracking-wide text-text-muted uppercase">{label}</p>
         {helper ? <p className="mt-0.5 text-xs text-text-muted">{helper}</p> : null}
         {trend ? (
           <p className={`mt-0.5 text-xs font-medium tabular-nums ${TREND_TONE[trend.direction]}`}>
@@ -87,6 +97,18 @@ function CardBody({ label, value, helper, icon: Icon, trend, sparkline }: Omit<K
  * site (label/value/helper/icon only) keeps rendering identically. The
  * generic, Classical-token counterpart of the Owner Dashboard's own
  * `LuxuryMetricCard`, for every other module's KPI row.
+ *
+ * GLOBAL-VISUAL-02B — this previously diverged from LuxuryMetricCard in
+ * real, structural ways (horizontal icon-left layout vs. its vertical
+ * icon-top one, a flat rounded-square icon badge vs. a tinted circular
+ * medallion, sans-serif value vs. serif) — the actual, compositional reason
+ * every one of this component's 39 consumers (Events, Leads, Clients,
+ * Contracts, Finance, Vendors, Purchases, Inventory, Automation, ...) still
+ * read as visually different from Dashboard/Team/Relationships even though
+ * they already shared the same color tokens. Rebuilt to match
+ * LuxuryMetricCard's composition exactly while staying in the Classical
+ * Card/token namespace (no cross-shell import) — same props for every
+ * existing caller, so this is presentation-only.
  */
 export function KpiCard(props: KpiCardProps): ReactNode {
   if (props.href) {

@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ComponentType, type ReactNode, type SVGProps } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { UserPlus, Users, FileSignature, Mail, TrendingUp } from "lucide-react";
 import { getLeads, getClients, getContracts, getClientInvitations } from "@/lib/data";
 import type { Lead } from "@/types/lead";
 import type { Client } from "@/types/client";
@@ -15,7 +14,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
-import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { LuxuryMetricCard, type LuxuryMetricCardData } from "@/modules/dashboard/luxury/components/LuxuryMetricCard";
 import { SectionHeader } from "@/modules/dashboard/luxury/components/SectionHeader";
 import { LeadStatusBadge } from "@/modules/leads/components/LeadStatusBadge";
 import { ContractStatusBadge } from "@/modules/contracts/components/ContractStatusBadge";
@@ -46,33 +45,6 @@ function formatMoney(amount: number): string {
   return `$${amount.toLocaleString()}`;
 }
 
-interface RelationshipMetricCardProps {
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
-  tint: string;
-  label: string;
-  value: string;
-  tone?: "surface" | "tint";
-}
-
-/** GLOBAL-VISUAL-02B — an icon medallion above label/value, matching the same
- * icon-forward pattern `StudioTodayCard`/Dashboard's own metric cards already
- * use, so these five read as part of the same product instead of bare
- * text-only KPI boxes. Reuses the existing `--luxury-*` tint tokens only —
- * no new colors. */
-function RelationshipMetricCard({ icon: Icon, tint, label, value, tone }: RelationshipMetricCardProps) {
-  return (
-    <LuxuryCard tone={tone}>
-      <span
-        className="flex h-9 w-9 items-center justify-center rounded-luxury-md"
-        style={{ backgroundColor: `color-mix(in srgb, ${tint} 16%, transparent)`, color: tint }}
-      >
-        <Icon className="h-4 w-4" aria-hidden="true" />
-      </span>
-      <p className="mt-3 text-[11px] font-medium tracking-wide text-text-muted uppercase">{label}</p>
-      <p className="mt-1 text-2xl font-medium text-text tabular-nums">{value}</p>
-    </LuxuryCard>
-  );
-}
 
 interface AttentionItem {
   key: string;
@@ -193,16 +165,22 @@ export function RelationshipsLandingView() {
     return <ErrorState onRetry={load} />;
   }
 
+  const metrics: LuxuryMetricCardData[] = [
+    { id: "active-leads", label: "Active Leads", value: String(summary.activeLeads.length), icon: "Users", tint: "var(--luxury-rose)" },
+    { id: "active-clients", label: "Active Clients", value: String(summary.activeClients.length), icon: "Users", tint: "var(--luxury-success)" },
+    { id: "contracts-in-progress", label: "Contracts In Progress", value: String(summary.contractsInProgress.length), icon: "Document", tint: "var(--luxury-coral)" },
+    { id: "pending-invitations", label: "Pending Invitations", value: String(summary.pendingInvitations.length), icon: "Mail", tint: "var(--luxury-warning)" },
+    { id: "active-pipeline-value", label: "Active Pipeline Value", value: formatMoney(summary.pipelineValue), icon: "Revenue", tint: "var(--luxury-rose)" },
+  ];
+
   return (
     <div className="space-y-8">
       <PageHeader title="Relationships" subtitle="Who needs your attention today." />
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <RelationshipMetricCard icon={UserPlus} tint="var(--luxury-rose)" label="Active Leads" value={String(summary.activeLeads.length)} />
-        <RelationshipMetricCard icon={Users} tint="var(--luxury-success)" label="Active Clients" value={String(summary.activeClients.length)} />
-        <RelationshipMetricCard icon={FileSignature} tint="var(--luxury-coral)" label="Contracts In Progress" value={String(summary.contractsInProgress.length)} />
-        <RelationshipMetricCard icon={Mail} tint="var(--luxury-warning)" label="Pending Invitations" value={String(summary.pendingInvitations.length)} />
-        <RelationshipMetricCard icon={TrendingUp} tint="var(--luxury-rose)" label="Active Pipeline Value" value={formatMoney(summary.pipelineValue)} tone="tint" />
+        {metrics.map((metric) => (
+          <LuxuryMetricCard key={metric.id} data={metric} />
+        ))}
       </div>
 
       <div>

@@ -5,14 +5,84 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { KpiCard } from "@/components/ui/KpiCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Timeline } from "@/modules/timeline/components/Timeline";
+import { getWorkspaceMembers } from "@/lib/data";
+import type { TeamMember } from "@/types/teamMember";
+import { TeamIcon } from "@/components/ui/icons";
 import { getTeamOperationsView, type TeamOperationsView as TeamOperationsData } from "@/modules/operations/teamOperationsData";
 import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 type LoadState = { status: "loading" } | { status: "ready"; data: TeamOperationsData } | { status: "error" };
+
+type RosterState = { status: "loading" } | { status: "ready"; members: TeamMember[] } | { status: "error" };
+
+/**
+ * GLOBAL-VISUAL-02B — the workspace-wide role-count summary (Total Members/
+ * Owner/Admin/Manager/Staff) that used to render on `/team` for every
+ * `team.view` holder, moved here per founder decision. Gated on
+ * `team.manage_roles` — the same permission `TeamView.tsx`'s own Members
+ * table already uses to gate role-editing controls on the general Team
+ * page — never a new or invented permission. This is a real permission
+ * check (`useMemberSession().can(...)`), not a CSS hide: a member without
+ * `team.manage_roles` never triggers the `getWorkspaceMembers()` fetch this
+ * section needs, and the section itself never mounts for them.
+ */
+function TeamRosterSummary() {
+  const [state, setState] = useState<RosterState>({ status: "loading" });
+
+  useEffect(() => {
+    let cancelled = false;
+    getWorkspaceMembers().then(
+      (members) => {
+        if (!cancelled) setState({ status: "ready", members });
+      },
+      () => {
+        if (!cancelled) setState({ status: "error" });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (state.status === "loading") {
+    return (
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <Skeleton key={index} className="h-24 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  if (state.status === "error") return null;
+
+  const kpis = {
+    total: state.members.length,
+    owner: state.members.filter((member) => member.role === "owner").length,
+    admin: state.members.filter((member) => member.role === "admin").length,
+    manager: state.members.filter((member) => member.role === "manager").length,
+    staff: state.members.filter((member) => member.role === "staff").length,
+  };
+
+  return (
+    <div>
+      <p className="text-xs font-semibold tracking-wide text-accent uppercase">Management</p>
+      <h2 className="mt-1 font-serif text-xl font-semibold text-text">Team roster overview</h2>
+      <div className="mt-3 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
+        <KpiCard icon={TeamIcon} label="Total Members" value={kpis.total.toLocaleString()} tint="var(--color-accent)" />
+        <KpiCard icon={TeamIcon} label="Owner" value={kpis.owner.toLocaleString()} tint="var(--color-accent-2)" />
+        <KpiCard icon={TeamIcon} label="Admin" value={kpis.admin.toLocaleString()} tint="var(--color-success)" />
+        <KpiCard icon={TeamIcon} label="Manager" value={kpis.manager.toLocaleString()} tint="var(--color-warning)" />
+        <KpiCard icon={TeamIcon} label="Staff" value={kpis.staff.toLocaleString()} tint="var(--color-danger)" />
+      </div>
+    </div>
+  );
+}
 
 /**
  * v2 Checkpoint 21, Step 6 — every team member's own operational view:
@@ -23,6 +93,7 @@ type LoadState = { status: "loading" } | { status: "ready"; data: TeamOperations
  */
 export function TeamOperationsView() {
   const session = useMemberSession();
+  const canManageRoles = session.can("team.manage_roles");
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const fullName = session.status === "active" ? session.profile?.full_name : null;
 
@@ -73,6 +144,8 @@ export function TeamOperationsView() {
   return (
     <div className="space-y-6">
       <PageHeader title="Team Operations" subtitle={`Your own operational view, ${fullName}.`} />
+
+      {canManageRoles ? <TeamRosterSummary /> : null}
 
       <Card>
         <div className="flex items-center justify-between">
