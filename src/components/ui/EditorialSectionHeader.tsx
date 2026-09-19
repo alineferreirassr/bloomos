@@ -22,7 +22,9 @@ export function EditorialSectionHeader({ eyebrow, title, action }: EditorialSect
     <div className="flex items-end justify-between gap-3">
       <div>
         <p className="text-xs font-semibold tracking-wide text-accent uppercase">{eyebrow}</p>
-        <h2 className="mt-1 font-serif text-[1.75rem] leading-tight font-semibold text-text">{title}</h2>
+        <h2 className="mt-1 font-serif text-[1.75rem] leading-tight font-semibold text-text" style={{ textWrap: "balance" }}>
+          {title}
+        </h2>
       </div>
       {action}
     </div>

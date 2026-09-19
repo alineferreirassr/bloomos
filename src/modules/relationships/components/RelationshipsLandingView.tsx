@@ -216,7 +216,7 @@ export function RelationshipsLandingView() {
       <div className="space-y-4">
         <EditorialSectionHeader eyebrow="Follow-up" title="Needs your attention" />
         {attention.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-2xl bg-surface-tint px-6 py-12 text-center">
+          <div className="flex flex-col items-center gap-3 rounded-2xl bg-surface-tint px-6 py-9 text-center">
             <CheckCircle2 className="h-6 w-6 text-success" aria-hidden="true" />
             <p className="max-w-sm text-sm text-text-muted">
               All caught up — nothing in Leads, Contracts, or Invitations needs action right now.
