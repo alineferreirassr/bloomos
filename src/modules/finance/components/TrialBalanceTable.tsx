@@ -1,5 +1,6 @@
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge } from "@/components/ui/Badge";
+import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/components/ui/Table";
 import { AccountTypeBadge } from "@/modules/finance/components/AccountTypeBadge";
 import { MoneyCell } from "@/modules/finance/components/MoneyCell";
 import type { TrialBalanceRow } from "@/types/financeReport";
@@ -14,68 +15,65 @@ interface TrialBalanceTableProps {
 export function TrialBalanceTable({ rows, totalEndingDebitMinor, totalEndingCreditMinor }: TrialBalanceTableProps) {
   return (
     <>
-      <div className="hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
-        <table className="w-full border-collapse text-left text-sm">
-          <thead>
-            <tr className="border-b border-border/70">
+      <div className="hidden md:block">
+        <Table>
+          <TableHead>
+            <tr>
               {["Number", "Name", "Type", "Debit Activity", "Credit Activity", "Ending Debit", "Ending Credit"].map(
                 (heading) => (
-                  <th
-                    key={heading}
-                    className="px-5 py-4 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
-                  >
+                  <TableHeaderCell key={heading} className="whitespace-nowrap">
                     {heading}
-                  </th>
+                  </TableHeaderCell>
                 ),
               )}
             </tr>
-          </thead>
-          <tbody className="divide-y divide-border/60">
+          </TableHead>
+          <TableBody>
             {rows.map((row) => (
-              <tr key={row.accountId} className="hover:bg-text/4">
-                <td className="px-5 py-4 whitespace-nowrap font-medium text-text">
+              <TableRow key={row.accountId}>
+                <TableCell className="whitespace-nowrap font-medium text-text">
                   {row.accountNumber}
-                </td>
-                <td className="px-5 py-4 whitespace-nowrap text-text">
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-text">
                   {row.accountName}
                   {row.isArchived ? (
                     <Badge tone="neutral" className="ml-2">
                       Inactive
                     </Badge>
                   ) : null}
-                </td>
-                <td className="px-5 py-4">
+                </TableCell>
+                <TableCell>
                   <AccountTypeBadge accountType={row.accountType} />
-                </td>
-                <td className="px-5 py-4 whitespace-nowrap">
+                </TableCell>
+                <TableCell className="whitespace-nowrap">
                   <MoneyCell amountMinor={row.debitMinor} hideZero />
-                </td>
-                <td className="px-5 py-4 whitespace-nowrap">
+                </TableCell>
+                <TableCell className="whitespace-nowrap">
                   <MoneyCell amountMinor={row.creditMinor} hideZero />
-                </td>
-                <td className="px-5 py-4 whitespace-nowrap font-medium">
+                </TableCell>
+                <TableCell className="whitespace-nowrap font-medium">
                   <MoneyCell amountMinor={row.endingDebitMinor} hideZero />
-                </td>
-                <td className="px-5 py-4 whitespace-nowrap font-medium">
+                </TableCell>
+                <TableCell className="whitespace-nowrap font-medium">
                   <MoneyCell amountMinor={row.endingCreditMinor} hideZero />
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
+          </TableBody>
           <tfoot>
-            <tr>
-              <td className="px-5 py-4 text-xs font-semibold tracking-wide text-text-muted uppercase" colSpan={5}>
+            <tr className="border-t border-border/70">
+              <td className="px-4 py-3 text-xs font-semibold tracking-wide text-text-muted uppercase" colSpan={5}>
                 Total
               </td>
-              <td className="px-5 py-4 font-semibold whitespace-nowrap">
+              <td className="px-4 py-3 font-semibold whitespace-nowrap">
                 <MoneyCell amountMinor={totalEndingDebitMinor} />
               </td>
-              <td className="px-5 py-4 font-semibold whitespace-nowrap">
+              <td className="px-4 py-3 font-semibold whitespace-nowrap">
                 <MoneyCell amountMinor={totalEndingCreditMinor} />
               </td>
             </tr>
           </tfoot>
-        </table>
+        </Table>
       </div>
 
       <div className="space-y-3 md:hidden">

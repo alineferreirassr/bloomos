@@ -1,4 +1,5 @@
 import { MoneyCell } from "@/modules/finance/components/MoneyCell";
+import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/components/ui/Table";
 import type { BalanceSheetSection } from "@/types/financeReport";
 
 const CURRENT_PERIOD_EARNINGS_ACCOUNT_ID = "current-period-earnings";
@@ -12,29 +13,26 @@ export function BalanceSheetSectionTable({ section }: BalanceSheetSectionTablePr
   return (
     <div>
       <h4 className="font-serif text-sm font-semibold text-text">{section.label}</h4>
-      <div className="mt-2 hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
-        <table className="w-full border-collapse text-left text-sm">
-          <thead>
-            <tr className="border-b border-border/70">
+      <div className="mt-2 hidden md:block">
+        <Table>
+          <TableHead>
+            <tr>
               {["Number", "Name", "Amount"].map((heading) => (
-                <th
-                  key={heading}
-                  className="px-5 py-4 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
-                >
+                <TableHeaderCell key={heading} className="whitespace-nowrap">
                   {heading}
-                </th>
+                </TableHeaderCell>
               ))}
             </tr>
-          </thead>
-          <tbody className="divide-y divide-border/60">
+          </TableHead>
+          <TableBody>
             {section.rows.map((row) => {
               const isSynthetic = row.accountId === CURRENT_PERIOD_EARNINGS_ACCOUNT_ID;
               return (
-                <tr key={row.accountId} className={isSynthetic ? "bg-text/4 hover:bg-text/7" : "hover:bg-text/4"}>
-                  <td className="px-5 py-4 whitespace-nowrap font-medium text-text">
+                <TableRow key={row.accountId} className={isSynthetic ? "bg-text/4" : ""}>
+                  <TableCell className="whitespace-nowrap font-medium text-text">
                     {isSynthetic ? "—" : row.accountNumber}
-                  </td>
-                  <td className="px-5 py-4 text-text">
+                  </TableCell>
+                  <TableCell className="text-text">
                     <span className="whitespace-nowrap">
                       {row.accountName}
                       {isSynthetic ? <span className="ml-1.5 text-xs text-text-muted">(report-only)</span> : null}
@@ -44,25 +42,25 @@ export function BalanceSheetSectionTable({ section }: BalanceSheetSectionTablePr
                         Not a real Chart of Accounts entry — represents net income not yet closed to Retained Earnings.
                       </p>
                     ) : null}
-                  </td>
-                  <td className="px-5 py-4 whitespace-nowrap font-medium">
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap font-medium">
                     <MoneyCell amountMinor={row.closingBalanceMinor} />
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               );
             })}
-          </tbody>
+          </TableBody>
           <tfoot>
-            <tr>
-              <td className="px-5 py-4 text-xs font-semibold tracking-wide text-text-muted uppercase" colSpan={2}>
+            <tr className="border-t border-border/70">
+              <td className="px-4 py-3 text-xs font-semibold tracking-wide text-text-muted uppercase" colSpan={2}>
                 Total {section.label}
               </td>
-              <td className="px-5 py-4 font-semibold whitespace-nowrap">
+              <td className="px-4 py-3 font-semibold whitespace-nowrap">
                 <MoneyCell amountMinor={section.totalMinor} />
               </td>
             </tr>
           </tfoot>
-        </table>
+        </Table>
       </div>
 
       <div className="mt-2 space-y-2 md:hidden">

@@ -1,4 +1,5 @@
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
+import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/components/ui/Table";
 import { formatMoney } from "@/lib/money";
 import type { JournalLine } from "@/types/journalEntry";
 
@@ -9,50 +10,47 @@ export function JournalLinesTable({ lines, currency }: { lines: JournalLine[]; c
 
   return (
     <>
-      <div className="hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
-        <table className="w-full border-collapse text-left text-sm">
-          <thead>
-            <tr className="border-b border-border/70">
+      <div className="hidden md:block">
+        <Table>
+          <TableHead>
+            <tr>
               {["Account", "Description", "Debit", "Credit"].map((heading) => (
-                <th
-                  key={heading}
-                  className="px-5 py-4 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
-                >
+                <TableHeaderCell key={heading} className="whitespace-nowrap">
                   {heading}
-                </th>
+                </TableHeaderCell>
               ))}
             </tr>
-          </thead>
-          <tbody className="divide-y divide-border/60">
+          </TableHead>
+          <TableBody>
             {lines.map((line) => (
-              <tr key={line.id} className="hover:bg-text/4">
-                <td className="px-5 py-4 whitespace-nowrap text-text">
+              <TableRow key={line.id}>
+                <TableCell className="whitespace-nowrap text-text">
                   {line.account ? `${line.account.account_number} — ${line.account.name}` : "—"}
-                </td>
-                <td className="px-5 py-4 text-text-muted">{line.line_memo ?? "—"}</td>
-                <td className="px-5 py-4 whitespace-nowrap text-text">
+                </TableCell>
+                <TableCell className="text-text-muted">{line.line_memo ?? "—"}</TableCell>
+                <TableCell className="whitespace-nowrap text-text">
                   {line.debit_minor > 0 ? formatMoney(line.debit_minor, currency) : "—"}
-                </td>
-                <td className="px-5 py-4 whitespace-nowrap text-text">
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-text">
                   {line.credit_minor > 0 ? formatMoney(line.credit_minor, currency) : "—"}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
+          </TableBody>
           <tfoot>
-            <tr>
-              <td className="px-5 py-4 text-xs font-semibold tracking-wide text-text-muted uppercase" colSpan={2}>
+            <tr className="border-t border-border/70">
+              <td className="px-4 py-3 text-xs font-semibold tracking-wide text-text-muted uppercase" colSpan={2}>
                 Total
               </td>
-              <td className="px-5 py-4 font-semibold whitespace-nowrap text-text">
+              <td className="px-4 py-3 font-semibold whitespace-nowrap text-text">
                 {formatMoney(totalDebitMinor, currency)}
               </td>
-              <td className="px-5 py-4 font-semibold whitespace-nowrap text-text">
+              <td className="px-4 py-3 font-semibold whitespace-nowrap text-text">
                 {formatMoney(totalCreditMinor, currency)}
               </td>
             </tr>
           </tfoot>
-        </table>
+        </Table>
       </div>
 
       <div className="space-y-3 md:hidden">

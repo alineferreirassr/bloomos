@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import { useRouter } from "next/navigation";
 import { recordPaymentSettlement } from "@/lib/data";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { PaymentForm } from "@/modules/finance/components/PaymentForm";
 import { paymentFormToInput, type PaymentInput } from "@/modules/finance/schema";
 
@@ -46,11 +47,15 @@ export function NewPaymentSettlementView({
   }
 
   return (
-    <div>
-      <h2 className="font-serif text-3xl font-semibold text-text">Record Settlement</h2>
-      <p className="mt-1 text-sm text-text-muted">
-        Posts a payment directly to the ledger as settled. Use this for cash, check, or bank transfers already received.
-      </p>
+    // GLOBAL-VISUAL-06 (Business) — same AF-ported detail/form pattern as
+    // NewPaymentView/NewInvoiceView.
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        eyebrow="Finance"
+        title="Record Settlement"
+        subtitle="Posts a payment directly to the ledger as settled. Use this for cash, check, or bank transfers already received."
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Finance", href: "/finance" }, { label: "Payments", href: "/finance/payments" }, { label: "Settlement" }]}
+      />
       <div className="mt-6 max-w-3xl">
         <PaymentForm
           submitLabel="Record Settlement"

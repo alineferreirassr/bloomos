@@ -8,6 +8,7 @@ import type { Expense } from "@/types/expense";
 import { NotFoundError } from "@/core/errors";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ExpenseForm } from "@/modules/finance/components/ExpenseForm";
 import { expenseFormToInput } from "@/modules/finance/schema";
 import { expenseToFormInput } from "@/modules/finance/mappers";
@@ -61,8 +62,12 @@ export function EditExpenseView({ expenseId }: { expenseId: string }) {
 
   if (isExpenseTerminal(expense.status)) {
     return (
-      <div>
-        <h2 className="font-serif text-3xl font-semibold text-text">Edit Expense</h2>
+      <div className="mx-auto max-w-6xl">
+        <PageHeader
+          eyebrow="Finance"
+          title="Edit Expense"
+          breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Finance", href: "/finance" }, { label: "Expenses", href: "/finance/expenses" }, { label: "Edit" }]}
+        />
         <p className="mt-4 text-sm text-text-muted">
           This expense is {EXPENSE_STATUS_LABELS[expense.status].toLowerCase()} and can&apos;t be edited.
         </p>
@@ -74,8 +79,14 @@ export function EditExpenseView({ expenseId }: { expenseId: string }) {
   }
 
   return (
-    <div>
-      <h2 className="font-serif text-3xl font-semibold text-text">Edit Expense</h2>
+    // GLOBAL-VISUAL-06 (Business) — same AF-ported detail/form pattern as
+    // NewExpenseView/EditContractView.
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        eyebrow="Finance"
+        title="Edit Expense"
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Finance", href: "/finance" }, { label: "Expenses", href: "/finance/expenses" }, { label: "Edit" }]}
+      />
       <div className="mt-6 max-w-3xl">
         <ExpenseForm
           submitLabel="Save changes"

@@ -1,5 +1,6 @@
 import { MoneyCell } from "@/modules/finance/components/MoneyCell";
 import { VarianceCell } from "@/modules/finance/components/VarianceCell";
+import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/components/ui/Table";
 import type { ProfitAndLossSection } from "@/types/financeReport";
 
 interface ProfitAndLossSectionTableProps {
@@ -38,64 +39,61 @@ export function ProfitAndLossSectionTable({ section, hasComparison, emphasized =
   return (
     <div>
       <h4 className="font-serif text-sm font-semibold text-text">{section.label}</h4>
-      <div className="mt-2 hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
-        <table className="w-full border-collapse text-left text-sm">
-          <thead>
-            <tr className="border-b border-border/70">
+      <div className="mt-2 hidden md:block">
+        <Table>
+          <TableHead>
+            <tr>
               {["Number", "Name", "Current Period", ...(hasComparison ? ["Comparison Period", "Variance"] : [])].map(
                 (heading) => (
-                  <th
-                    key={heading}
-                    className="px-5 py-4 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
-                  >
+                  <TableHeaderCell key={heading} className="whitespace-nowrap">
                     {heading}
-                  </th>
+                  </TableHeaderCell>
                 ),
               )}
             </tr>
-          </thead>
-          <tbody className="divide-y divide-border/60">
+          </TableHead>
+          <TableBody>
             {section.rows.map((row) => (
-              <tr key={row.accountId} className="hover:bg-text/4">
-                <td className="px-5 py-4 whitespace-nowrap font-medium text-text">{row.accountNumber}</td>
-                <td className="px-5 py-4 whitespace-nowrap text-text">{row.accountName}</td>
-                <td className="px-5 py-4 whitespace-nowrap">
+              <TableRow key={row.accountId}>
+                <TableCell className="whitespace-nowrap font-medium text-text">{row.accountNumber}</TableCell>
+                <TableCell className="whitespace-nowrap text-text">{row.accountName}</TableCell>
+                <TableCell className="whitespace-nowrap">
                   <MoneyCell amountMinor={row.currentPeriodMinor} />
-                </td>
+                </TableCell>
                 {hasComparison ? (
                   <>
-                    <td className="px-5 py-4 whitespace-nowrap">
+                    <TableCell className="whitespace-nowrap">
                       {row.comparisonPeriodMinor !== null ? <MoneyCell amountMinor={row.comparisonPeriodMinor} /> : "—"}
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
                       <VarianceCell varianceMinor={row.varianceMinor} />
-                    </td>
+                    </TableCell>
                   </>
                 ) : null}
-              </tr>
+              </TableRow>
             ))}
-          </tbody>
+          </TableBody>
           <tfoot>
-            <tr>
-              <td className="px-5 py-4 text-xs font-semibold tracking-wide text-text-muted uppercase" colSpan={2}>
+            <tr className="border-t border-border/70">
+              <td className="px-4 py-3 text-xs font-semibold tracking-wide text-text-muted uppercase" colSpan={2}>
                 Total {section.label}
               </td>
-              <td className="px-5 py-4 font-semibold whitespace-nowrap">
+              <td className="px-4 py-3 font-semibold whitespace-nowrap">
                 <MoneyCell amountMinor={section.totalCurrentPeriodMinor} />
               </td>
               {hasComparison ? (
                 <>
-                  <td className="px-5 py-4 font-semibold whitespace-nowrap">
+                  <td className="px-4 py-3 font-semibold whitespace-nowrap">
                     {section.totalComparisonPeriodMinor !== null ? <MoneyCell amountMinor={section.totalComparisonPeriodMinor} /> : "—"}
                   </td>
-                  <td className="px-5 py-4 font-semibold whitespace-nowrap">
+                  <td className="px-4 py-3 font-semibold whitespace-nowrap">
                     <VarianceCell varianceMinor={section.totalVarianceMinor} />
                   </td>
                 </>
               ) : null}
             </tr>
           </tfoot>
-        </table>
+        </Table>
       </div>
 
       <div className="mt-2 space-y-2 md:hidden">

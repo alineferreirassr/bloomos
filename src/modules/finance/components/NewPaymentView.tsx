@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createPayment } from "@/lib/data";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { PaymentForm } from "@/modules/finance/components/PaymentForm";
 import { paymentFormToInput, type PaymentInput } from "@/modules/finance/schema";
 
@@ -45,8 +46,14 @@ export function NewPaymentView({
   }
 
   return (
-    <div>
-      <h2 className="font-serif text-3xl font-semibold text-text">Record Payment</h2>
+    // GLOBAL-VISUAL-06 (Business) — same AF-ported detail/form pattern as
+    // NewExpenseView/NewInvoiceView.
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        eyebrow="Finance"
+        title="Record Payment"
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Finance", href: "/finance" }, { label: "Payments", href: "/finance/payments" }, { label: "New" }]}
+      />
       <div className="mt-6 max-w-3xl">
         <PaymentForm
           submitLabel="Record Payment"

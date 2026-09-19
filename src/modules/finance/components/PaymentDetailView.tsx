@@ -147,7 +147,9 @@ export function PaymentDetailView({ paymentId }: { paymentId: string }) {
   const refundedSoFarMinor = subtractMinor(payment.amount_minor, refundableMinor);
 
   return (
-    <div className="space-y-8">
+    // GLOBAL-VISUAL-06 (Business) — LuxuryCard body left as-is; already
+    // has a real "Back to Payments" orientation link, only max-w-6xl added.
+    <div className="mx-auto max-w-6xl space-y-8">
       <div>
         <Link href="/finance/payments" className="text-sm text-accent hover:underline">
           ← Back to Payments

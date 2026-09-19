@@ -106,7 +106,10 @@ export function ExpenseDetailView({ expenseId }: { expenseId: string }) {
   const notesReadOnly = isExpenseTerminal(expense.status);
 
   return (
-    <div className="space-y-8">
+    // GLOBAL-VISUAL-06 (Business) — LuxuryCard body left as-is (same
+    // precedent as ClientDetailView/EventDetailView); already has a real
+    // "Back to Expenses" orientation link, so only max-w-6xl was added.
+    <div className="mx-auto max-w-6xl space-y-8">
       <div>
         <Link href="/finance/expenses" className="text-sm text-accent hover:underline">
           ← Back to Expenses

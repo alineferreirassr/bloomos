@@ -8,6 +8,7 @@ import type { Invoice } from "@/types/invoice";
 import { NotFoundError } from "@/core/errors";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { InvoiceForm } from "@/modules/finance/components/InvoiceForm";
 import { invoiceFormToInput } from "@/modules/finance/schema";
 import { invoiceToFormInput } from "@/modules/finance/mappers";
@@ -66,8 +67,12 @@ export function EditInvoiceView({ invoiceId }: { invoiceId: string }) {
 
   if (isInvoiceTerminal(invoice.status)) {
     return (
-      <div>
-        <h2 className="font-serif text-3xl font-semibold text-text">Edit {invoice.title}</h2>
+      <div className="mx-auto max-w-6xl">
+        <PageHeader
+          eyebrow="Finance"
+          title={`Edit ${invoice.title}`}
+          breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Finance", href: "/finance" }, { label: "Invoices", href: "/finance/invoices" }, { label: invoice.title, href: `/finance/invoices/${invoiceId}` }, { label: "Edit" }]}
+        />
         <p className="mt-4 text-sm text-text-muted">
           This invoice is {INVOICE_STATUS_LABELS[invoice.status].toLowerCase()} and can&apos;t be edited.
         </p>
@@ -79,8 +84,14 @@ export function EditInvoiceView({ invoiceId }: { invoiceId: string }) {
   }
 
   return (
-    <div>
-      <h2 className="font-serif text-3xl font-semibold text-text">Edit {invoice.title}</h2>
+    // GLOBAL-VISUAL-06 (Business) — same AF-ported detail/form pattern as
+    // NewInvoiceView/EditContractView.
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        eyebrow="Finance"
+        title={`Edit ${invoice.title}`}
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Finance", href: "/finance" }, { label: "Invoices", href: "/finance/invoices" }, { label: invoice.title, href: `/finance/invoices/${invoiceId}` }, { label: "Edit" }]}
+      />
       <div className="mt-6 max-w-3xl">
         <InvoiceForm
           submitLabel="Save changes"

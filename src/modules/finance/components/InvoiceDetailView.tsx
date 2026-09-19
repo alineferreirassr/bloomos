@@ -119,7 +119,9 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
   const isPartiallyVoided = invoice.status === "voided" && invoice.paid_minor > 0;
 
   return (
-    <div className="space-y-6">
+    // GLOBAL-VISUAL-06 (Business) — LuxuryCard body left as-is; already
+    // has a real "Back to Invoices" orientation link, only max-w-6xl added.
+    <div className="mx-auto max-w-6xl space-y-6">
       <div>
         <Link href="/finance/invoices" className="text-sm text-accent hover:underline">
           ← Back to Invoices

@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { ModuleHero } from "@/components/ui/ModuleHero";
+import { ConnectedRail } from "@/components/ui/ConnectedRail";
 import {
   ExpenseFilters,
   DEFAULT_EXPENSE_FILTERS,
@@ -102,23 +104,46 @@ export function ExpensesListView() {
     filters.reimbursableOnly;
 
   return (
-    <div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="font-serif text-3xl font-semibold text-text">Expenses</h2>
-          <p className="mt-1 text-sm text-text-muted">
-            Every cost the business incurs — Event-specific, general business, or supplier/team-related.
-            {" "}{getDataPersistenceMessage()}
+    // GLOBAL-VISUAL-06 (Business) — same AF-ported dense-list shell as
+    // Leads/Events/Inventory (ModuleHero compact + ConnectedRail).
+    // Expenses/Invoices/Payments are reached via Finance Overview's own
+    // cards, not the FinanceLedgerNav tab bar (which stays specific to
+    // Chart of Accounts/Journal/Periods/Reports), so this shell — not
+    // FinanceLedgerNav's tabs — is the right orientation pattern here.
+    <div className="mx-auto max-w-6xl">
+      <ModuleHero
+        compact
+        eyebrow="Finance"
+        title="Expenses"
+        purpose="Every cost the business incurs — Event-specific, general business, or supplier/team-related."
+        breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Finance", href: "/finance" }, { label: "Expenses" }]}
+        actions={
+          canCreate ? (
+            <Link href="/finance/expenses/new">
+              <Button>New Expense</Button>
+            </Link>
+          ) : null
+        }
+        source={
+          <p className="flex items-center gap-1.5 text-xs text-text-muted/80">
+            <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
+            {getDataPersistenceMessage()}
           </p>
-        </div>
-        {canCreate ? (
-          <Link href="/finance/expenses/new">
-            <Button>New Expense</Button>
-          </Link>
-        ) : null}
-      </div>
+        }
+      />
 
-      <div className="mt-6">
+      <section aria-label="Where Expenses sits in your workflow" className="mt-8">
+        <ConnectedRail
+          items={[
+            { label: "Finance", href: "/finance" },
+            { label: "Invoices", href: "/finance/invoices" },
+            { label: "Expenses", current: true },
+            { label: "Payments", href: "/finance/payments" },
+          ]}
+        />
+      </section>
+
+      <div className="mt-8">
         <ExpenseFilters value={filters} onChange={handleFiltersChange} />
       </div>
 

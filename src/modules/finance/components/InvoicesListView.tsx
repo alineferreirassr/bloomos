@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { ModuleHero } from "@/components/ui/ModuleHero";
+import { ConnectedRail } from "@/components/ui/ConnectedRail";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { ModuleInsightCard } from "@/components/ui/ModuleInsightCard";
 import { ContractsIcon, PipelineIcon, FinanceIcon } from "@/components/ui/icons";
@@ -179,10 +180,15 @@ export function InvoicesListView() {
   const insight = state.status === "ready" ? buildInvoicesInsight(state.rows) : null;
 
   return (
-    <div>
-      <PageHeader
+    // GLOBAL-VISUAL-06 (Business) — same AF-ported dense-list shell as
+    // Expenses/Leads/Events (ModuleHero compact + ConnectedRail).
+    <div className="mx-auto max-w-6xl">
+      <ModuleHero
+        compact
+        eyebrow="Finance"
         title="Invoices"
-        subtitle={`Every invoice billed to a Client, standalone or linked to an Event and Contract. ${getDataPersistenceMessage()}`}
+        purpose="Every invoice billed to a Client, standalone or linked to an Event and Contract."
+        breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Finance", href: "/finance" }, { label: "Invoices" }]}
         actions={
           canCreate ? (
             <Link href="/finance/invoices/new">
@@ -190,8 +196,26 @@ export function InvoicesListView() {
             </Link>
           ) : null
         }
+        source={
+          <p className="flex items-center gap-1.5 text-xs text-text-muted/80">
+            <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
+            {getDataPersistenceMessage()}
+          </p>
+        }
       />
 
+      <section aria-label="Where Invoices sits in your workflow" className="mt-8">
+        <ConnectedRail
+          items={[
+            { label: "Finance", href: "/finance" },
+            { label: "Invoices", current: true },
+            { label: "Expenses", href: "/finance/expenses" },
+            { label: "Payments", href: "/finance/payments" },
+          ]}
+        />
+      </section>
+
+      <div className="mt-8">
       {insight ? (
         <div className="animate-fade-up mb-6">
           <ModuleInsightCard insight={insight} tone={insight.includes("overdue") ? "warning" : "info"} />
@@ -242,6 +266,7 @@ export function InvoicesListView() {
             <InvoiceListCards rows={state.rows} />
           </div>
         )}
+      </div>
       </div>
     </div>
   );

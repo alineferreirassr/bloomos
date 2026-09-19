@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createExpense } from "@/lib/data";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ExpenseForm } from "@/modules/finance/components/ExpenseForm";
 import { expenseFormToInput, type ExpenseInput } from "@/modules/finance/schema";
 
@@ -36,8 +37,14 @@ export function NewExpenseView({ defaultEventId, defaultClientId, defaultContrac
   }
 
   return (
-    <div>
-      <h2 className="font-serif text-3xl font-semibold text-text">New Expense</h2>
+    // GLOBAL-VISUAL-06 (Business) — same AF-ported detail/form pattern as
+    // NewLeadView/NewEventView.
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        eyebrow="Finance"
+        title="New Expense"
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Finance", href: "/finance" }, { label: "Expenses", href: "/finance/expenses" }, { label: "New" }]}
+      />
       <div className="mt-6 max-w-3xl">
         <ExpenseForm
           submitLabel="Create Expense"

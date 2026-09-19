@@ -6,61 +6,59 @@ import { formatMoney } from "@/lib/money";
 import { formatEventDate } from "@/modules/events/dateFormat";
 import type { PaymentListRow } from "@/modules/finance/components/PaymentsListView";
 import { getFullName } from "@/lib/personName";
+import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/components/ui/Table";
 
 export function PaymentListTable({ rows }: { rows: PaymentListRow[] }) {
   return (
-    <div className="hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
-      <table className="w-full border-collapse text-left text-sm">
-        <thead className="sticky top-0 z-[var(--z-index-dropdown)] bg-surface">
-          <tr className="border-b border-border/70">
+    <div className="hidden md:block">
+      <Table>
+        <TableHead>
+          <tr>
             {["Date", "Client", "Invoice", "Event", "Type", "Method", "Status", "Amount", "Reference"].map(
               (heading) => (
-                <th
-                  key={heading}
-                  className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase whitespace-nowrap"
-                >
+                <TableHeaderCell key={heading} className="whitespace-nowrap">
                   {heading}
-                </th>
+                </TableHeaderCell>
               ),
             )}
           </tr>
-        </thead>
-        <tbody className="divide-y divide-border/60">
+        </TableHead>
+        <TableBody>
           {rows.map(({ payment, client, event, invoice }) => (
-            <tr key={payment.id} className="transition-colors duration-150 hover:bg-accent-100/25">
-              <td className="px-5 py-4 whitespace-nowrap">
+            <TableRow key={payment.id}>
+              <TableCell className="whitespace-nowrap">
                 <Link href={`/finance/payments/${payment.id}`} className="font-medium text-text hover:text-accent">
                   {formatEventDate(payment.transaction_date)}
                 </Link>
-              </td>
-              <td className="px-5 py-4 whitespace-nowrap text-text-muted">
+              </TableCell>
+              <TableCell className="whitespace-nowrap text-text-muted">
                 {client ? getFullName(client) : "—"}
-              </td>
-              <td className="px-5 py-4 whitespace-nowrap text-text-muted">
+              </TableCell>
+              <TableCell className="whitespace-nowrap text-text-muted">
                 {invoice ? invoice.invoice_number : "—"}
-              </td>
-              <td className="px-5 py-4 whitespace-nowrap text-text-muted">
+              </TableCell>
+              <TableCell className="whitespace-nowrap text-text-muted">
                 {event ? event.title : "—"}
-              </td>
-              <td className="px-5 py-4">
+              </TableCell>
+              <TableCell>
                 <PaymentTypeBadge type={payment.payment_type} reference={payment.reference} />
-              </td>
-              <td className="px-5 py-4">
+              </TableCell>
+              <TableCell>
                 <PaymentMethodBadge method={payment.payment_method} />
-              </td>
-              <td className="px-5 py-4">
+              </TableCell>
+              <TableCell>
                 <PaymentStatusBadge status={payment.status} />
-              </td>
-              <td className="px-5 py-4 whitespace-nowrap font-medium text-text">
+              </TableCell>
+              <TableCell className="whitespace-nowrap font-medium text-text">
                 {formatMoney(payment.amount_minor, payment.currency)}
-              </td>
-              <td className="px-5 py-4 whitespace-nowrap text-text-muted">
+              </TableCell>
+              <TableCell className="whitespace-nowrap text-text-muted">
                 {payment.reference ?? "—"}
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }

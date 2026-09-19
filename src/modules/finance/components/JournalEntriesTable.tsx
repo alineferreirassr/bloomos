@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge } from "@/components/ui/Badge";
+import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/components/ui/Table";
 import { PostingStatusBadge } from "@/modules/finance/components/PostingStatusBadge";
 import { formatEventDate } from "@/modules/events/dateFormat";
 import type { JournalEntry } from "@/types/journalEntry";
@@ -23,44 +24,41 @@ interface JournalEntriesTableProps {
 export function JournalEntriesTable({ entries, periodsById }: JournalEntriesTableProps) {
   return (
     <>
-      <div className="hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
-        <table className="w-full border-collapse text-left text-sm">
-          <thead>
-            <tr className="border-b border-border/70">
+      <div className="hidden md:block">
+        <Table>
+          <TableHead>
+            <tr>
               {["Date", "Reference", "Memo", "Source Type", "Period", "Status", "Reversal"].map((heading) => (
-                <th
-                  key={heading}
-                  className="px-5 py-4 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
-                >
+                <TableHeaderCell key={heading} className="whitespace-nowrap">
                   {heading}
-                </th>
+                </TableHeaderCell>
               ))}
             </tr>
-          </thead>
-          <tbody className="divide-y divide-border/60">
+          </TableHead>
+          <TableBody>
             {entries.map((entry) => {
               const period = periodsById.get(entry.accounting_period_id);
               return (
-                <tr key={entry.id} className="hover:bg-text/4">
-                  <td className="px-5 py-4 whitespace-nowrap">
+                <TableRow key={entry.id}>
+                  <TableCell className="whitespace-nowrap">
                     <Link href={`/finance/journal/${entry.id}`} className="font-medium text-text hover:text-accent">
                       {formatEventDate(entry.entry_date)}
                     </Link>
-                  </td>
-                  <td className="px-5 py-4 font-mono text-xs whitespace-nowrap text-text-muted">
+                  </TableCell>
+                  <TableCell className="font-mono text-xs whitespace-nowrap text-text-muted">
                     {entry.id.slice(0, 8)}
-                  </td>
-                  <td className="px-5 py-4 text-text-muted">{entry.memo ?? "—"}</td>
-                  <td className="px-5 py-4 whitespace-nowrap text-text-muted">
+                  </TableCell>
+                  <TableCell className="text-text-muted">{entry.memo ?? "—"}</TableCell>
+                  <TableCell className="whitespace-nowrap text-text-muted">
                     {entry.source_type}
-                  </td>
-                  <td className="px-5 py-4 whitespace-nowrap text-text-muted">
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-text-muted">
                     {period ? `${formatEventDate(period.period_start)} – ${formatEventDate(period.period_end)}` : "—"}
-                  </td>
-                  <td className="px-5 py-4">
+                  </TableCell>
+                  <TableCell>
                     <PostingStatusBadge status={entry.posting_status} />
-                  </td>
-                  <td className="px-5 py-4 whitespace-nowrap">
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
                     {entry.reversed_by_entry_id ? (
                       <Badge tone="neutral">Reversed</Badge>
                     ) : entry.reverses_entry_id ? (
@@ -68,12 +66,12 @@ export function JournalEntriesTable({ entries, periodsById }: JournalEntriesTabl
                     ) : (
                       "—"
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               );
             })}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       <div className="space-y-3 md:hidden">

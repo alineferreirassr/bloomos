@@ -1,5 +1,6 @@
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge } from "@/components/ui/Badge";
+import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/components/ui/Table";
 import { AccountTypeBadge } from "@/modules/finance/components/AccountTypeBadge";
 import type { ChartOfAccount } from "@/types/chartOfAccount";
 
@@ -12,45 +13,42 @@ interface ChartOfAccountsTableProps {
 export function ChartOfAccountsTable({ accounts, accountsById }: ChartOfAccountsTableProps) {
   return (
     <>
-      <div className="hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
-        <table className="w-full border-collapse text-left text-sm">
-          <thead>
-            <tr className="border-b border-border/70">
+      <div className="hidden md:block">
+        <Table>
+          <TableHead>
+            <tr>
               {["Number", "Name", "Type", "Normal Balance", "Parent Account", "Status"].map((heading) => (
-                <th
-                  key={heading}
-                  className="px-5 py-4 text-[11px] tracking-wide text-text-muted uppercase whitespace-nowrap"
-                >
+                <TableHeaderCell key={heading} className="whitespace-nowrap">
                   {heading}
-                </th>
+                </TableHeaderCell>
               ))}
             </tr>
-          </thead>
-          <tbody className="divide-y divide-border/60">
+          </TableHead>
+          <TableBody>
             {accounts.map((account) => (
-              <tr key={account.id} className="hover:bg-text/4">
-                <td className="px-5 py-4 whitespace-nowrap font-medium text-text">
+              <TableRow key={account.id}>
+                <TableCell className="whitespace-nowrap font-medium text-text">
                   {account.account_number}
-                </td>
-                <td className="px-5 py-4 whitespace-nowrap text-text">{account.name}</td>
-                <td className="px-5 py-4">
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-text">{account.name}</TableCell>
+                <TableCell>
                   <AccountTypeBadge accountType={account.account_type} />
-                </td>
-                <td className="px-5 py-4 whitespace-nowrap text-text-muted capitalize">
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-text-muted capitalize">
                   {account.normal_balance}
-                </td>
-                <td className="px-5 py-4 whitespace-nowrap text-text-muted">
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-text-muted">
                   {account.parent_account_id ? (accountsById.get(account.parent_account_id)?.name ?? "—") : "—"}
-                </td>
-                <td className="px-5 py-4">
+                </TableCell>
+                <TableCell>
                   <Badge tone={account.archived_at ? "neutral" : "accent"}>
                     {account.archived_at ? "Inactive" : "Active"}
                   </Badge>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       <div className="space-y-3 md:hidden">

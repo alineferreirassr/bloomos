@@ -82,7 +82,7 @@ export function ExpenseActions({ expense, onChanged }: ExpenseActionsProps) {
         {duplicating ? "Duplicating…" : "Duplicate"}
       </Button>
       {duplicateError ? (
-        <p role="alert" className="mt-1.5 text-xs text-rose-600 dark:text-rose-400">
+        <p role="alert" className="mt-1.5 text-xs text-danger">
           {duplicateError}
         </p>
       ) : null}
@@ -107,7 +107,7 @@ export function ExpenseActions({ expense, onChanged }: ExpenseActionsProps) {
           {duplicateButton}
         </div>
         {actionError ? (
-          <p role="alert" className="text-xs text-rose-600 dark:text-rose-400">
+          <p role="alert" className="text-xs text-danger">
             {actionError}
           </p>
         ) : null}
@@ -174,7 +174,7 @@ export function ExpenseActions({ expense, onChanged }: ExpenseActionsProps) {
       </div>
 
       {actionError ? (
-        <p role="alert" className="text-xs text-rose-600 dark:text-rose-400">
+        <p role="alert" className="text-xs text-danger">
           {actionError}
         </p>
       ) : null}

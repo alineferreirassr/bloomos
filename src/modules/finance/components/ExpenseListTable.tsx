@@ -4,13 +4,14 @@ import { ExpenseCategoryBadge } from "@/modules/finance/components/ExpenseCatego
 import { formatMoney } from "@/lib/money";
 import { formatEventDate } from "@/modules/events/dateFormat";
 import type { ExpenseListRow } from "@/modules/finance/components/ExpensesListView";
+import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/components/ui/Table";
 
 export function ExpenseListTable({ rows }: { rows: ExpenseListRow[] }) {
   return (
-    <div className="hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
-      <table className="w-full border-collapse text-left text-sm">
-        <thead className="sticky top-0 z-[var(--z-index-dropdown)] bg-surface">
-          <tr className="border-b border-border/70">
+    <div className="hidden md:block">
+      <Table>
+        <TableHead>
+          <tr>
             {[
               "Date",
               "Description",
@@ -23,50 +24,47 @@ export function ExpenseListTable({ rows }: { rows: ExpenseListRow[] }) {
               "Reference",
               "Next action",
             ].map((heading) => (
-              <th
-                key={heading}
-                className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase whitespace-nowrap"
-              >
+              <TableHeaderCell key={heading} className="whitespace-nowrap">
                 {heading}
-              </th>
+              </TableHeaderCell>
             ))}
           </tr>
-        </thead>
-        <tbody className="divide-y divide-border/60">
+        </TableHead>
+        <TableBody>
           {rows.map(({ expense, event, nextAction }) => (
-            <tr key={expense.id} className="transition-colors duration-150 hover:bg-accent-100/25">
-              <td className="px-5 py-4 whitespace-nowrap">
+            <TableRow key={expense.id}>
+              <TableCell className="whitespace-nowrap">
                 <Link href={`/finance/expenses/${expense.id}`} className="font-medium text-text hover:text-accent">
                   {formatEventDate(expense.transaction_date)}
                 </Link>
-              </td>
-              <td className="px-5 py-4 text-text-muted">{expense.description}</td>
-              <td className="px-5 py-4">
+              </TableCell>
+              <TableCell className="text-text-muted">{expense.description}</TableCell>
+              <TableCell>
                 <ExpenseCategoryBadge category={expense.category} />
-              </td>
-              <td className="px-5 py-4 whitespace-nowrap text-text-muted">
+              </TableCell>
+              <TableCell className="whitespace-nowrap text-text-muted">
                 {event ? event.title : "—"}
-              </td>
-              <td className="px-5 py-4">
+              </TableCell>
+              <TableCell>
                 <ExpenseStatusBadge status={expense.status} />
-              </td>
-              <td className="px-5 py-4 whitespace-nowrap font-medium text-text">
+              </TableCell>
+              <TableCell className="whitespace-nowrap font-medium text-text">
                 {formatMoney(expense.amount_minor, expense.currency)}
-              </td>
-              <td className="px-5 py-4 whitespace-nowrap text-text-muted">
+              </TableCell>
+              <TableCell className="whitespace-nowrap text-text-muted">
                 {formatEventDate(expense.due_date)}
-              </td>
-              <td className="px-5 py-4 whitespace-nowrap text-text-muted">
+              </TableCell>
+              <TableCell className="whitespace-nowrap text-text-muted">
                 {expense.reimbursable ? "Yes" : "No"}
-              </td>
-              <td className="px-5 py-4 whitespace-nowrap text-text-muted">
+              </TableCell>
+              <TableCell className="whitespace-nowrap text-text-muted">
                 {expense.reference ?? "—"}
-              </td>
-              <td className="px-5 py-4 text-text-muted">{nextAction ?? "—"}</td>
-            </tr>
+              </TableCell>
+              <TableCell className="text-text-muted">{nextAction ?? "—"}</TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }

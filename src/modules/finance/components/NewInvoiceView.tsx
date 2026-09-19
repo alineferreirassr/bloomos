@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createInvoice } from "@/lib/data";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { InvoiceForm } from "@/modules/finance/components/InvoiceForm";
 import { invoiceFormToInput, type InvoiceInput } from "@/modules/finance/schema";
 
@@ -37,8 +38,14 @@ export function NewInvoiceView({ defaultClientId, defaultEventId, defaultContrac
   }
 
   return (
-    <div>
-      <h2 className="font-serif text-3xl font-semibold text-text">New Invoice</h2>
+    // GLOBAL-VISUAL-06 (Business) — same AF-ported detail/form pattern as
+    // NewExpenseView/NewLeadView.
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        eyebrow="Finance"
+        title="New Invoice"
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Finance", href: "/finance" }, { label: "Invoices", href: "/finance/invoices" }, { label: "New" }]}
+      />
       <div className="mt-6 max-w-3xl">
         <InvoiceForm
           submitLabel="Create Invoice"
