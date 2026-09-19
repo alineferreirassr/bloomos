@@ -4,15 +4,22 @@ import { useRouter } from "next/navigation";
 import { createVendor, setVendorPreferredStatus, setVendorStatus } from "@/lib/data";
 import type { DataResult } from "@/lib/data/result";
 import type { Vendor } from "@/types/vendor";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { VendorForm, type VendorFormValues } from "@/modules/vendors/components/VendorForm";
 
 export function NewVendorView() {
   const router = useRouter();
 
   return (
-    <div>
-      <h2 className="text-3xl font-semibold text-text">New Vendor</h2>
-      <p className="mt-1 text-sm text-text-muted">Add a supplier Amoré Bloom purchases from or books through.</p>
+    // GLOBAL-VISUAL-06 (Business) — same AF-ported detail/form pattern as
+    // NewLeadView/NewEventView.
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        eyebrow="Vendor"
+        title="New Vendor"
+        subtitle="Add a supplier Amoré Bloom purchases from or books through."
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Vendors", href: "/vendors" }, { label: "New" }]}
+      />
       <div className="mt-6 max-w-3xl">
         <VendorForm
           submitLabel="Create Vendor"

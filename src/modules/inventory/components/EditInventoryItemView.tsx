@@ -9,6 +9,7 @@ import { NotFoundError } from "@/core/errors";
 import { majorToMinor } from "@/lib/money";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { InventoryItemForm, type InventoryItemFormValues } from "@/modules/inventory/components/InventoryItemForm";
 import { inventoryItemToFormInput } from "@/modules/inventory/mappers";
 
@@ -51,8 +52,14 @@ export function EditInventoryItemView({ inventoryItemId }: { inventoryItemId: st
   }
 
   return (
-    <div>
-      <h2 className="text-3xl font-semibold text-text">Edit {state.item.name}</h2>
+    // GLOBAL-VISUAL-06 (Business) — same AF-ported detail/form pattern as
+    // NewInventoryItemView/EditLeadView.
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        eyebrow="Inventory"
+        title={`Edit ${state.item.name}`}
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Inventory", href: "/inventory" }, { label: state.item.name, href: `/inventory/${inventoryItemId}` }, { label: "Edit" }]}
+      />
       <div className="mt-6 max-w-3xl">
         <InventoryItemForm
           submitLabel="Save changes"

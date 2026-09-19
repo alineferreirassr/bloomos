@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Vendor } from "@/types/vendor";
 import { ActionMenu, type ActionMenuAction } from "@/components/ui/ActionMenu";
+import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/components/ui/Table";
 import { archiveVendor, restoreVendor } from "@/lib/data";
 import { VendorStatusBadge } from "@/modules/vendors/components/VendorStatusBadge";
 import { PreferredStar } from "@/modules/vendors/components/PreferredStar";
@@ -44,57 +45,57 @@ export function VendorListTable({ vendors, onChanged }: VendorListTableProps) {
   };
 
   return (
-    <div className="hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
-      <table className="w-full border-collapse text-left text-sm">
-        <thead className="sticky top-0 z-[var(--z-index-dropdown)] bg-surface">
-          <tr className="border-b border-border/70">
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">
+    <div className="hidden md:block">
+      <Table>
+        <TableHead>
+          <tr>
+            <TableHeaderCell>
               <span className="sr-only">Preferred</span>
-            </th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Company Name</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Display Name</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Status</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Email</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Phone</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Currency</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Tags</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Updated</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">
+            </TableHeaderCell>
+            <TableHeaderCell>Company Name</TableHeaderCell>
+            <TableHeaderCell>Display Name</TableHeaderCell>
+            <TableHeaderCell>Status</TableHeaderCell>
+            <TableHeaderCell>Email</TableHeaderCell>
+            <TableHeaderCell>Phone</TableHeaderCell>
+            <TableHeaderCell>Currency</TableHeaderCell>
+            <TableHeaderCell>Tags</TableHeaderCell>
+            <TableHeaderCell>Updated</TableHeaderCell>
+            <TableHeaderCell>
               <span className="sr-only">Actions</span>
-            </th>
+            </TableHeaderCell>
           </tr>
-        </thead>
-        <tbody className="divide-y divide-border/60">
+        </TableHead>
+        <TableBody>
           {vendors.map((vendor) => (
-            <tr key={vendor.id} className="transition-colors duration-150 hover:bg-accent-100/25">
-              <td className="px-5 py-4">
+            <TableRow key={vendor.id}>
+              <TableCell>
                 <PreferredStar isPreferred={vendor.is_preferred} />
-              </td>
-              <td className="px-5 py-4">
+              </TableCell>
+              <TableCell>
                 <Link href={`/vendors/${vendor.id}`} className="text-[15px] font-medium text-text hover:text-accent">
                   {vendor.company_name}
                 </Link>
-              </td>
-              <td className="px-5 py-4 text-text-muted">{vendor.display_name ?? "—"}</td>
-              <td className="px-5 py-4">
+              </TableCell>
+              <TableCell className="text-text-muted">{vendor.display_name ?? "—"}</TableCell>
+              <TableCell>
                 <VendorStatusBadge status={vendor.status} />
-              </td>
-              <td className="px-5 py-4 text-text-muted">{vendor.email ?? "—"}</td>
-              <td className="px-5 py-4 text-text-muted">{vendor.phone ?? "—"}</td>
-              <td className="px-5 py-4 text-text-muted">{vendor.default_currency}</td>
-              <td className="px-5 py-4 text-text-muted">
+              </TableCell>
+              <TableCell className="text-text-muted">{vendor.email ?? "—"}</TableCell>
+              <TableCell className="text-text-muted">{vendor.phone ?? "—"}</TableCell>
+              <TableCell className="text-text-muted">{vendor.default_currency}</TableCell>
+              <TableCell className="text-text-muted">
                 {vendor.tags.length > 0 ? vendor.tags.join(", ") : "—"}
-              </td>
-              <td className="px-5 py-4 text-text-muted">
+              </TableCell>
+              <TableCell className="text-text-muted">
                 {new Date(vendor.updated_at).toLocaleDateString()}
-              </td>
-              <td className="px-5 py-4">
+              </TableCell>
+              <TableCell>
                 <ActionMenu actions={actionsFor(vendor)} />
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }

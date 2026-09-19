@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { ModuleHero } from "@/components/ui/ModuleHero";
+import { ConnectedRail } from "@/components/ui/ConnectedRail";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { ModuleInsightCard } from "@/components/ui/ModuleInsightCard";
 import { InventoryIcon, PurchasesIcon, CloseIcon } from "@/components/ui/icons";
@@ -87,18 +88,40 @@ export function InventoryListView() {
       : null;
 
   return (
-    <div>
-      <PageHeader
+    // GLOBAL-VISUAL-06 (Business) — same AF-ported dense-list shell as
+    // Leads/Clients/Contracts/Events (ModuleHero compact + ConnectedRail).
+    <div className="mx-auto max-w-6xl">
+      <ModuleHero
+        compact
+        eyebrow="Inventory"
         title="Inventory"
-        subtitle={`Consumable and reusable items Amoré Bloom stocks for Events. ${getDataPersistenceMessage()}`}
+        purpose="Consumable and reusable items Amoré Bloom stocks for Events."
+        breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Inventory" }]}
         actions={
           <Link href="/inventory/new">
             <Button type="button">New Item</Button>
           </Link>
         }
+        source={
+          <p className="flex items-center gap-1.5 text-xs text-text-muted/80">
+            <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
+            {getDataPersistenceMessage()}
+          </p>
+        }
       />
 
-      <div className="space-y-8">
+      <section aria-label="Where Inventory sits in your workflow" className="mt-8">
+        <ConnectedRail
+          items={[
+            { label: "Vendors", href: "/vendors" },
+            { label: "Purchases", href: "/purchases" },
+            { label: "Inventory", current: true },
+            { label: "Services", href: "/services" },
+          ]}
+        />
+      </section>
+
+      <div className="mt-8 space-y-8">
       {kpis ? (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           <KpiCard icon={InventoryIcon} label="Total Items" value={kpis.total.toLocaleString()} />

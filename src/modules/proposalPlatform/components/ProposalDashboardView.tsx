@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Select } from "@/components/ui/Select";
 import { DocumentTemplatesIcon, AnalyticsIcon, CheckIcon } from "@/components/ui/icons";
 
 /**
@@ -156,13 +157,13 @@ export function ProposalDashboardView() {
             <label className="text-sm text-text-muted" htmlFor="proposal-status-filter">
               Status
             </label>
-            <select id="proposal-status-filter" className="rounded-md border border-border bg-surface px-2 py-1 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "all" | ProposalDocumentStatus)}>
+            <Select id="proposal-status-filter" className="w-auto" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "all" | ProposalDocumentStatus)}>
               <option value="all">All</option>
               <option value="draft">Draft</option>
               <option value="revision">Revision</option>
               <option value="published">Published</option>
               <option value="archived">Archived</option>
-            </select>
+            </Select>
           </div>
 
           <Card className="mb-6">

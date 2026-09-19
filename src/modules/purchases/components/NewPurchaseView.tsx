@@ -5,15 +5,22 @@ import { createPurchase } from "@/lib/data";
 import type { DataResult } from "@/lib/data/result";
 import type { Purchase } from "@/types/purchase";
 import { majorToMinor } from "@/lib/money";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { PurchaseForm, type PurchaseFormValues } from "@/modules/purchases/components/PurchaseForm";
 
 export function NewPurchaseView() {
   const router = useRouter();
 
   return (
-    <div>
-      <h2 className="font-serif text-3xl font-semibold text-text">New Purchase</h2>
-      <p className="mt-1 text-sm text-text-muted">Create a draft purchase order — add line items and submit it once it&rsquo;s ready.</p>
+    // GLOBAL-VISUAL-06 (Business) — same AF-ported detail/form pattern as
+    // NewLeadView/NewEventView.
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        eyebrow="Purchase"
+        title="New Purchase"
+        subtitle="Create a draft purchase order — add line items and submit it once it's ready."
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Purchases", href: "/purchases" }, { label: "New" }]}
+      />
       <div className="mt-6 max-w-3xl">
         <PurchaseForm
           mode="create"

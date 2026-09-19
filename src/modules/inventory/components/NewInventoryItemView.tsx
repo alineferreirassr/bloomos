@@ -5,15 +5,22 @@ import { createInventoryItem } from "@/lib/data";
 import type { DataResult } from "@/lib/data/result";
 import type { InventoryItem } from "@/types/inventoryItem";
 import { majorToMinor } from "@/lib/money";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { InventoryItemForm, type InventoryItemFormValues } from "@/modules/inventory/components/InventoryItemForm";
 
 export function NewInventoryItemView() {
   const router = useRouter();
 
   return (
-    <div>
-      <h2 className="text-3xl font-semibold text-text">New Inventory Item</h2>
-      <p className="mt-1 text-sm text-text-muted">Add a consumable or reusable item Amoré Bloom stocks for Events.</p>
+    // GLOBAL-VISUAL-06 (Business) — same AF-ported detail/form pattern as
+    // NewLeadView/NewEventView (real PageHeader + breadcrumb, max-w-6xl).
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        eyebrow="Inventory"
+        title="New Inventory Item"
+        subtitle="Add a consumable or reusable item Amoré Bloom stocks for Events."
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Inventory", href: "/inventory" }, { label: "New" }]}
+      />
       <div className="mt-6 max-w-3xl">
         <InventoryItemForm
           submitLabel="Create Item"

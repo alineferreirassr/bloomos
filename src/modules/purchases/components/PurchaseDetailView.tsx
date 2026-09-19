@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { getPurchase, listPurchaseItems, getPurchaseReceiptSummary } from "@/lib/data";
 import type { Purchase } from "@/types/purchase";
 import type { PurchaseItem } from "@/types/purchaseItem";
@@ -87,7 +88,20 @@ export function PurchaseDetailView({ purchaseId }: { purchaseId: string }) {
   const remaining = receiptSummary.totalOrdered - receiptSummary.totalReceived;
 
   return (
-    <div className="space-y-8">
+    // GLOBAL-VISUAL-06 (Business) — this page is already an elaborate,
+    // deliberately-designed LuxuryCard-based operational detail page, same
+    // category as ClientDetailView/EventDetailView's "separately-approved"
+    // precedent — left as-is; only a breadcrumb (previously missing
+    // entirely) and max-w-6xl were added.
+    <div className="mx-auto max-w-6xl space-y-8">
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-text-muted">
+        <Link href="/dashboard" className="hover:text-text">Home</Link>
+        <span>/</span>
+        <Link href="/purchases" className="hover:text-text">Purchases</Link>
+        <span>/</span>
+        <span className="text-text">{purchase.purchase_number}</span>
+      </nav>
+
       <div>
         <h2 className="font-serif text-3xl font-semibold text-text">{purchase.purchase_number}</h2>
         <div className="mt-2 flex flex-wrap items-center gap-2">

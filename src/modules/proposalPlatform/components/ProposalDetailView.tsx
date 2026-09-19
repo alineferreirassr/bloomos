@@ -21,6 +21,10 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { DocumentTemplatesIcon } from "@/components/ui/icons";
 import { CommentsPanel } from "@/modules/communication/comments/components/CommentsPanel";
 
@@ -243,18 +247,18 @@ export function ProposalDetailView({ proposalId }: { proposalId: string }) {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <label className="text-sm">
               Template
-              <select className="mt-1 w-full rounded-md border border-border bg-surface px-2 py-1 text-sm" value={selectedTemplateId} onChange={(e) => setSelectedTemplateId(e.target.value)}>
+              <Select className="mt-1 w-full" value={selectedTemplateId} onChange={(e) => setSelectedTemplateId(e.target.value)}>
                 <option value="">Select a template…</option>
                 {templates.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label className="text-sm">
               Deposit %
-              <input type="number" min={0} max={100} className="mt-1 w-full rounded-md border border-border bg-surface px-2 py-1 text-sm" value={depositPercent} onChange={(e) => setDepositPercent(Number(e.target.value))} />
+              <Input type="number" min={0} max={100} className="mt-1 w-full" value={depositPercent} onChange={(e) => setDepositPercent(Number(e.target.value))} />
             </label>
           </div>
 
@@ -265,8 +269,7 @@ export function ProposalDetailView({ proposalId }: { proposalId: string }) {
                 {packages.map((p) => (
                   <li key={p.id} role="listitem">
                     <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={selectedPackageIds.includes(p.id)}
                         onChange={(e) => setSelectedPackageIds((prev) => (e.target.checked ? [...prev, p.id] : prev.filter((id) => id !== p.id)))}
                       />
@@ -282,8 +285,7 @@ export function ProposalDetailView({ proposalId }: { proposalId: string }) {
                 {addons.map((a) => (
                   <li key={a.id} role="listitem">
                     <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={selectedAddonIds.includes(a.id)}
                         onChange={(e) => setSelectedAddonIds((prev) => (e.target.checked ? [...prev, a.id] : prev.filter((id) => id !== a.id)))}
                       />
@@ -298,11 +300,11 @@ export function ProposalDetailView({ proposalId }: { proposalId: string }) {
           <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
             <label className="text-sm">
               Terms
-              <textarea className="mt-1 w-full rounded-md border border-border bg-surface px-2 py-1 text-sm" rows={3} value={terms} onChange={(e) => setTerms(e.target.value)} />
+              <Textarea className="mt-1 w-full" rows={3} value={terms} onChange={(e) => setTerms(e.target.value)} />
             </label>
             <label className="text-sm">
               Policies
-              <textarea className="mt-1 w-full rounded-md border border-border bg-surface px-2 py-1 text-sm" rows={3} value={policies} onChange={(e) => setPolicies(e.target.value)} />
+              <Textarea className="mt-1 w-full" rows={3} value={policies} onChange={(e) => setPolicies(e.target.value)} />
             </label>
           </div>
 
@@ -353,22 +355,22 @@ export function ProposalDetailView({ proposalId }: { proposalId: string }) {
 
         {detail.builderState && detail.builderState.versions.length > 1 && (
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <select className="rounded-md border border-border bg-surface px-2 py-1 text-sm" value={compareA ?? ""} onChange={(e) => setCompareA(Number(e.target.value))}>
+            <Select className="w-auto" value={compareA ?? ""} onChange={(e) => setCompareA(Number(e.target.value))}>
               <option value="">Version A</option>
               {detail.builderState.versions.map((v) => (
                 <option key={v.id} value={v.version_number}>
                   Version {v.version_number}
                 </option>
               ))}
-            </select>
-            <select className="rounded-md border border-border bg-surface px-2 py-1 text-sm" value={compareB ?? ""} onChange={(e) => setCompareB(Number(e.target.value))}>
+            </Select>
+            <Select className="w-auto" value={compareB ?? ""} onChange={(e) => setCompareB(Number(e.target.value))}>
               <option value="">Version B</option>
               {detail.builderState.versions.map((v) => (
                 <option key={v.id} value={v.version_number}>
                   Version {v.version_number}
                 </option>
               ))}
-            </select>
+            </Select>
             <Button variant="secondary" onClick={handleCompare} disabled={compareA === null || compareB === null}>
               Compare
             </Button>

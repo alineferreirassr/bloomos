@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { getInventoryItem } from "@/lib/data";
 import type { InventoryItem } from "@/types/inventoryItem";
 import { NotFoundError } from "@/core/errors";
@@ -78,7 +79,18 @@ export function InventoryItemDetailView({ inventoryItemId }: { inventoryItemId: 
   const currency = "USD";
 
   return (
-    <div className="space-y-8">
+    // GLOBAL-VISUAL-06 (Business) — same light-touch precedent as
+    // ClientDetailView/EventDetailView/VendorDetailView: LuxuryCard body
+    // left as-is, only breadcrumb (previously missing) and max-w-6xl added.
+    <div className="mx-auto max-w-6xl space-y-8">
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-text-muted">
+        <Link href="/dashboard" className="hover:text-text">Home</Link>
+        <span>/</span>
+        <Link href="/inventory" className="hover:text-text">Inventory</Link>
+        <span>/</span>
+        <span className="text-text">{item.name}</span>
+      </nav>
+
       <div>
         <div className="flex flex-wrap items-center gap-3">
           <BloomAvatar name={item.name} />

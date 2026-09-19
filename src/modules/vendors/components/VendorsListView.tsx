@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { ModuleHero } from "@/components/ui/ModuleHero";
+import { ConnectedRail } from "@/components/ui/ConnectedRail";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { ModuleInsightCard } from "@/components/ui/ModuleInsightCard";
 import { VendorsIcon, CheckIcon, BloomAiIcon } from "@/components/ui/icons";
@@ -109,17 +110,41 @@ export function VendorsListView() {
   const insight = state.status === "ready" ? buildVendorsInsight(state.vendors) : null;
 
   return (
-    <div>
-      <PageHeader
+    // GLOBAL-VISUAL-06 (Business) — same AF-ported dense-list shell as
+    // Leads/Clients/Contracts/Events/Inventory (ModuleHero compact +
+    // ConnectedRail).
+    <div className="mx-auto max-w-6xl">
+      <ModuleHero
+        compact
+        eyebrow="Vendors"
         title="Vendors"
-        subtitle={`Suppliers Amoré Bloom purchases from or books through. ${getDataPersistenceMessage()}`}
+        purpose="Suppliers Amoré Bloom purchases from or books through."
+        breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Vendors" }]}
         actions={
           <Link href="/vendors/new">
             <Button type="button">New Vendor</Button>
           </Link>
         }
+        source={
+          <p className="flex items-center gap-1.5 text-xs text-text-muted/80">
+            <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
+            {getDataPersistenceMessage()}
+          </p>
+        }
       />
 
+      <section aria-label="Where Vendors sits in your workflow" className="mt-8">
+        <ConnectedRail
+          items={[
+            { label: "Vendors", current: true },
+            { label: "Purchases", href: "/purchases" },
+            { label: "Inventory", href: "/inventory" },
+            { label: "Services", href: "/services" },
+          ]}
+        />
+      </section>
+
+      <div className="mt-8">
       {insight ? (
         <div className="animate-fade-up mb-6">
           <ModuleInsightCard insight={insight.insight} tone={insight.tone} />
@@ -171,6 +196,7 @@ export function VendorsListView() {
             <VendorListCards vendors={state.vendors} onChanged={refetch} />
           </div>
         )}
+      </div>
       </div>
     </div>
   );

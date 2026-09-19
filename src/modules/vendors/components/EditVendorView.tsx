@@ -8,6 +8,7 @@ import type { Vendor } from "@/types/vendor";
 import { NotFoundError } from "@/core/errors";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { VendorForm, type VendorFormValues } from "@/modules/vendors/components/VendorForm";
 import { vendorToFormInput } from "@/modules/vendors/mappers";
 
@@ -50,8 +51,14 @@ export function EditVendorView({ vendorId }: { vendorId: string }) {
   }
 
   return (
-    <div>
-      <h2 className="text-3xl font-semibold text-text">Edit {state.vendor.company_name}</h2>
+    // GLOBAL-VISUAL-06 (Business) — same AF-ported detail/form pattern as
+    // NewVendorView/EditLeadView.
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        eyebrow="Vendor"
+        title={`Edit ${state.vendor.company_name}`}
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Vendors", href: "/vendors" }, { label: state.vendor.company_name, href: `/vendors/${vendorId}` }, { label: "Edit" }]}
+      />
       <div className="mt-6 max-w-3xl">
         <VendorForm
           submitLabel="Save changes"

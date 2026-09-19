@@ -12,6 +12,7 @@ import { canEditPurchase } from "@/core/workflows/purchaseWorkflow";
 import { PURCHASE_STATUS_LABELS } from "@/core/enums/purchaseStatus";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { PurchaseForm, type PurchaseFormValues } from "@/modules/purchases/components/PurchaseForm";
 import { purchaseToFormInput } from "@/modules/purchases/mappers";
 
@@ -66,8 +67,12 @@ export function EditPurchaseView({ purchaseId }: { purchaseId: string }) {
 
   if (!canEditPurchase(purchase.status)) {
     return (
-      <div>
-        <h2 className="font-serif text-3xl font-semibold text-text">Edit {purchase.purchase_number}</h2>
+      <div className="mx-auto max-w-6xl">
+        <PageHeader
+          eyebrow="Purchase"
+          title={`Edit ${purchase.purchase_number}`}
+          breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Purchases", href: "/purchases" }, { label: purchase.purchase_number, href: `/purchases/${purchaseId}` }, { label: "Edit" }]}
+        />
         <p className="mt-4 text-sm text-text-muted">
           This purchase is {PURCHASE_STATUS_LABELS[purchase.status].toLowerCase()} and can&apos;t be edited.
         </p>
@@ -79,8 +84,14 @@ export function EditPurchaseView({ purchaseId }: { purchaseId: string }) {
   }
 
   return (
-    <div>
-      <h2 className="font-serif text-3xl font-semibold text-text">Edit {purchase.purchase_number}</h2>
+    // GLOBAL-VISUAL-06 (Business) — same AF-ported detail/form pattern as
+    // NewPurchaseView/EditContractView.
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        eyebrow="Purchase"
+        title={`Edit ${purchase.purchase_number}`}
+        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Purchases", href: "/purchases" }, { label: purchase.purchase_number, href: `/purchases/${purchaseId}` }, { label: "Edit" }]}
+      />
       <div className="mt-6 max-w-3xl">
         <PurchaseForm
           mode="edit"

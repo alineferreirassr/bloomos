@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { ModuleHero } from "@/components/ui/ModuleHero";
+import { ConnectedRail } from "@/components/ui/ConnectedRail";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { ModuleInsightCard } from "@/components/ui/ModuleInsightCard";
 import { PurchasesIcon, EventsIcon, FinanceIcon } from "@/components/ui/icons";
@@ -113,17 +114,41 @@ export function PurchasesListView() {
   const insight = state.status === "ready" ? buildPurchasesInsight(state.rows) : null;
 
   return (
-    <div>
-      <PageHeader
+    // GLOBAL-VISUAL-06 (Business) — same AF-ported dense-list shell as
+    // Leads/Clients/Contracts/Events/Inventory/Vendors (ModuleHero compact
+    // + ConnectedRail).
+    <div className="mx-auto max-w-6xl">
+      <ModuleHero
+        compact
+        eyebrow="Purchases"
         title="Purchases"
-        subtitle={`Purchase orders placed with Vendors. ${getDataPersistenceMessage()}`}
+        purpose="Purchase orders placed with Vendors."
+        breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Purchases" }]}
         actions={
           <Link href="/purchases/new">
             <Button type="button">New Purchase</Button>
           </Link>
         }
+        source={
+          <p className="flex items-center gap-1.5 text-xs text-text-muted/80">
+            <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
+            {getDataPersistenceMessage()}
+          </p>
+        }
       />
 
+      <section aria-label="Where Purchases sits in your workflow" className="mt-8">
+        <ConnectedRail
+          items={[
+            { label: "Vendors", href: "/vendors" },
+            { label: "Purchases", current: true },
+            { label: "Inventory", href: "/inventory" },
+            { label: "Finance", href: "/finance" },
+          ]}
+        />
+      </section>
+
+      <div className="mt-8">
       {insight ? (
         <div className="animate-fade-up mb-6">
           <ModuleInsightCard insight={insight} tone="warning" />
@@ -174,6 +199,7 @@ export function PurchasesListView() {
             <PurchaseListCards rows={state.rows} onChanged={refetch} />
           </div>
         )}
+      </div>
       </div>
     </div>
   );

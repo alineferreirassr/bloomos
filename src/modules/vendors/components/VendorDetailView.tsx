@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { getVendorById } from "@/lib/data";
 import type { Vendor } from "@/types/vendor";
 import { NotFoundError } from "@/core/errors";
@@ -68,7 +69,18 @@ export function VendorDetailView({ vendorId }: { vendorId: string }) {
   const { vendor } = state;
 
   return (
-    <div className="space-y-6">
+    // GLOBAL-VISUAL-06 (Business) — same light-touch precedent as
+    // ClientDetailView/EventDetailView/PurchaseDetailView: LuxuryCard body
+    // left as-is, only breadcrumb (previously missing) and max-w-6xl added.
+    <div className="mx-auto max-w-6xl space-y-6">
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-text-muted">
+        <Link href="/dashboard" className="hover:text-text">Home</Link>
+        <span>/</span>
+        <Link href="/vendors" className="hover:text-text">Vendors</Link>
+        <span>/</span>
+        <span className="text-text">{vendor.company_name}</span>
+      </nav>
+
       <div>
         <div className="flex flex-wrap items-start gap-3">
           <BloomAvatar name={vendor.company_name} />

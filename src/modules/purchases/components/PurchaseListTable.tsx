@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Purchase } from "@/types/purchase";
 import type { Vendor } from "@/types/vendor";
 import { ActionMenu, type ActionMenuAction } from "@/components/ui/ActionMenu";
+import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/components/ui/Table";
 import { archivePurchase, restorePurchase } from "@/lib/data";
 import { PurchaseStatusBadge } from "@/modules/purchases/components/PurchaseStatusBadge";
 import { formatMoney } from "@/lib/money";
@@ -50,31 +51,31 @@ export function PurchaseListTable({ rows, onChanged }: PurchaseListTableProps) {
   };
 
   return (
-    <div className="hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
-      <table className="w-full border-collapse text-left text-sm">
-        <thead className="sticky top-0 z-[var(--z-index-dropdown)] bg-surface">
-          <tr className="border-b border-border/70">
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Purchase #</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Vendor</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Status</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Order date</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Expected delivery</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Total</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Receipt</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">
+    <div className="hidden md:block">
+      <Table>
+        <TableHead>
+          <tr>
+            <TableHeaderCell>Purchase #</TableHeaderCell>
+            <TableHeaderCell>Vendor</TableHeaderCell>
+            <TableHeaderCell>Status</TableHeaderCell>
+            <TableHeaderCell>Order date</TableHeaderCell>
+            <TableHeaderCell>Expected delivery</TableHeaderCell>
+            <TableHeaderCell>Total</TableHeaderCell>
+            <TableHeaderCell>Receipt</TableHeaderCell>
+            <TableHeaderCell>
               <span className="sr-only">Actions</span>
-            </th>
+            </TableHeaderCell>
           </tr>
-        </thead>
-        <tbody className="divide-y divide-border/60">
+        </TableHead>
+        <TableBody>
           {rows.map(({ purchase, vendor }) => (
-            <tr key={purchase.id} className="transition-colors duration-150 hover:bg-accent-100/25">
-              <td className="px-5 py-4">
+            <TableRow key={purchase.id}>
+              <TableCell>
                 <Link href={`/purchases/${purchase.id}`} className="block max-w-[10rem] truncate text-[15px] font-medium text-text hover:text-accent">
                   {purchase.purchase_number}
                 </Link>
-              </td>
-              <td className="px-5 py-4 text-text-muted">
+              </TableCell>
+              <TableCell className="text-text-muted">
                 {vendor ? (
                   <Link href={`/vendors/${vendor.id}`} className="hover:text-accent">
                     {vendor.company_name}
@@ -82,21 +83,21 @@ export function PurchaseListTable({ rows, onChanged }: PurchaseListTableProps) {
                 ) : (
                   "—"
                 )}
-              </td>
-              <td className="px-5 py-4">
+              </TableCell>
+              <TableCell>
                 <PurchaseStatusBadge status={purchase.status} />
-              </td>
-              <td className="px-5 py-4 text-text-muted">{formatPurchaseDate(purchase.order_date)}</td>
-              <td className="px-5 py-4 text-text-muted">{formatPurchaseDate(purchase.expected_delivery_date)}</td>
-              <td className="px-5 py-4 text-text-muted">{formatMoney(purchase.total_minor, purchase.currency)}</td>
-              <td className="px-5 py-4 text-text-muted">{receiptProgressLabel(purchase.status)}</td>
-              <td className="px-5 py-4">
+              </TableCell>
+              <TableCell className="text-text-muted">{formatPurchaseDate(purchase.order_date)}</TableCell>
+              <TableCell className="text-text-muted">{formatPurchaseDate(purchase.expected_delivery_date)}</TableCell>
+              <TableCell className="text-text-muted">{formatMoney(purchase.total_minor, purchase.currency)}</TableCell>
+              <TableCell className="text-text-muted">{receiptProgressLabel(purchase.status)}</TableCell>
+              <TableCell>
                 <ActionMenu actions={actionsFor(purchase)} />
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }

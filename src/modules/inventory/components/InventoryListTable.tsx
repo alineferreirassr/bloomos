@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { InventoryItem } from "@/types/inventoryItem";
 import { ActionMenu, type ActionMenuAction } from "@/components/ui/ActionMenu";
 import { Badge } from "@/components/ui/Badge";
+import { Table, TableHead, TableBody, TableRow, TableHeaderCell, TableCell } from "@/components/ui/Table";
 import { archiveInventoryItem, restoreInventoryItem } from "@/lib/data";
 import { InventoryStatusBadge } from "@/modules/inventory/components/InventoryStatusBadge";
 import { InventoryConditionBadge } from "@/modules/inventory/components/InventoryConditionBadge";
@@ -45,46 +46,46 @@ export function InventoryListTable({ items, onChanged }: InventoryListTableProps
   };
 
   return (
-    <div className="hidden overflow-x-auto rounded-2xl bg-surface shadow-luxury-sm md:block">
-      <table className="w-full border-collapse text-left text-sm">
-        <thead className="sticky top-0 z-[var(--z-index-dropdown)] bg-surface">
-          <tr className="border-b border-border/70">
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Name</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">SKU</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Category</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Type</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Status</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Condition</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">On hand</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Available</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Reserved</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">Location</th>
-            <th className="px-5 py-3.5 text-[11px] font-medium tracking-wide text-text-muted uppercase">
+    <div className="hidden md:block">
+      <Table>
+        <TableHead>
+          <tr>
+            <TableHeaderCell>Name</TableHeaderCell>
+            <TableHeaderCell>SKU</TableHeaderCell>
+            <TableHeaderCell>Category</TableHeaderCell>
+            <TableHeaderCell>Type</TableHeaderCell>
+            <TableHeaderCell>Status</TableHeaderCell>
+            <TableHeaderCell>Condition</TableHeaderCell>
+            <TableHeaderCell>On hand</TableHeaderCell>
+            <TableHeaderCell>Available</TableHeaderCell>
+            <TableHeaderCell>Reserved</TableHeaderCell>
+            <TableHeaderCell>Location</TableHeaderCell>
+            <TableHeaderCell>
               <span className="sr-only">Actions</span>
-            </th>
+            </TableHeaderCell>
           </tr>
-        </thead>
-        <tbody className="divide-y divide-border/60">
+        </TableHead>
+        <TableBody>
           {items.map((item) => {
             const lowStock = isInventoryItemLowStock(item);
             return (
-              <tr key={item.id} className="transition-colors duration-150 hover:bg-accent-100/25">
-                <td className="px-5 py-4">
+              <TableRow key={item.id}>
+                <TableCell>
                   <Link href={`/inventory/${item.id}`} className="block max-w-[16rem] truncate text-[15px] font-medium text-text hover:text-accent">
                     {item.name}
                   </Link>
-                </td>
-                <td className="px-5 py-4 text-text-muted">{item.sku ?? "—"}</td>
-                <td className="px-5 py-4 text-text-muted">{item.category ?? "—"}</td>
-                <td className="px-5 py-4 text-text-muted">{item.item_type === "consumable" ? "Consumable" : "Reusable"}</td>
-                <td className="px-5 py-4">
+                </TableCell>
+                <TableCell className="text-text-muted">{item.sku ?? "—"}</TableCell>
+                <TableCell className="text-text-muted">{item.category ?? "—"}</TableCell>
+                <TableCell className="text-text-muted">{item.item_type === "consumable" ? "Consumable" : "Reusable"}</TableCell>
+                <TableCell>
                   <InventoryStatusBadge status={item.status} />
-                </td>
-                <td className="px-5 py-4">
+                </TableCell>
+                <TableCell>
                   <InventoryConditionBadge condition={item.condition} />
-                </td>
-                <td className="px-5 py-4 text-text-muted">{item.quantity_on_hand}</td>
-                <td className="px-5 py-4">
+                </TableCell>
+                <TableCell className="text-text-muted">{item.quantity_on_hand}</TableCell>
+                <TableCell>
                   <span className={lowStock ? "font-medium text-amber-700 dark:text-amber-400" : "text-text-muted"}>
                     {item.quantity_available}
                     {lowStock ? (
@@ -93,17 +94,17 @@ export function InventoryListTable({ items, onChanged }: InventoryListTableProps
                       </Badge>
                     ) : null}
                   </span>
-                </td>
-                <td className="px-5 py-4 text-text-muted">{item.quantity_reserved}</td>
-                <td className="px-5 py-4 text-text-muted">{item.storage_location ?? "—"}</td>
-                <td className="px-5 py-4">
+                </TableCell>
+                <TableCell className="text-text-muted">{item.quantity_reserved}</TableCell>
+                <TableCell className="text-text-muted">{item.storage_location ?? "—"}</TableCell>
+                <TableCell>
                   <ActionMenu actions={actionsFor(item)} />
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }
