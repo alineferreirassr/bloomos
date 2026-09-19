@@ -6,13 +6,13 @@ import { DayPeriodGlyph } from "@/modules/dashboard/luxury/components/DayPeriodG
 import { WORLD_CLOCK_LOCATIONS, buildWorldClockDisplays, type WorldClockDisplay } from "@/modules/dashboard/luxury/worldClock";
 
 const REFRESH_INTERVAL_MS = 30_000;
-const CLOCK_FACE_SIZE = 84;
+const CLOCK_FACE_SIZE = 60;
 
 /**
- * VISUAL-01 Revision D — the Owner Home's own spacious World Clock
- * presentation. `WorldClockCard.tsx` (still used unchanged by Team, see
- * its own doc comment) is shared, so its own padding/card sizing can't
- * change without affecting Team — same "Owner-only variant" precedent as
+ * VISUAL-01 Revision D — the Owner Home's own World Clock presentation.
+ * `WorldClockCard.tsx` (still used unchanged by Team, see its own doc
+ * comment) is shared, so its own padding/card sizing can't change without
+ * affecting Team — same "Owner-only variant" precedent as
  * `OwnerHomeHeader`/`OwnerWeatherCard`. Reuses every piece of real logic
  * (`buildWorldClockDisplays`, `AnalogClockFace`, `DayPeriodGlyph`) — only
  * the layout/spacing/weight is different. No new clock/timezone behavior.
@@ -25,22 +25,32 @@ const CLOCK_FACE_SIZE = 84;
  * reflows off the container's real rendered width instead of a hardcoded
  * viewport breakpoint — the time is also `whitespace-nowrap` at a sized-
  * down (but still prominent) scale so it can never break across lines.
+ *
+ * GLOBAL-VISUAL-01 Round 4.3 Revision A — founder-flagged scale/density
+ * correction: each city had grown into its own heavily bordered, generously
+ * padded 28px-radius card (`CLOCK_FACE_SIZE` 84, `px-5 py-6`), materially
+ * larger than the founder-approved `visual-system/round4/dashboard`
+ * prototype's plain, unboxed columns. The auto-fit grid mechanism (kept,
+ * not the thing that was wrong) now lays out lighter, borderless columns —
+ * matching the prototype's density — instead of three separate boxes.
+ * `AnalogClockFace` itself (the locked clock face) is untouched; only its
+ * rendered `size` and the surrounding chrome shrank.
  */
 function CityCard({ display }: { display: WorldClockDisplay }) {
   return (
-    <div className="flex flex-1 flex-col items-center rounded-[28px] border border-luxury-border bg-luxury-surface px-5 py-6 text-center">
+    <div className="flex flex-col items-center px-2 py-2 text-center">
       <AnalogClockFace hour24={display.hour24} minute={display.minute} size={CLOCK_FACE_SIZE} />
-      <p className="mt-3 font-luxury-display text-lg leading-tight font-semibold text-luxury-text">{display.city}</p>
-      <p className="mt-1 flex min-h-[2.1em] items-center text-luxury-metadata font-medium tracking-[0.14em] text-luxury-text-muted uppercase">{display.region}</p>
-      <p className="mt-2 font-luxury-display text-[1.65rem] leading-none font-semibold whitespace-nowrap text-luxury-text">{display.timeLabel}</p>
-      <p className="mt-2 text-luxury-small text-luxury-text-muted">{display.dateLabel}</p>
-      <div className="mt-auto flex items-center gap-2 pt-3">
+      <p className="mt-2 font-luxury-display text-[1.0625rem] leading-tight font-semibold text-luxury-text">{display.city}</p>
+      <p className="mt-0.5 flex items-center text-luxury-status font-medium tracking-[0.1em] text-luxury-text-muted uppercase">{display.region}</p>
+      <p className="mt-1.5 font-luxury-display text-[1.375rem] leading-none font-semibold whitespace-nowrap text-luxury-text">{display.timeLabel}</p>
+      <p className="mt-1 text-luxury-status text-luxury-text-muted">{display.dateLabel}</p>
+      <div className="mt-1.5 flex items-center gap-1.5">
         <span className="flex items-center gap-1 text-luxury-status font-medium tracking-[0.1em] text-luxury-text-muted uppercase">
           <DayPeriodGlyph isNight={display.isNight} />
           {display.dayPeriod}
         </span>
         {display.isHome ? (
-          <span className="rounded-luxury-full border border-luxury-rose/40 px-2 py-0.5 text-luxury-status font-medium tracking-[0.1em] text-luxury-rose uppercase">Home</span>
+          <span className="rounded-luxury-full border border-luxury-rose/40 px-1.5 py-0.5 text-[0.5625rem] font-medium tracking-[0.08em] text-luxury-rose uppercase">Home</span>
         ) : display.hoursFromHome !== null ? (
           <span className="text-luxury-status font-medium tracking-[0.05em] text-luxury-text-muted">
             {display.hoursFromHome >= 0 ? "+" : ""}
@@ -63,18 +73,18 @@ export function OwnerWorldClockCard() {
   }, []);
 
   return (
-    <div className="rounded-[32px] border border-luxury-border/70 bg-luxury-surface-tint p-6">
-      <p className="px-1 text-luxury-metadata font-medium tracking-[0.14em] text-luxury-text-muted uppercase">♡ World Clock</p>
+    <div className="rounded-[14px] border border-luxury-border/70 bg-luxury-surface-tint p-5">
+      <p className="px-1 text-luxury-status font-medium tracking-[0.14em] text-luxury-text-muted uppercase">♡ World Clock</p>
       {now ? (
-        <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-4">
+        <div className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-2">
           {buildWorldClockDisplays(now).map((display) => (
             <CityCard key={display.locationId} display={display} />
           ))}
         </div>
       ) : (
-        <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-4" aria-hidden="true">
+        <div className="mt-2 grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-2" aria-hidden="true">
           {WORLD_CLOCK_LOCATIONS.map((location) => (
-            <div key={location.id} className="h-[13rem] rounded-[28px] border border-luxury-border bg-luxury-surface" />
+            <div key={location.id} className="h-[9.5rem] rounded-[10px] bg-luxury-surface" />
           ))}
         </div>
       )}

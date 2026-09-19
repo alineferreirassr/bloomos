@@ -47,8 +47,10 @@ export function OwnerHomeHeader({ studioDate, greeting, contextualSentence, isSu
 
   return (
     <div className="animate-fade-down">
+      {/* GLOBAL-VISUAL-01 Round 4.3 Revision A — removed the sm:3.25rem (52px) step-up; the
+          founder-approved prototype holds the greeting at a flat 2.75rem (44px). */}
       <p className="text-luxury-status font-medium tracking-[0.16em] text-luxury-coral uppercase">Today&rsquo;s Studio &middot; {studioDate}</p>
-      <h1 className="mt-3 flex items-center gap-3 font-luxury-display text-[2.75rem] leading-[1.1] font-semibold text-luxury-text sm:text-[3.25rem]" style={{ textWrap: "balance" }}>
+      <h1 className="mt-3 flex items-center gap-3 font-luxury-display text-[2.75rem] leading-[1.1] font-semibold text-luxury-text" style={{ textWrap: "balance" }}>
         {greeting}
         <LuxuryHeartIcon className="h-7 w-7 shrink-0 text-luxury-rose" aria-hidden="true" />
       </h1>

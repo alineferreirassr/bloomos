@@ -24,23 +24,27 @@ export function LuxurySidebar({ logoUrl, brandName, tagline, inspirationalMessag
   const dashboardLabel = role && resolveDashboardExperience(role) === "team" ? "My Day" : undefined;
 
   return (
-    <aside className="hidden md:flex md:w-64 md:shrink-0 md:flex-col md:border-r md:border-luxury-border md:bg-luxury-sidebar md:py-6">
-      <div className="mb-4 px-6 pb-5">
+    // GLOBAL-VISUAL-01 Round 4.3 Revision A — founder-flagged "substantially too wide and
+    // visually heavy" correction: logo/header/decorative-box/footer padding all trimmed to
+    // match the approved `visual-system/round4/dashboard` prototype's lighter sidebar. Width,
+    // navigation data, grouping/collapse behavior, active state, and permissions are unchanged.
+    <aside className="hidden md:flex md:w-64 md:shrink-0 md:flex-col md:border-r md:border-luxury-border md:bg-luxury-sidebar md:py-5">
+      <div className="mb-3 px-5 pb-4">
         {logoUrl ? (
-          <Image src={logoUrl} alt={brandName} width={640} height={640} priority className="h-auto w-36" />
+          <Image src={logoUrl} alt={brandName} width={640} height={640} priority className="h-auto w-28" />
         ) : (
-          <p className="font-luxury-display text-2xl font-semibold text-luxury-text">{brandName}</p>
+          <p className="font-luxury-display text-xl font-semibold text-luxury-text">{brandName}</p>
         )}
-        <p className="mt-1 text-[11px] tracking-[0.06em] text-luxury-text-muted uppercase">{tagline}</p>
+        <p className="mt-1 text-[10px] tracking-[0.06em] text-luxury-text-muted uppercase">{tagline}</p>
       </div>
 
       <LuxuryNavGroupList groups={groups} pathname={pathname} dashboardLabel={dashboardLabel} />
 
-      <div className="mx-4 mt-4 rounded-luxury-md bg-luxury-surface-tint p-4 text-center">
-        <p className="font-luxury-display text-luxury-small text-luxury-text italic">{inspirationalMessage}</p>
+      <div className="mx-3 mt-3 rounded-luxury-md bg-luxury-surface-tint p-3 text-center">
+        <p className="font-luxury-display text-luxury-status text-luxury-text italic">{inspirationalMessage}</p>
       </div>
 
-      <div className="mt-4 px-4">{footer}</div>
+      <div className="mt-3 px-3">{footer}</div>
     </aside>
   );
 }

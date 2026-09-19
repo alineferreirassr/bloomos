@@ -57,13 +57,16 @@ export function LuxuryNavGroupList({
   });
 
   return (
-    <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-4">
+    // GLOBAL-VISUAL-01 Round 4.3 Revision A — founder-flagged sidebar density correction: row
+    // padding/text/icon size trimmed to match the approved prototype's tighter navigation.
+    // Grouping, collapse behavior, active state, hrefs, and permissions are all unchanged.
+    <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3">
       {groups.map((group) => {
         const entries = group.modules.filter((navModule) => navModule.href && !navModule.disabled);
         if (entries.length === 0) return null;
 
         const rows = (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-0.5">
             {entries.map((navModule) => {
               const Icon = navModule.icon;
               const href = navModule.href as string;
@@ -74,11 +77,11 @@ export function LuxuryNavGroupList({
                   href={href}
                   onClick={onNavigate}
                   aria-current={active ? "page" : undefined}
-                  className={`flex items-center gap-3 rounded-luxury-full px-4 py-2.5 text-luxury-body font-medium transition-colors duration-150 ${
+                  className={`flex items-center gap-2.5 rounded-luxury-full px-3 py-2 text-luxury-small font-medium transition-colors duration-150 ${
                     active ? "bg-luxury-blush text-luxury-rose" : "text-luxury-text hover:bg-luxury-blush"
                   }`}
                 >
-                  <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                   {navModule.id === "dashboard" && dashboardLabel ? dashboardLabel : navModule.label}
                 </Link>
               );
@@ -88,7 +91,7 @@ export function LuxuryNavGroupList({
 
         if (group.id === "workspace") {
           return (
-            <div key={group.id} className="pb-2">
+            <div key={group.id} className="pb-1.5">
               {rows}
             </div>
           );
@@ -101,7 +104,7 @@ export function LuxuryNavGroupList({
               type="button"
               onClick={() => setOpenGroups((prev) => ({ ...prev, [group.id]: !prev[group.id] }))}
               aria-expanded={open}
-              className="flex w-full items-center justify-between rounded-luxury-md px-4 py-2 text-[11px] font-semibold tracking-[0.08em] text-luxury-text-muted uppercase transition-colors duration-150 hover:text-luxury-text"
+              className="flex w-full items-center justify-between rounded-luxury-md px-3 py-1.5 text-[10px] font-semibold tracking-[0.08em] text-luxury-text-muted uppercase transition-colors duration-150 hover:text-luxury-text"
             >
               {group.label}
               <NavChevronIcon className={`h-3.5 w-3.5 shrink-0 transition-transform duration-150 ${open ? "rotate-90" : ""}`} />
