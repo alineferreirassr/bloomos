@@ -1,21 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import Link from "next/link";
-import { TrendingUp, Users, FileSignature, Mail, CheckCircle2 } from "lucide-react";
+import { TrendingUp, Users, FileSignature, Mail } from "lucide-react";
 import { getLeads, getClients, getContracts, getClientInvitations } from "@/lib/data";
+import { getDataPersistenceMessage } from "@/lib/dataModeCopy";
 import type { Lead } from "@/types/lead";
 import type { Client } from "@/types/client";
 import type { Contract } from "@/types/contract";
 import type { ClientInvitation } from "@/types/clientInvitation";
 import { LEAD_STATUS_LABELS } from "@/core/enums/leadStatus";
 import { getFullName } from "@/lib/personName";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { ModuleHero } from "@/components/ui/ModuleHero";
+import { ConnectedRail } from "@/components/ui/ConnectedRail";
+import { MetricRail, StatTile } from "@/components/ui/StatTile";
+import { SimpleListCard, SimpleListEmpty, RowLink } from "@/components/ui/SimpleListCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Badge } from "@/components/ui/Badge";
-import { MetricStat } from "@/components/ui/MetricStat";
-import { EditorialSectionHeader } from "@/components/ui/EditorialSectionHeader";
 import { LeadStatusBadge } from "@/modules/leads/components/LeadStatusBadge";
 import { ContractStatusBadge } from "@/modules/contracts/components/ContractStatusBadge";
 
@@ -148,7 +149,7 @@ export function RelationshipsLandingView() {
 
   if (state.status === "loading") {
     return (
-      <div className="mx-auto max-w-[1240px] space-y-8">
+      <div className="mx-auto max-w-6xl space-y-8">
         <Skeleton className="h-16 w-full" />
         <Skeleton className="h-24 w-full" />
         <Skeleton className="h-64 w-full" />
@@ -161,93 +162,69 @@ export function RelationshipsLandingView() {
   }
 
   return (
-    // GLOBAL-VISUAL-03B.1 — content column capped to Dashboard's own
-    // measured 1240px (OwnerDashboardView.tsx: `mx-auto max-w-[1240px]`),
-    // restrained instead of stretching the full remaining sidebar width.
-    // `pb-20` — this page is now genuinely short; without it, the last
-    // section's own bottom edge can land directly under the fixed Bloom AI
-    // FAB at common mobile viewport heights.
-    <div className="mx-auto max-w-[1240px] space-y-8 pb-20">
-      <PageHeader
-        breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Relationships" }]}
+    // GLOBAL-VISUAL-03B.2 — content capped to AF Digital Studio OS's own
+    // measured content width (`max-w-6xl`, ContentFrame in
+    // src/design-system/patterns/experience.tsx), not BloomOS Dashboard's
+    // 1240px — this checkpoint ports AF's real values directly.
+    <div className="mx-auto max-w-6xl space-y-8">
+      <ModuleHero
         eyebrow="Relationships"
         title="Relationships"
-        heart
-        subtitle="The people and conversations that need your attention."
+        purpose="The people and conversations that need your attention — every active lead, client, and follow-up in one calm place."
+        breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Relationships" }]}
+        status={[
+          { label: "Contracts In Progress", value: summary.contractsInProgress.length, icon: FileSignature },
+          { label: "Pending Invitations", value: summary.pendingInvitations.length, icon: Mail },
+        ]}
+        source={
+          <p className="flex items-center gap-1.5 text-xs text-text-muted/80">
+            <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
+            {getDataPersistenceMessage()}
+          </p>
+        }
       />
 
-      {/* GLOBAL-VISUAL-03B.1 — full editorial rebuild, replacing the
-          GLOBAL-VISUAL-03A "hero card + secondary card" composition (still
-          two bordered/shadowed surfaces stacked, still read as "CARD + CARD").
-          Pipeline Value is now bare dominant typography directly on the page
-          canvas (no card at all — Dashboard's own measured 40px
-          `--luxury-text-display-size`, the exact scale its Revenue Overview
-          figure uses) instead of living inside a LuxuryCard; Active Leads/
-          Active Clients drop from a bordered+shadowed card to a quiet tinted
-          strip (no border, no shadow — one step down, not another card);
-          Contracts/Invitations stay plain inline text, unchanged. Same five
-          real metrics, same values, same calculations. */}
-      <div className="space-y-6">
-        <EditorialSectionHeader eyebrow="Relationship overview" title="Your relationships at a glance ♡" />
+      <section aria-label="Where Relationships sits in your workflow">
+        <ConnectedRail
+          items={[
+            { label: "Leads", href: "/leads" },
+            { label: "Relationships", current: true },
+            { label: "Clients", href: "/clients" },
+            { label: "Contracts", href: "/contracts" },
+            { label: "Client Invitations", href: "/client-portal/invitations" },
+          ]}
+        />
+      </section>
 
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-[1.3fr_1fr] md:items-center">
-          <MetricStat
-            size="primary"
-            icon={TrendingUp}
-            tint="var(--color-accent)"
-            value={formatMoney(summary.pipelineValue)}
-            label="Active Pipeline Value"
-          />
-          <div className="grid grid-cols-2 divide-x divide-border/40 rounded-2xl bg-surface-tint">
-            <MetricStat icon={Users} tint="var(--color-accent-2)" value={String(summary.activeLeads.length)} label="Active Leads" />
-            <MetricStat icon={Users} tint="var(--color-success)" value={String(summary.activeClients.length)} label="Active Clients" />
-          </div>
-        </div>
+      {/* GLOBAL-VISUAL-03B.2 — a direct structural port of AF Digital
+          Studio OS's own `MetricRail`/`StatTile` grammar (the real AF
+          metric-card component, not a BloomOS "no card" reinterpretation):
+          three equal StatTiles for Pipeline Value/Active Leads/Active
+          Clients. Contracts In Progress/Pending Invitations live in
+          ModuleHero's own `status` row above, matching how AF's Notifications
+          page uses that exact slot for its own smaller counts. Same five
+          real metrics, same values, same calculations as every prior round. */}
+      <MetricRail>
+        <StatTile icon={TrendingUp} value={formatMoney(summary.pipelineValue)} label="Active Pipeline Value" />
+        <StatTile icon={Users} value={String(summary.activeLeads.length)} label="Active Leads" />
+        <StatTile icon={Users} value={String(summary.activeClients.length)} label="Active Clients" />
+      </MetricRail>
 
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 text-xs text-text-muted">
-          <span className="flex items-center gap-1.5">
-            <FileSignature className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--color-accent-2)" }} aria-hidden="true" />
-            Contracts In Progress <strong className="font-semibold text-text">{summary.contractsInProgress.length}</strong>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Mail className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--color-warning)" }} aria-hidden="true" />
-            Pending Invitations <strong className="font-semibold text-text">{summary.pendingInvitations.length}</strong>
-          </span>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <EditorialSectionHeader eyebrow="Follow-up" title="Needs your attention" />
+      {/* GLOBAL-VISUAL-03B.2 — a direct structural port of AF's own
+          Workspace "Needs your attention" Card (app/(app)/app/workspace/page.tsx),
+          the real component and the real empty-state copy pattern AF uses
+          for this exact concept. */}
+      <SimpleListCard title="Needs your attention">
         {attention.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-2xl bg-surface-tint px-6 py-9 text-center">
-            <CheckCircle2 className="h-6 w-6 text-success" aria-hidden="true" />
-            <p className="max-w-sm text-sm text-text-muted">
-              All caught up — nothing in Leads, Contracts, or Invitations needs action right now.
-            </p>
-          </div>
+          <SimpleListEmpty>All caught up — nothing in Leads, Contracts, or Invitations needs action right now.</SimpleListEmpty>
         ) : (
-          <div className="overflow-hidden rounded-2xl bg-surface shadow-luxury-sm">
-            <ul className="divide-y divide-border/60">
-              {attention.map((item) => (
-                <li key={item.key}>
-                  <Link
-                    href={item.href}
-                    className="flex items-center justify-between gap-4 px-5 py-4 transition-colors duration-150 hover:bg-accent-100/25"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-[15px] font-medium text-text">{item.name}</p>
-                      <p className="truncate text-xs text-text-muted">
-                        {item.kind} · {item.detail}
-                      </p>
-                    </div>
-                    {item.badge}
-                  </Link>
-                </li>
-              ))}
-            </ul>
+          <div className="space-y-1">
+            {attention.map((item) => (
+              <RowLink key={item.key} href={item.href} title={item.name} meta={`${item.kind} · ${item.detail}`} trailing={item.badge} />
+            ))}
           </div>
         )}
-      </div>
+      </SimpleListCard>
     </div>
   );
 }

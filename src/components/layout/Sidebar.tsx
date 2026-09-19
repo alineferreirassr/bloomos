@@ -31,6 +31,12 @@ interface SidebarProps {
  * with no monogram — the single biggest visual gap the founder's AF Digital
  * Studio OS comparison flagged between this shell and Dashboard's. Same
  * logo asset, same brand copy, same nav data/grouping/permissions.
+ *
+ * GLOBAL-VISUAL-03B.2 — width ported to AF Digital Studio OS's own real
+ * sidebar width (`w-64`/256px, app/(app)/_shell/sidebar.tsx, HEAD 1587d1f)
+ * instead of BloomOS's prior 224px — also brings it in line with this app's
+ * own mobile drawer (`MobileNav.tsx`), which was already 256px. Dashboard/
+ * Team render their own separate `LuxurySidebar`, unaffected.
  */
 export function Sidebar({ workspaceDisplayName }: SidebarProps) {
   const pathname = usePathname();
@@ -38,7 +44,7 @@ export function Sidebar({ workspaceDisplayName }: SidebarProps) {
   const groups = groupVisibleNavigationModules(can);
 
   return (
-    <aside className="hidden md:flex md:w-56 md:flex-col md:bg-sidebar md:border-r md:border-border/50 md:py-6">
+    <aside className="hidden md:flex md:w-64 md:flex-col md:bg-sidebar md:border-r md:border-border/50 md:py-6">
       <div className="mb-3 flex items-center gap-2.5 border-b border-border/50 px-5 pb-4">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-medium text-white">
           AB

@@ -45,7 +45,11 @@ export function AppShell({ children, workspaceDisplayName }: AppShellProps) {
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar onMenuClick={() => setMobileNavOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-4 md:p-7">{children}</main>
+        {/* GLOBAL-VISUAL-03B.2 — gutter ported to AF Digital Studio OS's own
+            real shell padding (`px-5 py-8 sm:px-8`, app/(app)/_shell/app-shell.tsx,
+            HEAD 1587d1f). Dashboard/Team render their own LuxuryDashboardShell,
+            unaffected. */}
+        <main className="flex-1 overflow-y-auto px-5 py-8 sm:px-8">{children}</main>
       </div>
     </div>
   );
