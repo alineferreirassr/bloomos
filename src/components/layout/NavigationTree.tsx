@@ -57,12 +57,14 @@ const SOON_BADGE = <span className="text-[10px] font-medium tracking-wide text-t
  * padding `px-3 py-4`, `gap-1` between groups (was `gap-4`/`px-3.5`, no
  * vertical padding); group toggle row matched to AF's own AccordionGroup
  * button (`px-3 py-2 text-[0.68rem] tracking-wider`); item rows matched to
- * AF's real item geometry — `rounded-lg` (AF's own `--radius-lg`, not a
- * full pill), `px-3 py-2 text-sm`, `size-4` (16px) icons, active state
- * `bg-accent-100` + `font-medium` (AF: `bg-accent-soft` + `font-medium`,
- * BloomOS's accent-100 being the same soft-fill role). Navigation data,
- * grouping, permissions, and information architecture are unchanged —
- * visual geometry only.
+ * AF's real item geometry — `rounded-[0.625rem]` (AF's own literal
+ * `--radius-lg: 0.625rem`/10px, not BloomOS's differently-valued shared
+ * `rounded-lg` card-radius token/20px, and not a full pill), `px-3 py-2
+ * text-sm`, `size-4` (16px) icons, active state `bg-accent-100` +
+ * `font-medium` (AF: `bg-accent-soft` + `font-medium`, BloomOS's
+ * accent-100 being the same soft-fill role). Navigation data, grouping,
+ * permissions, and information architecture are unchanged — visual
+ * geometry only.
  */
 export function NavigationTree({ groups, pathname, onNavigate }: NavigationTreeProps) {
   const [openGroupIds, setOpenGroupIds] = useState<Set<string>>(
@@ -96,7 +98,7 @@ export function NavigationTree({ groups, pathname, onNavigate }: NavigationTreeP
     const isExpanded = hasChildren && !collapsedModuleIds.has(navModule.id);
     const active = isActive(pathname, navModule.href) && !navModule.disabled;
 
-    const rowClassName = `flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors duration-150 ${
+    const rowClassName = `flex w-full items-center gap-2.5 rounded-[0.625rem] px-3 py-2 text-left text-sm transition-colors duration-150 ${
       active ? "bg-accent-100 font-medium text-accent" : navModule.disabled ? "cursor-default font-normal text-text/35" : "font-normal text-text hover:bg-accent/7"
     }`;
 
@@ -150,7 +152,7 @@ export function NavigationTree({ groups, pathname, onNavigate }: NavigationTreeP
               type="button"
               onClick={() => toggleGroup(group.id)}
               aria-expanded={open}
-              className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-[0.68rem] font-semibold tracking-wider text-text/45 uppercase transition-colors duration-150 hover:text-text/70"
+              className="flex w-full items-center justify-between rounded-[0.625rem] px-3 py-2 text-[0.68rem] font-semibold tracking-wider text-text/45 uppercase transition-colors duration-150 hover:text-text/70"
             >
               {group.label}
               <NavChevronIcon className={`h-3.5 w-3.5 shrink-0 transition-transform duration-150 ${open ? "rotate-90" : ""}`} />
@@ -165,7 +167,7 @@ export function NavigationTree({ groups, pathname, onNavigate }: NavigationTreeP
 
 function NavigationLeafRow({ leaf, pathname, onNavigate }: { leaf: NavLeaf; pathname: string; onNavigate?: () => void }) {
   const active = isActive(pathname, leaf.href) && !leaf.disabled;
-  const className = `flex items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-[0.82rem] transition-colors duration-150 ${
+  const className = `flex items-center justify-between gap-2 rounded-[0.625rem] px-3 py-1.5 text-[0.82rem] transition-colors duration-150 ${
     active ? "bg-accent-100 font-medium text-text" : leaf.disabled ? "cursor-default font-normal text-text/35" : "font-normal text-text hover:bg-accent/7"
   }`;
 

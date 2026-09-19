@@ -26,7 +26,7 @@ export function StatusSummary({ items, className }: { items: StatusSummaryItem[]
         return (
           <div key={item.label} className="flex items-center gap-2">
             {Icon ? (
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent-100 text-accent">
+              <span className="flex h-7 w-7 items-center justify-center rounded-[0.625rem] bg-accent-100 text-accent">
                 <Icon className="h-3.5 w-3.5" aria-hidden="true" />
               </span>
             ) : null}
