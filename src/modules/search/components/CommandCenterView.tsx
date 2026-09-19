@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { TableSkeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { Input } from "@/components/ui/Input";
 import { CommandCenterIcon } from "@/components/ui/icons";
 import { getCommands } from "@/core/commandPalette/registry";
 import { filterCommands } from "@/core/commandPalette/filter";
@@ -81,13 +82,13 @@ export function CommandCenterView() {
     <div className="flex flex-col gap-4">
       <PageHeader title="Command Center" subtitle="Every command and every page you can reach, in one browsable, searchable place. Press Cmd/Ctrl+K for the quick overlay anywhere." icon={CommandCenterIcon} />
 
-      <input
+      <Input
         autoFocus
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Filter commands…"
         aria-label="Filter commands"
-        className="w-full rounded-md border border-border bg-surface px-3.5 py-2 text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent/40"
+        className="px-3.5 focus:outline-none focus:ring-2 focus:ring-accent/40"
       />
 
       {grouped.length === 0 ? (

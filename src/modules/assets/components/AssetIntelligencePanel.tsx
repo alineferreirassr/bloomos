@@ -18,6 +18,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { Input } from "@/components/ui/Input";
 import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 
 const HEALTH_BAND_TONE: Record<string, BadgeTone> = { excellent: "success", good: "success", attention: "warning", critical: "danger" };
@@ -213,7 +214,7 @@ export function AssetIntelligencePanel({ assetId }: { assetId: string }) {
       <Card>
         <h2 className="mb-3 text-sm font-semibold">Comments</h2>
         <div className="mb-3 flex gap-2">
-          <input
+          <Input
             type="text"
             value={commentDraft}
             onChange={(e) => setCommentDraft(e.target.value)}

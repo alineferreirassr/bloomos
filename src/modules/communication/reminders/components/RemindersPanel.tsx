@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { listMyRemindersAction, createReminderAction, completeReminderAction, dismissReminderAction, snoozeReminderAction } from "@/modules/communication/reminders/reminderActions";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -57,24 +58,23 @@ export function RemindersPanel() {
           <label htmlFor="reminder-title" className="text-xs text-text-muted">
             New reminder
           </label>
-          <input
+          <Input
             id="reminder-title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Follow up with…"
-            className="w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text placeholder:text-text-muted focus-visible:border-accent focus-visible:outline-none"
           />
         </div>
         <div className="space-y-1">
           <label htmlFor="reminder-due" className="text-xs text-text-muted">
             Due
           </label>
-          <input
+          <Input
             id="reminder-due"
             type="datetime-local"
             value={dueAt}
             onChange={(e) => setDueAt(e.target.value)}
-            className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text sm:w-auto"
+            className="sm:w-auto"
           />
         </div>
         <Button onClick={handleCreate} disabled={title.trim().length === 0} className="w-full sm:w-auto">

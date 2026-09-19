@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { listActiveAnnouncementsAction, acknowledgeAnnouncementAction, publishAnnouncementAction } from "@/modules/communication/announcements/announcementActions";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -57,11 +58,10 @@ export function AnnouncementsPanel({ currentMemberId, canManage }: { currentMemb
       {canManage ? (
         <div className="space-y-2 rounded-md border border-border p-3">
           <p className="text-sm font-medium text-text">New announcement</p>
-          <input
+          <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Title"
-            className="w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text placeholder:text-text-muted focus-visible:border-accent focus-visible:outline-none"
           />
           <textarea
             value={body}

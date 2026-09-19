@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { TableSkeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { Input } from "@/components/ui/Input";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { ReportsIcon } from "@/components/ui/icons";
 import { listReportMetricsAction, previewReportAction, createReportAction } from "@/modules/reporting/reportingActions";
 import { REPORT_CATEGORIES, REPORT_PERIOD_KEYS, REPORT_COMPARISON_MODES } from "@/types/reporting";
@@ -108,11 +110,11 @@ export function ReportBuilderView() {
       <Card className="flex flex-col gap-4 p-6">
         <label className="flex flex-col gap-1 text-sm">
           Title
-          <input className="rounded-md border border-border px-3 py-2 text-sm" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} />
         </label>
         <label className="flex flex-col gap-1 text-sm">
           Description
-          <input className="rounded-md border border-border px-3 py-2 text-sm" value={description} onChange={(e) => setDescription(e.target.value)} />
+          <Input value={description} onChange={(e) => setDescription(e.target.value)} />
         </label>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <label className="flex flex-col gap-1 text-sm">
@@ -160,7 +162,7 @@ export function ReportBuilderView() {
                 <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {metrics.map((metric) => (
                     <label key={metric.id} className="flex items-start gap-2 rounded-md border border-border p-2 text-sm">
-                      <input type="checkbox" className="mt-0.5" checked={selectedMetricIds.includes(metric.id)} onChange={() => toggleMetric(metric.id)} />
+                      <Checkbox className="mt-0.5" checked={selectedMetricIds.includes(metric.id)} onChange={() => toggleMetric(metric.id)} />
                       <span>
                         <span className="font-medium">{metric.name}</span>
                         <span className="block text-xs text-text-muted">{metric.description}</span>

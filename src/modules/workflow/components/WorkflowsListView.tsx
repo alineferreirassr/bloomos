@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { registerCommand, unregisterCommand } from "@/core/commandPalette";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Input } from "@/components/ui/Input";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -318,13 +319,13 @@ export function WorkflowsListView() {
             <label htmlFor="workflow-name" className="block text-xs font-medium text-text-muted">
               Name
             </label>
-            <input
+            <Input
               id="workflow-name"
               type="text"
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="e.g. Notify on overdue invoice"
-              className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm text-text"
+              className="mt-1 rounded-md bg-transparent"
             />
           </div>
           <div>

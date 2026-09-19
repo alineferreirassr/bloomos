@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { CardGridSkeleton } from "@/components/ui/Skeleton";
+import { Input } from "@/components/ui/Input";
 import { AssetsIcon, SearchIcon } from "@/components/ui/icons";
 import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 import { AssetCard } from "@/modules/assets/components/AssetCard";
@@ -249,7 +250,7 @@ export function AssetLibraryView() {
           <Card className="flex flex-wrap items-center gap-3">
             <div className="relative min-w-[180px] flex-1">
               <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
-              <input
+              <Input
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}

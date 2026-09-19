@@ -5,6 +5,7 @@ import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { Input } from "@/components/ui/Input";
 import { listCopilotActivity } from "@/modules/ai/copilot/activityLog";
 import type { AIMemoryEntry } from "@/types/aiMemory";
 
@@ -33,7 +34,7 @@ export function ActivityHistoryView() {
     <div>
       <PageHeader title="Activity History" subtitle="Suggestions you've accepted or dismissed from the Bloom AI Copilot." />
 
-      <input
+      <Input
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Search activity…"

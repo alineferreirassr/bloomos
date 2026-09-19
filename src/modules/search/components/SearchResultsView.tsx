@@ -11,6 +11,7 @@ import { TableSkeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Toast } from "@/components/ui/Toast";
+import { Input } from "@/components/ui/Input";
 import { SearchIcon } from "@/components/ui/icons";
 import { SearchPreviewPanel } from "@/modules/search/components/SearchPreviewPanel";
 import { searchAction, listSearchableEntityTypesAction, createSavedSearchAction, type SearchableEntitySummary } from "@/modules/search/searchActions";
@@ -133,12 +134,12 @@ export function SearchResultsView({ initialQuery }: SearchResultsViewProps) {
       <PageHeader title="Search Results" subtitle="Every result respects your permissions — hidden entities never appear here." icon={SearchIcon} breadcrumb={[{ label: "Search", href: "/search" }, { label: "Results" }]} />
 
       <form onSubmit={handleSubmit} className="flex gap-2">
-        <input
+        <Input
           value={term}
           onChange={(event) => setTerm(event.target.value)}
           placeholder="Search clients, events, invoices, workflows…"
           aria-label="Search term"
-          className="w-full rounded-md border border-border bg-surface px-3.5 py-2 text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent/40"
+          className="px-3.5 focus:outline-none focus:ring-2 focus:ring-accent/40"
         />
         <Button type="submit" variant="primary">
           Search

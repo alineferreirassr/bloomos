@@ -194,7 +194,7 @@ export function MetaSettingsPanel() {
 
       {callbackMessage ? (
         <Card>
-          <p className={callbackMessage.tone === "error" ? "text-sm text-danger" : "text-sm text-emerald-600 dark:text-emerald-400"}>{callbackMessage.text}</p>
+          <p className={callbackMessage.tone === "error" ? "text-sm text-danger" : "text-sm text-success"}>{callbackMessage.text}</p>
         </Card>
       ) : null}
 

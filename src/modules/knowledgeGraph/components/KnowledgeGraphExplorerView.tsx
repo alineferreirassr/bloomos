@@ -19,6 +19,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Input } from "@/components/ui/Input";
 import { AssetsIcon } from "@/components/ui/icons";
 
 function nodeLabel(node: KnowledgeNodeRef): string {
@@ -122,11 +123,11 @@ export function KnowledgeGraphExplorerView() {
                 </option>
               ))}
             </select>
-            <input
+            <Input
               value={inspectNodeId}
               onChange={(e) => setInspectNodeId(e.target.value)}
               placeholder="Record id (e.g. asset_1)"
-              className="min-w-[160px] flex-1 rounded-md border border-border bg-surface px-3 py-1.5 text-sm"
+              className="min-w-[160px] flex-1"
             />
             <Button variant="primary" onClick={handleInspect} disabled={inspecting}>
               Inspect
@@ -183,7 +184,7 @@ export function KnowledgeGraphExplorerView() {
                 </option>
               ))}
             </select>
-            <input value={fromId} onChange={(e) => setFromId(e.target.value)} placeholder="From id" className="w-28 rounded-md border border-border bg-surface px-3 py-1.5 text-sm" />
+            <Input value={fromId} onChange={(e) => setFromId(e.target.value)} placeholder="From id" className="w-28" />
             <span className="text-text-muted">→</span>
             <select value={toType} onChange={(e) => setToType(e.target.value as KnowledgeNodeType)} className="rounded-md border border-border bg-surface px-2 py-1.5 text-sm">
               {KNOWLEDGE_NODE_TYPES.map((t) => (
@@ -192,7 +193,7 @@ export function KnowledgeGraphExplorerView() {
                 </option>
               ))}
             </select>
-            <input value={toId} onChange={(e) => setToId(e.target.value)} placeholder="To id" className="w-28 rounded-md border border-border bg-surface px-3 py-1.5 text-sm" />
+            <Input value={toId} onChange={(e) => setToId(e.target.value)} placeholder="To id" className="w-28" />
             <Button variant="primary" onClick={handleFindPath}>
               Find Path
             </Button>

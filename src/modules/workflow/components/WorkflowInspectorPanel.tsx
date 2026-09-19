@@ -4,6 +4,8 @@ import { AUTOMATION_CATEGORIES, WORKFLOW_SCHEDULE_FREQUENCIES, type AutomationCa
 import { WORKSPACE_MEMBER_ROLES, WORKSPACE_MEMBER_ROLE_LABELS } from "@/core/enums/workspaceRole";
 import type { WorkflowExecutionPolicy, WorkflowMetadata } from "@/types/workflow";
 import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
+import { Input } from "@/components/ui/Input";
+import { Checkbox } from "@/components/ui/Checkbox";
 
 const SCHEDULE_FREQUENCY_LABELS: Record<WorkflowScheduleFrequency, string> = { daily: "Daily", weekly: "Weekly", monthly: "Monthly" };
 const WEEKDAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -31,12 +33,12 @@ export function WorkflowInspectorPanel({
         <label htmlFor="inspector-name" className="block text-[11px] font-medium text-text-muted">
           Name
         </label>
-        <input
+        <Input
           id="inspector-name"
           type="text"
           value={metadata.name}
           onChange={(event) => onChange({ metadata: { ...metadata, name: event.target.value }, executionPolicy })}
-          className="mt-1 w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-text"
+          className="mt-1 rounded-md bg-transparent px-2.5 py-1.5 text-sm"
         />
       </div>
 
@@ -100,14 +102,14 @@ export function WorkflowInspectorPanel({
           <label htmlFor="inspector-max-retries" className="block text-[11px] font-medium text-text-muted">
             Max retries per Action
           </label>
-          <input
+          <Input
             id="inspector-max-retries"
             type="number"
             min={0}
             max={5}
             value={executionPolicy.maxRetries}
             onChange={(event) => onChange({ metadata, executionPolicy: { ...executionPolicy, maxRetries: Math.max(0, Number(event.target.value) || 0) } })}
-            className="mt-1 w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-text"
+            className="mt-1 rounded-md bg-transparent px-2.5 py-1.5 text-sm"
           />
         </div>
       </div>
@@ -119,9 +121,8 @@ export function WorkflowInspectorPanel({
         </p>
 
         <div className="mt-2 flex items-center gap-2">
-          <input
+          <Checkbox
             id="inspector-schedule-enabled"
-            type="checkbox"
             checked={executionPolicy.scheduledExecution !== null}
             onChange={(event) =>
               onChange({
@@ -170,7 +171,7 @@ export function WorkflowInspectorPanel({
               <label htmlFor="inspector-schedule-time" className="block text-[11px] font-medium text-text-muted">
                 Time (workspace-local)
               </label>
-              <input
+              <Input
                 id="inspector-schedule-time"
                 type="time"
                 value={executionPolicy.scheduledExecution.time}
@@ -180,7 +181,7 @@ export function WorkflowInspectorPanel({
                     executionPolicy: { ...executionPolicy, scheduledExecution: { ...executionPolicy.scheduledExecution!, time: event.target.value } },
                   })
                 }
-                className="mt-1 w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-text"
+                className="mt-1 rounded-md bg-transparent px-2.5 py-1.5 text-sm"
               />
             </div>
 
@@ -214,7 +215,7 @@ export function WorkflowInspectorPanel({
                 <label htmlFor="inspector-schedule-day" className="block text-[11px] font-medium text-text-muted">
                   Day of month
                 </label>
-                <input
+                <Input
                   id="inspector-schedule-day"
                   type="number"
                   min={1}
@@ -229,7 +230,7 @@ export function WorkflowInspectorPanel({
                       },
                     })
                   }
-                  className="mt-1 w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-text"
+                  className="mt-1 rounded-md bg-transparent px-2.5 py-1.5 text-sm"
                 />
               </div>
             ) : null}

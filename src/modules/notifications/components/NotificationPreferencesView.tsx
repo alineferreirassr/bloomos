@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge } from "@/components/ui/Badge";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { COMMUNICATION_CATEGORIES, DIGEST_FREQUENCIES } from "@/types/communication";
@@ -111,23 +112,23 @@ export function NotificationPreferencesView() {
           <h3 className="font-serif text-base font-semibold text-text">Channels</h3>
           <div className="mt-2 space-y-2">
             <label className="flex items-center gap-2 text-sm text-text">
-              <input type="checkbox" checked={preferences.desktop_enabled} onChange={(e) => toggleChannel("desktopEnabled", e.target.checked)} />
+              <Checkbox checked={preferences.desktop_enabled} onChange={(e) => toggleChannel("desktopEnabled", e.target.checked)} />
               Desktop
             </label>
             <label className="flex items-center gap-2 text-sm text-text">
-              <input type="checkbox" checked={preferences.in_app_enabled} onChange={(e) => toggleChannel("inAppEnabled", e.target.checked)} />
+              <Checkbox checked={preferences.in_app_enabled} onChange={(e) => toggleChannel("inAppEnabled", e.target.checked)} />
               In-App
             </label>
             <label className="flex items-center gap-2 text-sm text-text-muted">
-              <input type="checkbox" checked={preferences.email_enabled} onChange={(e) => toggleChannel("emailEnabled", e.target.checked)} />
+              <Checkbox checked={preferences.email_enabled} onChange={(e) => toggleChannel("emailEnabled", e.target.checked)} />
               Email (coming soon)
             </label>
             <label className="flex items-center gap-2 text-sm text-text-muted">
-              <input type="checkbox" checked={preferences.sms_enabled} onChange={(e) => toggleChannel("smsEnabled", e.target.checked)} />
+              <Checkbox checked={preferences.sms_enabled} onChange={(e) => toggleChannel("smsEnabled", e.target.checked)} />
               SMS (coming soon)
             </label>
             <label className="flex items-center gap-2 text-sm text-text-muted">
-              <input type="checkbox" checked={preferences.push_enabled} onChange={(e) => toggleChannel("pushEnabled", e.target.checked)} />
+              <Checkbox checked={preferences.push_enabled} onChange={(e) => toggleChannel("pushEnabled", e.target.checked)} />
               Push (coming soon)
             </label>
           </div>
@@ -136,7 +137,7 @@ export function NotificationPreferencesView() {
         <LuxuryCard>
           <h3 className="font-serif text-base font-semibold text-text">Quiet hours</h3>
           <label className="mt-2 flex items-center gap-2 text-sm text-text">
-            <input type="checkbox" checked={preferences.quiet_hours.enabled} onChange={(e) => setQuietHoursEnabled(e.target.checked)} />
+            <Checkbox checked={preferences.quiet_hours.enabled} onChange={(e) => setQuietHoursEnabled(e.target.checked)} />
             Enabled ({preferences.quiet_hours.startHour}:00–{preferences.quiet_hours.endHour}:00)
           </label>
 

@@ -12,6 +12,7 @@ import {
 } from "@/modules/communication/notifications/notificationActions";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -125,12 +126,11 @@ export function NotificationCenterPanel() {
         </div>
       </div>
 
-      <input
+      <Input
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search notifications…"
         aria-label="Search notifications"
-        className="w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text placeholder:text-text-muted focus-visible:border-accent focus-visible:outline-none"
       />
 
       {filtered.length === 0 ? (

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Input } from "@/components/ui/Input";
 import { AUTOMATION_CONDITION_FIELDS, AUTOMATION_CONDITION_OPERATORS } from "@/types/automation";
 import { WORKSPACE_MEMBER_ROLES, WORKSPACE_MEMBER_ROLE_LABELS } from "@/core/enums/workspaceRole";
 import { TIMELINE_ACTIVITY_TYPES } from "@/core/enums/timelineActivityType";
@@ -152,14 +153,14 @@ function ConditionFields({
           <label htmlFor="condition-cases" className="block text-[11px] font-medium text-text-muted">
             Cases (comma-separated)
           </label>
-          <input
+          <Input
             id="condition-cases"
             type="text"
             placeholder="gold, silver, bronze"
             value={cases}
             onChange={(event) => setCases(event.target.value)}
             onBlur={commitCases}
-            className="mt-1 w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-text"
+            className="mt-1 rounded-md bg-transparent px-2.5 py-1.5 text-sm"
           />
         </div>
       ) : (
@@ -185,13 +186,13 @@ function ConditionFields({
             <label htmlFor="condition-value" className="block text-[11px] font-medium text-text-muted">
               Value
             </label>
-            <input
+            <Input
               id="condition-value"
               type="text"
               value={value}
               onChange={(event) => setValue(event.target.value)}
               onBlur={commitValue}
-              className="mt-1 w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-text"
+              className="mt-1 rounded-md bg-transparent px-2.5 py-1.5 text-sm"
             />
           </div>
         </>
@@ -210,27 +211,27 @@ function CustomActionFields({ node, onUpdateNodeData }: { node: WorkflowNode; on
         <label htmlFor="custom-action-label" className="block text-[11px] font-medium text-text-muted">
           Label
         </label>
-        <input
+        <Input
           id="custom-action-label"
           type="text"
           placeholder="e.g. Call the venue"
           value={label}
           onChange={(event) => setLabel(event.target.value)}
           onBlur={() => onUpdateNodeData(node.id, { ...node.data, label })}
-          className="mt-1 w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-text"
+          className="mt-1 rounded-md bg-transparent px-2.5 py-1.5 text-sm"
         />
       </div>
       <div>
         <label htmlFor="custom-action-description" className="block text-[11px] font-medium text-text-muted">
           Description (optional)
         </label>
-        <input
+        <Input
           id="custom-action-description"
           type="text"
           value={description}
           onChange={(event) => setDescription(event.target.value)}
           onBlur={() => onUpdateNodeData(node.id, { ...node.data, description })}
-          className="mt-1 w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-text"
+          className="mt-1 rounded-md bg-transparent px-2.5 py-1.5 text-sm"
         />
       </div>
       <p className="text-xs text-text-muted">A manual step outside BloomOS&rsquo;s own Actions — shown in Simulation order, never auto-executed.</p>
@@ -261,7 +262,7 @@ function TimelineEventTriggerFields({ node, onUpdateNodeData }: { node: Workflow
         <label htmlFor="timeline-event-activity-type" className="block text-[11px] font-medium text-text-muted">
           Timeline activity type
         </label>
-        <input
+        <Input
           id="timeline-event-activity-type"
           type="text"
           list="timeline-activity-type-options"
@@ -269,7 +270,7 @@ function TimelineEventTriggerFields({ node, onUpdateNodeData }: { node: Workflow
           value={activityType}
           onChange={(event) => setActivityType(event.target.value)}
           onBlur={commit}
-          className="mt-1 w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-text"
+          className="mt-1 rounded-md bg-transparent px-2.5 py-1.5 text-sm"
         />
         <datalist id="timeline-activity-type-options">
           {TIMELINE_ACTIVITY_TYPES.map((type) => (
@@ -304,14 +305,14 @@ function DelayFields({ node, onUpdateNodeData }: { node: WorkflowNode; onUpdateN
         <label htmlFor="delay-duration" className="block text-[11px] font-medium text-text-muted">
           Duration (minutes)
         </label>
-        <input
+        <Input
           id="delay-duration"
           type="number"
           min={1}
           value={duration}
           onChange={(event) => setDuration(event.target.value)}
           onBlur={commit}
-          className="mt-1 w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-text"
+          className="mt-1 rounded-md bg-transparent px-2.5 py-1.5 text-sm"
         />
       </div>
       <p className="text-xs text-text-muted">Recorded for planning and the Simulator&apos;s own estimated duration — not enforced at real execution time (no background scheduler exists yet).</p>
@@ -329,14 +330,14 @@ function LoopFields({ node, onUpdateNodeData }: { node: WorkflowNode; onUpdateNo
         <label htmlFor="loop-iterate-over" className="block text-[11px] font-medium text-text-muted">
           Iterate over
         </label>
-        <input
+        <Input
           id="loop-iterate-over"
           type="text"
           placeholder="e.g. each assigned Worker"
           value={iterateOver}
           onChange={(event) => setIterateOver(event.target.value)}
           onBlur={() => onUpdateNodeData(node.id, { ...node.data, iterateOver })}
-          className="mt-1 w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-text"
+          className="mt-1 rounded-md bg-transparent px-2.5 py-1.5 text-sm"
         />
       </div>
       <p className="text-xs text-text-muted">Records repeat intent for planning and Simulation — BloomOS has no iteration engine yet, so this step compiles to nothing at real execution time.</p>

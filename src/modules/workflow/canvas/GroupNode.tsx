@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { NodeResizer, type Node, type NodeProps } from "@xyflow/react";
+import { Input } from "@/components/ui/Input";
 import { useAnnotationActions } from "@/modules/workflow/canvas/AnnotationActionsContext";
 import { resolveNodeColorClasses } from "@/modules/workflow/canvas/nodeColors";
 import type { WorkflowAnnotationRenderData } from "@/modules/workflow/canvas/graphAdapters";
@@ -31,8 +32,8 @@ export function GroupNode({ id, data, selected }: NodeProps<Node<WorkflowAnnotat
   return (
     <div className={`relative h-full w-full rounded-lg border-2 border-dashed ${colors.border} bg-transparent`}>
       <NodeResizer isVisible={selected && !readOnly} minWidth={220} minHeight={140} lineClassName={colors.border} handleClassName={`${colors.chip} !h-2.5 !w-2.5 !rounded-sm`} />
-      <input
-        className={`nodrag absolute -top-6 left-0 max-w-full rounded border-0 bg-transparent px-0.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted outline-none ${!readOnly ? "hover:bg-background/60 focus:bg-background" : ""}`}
+      <Input
+        className={`nodrag absolute -top-6 left-0 h-auto max-w-full rounded border-0 bg-transparent px-0.5 py-0 text-[11px] font-semibold uppercase tracking-wide text-text-muted outline-none ${!readOnly ? "hover:bg-background/60 focus:bg-background" : ""}`}
         value={label}
         placeholder="Group name"
         readOnly={readOnly}

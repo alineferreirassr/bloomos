@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getNotificationPreferencesAction, updateNotificationPreferencesAction } from "@/modules/communication/preferences/preferencesActions";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { COMMUNICATION_CATEGORIES, DIGEST_FREQUENCIES } from "@/types/communication";
@@ -82,23 +83,23 @@ export function NotificationPreferencesPanel() {
         <section className="space-y-2">
           <h3 className="text-sm font-semibold text-text">Channels</h3>
           <label className="flex items-center gap-2 text-sm text-text">
-            <input type="checkbox" checked={preferences.desktop_enabled} onChange={(e) => toggleChannel("desktopEnabled", e.target.checked)} />
+            <Checkbox checked={preferences.desktop_enabled} onChange={(e) => toggleChannel("desktopEnabled", e.target.checked)} />
             Desktop
           </label>
           <label className="flex items-center gap-2 text-sm text-text">
-            <input type="checkbox" checked={preferences.in_app_enabled} onChange={(e) => toggleChannel("inAppEnabled", e.target.checked)} />
+            <Checkbox checked={preferences.in_app_enabled} onChange={(e) => toggleChannel("inAppEnabled", e.target.checked)} />
             In-App
           </label>
           <label className="flex items-center gap-2 text-sm text-text-muted">
-            <input type="checkbox" checked={preferences.email_enabled} onChange={(e) => toggleChannel("emailEnabled", e.target.checked)} />
+            <Checkbox checked={preferences.email_enabled} onChange={(e) => toggleChannel("emailEnabled", e.target.checked)} />
             Email (coming soon)
           </label>
           <label className="flex items-center gap-2 text-sm text-text-muted">
-            <input type="checkbox" checked={preferences.sms_enabled} onChange={(e) => toggleChannel("smsEnabled", e.target.checked)} />
+            <Checkbox checked={preferences.sms_enabled} onChange={(e) => toggleChannel("smsEnabled", e.target.checked)} />
             SMS (coming soon)
           </label>
           <label className="flex items-center gap-2 text-sm text-text-muted">
-            <input type="checkbox" checked={preferences.push_enabled} onChange={(e) => toggleChannel("pushEnabled", e.target.checked)} />
+            <Checkbox checked={preferences.push_enabled} onChange={(e) => toggleChannel("pushEnabled", e.target.checked)} />
             Push (coming soon)
           </label>
         </section>
@@ -106,7 +107,7 @@ export function NotificationPreferencesPanel() {
         <section className="space-y-2">
           <h3 className="text-sm font-semibold text-text">Quiet hours</h3>
           <label className="flex items-center gap-2 text-sm text-text">
-            <input type="checkbox" checked={preferences.quiet_hours.enabled} onChange={(e) => setQuietHoursEnabled(e.target.checked)} />
+            <Checkbox checked={preferences.quiet_hours.enabled} onChange={(e) => setQuietHoursEnabled(e.target.checked)} />
             Enabled ({preferences.quiet_hours.startHour}:00–{preferences.quiet_hours.endHour}:00)
           </label>
         </section>

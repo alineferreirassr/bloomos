@@ -617,7 +617,7 @@ export function FinanceDashboardView() {
               <h3 className="font-serif text-[17px] font-semibold text-text">
                 {formatEventDate(reconciliationState.periodStartDate)} – {formatEventDate(reconciliationState.periodEndDate)}
               </h3>
-              <span className={`text-sm font-medium ${reconciliationState.isReconciled ? "text-emerald-700" : "text-amber-700"}`}>
+              <span className={`text-sm font-medium ${reconciliationState.isReconciled ? "text-success" : "text-warning"}`}>
                 {reconciliationState.isReconciled ? "✓ Reconciled" : "⚠ Review required"}
               </span>
             </div>

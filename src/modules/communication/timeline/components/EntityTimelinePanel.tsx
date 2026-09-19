@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getEntityTimelineData } from "@/modules/communication/timeline/getEntityTimelineData";
 import { ActivityCard } from "@/modules/communication/components/ActivityCard";
+import { Input } from "@/components/ui/Input";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -60,12 +61,12 @@ export function EntityTimelinePanel({ ownerType, ownerId }: { ownerType: EntityT
   return (
     <div className="space-y-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <input
+        <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search this timeline…"
           aria-label="Search timeline"
-          className="min-w-0 flex-1 rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text placeholder:text-text-muted focus-visible:border-accent focus-visible:outline-none"
+          className="min-w-0 flex-1"
         />
         <select
           value={category}

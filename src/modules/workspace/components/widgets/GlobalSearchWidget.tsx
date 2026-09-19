@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Input } from "@/components/ui/Input";
 import { searchWorkspaceAction } from "@/modules/workspace/workspaceActions";
 import type { SearchResult } from "@/core/search/types";
 
@@ -54,13 +55,12 @@ export function GlobalSearchWidget() {
 
   return (
     <div className="flex flex-col gap-3">
-      <input
+      <Input
         type="search"
         value={term}
         onChange={(event) => setTerm(event.target.value)}
         placeholder="Search leads, clients, events, contracts, invoices, documents, assets, team, vendors…"
         aria-label="Search everything"
-        className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
       />
       {loading ? <p className="text-xs text-text-muted">Searching…</p> : null}
       {!loading && term.trim() && results.length === 0 ? <p className="text-xs text-text-muted">No matches for &ldquo;{term}&rdquo;.</p> : null}

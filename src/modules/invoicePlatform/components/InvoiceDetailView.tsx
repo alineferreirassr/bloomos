@@ -18,6 +18,7 @@ import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Input } from "@/components/ui/Input";
 import { FinanceIcon } from "@/components/ui/icons";
 import { CommentsPanel } from "@/modules/communication/comments/components/CommentsPanel";
 
@@ -285,8 +286,8 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
                       </option>
                     ))}
                   </select>
-                  <input className="flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm" placeholder="Label" value={li.label} onChange={(e) => updateDraftLineItem(li.id, { label: e.target.value })} />
-                  <input type="number" min={0} className="w-32 rounded-md border border-border bg-surface px-2 py-1 text-sm" value={li.amount_minor / 100} onChange={(e) => updateDraftLineItem(li.id, { amount_minor: Math.round(Number(e.target.value) * 100) })} />
+                  <Input className="flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm" placeholder="Label" value={li.label} onChange={(e) => updateDraftLineItem(li.id, { label: e.target.value })} />
+                  <Input type="number" min={0} className="w-32 rounded-md border border-border bg-surface px-2 py-1 text-sm" value={li.amount_minor / 100} onChange={(e) => updateDraftLineItem(li.id, { amount_minor: Math.round(Number(e.target.value) * 100) })} />
                   <Button variant="secondary" onClick={() => removeDraftLineItem(li.id)} disabled={draftLineItems.length === 1}>
                     Remove
                   </Button>

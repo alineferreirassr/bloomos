@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { SearchIcon } from "@/components/ui/icons";
 import { RecentSearchesView } from "@/modules/search/components/RecentSearchesView";
 import { SavedSearchesView } from "@/modules/search/components/SavedSearchesView";
@@ -39,13 +40,13 @@ export function GlobalSearchView() {
       <PageHeader title="Global Search" subtitle="Search across every Client, Event, Proposal, Workflow, Decision, and more — one index, your own permissions." icon={SearchIcon} />
 
       <form onSubmit={handleSubmit} className="flex gap-2">
-        <input
+        <Input
           autoFocus
           value={term}
           onChange={(event) => setTerm(event.target.value)}
           placeholder="Search anything…"
           aria-label="Search anything"
-          className="w-full rounded-md border border-border bg-surface px-4 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent/40"
+          className="px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-accent/40"
         />
         <Button type="submit" variant="primary">
           Search

@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Input } from "@/components/ui/Input";
 import { CrmIcon } from "@/components/ui/icons";
 import { CommentsPanel } from "@/modules/communication/comments/components/CommentsPanel";
 
@@ -230,7 +231,7 @@ export function JourneyDetailView({ subjectType, subjectId }: { subjectType: "le
             return (
               <li key={role} role="listitem" className="flex items-center justify-between gap-2 rounded-md border border-border/50 px-3 py-2">
                 <span className="text-sm capitalize">{role.replace("_", " ")}</span>
-                <input
+                <Input
                   type="text"
                   placeholder="Member ID"
                   defaultValue={assignment?.memberId ?? ""}

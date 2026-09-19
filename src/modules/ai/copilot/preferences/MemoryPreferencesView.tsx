@@ -5,6 +5,7 @@ import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
   saveCopilotPreference,
@@ -62,7 +63,7 @@ export function MemoryPreferencesView() {
               </option>
             ))}
           </Select>
-          <input
+          <Input
             value={value}
             onChange={(event) => setValue(event.target.value)}
             placeholder="e.g. Warm and personal, never overly formal"
