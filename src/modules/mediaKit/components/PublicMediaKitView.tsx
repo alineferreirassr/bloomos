@@ -185,7 +185,11 @@ export function PublicMediaKitView({ content, assetUrls, brandName, slug }: Publ
           {navSections.length > 0 ? (
             <nav aria-label="Section navigation" className="flex flex-wrap gap-x-6 gap-y-1.5">
               {navSections.map((section) => (
-                <a key={section.id} href={`#${section.id}`} className="text-[11px] tracking-[0.14em] text-text-muted uppercase transition-colors hover:text-accent sm:text-xs">
+                <a
+                  key={section.id}
+                  href={`#${section.id}`}
+                  className="rounded-[2px] text-[11px] tracking-[0.14em] text-text-muted uppercase transition-colors hover:text-accent focus-visible:text-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent sm:text-xs"
+                >
                   {section.label}
                 </a>
               ))}
@@ -211,7 +215,7 @@ export function PublicMediaKitView({ content, assetUrls, brandName, slug }: Publ
                 href={primaryCtaHref}
                 target={primaryCtaIsExternal ? "_blank" : undefined}
                 rel={primaryCtaIsExternal ? "noopener noreferrer" : undefined}
-                className="mt-10 inline-flex items-center justify-center rounded-sm border border-white bg-white px-9 py-4 font-serif text-base font-medium tracking-wide text-text transition-opacity hover:opacity-90"
+                className="mt-10 inline-flex items-center justify-center rounded-sm border border-white bg-white px-9 py-4 font-serif text-base font-medium tracking-wide text-text transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
               >
                 {contact.primary_cta_label}
               </PublicMediaKitCtaButton>
@@ -235,7 +239,7 @@ export function PublicMediaKitView({ content, assetUrls, brandName, slug }: Publ
               href={primaryCtaHref}
               target={primaryCtaIsExternal ? "_blank" : undefined}
               rel={primaryCtaIsExternal ? "noopener noreferrer" : undefined}
-              className="mt-10 inline-flex items-center justify-center rounded-sm border border-accent bg-accent px-9 py-4 font-serif text-base font-medium tracking-wide text-accent-foreground transition-opacity hover:opacity-90"
+              className="mt-10 inline-flex items-center justify-center rounded-sm border border-accent bg-accent px-9 py-4 font-serif text-base font-medium tracking-wide text-accent-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
             >
               {contact.primary_cta_label}
             </PublicMediaKitCtaButton>
@@ -247,7 +251,11 @@ export function PublicMediaKitView({ content, assetUrls, brandName, slug }: Publ
         <section id="about" className="border-b border-border/60 bg-surface">
           <div className={`${WIDE} grid grid-cols-1 gap-12 py-24 sm:py-32 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20`}>
             <div>
-              {brand.specialty_label ? <p className="font-serif text-3xl leading-tight text-text sm:text-4xl">{brand.specialty_label}</p> : null}
+              {brand.specialty_label ? (
+                <h2 className="font-serif text-3xl leading-tight text-text sm:text-4xl">{brand.specialty_label}</h2>
+              ) : (
+                <h2 className="sr-only">About</h2>
+              )}
               {brand.location_label || brand.service_area || brand.established_year ? (
                 <dl className="mt-8 space-y-3">
                   {brand.location_label ? (
@@ -333,7 +341,7 @@ export function PublicMediaKitView({ content, assetUrls, brandName, slug }: Publ
 
           {hasPartners ? (
             <div className={`${WIDE} py-20 text-center ${hasTestimonials ? "border-t border-border/60" : ""}`}>
-              <p className="text-[11px] tracking-[0.22em] text-accent-2 uppercase">Selected Partners</p>
+              <h2 className="text-[11px] tracking-[0.22em] text-accent-2 uppercase">Selected Partners</h2>
               <div className="mt-8 flex flex-wrap items-center justify-center gap-x-10 gap-y-6">
                 {partners.map((partner) => (
                   <div key={partner.id} className="flex items-center gap-3">
@@ -352,7 +360,7 @@ export function PublicMediaKitView({ content, assetUrls, brandName, slug }: Publ
 
           {hasPress ? (
             <div className={`${WIDE} py-20 text-center ${hasTestimonials || hasPartners ? "border-t border-border/60" : ""}`}>
-              <p className="text-[11px] tracking-[0.22em] text-accent-2 uppercase">As Featured In</p>
+              <h2 className="text-[11px] tracking-[0.22em] text-accent-2 uppercase">As Featured In</h2>
               <div className="mt-8 flex flex-wrap items-center justify-center gap-x-14 gap-y-6">
                 {press.map((feature) => (
                   <PressLogo key={feature.id} feature={feature} assetUrls={assetUrls} />
@@ -397,7 +405,7 @@ export function PublicMediaKitView({ content, assetUrls, brandName, slug }: Publ
                   href={contact.secondary_cta_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-8 inline-block text-sm tracking-[0.1em] text-accent uppercase hover:underline"
+                  className="mt-8 inline-block rounded-[2px] text-sm tracking-[0.1em] text-accent uppercase hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 >
                   {contact.secondary_cta_label}
                 </PublicMediaKitCtaButton>
@@ -421,7 +429,7 @@ export function PublicMediaKitView({ content, assetUrls, brandName, slug }: Publ
                   href={/^https?:\/\//.test(link.handle_or_url) ? link.handle_or_url : `https://${link.handle_or_url}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[11px] tracking-[0.14em] text-text-muted uppercase transition-colors hover:text-accent"
+                  className="rounded-[2px] text-[11px] tracking-[0.14em] text-text-muted uppercase transition-colors hover:text-accent focus-visible:text-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
                 >
                   {link.platform}
                 </a>

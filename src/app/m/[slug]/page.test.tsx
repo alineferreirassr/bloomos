@@ -76,4 +76,29 @@ describe("PublicMediaKitPage", () => {
     expect(metadata.title).toBe("Amoré Bloom — Modern romance, timelessly told.");
     expect(metadata.description).toBe("A real positioning statement.");
   });
+
+  it("MEDIAKIT-06 — generateMetadata includes real Open Graph and Twitter Card data for a published slug, with no url/image fields that would require a domain or an unstable signed URL", async () => {
+    vi.mocked(getPublishedMediaKitContent).mockResolvedValue(CONTENT);
+    const metadata = await generateMetadata({ params: Promise.resolve({ slug: "amore-bloom" }) });
+    expect(metadata.openGraph).toMatchObject({
+      title: "Amoré Bloom — Modern romance, timelessly told.",
+      description: "A real positioning statement.",
+      siteName: "Amoré Bloom",
+      type: "website",
+    });
+    expect(metadata.openGraph).not.toHaveProperty("url");
+    expect(metadata.openGraph).not.toHaveProperty("images");
+    expect(metadata.twitter).toMatchObject({
+      card: "summary",
+      title: "Amoré Bloom — Modern romance, timelessly told.",
+      description: "A real positioning statement.",
+    });
+  });
+
+  it("MEDIAKIT-06 — generateMetadata never includes Open Graph/Twitter data for an unpublished/unknown slug", async () => {
+    vi.mocked(getPublishedMediaKitContent).mockResolvedValue(null);
+    const metadata = await generateMetadata({ params: Promise.resolve({ slug: "unknown-slug" }) });
+    expect(metadata.openGraph).toBeUndefined();
+    expect(metadata.twitter).toBeUndefined();
+  });
 });

@@ -249,4 +249,72 @@ describe("PublicMediaKitView", () => {
     expect(screen.getByRole("link", { name: "Instagram" })).toBeInTheDocument();
     expect(screen.queryByText("Internal Draft Link")).not.toBeInTheDocument();
   });
+
+  it("MEDIAKIT-06 — falls back to the text-led hero when a hero_media_asset_id is configured but its URL never resolved (deleted/failed asset), never a broken <img>", () => {
+    const content: PublicMediaKitContent = {
+      ...EMPTY_CONTENT,
+      brand: { ...EMPTY_CONTENT.brand, headline: "Headline" },
+      appearance: { hero_media_asset_id: "asset_never_resolved" },
+    };
+    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
+    expect(screen.getByRole("heading", { level: 1, name: "Headline" })).toBeInTheDocument();
+    // The text-led hero variant renders no <img> at all for the hero itself.
+    expect(document.querySelectorAll("img")).toHaveLength(0);
+  });
+
+  it("MEDIAKIT-06 — a Portfolio item's cover renders the elegant image-empty placeholder, not a broken <img>, when its cover_media_asset_id never resolved", () => {
+    const content: PublicMediaKitContent = {
+      ...EMPTY_CONTENT,
+      portfolio: [
+        {
+          id: "p1",
+          title: "The Harrington Wedding",
+          category: null,
+          location_label: null,
+          event_year: null,
+          short_description: null,
+          cover_media_asset_id: "asset_never_resolved",
+          is_featured: false,
+          gallery: [],
+        },
+      ],
+    };
+    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
+    expect(screen.getByText("The Harrington Wedding")).toBeInTheDocument();
+    expect(document.querySelectorAll("img")).toHaveLength(0);
+  });
+
+  it("MEDIAKIT-06 — a Partner logo that never resolved renders the display name only, no broken <img>", () => {
+    const content: PublicMediaKitContent = {
+      ...EMPTY_CONTENT,
+      partners: [{ id: "p1", display_name: "The Grand Ballroom", logo_media_asset_id: "asset_never_resolved", partner_type: null, is_featured: false }],
+    };
+    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
+    expect(screen.getByText("The Grand Ballroom")).toBeInTheDocument();
+    expect(document.querySelectorAll("img")).toHaveLength(0);
+  });
+
+  it("MEDIAKIT-06 — a Press logo that never resolved falls back to the publication's name as text, no broken <img>", () => {
+    const content: PublicMediaKitContent = {
+      ...EMPTY_CONTENT,
+      press: [{ id: "pr1", publication_name: "Southern Weddings", feature_title: null, url: null, logo_media_asset_id: "asset_never_resolved", featured_on: null }],
+    };
+    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
+    expect(screen.getByText("Southern Weddings")).toBeInTheDocument();
+    expect(document.querySelectorAll("img")).toHaveLength(0);
+  });
+
+  it("MEDIAKIT-06 — About, Partners, and Press each expose a real heading element, not just styled text, so the section's landmark structure is complete for assistive tech", () => {
+    const content: PublicMediaKitContent = {
+      ...EMPTY_CONTENT,
+      brand: { ...EMPTY_CONTENT.brand, location_label: "Charleston, SC" },
+      partners: [{ id: "p1", display_name: "The Grand Ballroom", logo_media_asset_id: null, partner_type: null, is_featured: false }],
+      press: [{ id: "pr1", publication_name: "Southern Weddings", feature_title: null, url: null, logo_media_asset_id: null, featured_on: null }],
+    };
+    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
+    // About has no specialty_label here, so its heading is the visually-hidden "About" — still a real heading.
+    expect(screen.getByRole("heading", { name: "About" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Selected Partners" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "As Featured In" })).toBeInTheDocument();
+  });
 });

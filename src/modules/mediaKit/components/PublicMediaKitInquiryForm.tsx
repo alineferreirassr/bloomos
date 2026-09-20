@@ -10,7 +10,7 @@ const EMPTY_FORM: MediaKitInquiryInput = { name: "", email: "", interest: "", me
 type FormStatus = "idle" | "submitting" | "success" | "error";
 
 const inputClasses =
-  "w-full rounded-sm border border-border/70 bg-background px-4 py-3.5 text-base text-text placeholder:text-text-muted/60 transition-colors focus:border-accent focus:outline-none";
+  "w-full rounded-sm border border-border/70 bg-background px-4 py-3.5 text-base text-text placeholder:text-text-muted/60 transition-colors focus:border-accent focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent";
 
 interface PublicMediaKitInquiryFormProps {
   slug: string;
@@ -144,7 +144,7 @@ export function PublicMediaKitInquiryForm({ slug }: PublicMediaKitInquiryFormPro
       <button
         type="submit"
         disabled={status === "submitting"}
-        className="inline-flex w-full items-center justify-center rounded-sm border border-accent bg-accent px-8 py-4 font-serif text-base font-medium tracking-wide text-accent-foreground transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-60 sm:w-auto"
+        className="inline-flex w-full items-center justify-center rounded-sm border border-accent bg-accent px-8 py-4 font-serif text-base font-medium tracking-wide text-accent-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-60 sm:w-auto"
       >
         {status === "submitting" ? "Sending…" : "Send Inquiry"}
       </button>

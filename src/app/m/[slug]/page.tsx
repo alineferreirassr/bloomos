@@ -53,7 +53,24 @@ export default async function PublicMediaKitPage({ params }: PageProps) {
   return <PublicMediaKitView content={content} assetUrls={assetUrls} brandName={brandName} slug={slug} />;
 }
 
-/** MEDIAKIT-04 — basic SEO/share metadata from real persisted content only. No fabricated OG image (no suitable public image field exists this checkpoint) and no metadata at all for an unpublished/unknown slug. */
+/**
+ * MEDIAKIT-04/06 — SEO/share metadata from real persisted content only, no
+ * metadata at all for an unpublished/unknown slug.
+ *
+ * MEDIAKIT-06 adds Open Graph and Twitter Card data so sharing a published
+ * Media Kit link produces a real rich preview (title + description) in
+ * iMessage/Slack/social apps. Deliberately still omits:
+ * - `openGraph.url` / `alternates.canonical` — no production origin
+ *   convention exists anywhere in this repo (no `metadataBase`,
+ *   `NEXT_PUBLIC_APP_URL`, or equivalent). Inventing a domain here would be
+ *   worse than omitting the field; Next.js/social crawlers fall back to the
+ *   request URL when no canonical is given.
+ * - `openGraph.images` — the only candidate (the hero image) is a
+ *   short-lived signed Supabase Storage URL (1-hour TTL), not a stable
+ *   public asset. A signed URL baked into a social crawler's cache would
+ *   break within the hour; a text-only preview is more honest than a link
+ *   that goes stale. Revisit if/when a stable public image URL exists.
+ */
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const content = await getPublishedMediaKitContent(slug);
@@ -62,5 +79,19 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const title = content.brand.headline ? `Amoré Bloom — ${content.brand.headline}` : "Amoré Bloom";
   const description = content.brand.positioning_statement ?? undefined;
 
-  return { title, description };
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      siteName: "Amoré Bloom",
+      type: "website",
+    },
+    twitter: {
+      card: "summary",
+      title,
+      description,
+    },
+  };
 }
