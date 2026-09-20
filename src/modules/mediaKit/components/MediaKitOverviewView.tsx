@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { ModuleHero } from "@/components/ui/ModuleHero";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -12,8 +13,11 @@ import { Tabs, TabList, Tab, TabPanel } from "@/components/ui/Tabs";
 import { MediaKitIcon } from "@/components/ui/icons";
 import { getMediaKitOverviewData } from "@/modules/mediaKit/getMediaKitOverviewData";
 import { createMediaKitAction } from "@/modules/mediaKit/createMediaKitAction";
+import { publishMediaKitAction } from "@/modules/mediaKit/publishMediaKitAction";
 import { MediaKitBrandEditor } from "@/modules/mediaKit/components/MediaKitBrandEditor";
 import { MediaKitServicesCurator } from "@/modules/mediaKit/components/MediaKitServicesCurator";
+import { MediaKitPortfolioEditor } from "@/modules/mediaKit/components/MediaKitPortfolioEditor";
+import { MediaKitGalleryEditor } from "@/modules/mediaKit/components/MediaKitGalleryEditor";
 import type { MediaKitContentStatus, MediaKitEventType, MediaKitOverview, MediaKitSectionReadiness } from "@/types/mediaKit";
 
 type LoadState =
@@ -94,6 +98,8 @@ export function MediaKitOverviewView() {
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   function applyResult(result: Awaited<ReturnType<typeof getMediaKitOverviewData>>) {
     if (!result.success) {
@@ -165,6 +171,29 @@ export function MediaKitOverviewView() {
       });
   };
 
+  // MEDIAKIT-04 — wires the frozen `publish_media_kit` RPC. Guards against
+  // double submission the same way `handleCreate` does; on success it
+  // re-runs the real read path so status/published_at/View Public Page all
+  // reflect the genuinely persisted result, never a client-fabricated one.
+  const handlePublish = () => {
+    if (publishing) return;
+    setPublishing(true);
+    setPublishError(null);
+    publishMediaKitAction()
+      .then((result) => {
+        setPublishing(false);
+        if (!result.success) {
+          setPublishError(result.error);
+          return;
+        }
+        refresh();
+      })
+      .catch(() => {
+        setPublishing(false);
+        setPublishError("Something went wrong publishing your Media Kit. Please try again.");
+      });
+  };
+
   if (state.status === "loading") {
     return (
       <div className="mx-auto max-w-6xl space-y-6">
@@ -232,10 +261,8 @@ export function MediaKitOverviewView() {
 
   const statusLabel = mediaKit.status === "published" ? "Published" : mediaKit.status === "unpublished" ? "Unpublished" : "Draft";
   const statusTone = mediaKit.status === "published" ? "success" : mediaKit.status === "unpublished" ? "warning" : "neutral";
-  const publishDisabledReason =
-    mediaKit.status === "published"
-      ? "Already published — republishing arrives in a later Media Kit checkpoint."
-      : "Publishing becomes available once your Media Kit has content and a dedicated publish workflow — coming in a later Media Kit checkpoint.";
+  const publishButtonLabel = publishing ? "Publishing…" : mediaKit.status === "published" ? "Republish" : "Publish";
+  const publicMediaKitPath = `/m/${mediaKit.slug}`;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -245,11 +272,25 @@ export function MediaKitOverviewView() {
         purpose="Manage your public Amoré Bloom media presence."
         breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Media Kit" }]}
         actions={
-          <Button type="button" variant="primary" disabled title={publishDisabledReason}>
-            Publish
-          </Button>
+          <div className="flex items-center gap-2">
+            {mediaKit.status === "published" ? (
+              <Link href={publicMediaKitPath} target="_blank" rel="noopener noreferrer">
+                <Button type="button" variant="secondary">
+                  View Public Page
+                </Button>
+              </Link>
+            ) : null}
+            <Button type="button" variant="primary" onClick={handlePublish} disabled={publishing}>
+              {publishButtonLabel}
+            </Button>
+          </div>
         }
       />
+      {publishError ? (
+        <p role="alert" className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
+          {publishError}
+        </p>
+      ) : null}
 
       <Tabs defaultValue="overview">
         <TabList aria-label="Media Kit sections" className="flex-wrap">
@@ -331,8 +372,23 @@ export function MediaKitOverviewView() {
                     <span className="text-xs text-text-muted">Last published {new Date(mediaKit.published_at).toLocaleDateString()}</span>
                   ) : null}
                 </div>
-                <p className="mt-1.5 text-xs text-text-muted">Public page not yet available — the public Media Kit ships in a later checkpoint.</p>
+                <p className="mt-1.5 text-xs text-text-muted">
+                  {mediaKit.status === "published" ? (
+                    <>
+                      Your public Media Kit is live at <span className="font-medium text-text">{publicMediaKitPath}</span>.
+                    </>
+                  ) : (
+                    "Not published yet — your public Media Kit page won't show until you publish."
+                  )}
+                </p>
               </div>
+              {mediaKit.status === "published" ? (
+                <Link href={publicMediaKitPath} target="_blank" rel="noopener noreferrer">
+                  <Button type="button" variant="secondary">
+                    View Public Page
+                  </Button>
+                </Link>
+              ) : null}
             </Card>
           </section>
         </TabPanel>
@@ -344,7 +400,7 @@ export function MediaKitOverviewView() {
           <MediaKitServicesCurator onChanged={refresh} />
         </TabPanel>
         <TabPanel value="portfolio" className="mt-6">
-          <ComingSoonSection {...SECTION_COPY.portfolio} note="Portfolio curation begins in a future Media Kit checkpoint." />
+          <MediaKitPortfolioEditor workspaceId={mediaKit.workspace_id} onChanged={refresh} />
         </TabPanel>
         <TabPanel value="partners" className="mt-6">
           <ComingSoonSection {...SECTION_COPY.partners} note="Partners curation begins in a future Media Kit checkpoint." />
@@ -389,7 +445,7 @@ export function MediaKitOverviewView() {
           />
         </TabPanel>
         <TabPanel value="gallery" className="mt-6">
-          <ComingSoonSection {...SECTION_COPY.gallery} note="Gallery curation begins in a future Media Kit checkpoint." />
+          <MediaKitGalleryEditor workspaceId={mediaKit.workspace_id} onChanged={refresh} />
         </TabPanel>
         <TabPanel value="contact" className="mt-6">
           <ComingSoonSection {...SECTION_COPY.contact} note="Contact & CTA setup begins in a future Media Kit checkpoint." />
@@ -411,13 +467,38 @@ export function MediaKitOverviewView() {
                   <span className="text-xs text-text-muted">Last published {new Date(mediaKit.published_at).toLocaleDateString()}</span>
                 ) : null}
               </div>
-              <p className="mt-1.5 text-xs text-text-muted">Public page not yet available — the public Media Kit ships in a later checkpoint.</p>
+              <p className="mt-1.5 text-xs text-text-muted">
+                {mediaKit.status === "published" ? (
+                  <>
+                    Your public Media Kit is live at <span className="font-medium text-text">{publicMediaKitPath}</span>.
+                  </>
+                ) : (
+                  "Publishing creates a new snapshot of your Brand, Services, Portfolio, and Gallery, and makes your public Media Kit page available."
+                )}
+              </p>
             </div>
-            <Button type="button" variant="primary" disabled title={publishDisabledReason}>
-              Publish
-            </Button>
+            <div className="flex items-center gap-2">
+              {mediaKit.status === "published" ? (
+                <Link href={publicMediaKitPath} target="_blank" rel="noopener noreferrer">
+                  <Button type="button" variant="secondary">
+                    View Public Page
+                  </Button>
+                </Link>
+              ) : null}
+              <Button type="button" variant="primary" onClick={handlePublish} disabled={publishing}>
+                {publishButtonLabel}
+              </Button>
+            </div>
           </Card>
-          <p className="max-w-2xl text-xs text-text-muted">{publishDisabledReason}</p>
+          {publishError ? (
+            <p role="alert" className="text-xs text-danger">
+              {publishError}
+            </p>
+          ) : null}
+          <p className="max-w-2xl text-xs text-text-muted">
+            Publishing composes an immutable snapshot from your current draft content — future edits to Brand, Services, Portfolio, or Gallery won&apos;t
+            appear publicly until you publish again.
+          </p>
         </TabPanel>
       </Tabs>
     </div>

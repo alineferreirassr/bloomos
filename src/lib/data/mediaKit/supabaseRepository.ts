@@ -6,6 +6,10 @@ import type {
   MediaKitBrandInput,
   MediaKitContentStatus,
   MediaKitEventType,
+  MediaKitGalleryItem,
+  MediaKitGalleryItemInput,
+  MediaKitPortfolioItem,
+  MediaKitPortfolioItemInput,
   MediaKitRecentActivityItem,
   MediaKitServiceCuration,
   MediaKitServiceCurationInput,
@@ -13,6 +17,76 @@ import type {
 import type { MediaKitRepository } from "@/lib/data/mediaKit/repository";
 import type { DataResult } from "@/lib/data/result";
 import { ok, fail } from "@/lib/data/result";
+
+interface MediaKitPortfolioItemRow {
+  id: string;
+  workspace_id: string;
+  media_kit_id: string;
+  event_id: string | null;
+  title: string;
+  category: string | null;
+  location_label: string | null;
+  event_year: number | null;
+  short_description: string | null;
+  cover_media_asset_id: string | null;
+  is_featured: boolean;
+  is_included: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+function mapMediaKitPortfolioItemRow(row: MediaKitPortfolioItemRow): MediaKitPortfolioItem {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    media_kit_id: row.media_kit_id,
+    event_id: row.event_id,
+    title: row.title,
+    category: row.category,
+    location_label: row.location_label,
+    event_year: row.event_year,
+    short_description: row.short_description,
+    cover_media_asset_id: row.cover_media_asset_id,
+    is_featured: row.is_featured,
+    is_included: row.is_included,
+    sort_order: row.sort_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    archived_at: row.archived_at,
+  };
+}
+
+interface MediaKitGalleryItemRow {
+  id: string;
+  workspace_id: string;
+  media_kit_id: string;
+  portfolio_item_id: string | null;
+  media_asset_id: string;
+  caption: string | null;
+  is_cover: boolean;
+  is_included: boolean;
+  sort_order: number;
+  created_at: string;
+  archived_at: string | null;
+}
+
+function mapMediaKitGalleryItemRow(row: MediaKitGalleryItemRow): MediaKitGalleryItem {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    media_kit_id: row.media_kit_id,
+    portfolio_item_id: row.portfolio_item_id,
+    media_asset_id: row.media_asset_id,
+    caption: row.caption,
+    is_cover: row.is_cover,
+    is_included: row.is_included,
+    sort_order: row.sort_order,
+    created_at: row.created_at,
+    archived_at: row.archived_at,
+  };
+}
 
 interface MediaKitServiceCurationRow {
   id: string;
@@ -326,9 +400,264 @@ async function reorderMediaKitServices(
   return ok(rows.sort((a, b) => a.sort_order - b.sort_order));
 }
 
+// ── MEDIAKIT-04 — Portfolio ────────────────────────────────────────────
+
+async function listMediaKitPortfolioItems(workspaceId: string, mediaKitId: string): Promise<MediaKitPortfolioItem[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("media_kit_portfolio_items")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("media_kit_id", mediaKitId)
+    .is("archived_at", null);
+  if (error) throw normalizeSupabaseError(error);
+
+  return (data ?? []).map((row) => mapMediaKitPortfolioItemRow(row as MediaKitPortfolioItemRow));
+}
+
+async function createMediaKitPortfolioItem(workspaceId: string, mediaKitId: string, input: MediaKitPortfolioItemInput): Promise<DataResult<MediaKitPortfolioItem>> {
+  const supabase = await createClient();
+
+  const { data: maxSortRow, error: maxSortError } = await supabase
+    .from("media_kit_portfolio_items")
+    .select("sort_order")
+    .eq("media_kit_id", mediaKitId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (maxSortError) throw normalizeSupabaseError(maxSortError);
+  const nextSortOrder = maxSortRow ? (maxSortRow as { sort_order: number }).sort_order + 1 : 0;
+
+  const { data: created, error: insertError } = await supabase
+    .from("media_kit_portfolio_items")
+    .insert({
+      workspace_id: workspaceId,
+      media_kit_id: mediaKitId,
+      event_id: input.event_id,
+      title: input.title,
+      category: input.category,
+      location_label: input.location_label,
+      event_year: input.event_year,
+      short_description: input.short_description,
+      cover_media_asset_id: input.cover_media_asset_id,
+      is_featured: input.is_featured,
+      is_included: input.is_included,
+      sort_order: nextSortOrder,
+    })
+    .select("*")
+    .single();
+  if (insertError) throw normalizeSupabaseError(insertError);
+  return ok(mapMediaKitPortfolioItemRow(created as MediaKitPortfolioItemRow));
+}
+
+async function updateMediaKitPortfolioItem(workspaceId: string, itemId: string, input: MediaKitPortfolioItemInput): Promise<DataResult<MediaKitPortfolioItem>> {
+  const supabase = await createClient();
+
+  const { data: updated, error } = await supabase
+    .from("media_kit_portfolio_items")
+    .update({
+      event_id: input.event_id,
+      title: input.title,
+      category: input.category,
+      location_label: input.location_label,
+      event_year: input.event_year,
+      short_description: input.short_description,
+      cover_media_asset_id: input.cover_media_asset_id,
+      is_featured: input.is_featured,
+      is_included: input.is_included,
+    })
+    .eq("id", itemId)
+    .eq("workspace_id", workspaceId)
+    .select("*")
+    .maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  if (!updated) return fail("This portfolio item could not be found.");
+  return ok(mapMediaKitPortfolioItemRow(updated as MediaKitPortfolioItemRow));
+}
+
+/** `media_kit_portfolio_items` has no delete RLS policy — `archived_at` is the only removal path. */
+async function archiveMediaKitPortfolioItem(workspaceId: string, itemId: string): Promise<DataResult<MediaKitPortfolioItem>> {
+  const supabase = await createClient();
+
+  const { data: updated, error } = await supabase
+    .from("media_kit_portfolio_items")
+    .update({ archived_at: new Date().toISOString() })
+    .eq("id", itemId)
+    .eq("workspace_id", workspaceId)
+    .select("*")
+    .maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  if (!updated) return fail("This portfolio item could not be found.");
+  return ok(mapMediaKitPortfolioItemRow(updated as MediaKitPortfolioItemRow));
+}
+
+async function reorderMediaKitPortfolioItems(workspaceId: string, mediaKitId: string, orderedItemIds: string[]): Promise<DataResult<MediaKitPortfolioItem[]>> {
+  const supabase = await createClient();
+
+  const updated = await Promise.all(
+    orderedItemIds.map(async (itemId, position) => {
+      const { data, error } = await supabase
+        .from("media_kit_portfolio_items")
+        .update({ sort_order: position })
+        .eq("id", itemId)
+        .eq("workspace_id", workspaceId)
+        .eq("media_kit_id", mediaKitId)
+        .select("*")
+        .maybeSingle();
+      if (error) throw normalizeSupabaseError(error);
+      return data ? mapMediaKitPortfolioItemRow(data as MediaKitPortfolioItemRow) : null;
+    }),
+  );
+
+  const rows = updated.filter((row): row is MediaKitPortfolioItem => row !== null);
+  return ok(rows.sort((a, b) => a.sort_order - b.sort_order));
+}
+
+// ── MEDIAKIT-04 — Gallery ──────────────────────────────────────────────
+
+async function listMediaKitGalleryItems(workspaceId: string, mediaKitId: string, portfolioItemId: string | null): Promise<MediaKitGalleryItem[]> {
+  const supabase = await createClient();
+
+  let query = supabase.from("media_kit_gallery_items").select("*").eq("workspace_id", workspaceId).eq("media_kit_id", mediaKitId).is("archived_at", null);
+  query = portfolioItemId === null ? query.is("portfolio_item_id", null) : query.eq("portfolio_item_id", portfolioItemId);
+  const { data, error } = await query;
+  if (error) throw normalizeSupabaseError(error);
+
+  return (data ?? []).map((row) => mapMediaKitGalleryItemRow(row as MediaKitGalleryItemRow));
+}
+
+async function addMediaKitGalleryItem(workspaceId: string, mediaKitId: string, portfolioItemId: string | null, mediaAssetId: string): Promise<DataResult<MediaKitGalleryItem>> {
+  const supabase = await createClient();
+
+  let maxSortQuery = supabase.from("media_kit_gallery_items").select("sort_order").eq("media_kit_id", mediaKitId);
+  maxSortQuery = portfolioItemId === null ? maxSortQuery.is("portfolio_item_id", null) : maxSortQuery.eq("portfolio_item_id", portfolioItemId);
+  const { data: maxSortRow, error: maxSortError } = await maxSortQuery.order("sort_order", { ascending: false }).limit(1).maybeSingle();
+  if (maxSortError) throw normalizeSupabaseError(maxSortError);
+  const nextSortOrder = maxSortRow ? (maxSortRow as { sort_order: number }).sort_order + 1 : 0;
+
+  const { data: created, error: insertError } = await supabase
+    .from("media_kit_gallery_items")
+    .insert({
+      workspace_id: workspaceId,
+      media_kit_id: mediaKitId,
+      portfolio_item_id: portfolioItemId,
+      media_asset_id: mediaAssetId,
+      sort_order: nextSortOrder,
+    })
+    .select("*")
+    .single();
+  if (insertError) throw normalizeSupabaseError(insertError);
+  return ok(mapMediaKitGalleryItemRow(created as MediaKitGalleryItemRow));
+}
+
+/** Setting `is_cover: true` clears any other cover within the same (media_kit_id, portfolio_item_id) scope first — at most one cover per scope. Not a DB constraint (none exists), enforced here at the application layer. */
+async function updateMediaKitGalleryItem(workspaceId: string, itemId: string, input: MediaKitGalleryItemInput): Promise<DataResult<MediaKitGalleryItem>> {
+  const supabase = await createClient();
+
+  const { data: target, error: targetError } = await supabase
+    .from("media_kit_gallery_items")
+    .select("media_kit_id, portfolio_item_id")
+    .eq("id", itemId)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  if (targetError) throw normalizeSupabaseError(targetError);
+  if (!target) return fail("This gallery image could not be found.");
+
+  if (input.is_cover) {
+    const targetRow = target as { media_kit_id: string; portfolio_item_id: string | null };
+    let clearQuery = supabase
+      .from("media_kit_gallery_items")
+      .update({ is_cover: false })
+      .eq("media_kit_id", targetRow.media_kit_id)
+      .eq("is_cover", true)
+      .neq("id", itemId);
+    clearQuery = targetRow.portfolio_item_id === null ? clearQuery.is("portfolio_item_id", null) : clearQuery.eq("portfolio_item_id", targetRow.portfolio_item_id);
+    const { error: clearError } = await clearQuery;
+    if (clearError) throw normalizeSupabaseError(clearError);
+  }
+
+  const { data: updated, error } = await supabase
+    .from("media_kit_gallery_items")
+    .update({ caption: input.caption, is_cover: input.is_cover, is_included: input.is_included })
+    .eq("id", itemId)
+    .eq("workspace_id", workspaceId)
+    .select("*")
+    .maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  if (!updated) return fail("This gallery image could not be found.");
+  return ok(mapMediaKitGalleryItemRow(updated as MediaKitGalleryItemRow));
+}
+
+/** `media_kit_gallery_items` has no delete RLS policy either — `archived_at` is the only removal path. */
+async function archiveMediaKitGalleryItem(workspaceId: string, itemId: string): Promise<DataResult<MediaKitGalleryItem>> {
+  const supabase = await createClient();
+
+  const { data: updated, error } = await supabase
+    .from("media_kit_gallery_items")
+    .update({ archived_at: new Date().toISOString() })
+    .eq("id", itemId)
+    .eq("workspace_id", workspaceId)
+    .select("*")
+    .maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  if (!updated) return fail("This gallery image could not be found.");
+  return ok(mapMediaKitGalleryItemRow(updated as MediaKitGalleryItemRow));
+}
+
+async function reorderMediaKitGalleryItems(
+  workspaceId: string,
+  mediaKitId: string,
+  portfolioItemId: string | null,
+  orderedItemIds: string[],
+): Promise<DataResult<MediaKitGalleryItem[]>> {
+  const supabase = await createClient();
+
+  const updated = await Promise.all(
+    orderedItemIds.map(async (itemId, position) => {
+      let query = supabase
+        .from("media_kit_gallery_items")
+        .update({ sort_order: position })
+        .eq("id", itemId)
+        .eq("workspace_id", workspaceId)
+        .eq("media_kit_id", mediaKitId);
+      query = portfolioItemId === null ? query.is("portfolio_item_id", null) : query.eq("portfolio_item_id", portfolioItemId);
+      const { data, error } = await query.select("*").maybeSingle();
+      if (error) throw normalizeSupabaseError(error);
+      return data ? mapMediaKitGalleryItemRow(data as MediaKitGalleryItemRow) : null;
+    }),
+  );
+
+  const rows = updated.filter((row): row is MediaKitGalleryItem => row !== null);
+  return ok(rows.sort((a, b) => a.sort_order - b.sort_order));
+}
+
+// ── MEDIAKIT-04 — Publish ──────────────────────────────────────────────
+
+/** Wires the frozen `publish_media_kit(uuid)` RPC. It re-derives the workspace/authorization itself (`security definer`, row-locks the media_kits row), so this is a thin pass-through plus a re-read of the refreshed row. */
+async function publishMediaKit(workspaceId: string, mediaKitId: string): Promise<DataResult<MediaKit>> {
+  const supabase = await createClient();
+
+  const { error: rpcError } = await supabase.rpc("publish_media_kit", { p_media_kit_id: mediaKitId });
+  if (rpcError) {
+    if (rpcError.message.includes("Not authorized") || rpcError.message.includes("not found")) return fail("This Media Kit could not be published.");
+    throw normalizeSupabaseError(rpcError);
+  }
+
+  const { data: refreshed, error: selectError } = await supabase
+    .from("media_kits")
+    .select("*")
+    .eq("id", mediaKitId)
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  if (selectError) throw normalizeSupabaseError(selectError);
+  if (!refreshed) return fail("This Media Kit could not be found.");
+  return ok(mapMediaKitRow(refreshed as MediaKitRow));
+}
+
 async function countIncludedRows(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  table: "media_kit_services" | "media_kit_portfolio_items" | "media_kit_partners" | "media_kit_press_features",
+  table: "media_kit_services" | "media_kit_portfolio_items" | "media_kit_gallery_items" | "media_kit_partners" | "media_kit_press_features",
   mediaKitId: string,
 ): Promise<number> {
   const { count, error } = await supabase
@@ -337,6 +666,16 @@ async function countIncludedRows(
     .eq("media_kit_id", mediaKitId)
     .eq("is_included", true)
     .is("archived_at", null);
+  if (error) throw normalizeSupabaseError(error);
+  return count ?? 0;
+}
+
+async function countTotalRows(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  table: "media_kit_portfolio_items" | "media_kit_gallery_items",
+  mediaKitId: string,
+): Promise<number> {
+  const { count, error } = await supabase.from(table).select("id", { count: "exact", head: true }).eq("media_kit_id", mediaKitId).is("archived_at", null);
   if (error) throw normalizeSupabaseError(error);
   return count ?? 0;
 }
@@ -364,14 +703,19 @@ async function getMediaKitContentStatus(workspaceId: string, mediaKitId: string)
     .is("archived_at", null);
   if (totalServiceCurationsError) throw normalizeSupabaseError(totalServiceCurationsError);
 
-  const [includedServicesCount, portfolioCount, partnersCount, pressCount] = await Promise.all([
+  const [includedServicesCount, includedPortfolioCount, totalPortfolioCount, includedGalleryCount, totalGalleryCount, partnersCount, pressCount] = await Promise.all([
     countIncludedRows(supabase, "media_kit_services", mediaKitId),
     countIncludedRows(supabase, "media_kit_portfolio_items", mediaKitId),
+    countTotalRows(supabase, "media_kit_portfolio_items", mediaKitId),
+    countIncludedRows(supabase, "media_kit_gallery_items", mediaKitId),
+    countTotalRows(supabase, "media_kit_gallery_items", mediaKitId),
     countIncludedRows(supabase, "media_kit_partners", mediaKitId),
     countIncludedRows(supabase, "media_kit_press_features", mediaKitId),
   ]);
 
   const services = (totalServiceCurations ?? 0) === 0 ? "not_started" : includedServicesCount > 0 ? "ready" : "in_progress";
+  const portfolio = totalPortfolioCount === 0 ? "not_started" : includedPortfolioCount > 0 ? "ready" : "in_progress";
+  const gallery = totalGalleryCount === 0 ? "not_started" : includedGalleryCount > 0 ? "ready" : "in_progress";
 
   const { count: testimonialsCount, error: testimonialsError } = await supabase
     .from("media_kit_testimonials")
@@ -382,22 +726,14 @@ async function getMediaKitContentStatus(workspaceId: string, mediaKitId: string)
     .is("archived_at", null);
   if (testimonialsError) throw normalizeSupabaseError(testimonialsError);
 
-  const { count: galleryCount, error: galleryError } = await supabase
-    .from("media_kit_gallery_items")
-    .select("id", { count: "exact", head: true })
-    .eq("media_kit_id", mediaKitId)
-    .eq("is_included", true)
-    .is("portfolio_item_id", null);
-  if (galleryError) throw normalizeSupabaseError(galleryError);
-
   return {
     brand,
     services,
-    portfolio: portfolioCount > 0 ? "ready" : "not_started",
+    portfolio,
     partners: partnersCount > 0 ? "ready" : "not_started",
     testimonials: (testimonialsCount ?? 0) > 0 ? "ready" : "not_started",
     press: pressCount > 0 ? "ready" : "not_started",
-    gallery: (galleryCount ?? 0) > 0 ? "ready" : "not_started",
+    gallery,
     contact: contactReady ? "ready" : "not_started",
   };
 }
@@ -464,6 +800,17 @@ export const supabaseMediaKitRepository: MediaKitRepository = {
   setMediaKitServiceIncluded,
   updateMediaKitServiceCuration,
   reorderMediaKitServices,
+  listMediaKitPortfolioItems,
+  createMediaKitPortfolioItem,
+  updateMediaKitPortfolioItem,
+  archiveMediaKitPortfolioItem,
+  reorderMediaKitPortfolioItems,
+  listMediaKitGalleryItems,
+  addMediaKitGalleryItem,
+  updateMediaKitGalleryItem,
+  archiveMediaKitGalleryItem,
+  reorderMediaKitGalleryItems,
+  publishMediaKit,
   getMediaKitContentStatus,
   getMediaKitAnalyticsSummary,
   getMediaKitRecentActivity,

@@ -3,6 +3,10 @@ import type {
   MediaKitAnalyticsSummary,
   MediaKitBrandInput,
   MediaKitContentStatus,
+  MediaKitGalleryItem,
+  MediaKitGalleryItemInput,
+  MediaKitPortfolioItem,
+  MediaKitPortfolioItemInput,
   MediaKitRecentActivityItem,
   MediaKitServiceCuration,
   MediaKitServiceCurationInput,
@@ -14,11 +18,15 @@ import { generateId, nowIso, delay } from "@/lib/data/utils";
 
 let mediaKits: MediaKit[] = [];
 let serviceCurations: MediaKitServiceCuration[] = [];
+let portfolioItems: MediaKitPortfolioItem[] = [];
+let galleryItems: MediaKitGalleryItem[] = [];
 
 /** Test-only: restore the store to empty between test cases. */
 export function resetMediaKitStore(): void {
   mediaKits = [];
   serviceCurations = [];
+  portfolioItems = [];
+  galleryItems = [];
 }
 
 function defaultMediaKit(workspaceId: string): MediaKit {
@@ -150,7 +158,171 @@ async function reorderMediaKitServices(workspaceId: string, mediaKitId: string, 
   return ok(updatedRows.sort((a, b) => a.sort_order - b.sort_order));
 }
 
-/** MEDIAKIT-03 — brand/services now derive from real store state (documented rule on `MediaKitSectionReadiness`); portfolio/partners/testimonials/press/gallery/contact have no editor yet, so no mock store backs them — truthfully "not_started" until then. */
+// ── MEDIAKIT-04 — Portfolio ────────────────────────────────────────────
+
+async function listMediaKitPortfolioItems(workspaceId: string, mediaKitId: string): Promise<MediaKitPortfolioItem[]> {
+  await delay(80);
+  return portfolioItems.filter((row) => row.workspace_id === workspaceId && row.media_kit_id === mediaKitId && row.archived_at === null);
+}
+
+async function createMediaKitPortfolioItem(workspaceId: string, mediaKitId: string, input: MediaKitPortfolioItemInput): Promise<DataResult<MediaKitPortfolioItem>> {
+  await delay(150);
+  const maxSortOrder = portfolioItems.filter((row) => row.media_kit_id === mediaKitId).reduce((max, row) => Math.max(max, row.sort_order), -1);
+  const now = nowIso();
+  const created: MediaKitPortfolioItem = {
+    id: generateId("mk_portfolio"),
+    workspace_id: workspaceId,
+    media_kit_id: mediaKitId,
+    ...input,
+    sort_order: maxSortOrder + 1,
+    created_at: now,
+    updated_at: now,
+    archived_at: null,
+  };
+  portfolioItems = [...portfolioItems, created];
+  return ok(created);
+}
+
+async function updateMediaKitPortfolioItem(workspaceId: string, itemId: string, input: MediaKitPortfolioItemInput): Promise<DataResult<MediaKitPortfolioItem>> {
+  await delay(150);
+  const index = portfolioItems.findIndex((row) => row.id === itemId && row.workspace_id === workspaceId);
+  if (index === -1) return fail("This portfolio item could not be found.");
+  const updated: MediaKitPortfolioItem = { ...portfolioItems[index], ...input, updated_at: nowIso() };
+  portfolioItems = [...portfolioItems.slice(0, index), updated, ...portfolioItems.slice(index + 1)];
+  return ok(updated);
+}
+
+async function archiveMediaKitPortfolioItem(workspaceId: string, itemId: string): Promise<DataResult<MediaKitPortfolioItem>> {
+  await delay(120);
+  const index = portfolioItems.findIndex((row) => row.id === itemId && row.workspace_id === workspaceId);
+  if (index === -1) return fail("This portfolio item could not be found.");
+  const updated: MediaKitPortfolioItem = { ...portfolioItems[index], archived_at: nowIso(), updated_at: nowIso() };
+  portfolioItems = [...portfolioItems.slice(0, index), updated, ...portfolioItems.slice(index + 1)];
+  return ok(updated);
+}
+
+async function reorderMediaKitPortfolioItems(workspaceId: string, mediaKitId: string, orderedItemIds: string[]): Promise<DataResult<MediaKitPortfolioItem[]>> {
+  await delay(120);
+  const updatedRows: MediaKitPortfolioItem[] = [];
+  portfolioItems = portfolioItems.map((row) => {
+    if (row.workspace_id !== workspaceId || row.media_kit_id !== mediaKitId) return row;
+    const position = orderedItemIds.indexOf(row.id);
+    if (position === -1) return row;
+    const updated = { ...row, sort_order: position, updated_at: nowIso() };
+    updatedRows.push(updated);
+    return updated;
+  });
+  return ok(updatedRows.sort((a, b) => a.sort_order - b.sort_order));
+}
+
+// ── MEDIAKIT-04 — Gallery ──────────────────────────────────────────────
+
+async function listMediaKitGalleryItems(workspaceId: string, mediaKitId: string, portfolioItemId: string | null): Promise<MediaKitGalleryItem[]> {
+  await delay(80);
+  return galleryItems.filter(
+    (row) => row.workspace_id === workspaceId && row.media_kit_id === mediaKitId && row.portfolio_item_id === portfolioItemId && row.archived_at === null,
+  );
+}
+
+async function addMediaKitGalleryItem(workspaceId: string, mediaKitId: string, portfolioItemId: string | null, mediaAssetId: string): Promise<DataResult<MediaKitGalleryItem>> {
+  await delay(150);
+  const maxSortOrder = galleryItems
+    .filter((row) => row.media_kit_id === mediaKitId && row.portfolio_item_id === portfolioItemId)
+    .reduce((max, row) => Math.max(max, row.sort_order), -1);
+  const created: MediaKitGalleryItem = {
+    id: generateId("mk_gallery"),
+    workspace_id: workspaceId,
+    media_kit_id: mediaKitId,
+    portfolio_item_id: portfolioItemId,
+    media_asset_id: mediaAssetId,
+    caption: null,
+    is_cover: false,
+    is_included: true,
+    sort_order: maxSortOrder + 1,
+    created_at: nowIso(),
+    archived_at: null,
+  };
+  galleryItems = [...galleryItems, created];
+  return ok(created);
+}
+
+async function updateMediaKitGalleryItem(workspaceId: string, itemId: string, input: MediaKitGalleryItemInput): Promise<DataResult<MediaKitGalleryItem>> {
+  await delay(120);
+  const index = galleryItems.findIndex((row) => row.id === itemId && row.workspace_id === workspaceId);
+  if (index === -1) return fail("This gallery image could not be found.");
+  const target = galleryItems[index];
+
+  // At most one cover per (media_kit_id, portfolio_item_id) scope — clear any other cover first.
+  if (input.is_cover) {
+    galleryItems = galleryItems.map((row) =>
+      row.id !== target.id && row.media_kit_id === target.media_kit_id && row.portfolio_item_id === target.portfolio_item_id && row.is_cover
+        ? { ...row, is_cover: false }
+        : row,
+    );
+  }
+
+  const updatedIndex = galleryItems.findIndex((row) => row.id === itemId);
+  const updated: MediaKitGalleryItem = { ...galleryItems[updatedIndex], ...input };
+  galleryItems = [...galleryItems.slice(0, updatedIndex), updated, ...galleryItems.slice(updatedIndex + 1)];
+  return ok(updated);
+}
+
+async function archiveMediaKitGalleryItem(workspaceId: string, itemId: string): Promise<DataResult<MediaKitGalleryItem>> {
+  await delay(120);
+  const index = galleryItems.findIndex((row) => row.id === itemId && row.workspace_id === workspaceId);
+  if (index === -1) return fail("This gallery image could not be found.");
+  const updated: MediaKitGalleryItem = { ...galleryItems[index], archived_at: nowIso() };
+  galleryItems = [...galleryItems.slice(0, index), updated, ...galleryItems.slice(index + 1)];
+  return ok(updated);
+}
+
+async function reorderMediaKitGalleryItems(
+  workspaceId: string,
+  mediaKitId: string,
+  portfolioItemId: string | null,
+  orderedItemIds: string[],
+): Promise<DataResult<MediaKitGalleryItem[]>> {
+  await delay(120);
+  const updatedRows: MediaKitGalleryItem[] = [];
+  galleryItems = galleryItems.map((row) => {
+    if (row.workspace_id !== workspaceId || row.media_kit_id !== mediaKitId || row.portfolio_item_id !== portfolioItemId) return row;
+    const position = orderedItemIds.indexOf(row.id);
+    if (position === -1) return row;
+    const updated = { ...row, sort_order: position };
+    updatedRows.push(updated);
+    return updated;
+  });
+  return ok(updatedRows.sort((a, b) => a.sort_order - b.sort_order));
+}
+
+// ── MEDIAKIT-04 — Publish ──────────────────────────────────────────────
+
+/**
+ * Mock-mode publish never resolves a real `media_kit_published_snapshots`
+ * row (there's no mock snapshot store — publish/preview parity isn't this
+ * checkpoint's concern in mock mode) — it only flips the same public state
+ * `publish_media_kit()` flips on the real `media_kits` row, so the Manager's
+ * Publication section and "View Public Page" gating behave truthfully in
+ * mock mode too.
+ */
+async function publishMediaKit(workspaceId: string, mediaKitId: string): Promise<DataResult<MediaKit>> {
+  await delay(200);
+  const index = mediaKits.findIndex((mk) => mk.id === mediaKitId && mk.workspace_id === workspaceId);
+  if (index === -1) return fail("This Media Kit could not be found.");
+  const now = nowIso();
+  const updated: MediaKit = {
+    ...mediaKits[index],
+    status: "published",
+    published_at: now,
+    published_by: null,
+    current_published_snapshot_id: generateId("mk_snapshot"),
+    updated_at: now,
+  };
+  mediaKits = [...mediaKits.slice(0, index), updated, ...mediaKits.slice(index + 1)];
+  return ok(updated);
+}
+
+/** MEDIAKIT-03/04 — brand/services/portfolio/gallery now derive from real store state (documented rule on `MediaKitSectionReadiness`); partners/testimonials/press/contact have no editor yet, so no mock store backs them — truthfully "not_started" until then. */
 async function getMediaKitContentStatus(workspaceId: string, mediaKitId: string): Promise<MediaKitContentStatus> {
   await delay(50);
   const mediaKit = mediaKits.find((mk) => mk.id === mediaKitId && mk.workspace_id === workspaceId);
@@ -160,17 +332,25 @@ async function getMediaKitContentStatus(workspaceId: string, mediaKitId: string)
   const brand = brandCoreFieldsFilled ? "ready" : brandFieldsAllEmpty ? "not_started" : "in_progress";
 
   const curationsForKit = serviceCurations.filter((row) => row.media_kit_id === mediaKitId && row.archived_at === null);
-  const anyIncluded = curationsForKit.some((row) => row.is_included);
-  const services = curationsForKit.length === 0 ? "not_started" : anyIncluded ? "ready" : "in_progress";
+  const anyServiceIncluded = curationsForKit.some((row) => row.is_included);
+  const services = curationsForKit.length === 0 ? "not_started" : anyServiceIncluded ? "ready" : "in_progress";
+
+  const portfolioForKit = portfolioItems.filter((row) => row.media_kit_id === mediaKitId && row.archived_at === null);
+  const anyPortfolioIncluded = portfolioForKit.some((row) => row.is_included);
+  const portfolio = portfolioForKit.length === 0 ? "not_started" : anyPortfolioIncluded ? "ready" : "in_progress";
+
+  const galleryForKit = galleryItems.filter((row) => row.media_kit_id === mediaKitId && row.archived_at === null);
+  const anyGalleryIncluded = galleryForKit.some((row) => row.is_included);
+  const gallery = galleryForKit.length === 0 ? "not_started" : anyGalleryIncluded ? "ready" : "in_progress";
 
   return {
     brand,
     services,
-    portfolio: "not_started",
+    portfolio,
     partners: "not_started",
     testimonials: "not_started",
     press: "not_started",
-    gallery: "not_started",
+    gallery,
     contact: mediaKit?.contact_headline || mediaKit?.contact_subtext ? "ready" : "not_started",
   };
 }
@@ -194,6 +374,17 @@ export const mockMediaKitRepository: MediaKitRepository = {
   setMediaKitServiceIncluded,
   updateMediaKitServiceCuration,
   reorderMediaKitServices,
+  listMediaKitPortfolioItems,
+  createMediaKitPortfolioItem,
+  updateMediaKitPortfolioItem,
+  archiveMediaKitPortfolioItem,
+  reorderMediaKitPortfolioItems,
+  listMediaKitGalleryItems,
+  addMediaKitGalleryItem,
+  updateMediaKitGalleryItem,
+  archiveMediaKitGalleryItem,
+  reorderMediaKitGalleryItems,
+  publishMediaKit,
   getMediaKitContentStatus,
   getMediaKitAnalyticsSummary,
   getMediaKitRecentActivity,

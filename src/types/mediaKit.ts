@@ -66,12 +66,22 @@ export interface MediaKit {
  *   in_progress when rows exist but none are is_included; ready when at
  *   least one non-archived row is is_included.
  *
- * Sections without an editor yet (portfolio/partners/testimonials/press/
- * gallery/contact) keep the original two-outcome rule: at least one
- * non-archived, `is_included` row exists (testimonials additionally
- * requires `is_approved`; contact requires contact_headline or
- * contact_subtext) — never `in_progress`, since no editor exists yet to
- * produce a real partial state for them.
+ * MEDIAKIT-04 rules:
+ * - portfolio: not_started when zero media_kit_portfolio_items rows exist;
+ *   in_progress when rows exist but none are is_included; ready when at
+ *   least one non-archived row is is_included.
+ * - gallery: not_started when zero media_kit_gallery_items rows exist for
+ *   this Media Kit (top-level AND per-portfolio-item curations both count —
+ *   "Gallery" is the imagery section as a whole); in_progress when rows
+ *   exist but none are is_included; ready when at least one non-archived
+ *   row is is_included.
+ *
+ * Sections without an editor yet (partners/testimonials/press/contact)
+ * keep the original two-outcome rule: at least one non-archived,
+ * `is_included` row exists (testimonials additionally requires
+ * `is_approved`; contact requires contact_headline or contact_subtext) —
+ * never `in_progress`, since no editor exists yet to produce a real
+ * partial state for them.
  */
 export type MediaKitSectionReadiness = "not_started" | "in_progress" | "ready";
 
@@ -179,4 +189,186 @@ export interface MediaKitCuratedServiceRow {
   publishedPriceMinor: number | null;
   publishedCurrency: string | null;
   curation: MediaKitServiceCuration | null;
+}
+
+/**
+ * MEDIAKIT-04 — mirrors `media_kit_portfolio_items` exactly. Editorial
+ * curation, never a second Events system: `event_id` is nullable and, when
+ * set, is a convenience link only — every display field here is always
+ * explicit, never auto-derived from the linked Event (a portfolio piece
+ * may show a styled shoot with no real Event at all).
+ */
+export interface MediaKitPortfolioItem {
+  id: string;
+  workspace_id: string;
+  media_kit_id: string;
+  event_id: string | null;
+  title: string;
+  category: string | null;
+  location_label: string | null;
+  event_year: number | null;
+  short_description: string | null;
+  cover_media_asset_id: string | null;
+  is_featured: boolean;
+  is_included: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+/** The editable subset of a portfolio item — everything except identity (id/media_kit_id) and ordering, which has its own dedicated action. */
+export interface MediaKitPortfolioItemInput {
+  event_id: string | null;
+  title: string;
+  category: string | null;
+  location_label: string | null;
+  event_year: number | null;
+  short_description: string | null;
+  cover_media_asset_id: string | null;
+  is_featured: boolean;
+  is_included: boolean;
+}
+
+/**
+ * MEDIAKIT-04 — mirrors `media_kit_gallery_items` exactly. One shared table
+ * serves two scopes: `portfolio_item_id: null` is the top-level Gallery
+ * section; a non-null value is that specific portfolio item's own image
+ * set. Every row always references a real, existing `media_assets` row
+ * (`media_asset_id` is never null) — this curates existing assets, it never
+ * creates a second asset library.
+ */
+export interface MediaKitGalleryItem {
+  id: string;
+  workspace_id: string;
+  media_kit_id: string;
+  portfolio_item_id: string | null;
+  media_asset_id: string;
+  caption: string | null;
+  is_cover: boolean;
+  is_included: boolean;
+  sort_order: number;
+  created_at: string;
+  archived_at: string | null;
+}
+
+/** The editable subset of a gallery item — identity/scope (media_asset_id/portfolio_item_id) and ordering have their own dedicated actions. */
+export interface MediaKitGalleryItemInput {
+  caption: string | null;
+  is_cover: boolean;
+  is_included: boolean;
+}
+
+/**
+ * MEDIAKIT-04 — the exact `content` shape `publish_media_kit()` composes
+ * (supabase/migrations/20260929100200_media_kit_foundation.sql) and
+ * `get_published_media_kit()` returns verbatim. This is a frozen, immutable
+ * contract: it contains no foreign key into any private/business table, no
+ * storage path, and no signed URL — only `media_asset_id` references the
+ * public renderer resolves fresh at request time.
+ *
+ * Three known gaps in this frozen shape (mechanically confirmed, not
+ * fixable without a new founder-authorized migration): a Service entry's
+ * `headline`/`description` are the override columns copied verbatim — the
+ * snapshot does not capture the canonical Service's own name/description at
+ * publish time, and carries no `service_id` to join back to one after the
+ * fact, so an included Service published with an empty override cannot
+ * fall back to canonical text on the public page. A Service entry carries
+ * `price_label` but never `public_starting_price_minor` — the public
+ * snapshot has no price amount field at all, so a public price can never be
+ * displayed under this frozen schema, regardless of what the private
+ * curator has stored. And `PublicMediaKitPortfolioItem` carries no
+ * `cover_media_asset_id` at all — `media_kit_portfolio_items.cover_media_asset_id`
+ * is stored and editable in the private Portfolio editor, but
+ * `publish_media_kit()` never serializes it into the snapshot; only that
+ * portfolio item's OWN `gallery[].is_cover` (a real `media_kit_gallery_items`
+ * row scoped to that item via `portfolio_item_id`) ever reaches the public
+ * page. The public renderer handles all three gaps by omitting the
+ * incomplete piece — or, for the portfolio cover, deriving it from the
+ * item's own gallery instead — rather than fabricating or guessing at
+ * content.
+ */
+export interface PublicMediaKitBrand {
+  headline: string | null;
+  positioning_statement: string | null;
+  brand_narrative: string | null;
+  location_label: string | null;
+  service_area: string | null;
+  established_year: number | null;
+  specialty_label: string | null;
+}
+
+export interface PublicMediaKitContact {
+  headline: string | null;
+  subtext: string | null;
+  primary_cta_label: string;
+  primary_cta_type: MediaKitCtaType;
+  primary_cta_external_url: string | null;
+  secondary_cta_label: string | null;
+  secondary_cta_url: string | null;
+}
+
+export interface PublicMediaKitService {
+  id: string;
+  headline: string | null;
+  description: string | null;
+  icon_key: string | null;
+  price_label: string | null;
+  is_featured: boolean;
+}
+
+export interface PublicMediaKitGalleryImage {
+  media_asset_id: string;
+  caption: string | null;
+  is_cover: boolean;
+}
+
+export interface PublicMediaKitPortfolioItem {
+  id: string;
+  title: string;
+  category: string | null;
+  location_label: string | null;
+  event_year: number | null;
+  short_description: string | null;
+  is_featured: boolean;
+  gallery: PublicMediaKitGalleryImage[];
+}
+
+export interface PublicMediaKitPartner {
+  id: string;
+  display_name: string;
+  logo_media_asset_id: string | null;
+  partner_type: string | null;
+  is_featured: boolean;
+}
+
+export interface PublicMediaKitTestimonial {
+  id: string;
+  quote: string;
+  author_name: string;
+  author_role: string | null;
+  photo_media_asset_id: string | null;
+  is_featured: boolean;
+}
+
+export interface PublicMediaKitPressFeature {
+  id: string;
+  publication_name: string;
+  feature_title: string | null;
+  url: string | null;
+  logo_media_asset_id: string | null;
+  featured_on: string | null;
+}
+
+export interface PublicMediaKitContent {
+  brand: PublicMediaKitBrand;
+  contact: PublicMediaKitContact;
+  social_links: MediaKitSocialLink[];
+  appearance: Record<string, unknown>;
+  services: PublicMediaKitService[];
+  portfolio: PublicMediaKitPortfolioItem[];
+  partners: PublicMediaKitPartner[];
+  testimonials: PublicMediaKitTestimonial[];
+  press: PublicMediaKitPressFeature[];
+  gallery: PublicMediaKitGalleryImage[];
 }

@@ -28,9 +28,50 @@ vi.mock("@/modules/mediaKit/updateMediaKitServiceCurationAction", () => ({
 vi.mock("@/modules/mediaKit/reorderMediaKitServicesAction", () => ({
   reorderMediaKitServicesAction: vi.fn(),
 }));
+vi.mock("@/modules/mediaKit/publishMediaKitAction", () => ({
+  publishMediaKitAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/getMediaKitPortfolioItemsData", () => ({
+  getMediaKitPortfolioItemsData: vi.fn(() => new Promise(() => {})),
+}));
+vi.mock("@/modules/mediaKit/createMediaKitPortfolioItemAction", () => ({
+  createMediaKitPortfolioItemAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/updateMediaKitPortfolioItemAction", () => ({
+  updateMediaKitPortfolioItemAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/archiveMediaKitPortfolioItemAction", () => ({
+  archiveMediaKitPortfolioItemAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/reorderMediaKitPortfolioItemsAction", () => ({
+  reorderMediaKitPortfolioItemsAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/getMediaKitEventOptionsData", () => ({
+  getMediaKitEventOptionsData: vi.fn(() => new Promise(() => {})),
+}));
+vi.mock("@/modules/mediaKit/getMediaKitGalleryItemsData", () => ({
+  getMediaKitGalleryItemsData: vi.fn(() => new Promise(() => {})),
+}));
+vi.mock("@/modules/mediaKit/addMediaKitGalleryItemAction", () => ({
+  addMediaKitGalleryItemAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/updateMediaKitGalleryItemAction", () => ({
+  updateMediaKitGalleryItemAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/archiveMediaKitGalleryItemAction", () => ({
+  archiveMediaKitGalleryItemAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/reorderMediaKitGalleryItemsAction", () => ({
+  reorderMediaKitGalleryItemsAction: vi.fn(),
+}));
+vi.mock("@/lib/data", () => ({
+  getMediaAssetDownloadUrl: vi.fn(() => new Promise(() => {})),
+  listMediaAssetsForWorkspace: vi.fn(() => new Promise(() => {})),
+}));
 
 import { getMediaKitOverviewData } from "@/modules/mediaKit/getMediaKitOverviewData";
 import { createMediaKitAction } from "@/modules/mediaKit/createMediaKitAction";
+import { publishMediaKitAction } from "@/modules/mediaKit/publishMediaKitAction";
 
 const EMPTY_MEDIA_KIT: MediaKitOverview = {
   mediaKit: {
@@ -107,13 +148,15 @@ describe("MediaKitOverviewView", () => {
 
     // Draft publication state, read from the real mediaKit.status.
     expect(screen.getByText("Draft")).toBeInTheDocument();
-    // No working public URL exists yet — never a broken/dead link.
-    expect(screen.getByText(/Public page not yet available/)).toBeInTheDocument();
+    // Not published yet — no "View Public Page" link, and a truthful "not published" message.
+    expect(screen.getByText(/Not published yet/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View Public Page" })).not.toBeInTheDocument();
 
-    // Publish is present but honestly disabled, not a dead-looking active button.
+    // Publish is present and real (not a dead-looking permanently-disabled button).
     const publishButtons = screen.getAllByRole("button", { name: "Publish" });
+    expect(publishButtons.length).toBeGreaterThan(0);
     for (const button of publishButtons) {
-      expect(button).toBeDisabled();
+      expect(button).not.toBeDisabled();
     }
   });
 
@@ -138,6 +181,39 @@ describe("MediaKitOverviewView", () => {
     // Every empty Brand field reads a genuine "Not set" — never fabricated example copy.
     expect(screen.getAllByText("Not set").length).toBeGreaterThan(0);
     expect(screen.queryByText(/lorem ipsum/i)).not.toBeInTheDocument();
+  });
+
+  it("clicking Publish calls the publish action and refreshes to show View Public Page once published", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getMediaKitOverviewData).mockResolvedValueOnce({ success: true, data: EMPTY_MEDIA_KIT });
+    render(<MediaKitOverviewView />);
+    await screen.findByRole("heading", { name: "Media Kit" });
+
+    const published = { ...EMPTY_MEDIA_KIT, mediaKit: { ...EMPTY_MEDIA_KIT.mediaKit, status: "published" as const, published_at: "2026-01-02T00:00:00Z" } };
+    vi.mocked(publishMediaKitAction).mockResolvedValue({ success: true, data: published.mediaKit });
+    vi.mocked(getMediaKitOverviewData).mockResolvedValueOnce({ success: true, data: published });
+
+    await user.click(screen.getAllByRole("button", { name: "Publish" })[0]);
+
+    expect(vi.mocked(publishMediaKitAction)).toHaveBeenCalledTimes(1);
+    // The real read path (not a client-fabricated status) is what surfaces the "View Public Page" link, pointing at the real slug's public route.
+    const publicLinks = await screen.findAllByRole("link", { name: "View Public Page" });
+    expect(publicLinks.length).toBeGreaterThan(0);
+    expect(publicLinks[0]).toHaveAttribute("href", "/m/amore-bloom");
+  });
+
+  it("shows a calm error on a failed publish and never claims the Media Kit is published", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getMediaKitOverviewData).mockResolvedValue({ success: true, data: EMPTY_MEDIA_KIT });
+    render(<MediaKitOverviewView />);
+    await screen.findByRole("heading", { name: "Media Kit" });
+
+    vi.mocked(publishMediaKitAction).mockResolvedValue({ success: false, error: "This Media Kit could not be published." });
+    await user.click(screen.getAllByRole("button", { name: "Publish" })[0]);
+
+    expect(await screen.findByText("This Media Kit could not be published.")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View Public Page" })).not.toBeInTheDocument();
+    expect(screen.getByText("Draft")).toBeInTheDocument();
   });
 
   it("renders the controlled ErrorState on a { success: false } result", async () => {

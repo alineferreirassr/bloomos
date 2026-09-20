@@ -3193,6 +3193,18 @@ export interface Database {
         Args: { p_event_id: string; p_service_id: string; p_selected_add_on_ids: string[]; p_actor: string };
         Returns: Database["public"]["Tables"]["event_services"]["Row"];
       };
+      publish_media_kit: {
+        Args: { p_media_kit_id: string };
+        Returns: string;
+      };
+      get_published_media_kit: {
+        Args: { p_slug?: string };
+        Returns: Json;
+      };
+      record_public_media_kit_event: {
+        Args: { p_slug: string; p_event_type: string; p_visitor_hash?: string | null; p_referrer?: string | null; p_path?: string | null; p_metadata?: Json };
+        Returns: undefined;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

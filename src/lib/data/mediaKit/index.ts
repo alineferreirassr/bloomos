@@ -2,7 +2,17 @@ import { selectRepository } from "@/lib/data/provider";
 import { mockMediaKitRepository } from "@/lib/data/mediaKit/mockRepository";
 import { supabaseMediaKitRepository } from "@/lib/data/mediaKit/supabaseRepository";
 import type { DataResult } from "@/lib/data/result";
-import type { MediaKit, MediaKitBrandInput, MediaKitOverview, MediaKitServiceCuration, MediaKitServiceCurationInput } from "@/types/mediaKit";
+import type {
+  MediaKit,
+  MediaKitBrandInput,
+  MediaKitGalleryItem,
+  MediaKitGalleryItemInput,
+  MediaKitOverview,
+  MediaKitPortfolioItem,
+  MediaKitPortfolioItemInput,
+  MediaKitServiceCuration,
+  MediaKitServiceCurationInput,
+} from "@/types/mediaKit";
 
 const repository = selectRepository({ mock: mockMediaKitRepository, supabase: supabaseMediaKitRepository });
 
@@ -94,4 +104,76 @@ export async function reorderMediaKitServicesForWorkspace(
   orderedCurationIds: string[],
 ): Promise<DataResult<MediaKitServiceCuration[]>> {
   return repository.reorderMediaKitServices(workspaceId, mediaKitId, orderedCurationIds);
+}
+
+// ── MEDIAKIT-04 — Portfolio ────────────────────────────────────────────
+
+export async function listMediaKitPortfolioItemsForWorkspace(workspaceId: string, mediaKitId: string): Promise<MediaKitPortfolioItem[]> {
+  return repository.listMediaKitPortfolioItems(workspaceId, mediaKitId);
+}
+
+export async function createMediaKitPortfolioItemForWorkspace(
+  workspaceId: string,
+  mediaKitId: string,
+  input: MediaKitPortfolioItemInput,
+): Promise<DataResult<MediaKitPortfolioItem>> {
+  return repository.createMediaKitPortfolioItem(workspaceId, mediaKitId, input);
+}
+
+export async function updateMediaKitPortfolioItemForWorkspace(
+  workspaceId: string,
+  itemId: string,
+  input: MediaKitPortfolioItemInput,
+): Promise<DataResult<MediaKitPortfolioItem>> {
+  return repository.updateMediaKitPortfolioItem(workspaceId, itemId, input);
+}
+
+export async function archiveMediaKitPortfolioItemForWorkspace(workspaceId: string, itemId: string): Promise<DataResult<MediaKitPortfolioItem>> {
+  return repository.archiveMediaKitPortfolioItem(workspaceId, itemId);
+}
+
+export async function reorderMediaKitPortfolioItemsForWorkspace(
+  workspaceId: string,
+  mediaKitId: string,
+  orderedItemIds: string[],
+): Promise<DataResult<MediaKitPortfolioItem[]>> {
+  return repository.reorderMediaKitPortfolioItems(workspaceId, mediaKitId, orderedItemIds);
+}
+
+// ── MEDIAKIT-04 — Gallery ──────────────────────────────────────────────
+
+export async function listMediaKitGalleryItemsForWorkspace(workspaceId: string, mediaKitId: string, portfolioItemId: string | null): Promise<MediaKitGalleryItem[]> {
+  return repository.listMediaKitGalleryItems(workspaceId, mediaKitId, portfolioItemId);
+}
+
+export async function addMediaKitGalleryItemForWorkspace(
+  workspaceId: string,
+  mediaKitId: string,
+  portfolioItemId: string | null,
+  mediaAssetId: string,
+): Promise<DataResult<MediaKitGalleryItem>> {
+  return repository.addMediaKitGalleryItem(workspaceId, mediaKitId, portfolioItemId, mediaAssetId);
+}
+
+export async function updateMediaKitGalleryItemForWorkspace(workspaceId: string, itemId: string, input: MediaKitGalleryItemInput): Promise<DataResult<MediaKitGalleryItem>> {
+  return repository.updateMediaKitGalleryItem(workspaceId, itemId, input);
+}
+
+export async function archiveMediaKitGalleryItemForWorkspace(workspaceId: string, itemId: string): Promise<DataResult<MediaKitGalleryItem>> {
+  return repository.archiveMediaKitGalleryItem(workspaceId, itemId);
+}
+
+export async function reorderMediaKitGalleryItemsForWorkspace(
+  workspaceId: string,
+  mediaKitId: string,
+  portfolioItemId: string | null,
+  orderedItemIds: string[],
+): Promise<DataResult<MediaKitGalleryItem[]>> {
+  return repository.reorderMediaKitGalleryItems(workspaceId, mediaKitId, portfolioItemId, orderedItemIds);
+}
+
+// ── MEDIAKIT-04 — Publish ──────────────────────────────────────────────
+
+export async function publishMediaKitForWorkspace(workspaceId: string, mediaKitId: string): Promise<DataResult<MediaKit>> {
+  return repository.publishMediaKit(workspaceId, mediaKitId);
 }
