@@ -20,6 +20,7 @@ import {
   IntegrationsIcon,
   InventoryIcon,
   MarketplaceIcon,
+  MediaKitIcon,
   NotificationsIcon,
   PurchasesIcon,
   ReportsIcon,
@@ -170,6 +171,14 @@ export const navigationModules: NavModule[] = [
   // pattern exists in this config, and every AI-assistant destination so
   // far is a flat top-level module, never a nested route.
   { id: "social-strategist", label: "Social Strategist", icon: SocialIcon, href: "/social-strategist", group: "business", keywords: ["ai", "content opportunities", "content pillars", "posting strategy"] },
+  // MEDIAKIT-02 — a first-class business/commercial domain (brand
+  // presentation, services, portfolio, lead generation), not a System
+  // utility like Integrations/Developer/Marketplace — placed in "business"
+  // per the architecture MEDIAKIT-01B already established, alongside
+  // Services/Social/Social Strategist. `/media-kit` is the authenticated
+  // Manager route; the future public renderer gets its own, distinct path
+  // (recommended `/press` — see MediaKitOverviewView.tsx's doc comment).
+  { id: "media-kit", label: "Media Kit", icon: MediaKitIcon, href: "/media-kit", group: "business", keywords: ["press kit", "brand presentation", "portfolio", "public page"] },
 
   { id: "documents", label: "Documents", icon: DocumentsIcon, href: "/documents", group: "knowledge" },
   { id: "assets", label: "Asset Library", icon: AssetsIcon, href: "/assets", group: "knowledge", keywords: ["dam", "media"] },

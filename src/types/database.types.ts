@@ -2680,6 +2680,60 @@ export interface Database {
         Update: { id?: string; workspace_id?: string; recipient_member_id?: string | null; recipient_client_account_id?: string | null; channel?: string; title?: string; body?: string; read_at?: string | null; created_at?: string; related_owner_type?: string | null; related_owner_id?: string | null; kind?: string | null; priority?: string; pinned_at?: string | null; archived_at?: string | null };
         Relationships: [];
       };
+      media_kits: {
+        Row: { appearance: Json; archived_at: string | null; brand_narrative: string | null; contact_headline: string | null; contact_subtext: string | null; created_at: string; created_by: string | null; current_published_snapshot_id: string | null; established_year: number | null; headline: string | null; id: string; location_label: string | null; positioning_statement: string | null; primary_cta_external_url: string | null; primary_cta_label: string; primary_cta_type: string; published_at: string | null; published_by: string | null; secondary_cta_label: string | null; secondary_cta_url: string | null; service_area: string | null; slug: string; social_links: Json; specialty_label: string | null; status: string; updated_at: string; visitor_hash_pepper: string; workspace_id: string };
+        Insert: { appearance?: Json; archived_at?: string | null; brand_narrative?: string | null; contact_headline?: string | null; contact_subtext?: string | null; created_at?: string; created_by?: string | null; current_published_snapshot_id?: string | null; established_year?: number | null; headline?: string | null; id?: string; location_label?: string | null; positioning_statement?: string | null; primary_cta_external_url?: string | null; primary_cta_label?: string; primary_cta_type?: string; published_at?: string | null; published_by?: string | null; secondary_cta_label?: string | null; secondary_cta_url?: string | null; service_area?: string | null; slug?: string; social_links?: Json; specialty_label?: string | null; status?: string; updated_at?: string; visitor_hash_pepper?: string; workspace_id: string };
+        Update: { appearance?: Json; archived_at?: string | null; brand_narrative?: string | null; contact_headline?: string | null; contact_subtext?: string | null; created_at?: string; created_by?: string | null; current_published_snapshot_id?: string | null; established_year?: number | null; headline?: string | null; id?: string; location_label?: string | null; positioning_statement?: string | null; primary_cta_external_url?: string | null; primary_cta_label?: string; primary_cta_type?: string; published_at?: string | null; published_by?: string | null; secondary_cta_label?: string | null; secondary_cta_url?: string | null; service_area?: string | null; slug?: string; social_links?: Json; specialty_label?: string | null; status?: string; updated_at?: string; visitor_hash_pepper?: string; workspace_id?: string };
+        Relationships: [];
+      };
+      media_kit_services: {
+        Row: { archived_at: string | null; created_at: string; description_override: string | null; headline_override: string | null; icon_key: string | null; id: string; is_featured: boolean; is_included: boolean; media_kit_id: string; public_price_label: string | null; public_starting_price_minor: number | null; service_id: string; sort_order: number; updated_at: string; workspace_id: string };
+        Insert: { archived_at?: string | null; created_at?: string; description_override?: string | null; headline_override?: string | null; icon_key?: string | null; id?: string; is_featured?: boolean; is_included?: boolean; media_kit_id: string; public_price_label?: string | null; public_starting_price_minor?: number | null; service_id: string; sort_order?: number; updated_at?: string; workspace_id: string };
+        Update: { archived_at?: string | null; created_at?: string; description_override?: string | null; headline_override?: string | null; icon_key?: string | null; id?: string; is_featured?: boolean; is_included?: boolean; media_kit_id?: string; public_price_label?: string | null; public_starting_price_minor?: number | null; service_id?: string; sort_order?: number; updated_at?: string; workspace_id?: string };
+        Relationships: [];
+      };
+      media_kit_portfolio_items: {
+        Row: { archived_at: string | null; category: string | null; cover_media_asset_id: string | null; created_at: string; event_id: string | null; event_year: number | null; id: string; is_featured: boolean; is_included: boolean; location_label: string | null; media_kit_id: string; short_description: string | null; sort_order: number; title: string; updated_at: string; workspace_id: string };
+        Insert: { archived_at?: string | null; category?: string | null; cover_media_asset_id?: string | null; created_at?: string; event_id?: string | null; event_year?: number | null; id?: string; is_featured?: boolean; is_included?: boolean; location_label?: string | null; media_kit_id: string; short_description?: string | null; sort_order?: number; title: string; updated_at?: string; workspace_id: string };
+        Update: { archived_at?: string | null; category?: string | null; cover_media_asset_id?: string | null; created_at?: string; event_id?: string | null; event_year?: number | null; id?: string; is_featured?: boolean; is_included?: boolean; location_label?: string | null; media_kit_id?: string; short_description?: string | null; sort_order?: number; title?: string; updated_at?: string; workspace_id?: string };
+        Relationships: [];
+      };
+      media_kit_partners: {
+        Row: { archived_at: string | null; client_id: string | null; created_at: string; display_name: string; id: string; is_featured: boolean; is_included: boolean; logo_media_asset_id: string | null; media_kit_id: string; partner_type: string | null; sort_order: number; updated_at: string; vendor_id: string | null; workspace_id: string };
+        Insert: { archived_at?: string | null; client_id?: string | null; created_at?: string; display_name: string; id?: string; is_featured?: boolean; is_included?: boolean; logo_media_asset_id?: string | null; media_kit_id: string; partner_type?: string | null; sort_order?: number; updated_at?: string; vendor_id?: string | null; workspace_id: string };
+        Update: { archived_at?: string | null; client_id?: string | null; created_at?: string; display_name?: string; id?: string; is_featured?: boolean; is_included?: boolean; logo_media_asset_id?: string | null; media_kit_id?: string; partner_type?: string | null; sort_order?: number; updated_at?: string; vendor_id?: string | null; workspace_id?: string };
+        Relationships: [];
+      };
+      media_kit_testimonials: {
+        Row: { archived_at: string | null; author_name: string; author_role: string | null; client_id: string | null; created_at: string; id: string; is_approved: boolean; is_featured: boolean; is_included: boolean; media_kit_id: string; photo_media_asset_id: string | null; quote: string; sort_order: number; updated_at: string; workspace_id: string };
+        Insert: { archived_at?: string | null; author_name: string; author_role?: string | null; client_id?: string | null; created_at?: string; id?: string; is_approved?: boolean; is_featured?: boolean; is_included?: boolean; media_kit_id: string; photo_media_asset_id?: string | null; quote: string; sort_order?: number; updated_at?: string; workspace_id: string };
+        Update: { archived_at?: string | null; author_name?: string; author_role?: string | null; client_id?: string | null; created_at?: string; id?: string; is_approved?: boolean; is_featured?: boolean; is_included?: boolean; media_kit_id?: string; photo_media_asset_id?: string | null; quote?: string; sort_order?: number; updated_at?: string; workspace_id?: string };
+        Relationships: [];
+      };
+      media_kit_press_features: {
+        Row: { archived_at: string | null; created_at: string; feature_title: string | null; featured_on: string | null; id: string; is_featured: boolean; is_included: boolean; logo_media_asset_id: string | null; media_kit_id: string; publication_name: string; sort_order: number; updated_at: string; url: string | null; workspace_id: string };
+        Insert: { archived_at?: string | null; created_at?: string; feature_title?: string | null; featured_on?: string | null; id?: string; is_featured?: boolean; is_included?: boolean; logo_media_asset_id?: string | null; media_kit_id: string; publication_name: string; sort_order?: number; updated_at?: string; url?: string | null; workspace_id: string };
+        Update: { archived_at?: string | null; created_at?: string; feature_title?: string | null; featured_on?: string | null; id?: string; is_featured?: boolean; is_included?: boolean; logo_media_asset_id?: string | null; media_kit_id?: string; publication_name?: string; sort_order?: number; updated_at?: string; url?: string | null; workspace_id?: string };
+        Relationships: [];
+      };
+      media_kit_gallery_items: {
+        Row: { archived_at: string | null; caption: string | null; created_at: string; id: string; is_cover: boolean; is_included: boolean; media_asset_id: string; media_kit_id: string; portfolio_item_id: string | null; sort_order: number; workspace_id: string };
+        Insert: { archived_at?: string | null; caption?: string | null; created_at?: string; id?: string; is_cover?: boolean; is_included?: boolean; media_asset_id: string; media_kit_id: string; portfolio_item_id?: string | null; sort_order?: number; workspace_id: string };
+        Update: { archived_at?: string | null; caption?: string | null; created_at?: string; id?: string; is_cover?: boolean; is_included?: boolean; media_asset_id?: string; media_kit_id?: string; portfolio_item_id?: string | null; sort_order?: number; workspace_id?: string };
+        Relationships: [];
+      };
+      media_kit_published_snapshots: {
+        Row: { content: Json; id: string; media_kit_id: string; published_at: string; published_by: string | null; version: number; workspace_id: string };
+        Insert: { content: Json; id?: string; media_kit_id: string; published_at?: string; published_by?: string | null; version: number; workspace_id: string };
+        Update: { content?: Json; id?: string; media_kit_id?: string; published_at?: string; published_by?: string | null; version?: number; workspace_id?: string };
+        Relationships: [];
+      };
+      media_kit_view_events: {
+        Row: { event_type: string; id: string; lead_id: string | null; media_kit_id: string; metadata: Json; occurred_at: string; path: string | null; published_snapshot_id: string | null; referrer: string | null; visitor_hash: string | null; workspace_id: string };
+        Insert: { event_type: string; id?: string; lead_id?: string | null; media_kit_id: string; metadata?: Json; occurred_at?: string; path?: string | null; published_snapshot_id?: string | null; referrer?: string | null; visitor_hash?: string | null; workspace_id: string };
+        Update: { event_type?: string; id?: string; lead_id?: string | null; media_kit_id?: string; metadata?: Json; occurred_at?: string; path?: string | null; published_snapshot_id?: string | null; referrer?: string | null; visitor_hash?: string | null; workspace_id?: string };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

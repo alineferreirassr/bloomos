@@ -146,6 +146,10 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // not-yet-released, unrelated to the Finance release this exact-count
   // assertion describes.
   "20260929100100_lead_attribution_foundation.sql",
+  // MEDIAKIT-01C — Media Kit Data Foundation. Independently-tracked,
+  // not-yet-released, unrelated to the Finance release this exact-count
+  // assertion describes.
+  "20260929100200_media_kit_foundation.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {

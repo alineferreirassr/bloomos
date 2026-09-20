@@ -49,6 +49,7 @@ import {
   NotebookPen,
   Clapperboard,
   GalleryHorizontal,
+  Presentation,
 } from "lucide-react";
 
 type IconProps = SVGProps<SVGSVGElement>;
@@ -281,4 +282,9 @@ export function ScriptIcon(props: IconProps) {
 /** SOCIAL-10E — Carousel Studio. Deliberately distinct from `ScriptIcon`'s `Clapperboard` (video/reel production) — a Carousel is an ordered sequence of static slides, so this uses a literal horizontal-gallery glyph instead. */
 export function CarouselIcon(props: IconProps) {
   return <GalleryHorizontal strokeWidth={2} aria-hidden="true" {...props} />;
+}
+
+/** MEDIAKIT-02 — the Media Kit Manager (Business group, `/media-kit`). A literal presentation-board glyph: Media Kit is Amoré Bloom's own brand/portfolio presentation, distinct from every existing icon here (none of which fit "present the brand to the outside world"). */
+export function MediaKitIcon(props: IconProps) {
+  return <Presentation strokeWidth={2} aria-hidden="true" {...props} />;
 }
