@@ -12,6 +12,8 @@ import { Tabs, TabList, Tab, TabPanel } from "@/components/ui/Tabs";
 import { MediaKitIcon } from "@/components/ui/icons";
 import { getMediaKitOverviewData } from "@/modules/mediaKit/getMediaKitOverviewData";
 import { createMediaKitAction } from "@/modules/mediaKit/createMediaKitAction";
+import { MediaKitBrandEditor } from "@/modules/mediaKit/components/MediaKitBrandEditor";
+import { MediaKitServicesCurator } from "@/modules/mediaKit/components/MediaKitServicesCurator";
 import type { MediaKitContentStatus, MediaKitEventType, MediaKitOverview, MediaKitSectionReadiness } from "@/types/mediaKit";
 
 type LoadState =
@@ -41,7 +43,9 @@ const ACTIVITY_LABELS: Record<MediaKitEventType, string> = {
 };
 
 function ReadinessBadge({ readiness }: { readiness: MediaKitSectionReadiness }) {
-  return <Badge tone={readiness === "ready" ? "success" : "neutral"}>{readiness === "ready" ? "Ready" : "Not started"}</Badge>;
+  const tone = readiness === "ready" ? "success" : readiness === "in_progress" ? "warning" : "neutral";
+  const label = readiness === "ready" ? "Ready" : readiness === "in_progress" ? "In progress" : "Not started";
+  return <Badge tone={tone}>{label}</Badge>;
 }
 
 function ComingSoonSection({ title, description, note }: { title: string; description: string; note: string }) {
@@ -105,6 +109,17 @@ export function MediaKitOverviewView() {
 
   const load = () => {
     setState({ status: "loading" });
+    getMediaKitOverviewData()
+      .then(applyResult)
+      .catch(() => setState({ status: "error" }));
+  };
+
+  // Same real read path as `load()`, without the leading `status: "loading"`
+  // reset — used as the Brand/Services editors' `onChanged` callback so a
+  // save refetches the real Content readiness/Overview state without a
+  // jarring full-skeleton flash for what is, from the founder's point of
+  // view, a small in-place update.
+  const refresh = () => {
     getMediaKitOverviewData()
       .then(applyResult)
       .catch(() => setState({ status: "error" }));
@@ -323,10 +338,10 @@ export function MediaKitOverviewView() {
         </TabPanel>
 
         <TabPanel value="brand" className="mt-6">
-          <ComingSoonSection {...SECTION_COPY.brand} note="Brand editing begins in the next Media Kit checkpoint." />
+          <MediaKitBrandEditor mediaKit={mediaKit} onChanged={refresh} />
         </TabPanel>
         <TabPanel value="services" className="mt-6">
-          <ComingSoonSection {...SECTION_COPY.services} note="Services curation begins in the next Media Kit checkpoint." />
+          <MediaKitServicesCurator onChanged={refresh} />
         </TabPanel>
         <TabPanel value="portfolio" className="mt-6">
           <ComingSoonSection {...SECTION_COPY.portfolio} note="Portfolio curation begins in a future Media Kit checkpoint." />

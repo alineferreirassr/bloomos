@@ -2,7 +2,7 @@ import { selectRepository } from "@/lib/data/provider";
 import { mockMediaKitRepository } from "@/lib/data/mediaKit/mockRepository";
 import { supabaseMediaKitRepository } from "@/lib/data/mediaKit/supabaseRepository";
 import type { DataResult } from "@/lib/data/result";
-import type { MediaKit, MediaKitOverview } from "@/types/mediaKit";
+import type { MediaKit, MediaKitBrandInput, MediaKitOverview, MediaKitServiceCuration, MediaKitServiceCurationInput } from "@/types/mediaKit";
 
 const repository = selectRepository({ mock: mockMediaKitRepository, supabase: supabaseMediaKitRepository });
 
@@ -36,4 +36,62 @@ export async function getMediaKitOverview(workspaceId: string): Promise<MediaKit
 /** The one explicit creation path — invoked only from the founder's own "Create Media Kit" action. */
 export async function createMediaKitForWorkspace(workspaceId: string): Promise<DataResult<MediaKit>> {
   return repository.createMediaKit(workspaceId);
+}
+
+/**
+ * MEDIAKIT-03 — the server-side id resolver every Brand/Services Server
+ * Action uses instead of trusting a client-supplied `mediaKitId`: re-derive
+ * it from the session's own `workspaceId` on every mutation, matching the
+ * "never trust a client id" convention the DB-layer functions already
+ * enforce.
+ */
+export async function getMediaKitForWorkspace(workspaceId: string): Promise<MediaKit | null> {
+  return repository.getMediaKit(workspaceId);
+}
+
+/** MEDIAKIT-03 — Brand editor save. Only the identity/story/location fields; no other `media_kits` field is ever touched here. */
+export async function updateMediaKitBrandForWorkspace(workspaceId: string, mediaKitId: string, input: MediaKitBrandInput): Promise<DataResult<MediaKit>> {
+  return repository.updateMediaKitBrand(workspaceId, mediaKitId, input);
+}
+
+/**
+ * Raw curation rows only — never composed with the canonical Services
+ * catalog here. `getServicesCatalog()` (the canonical, never-duplicated
+ * Services read path) resolves its own session via
+ * `requireWorkspaceSession()` → `getClientWorkspaceSession()`, which is a
+ * browser-only Supabase client (see `src/lib/supabase/client.ts`) — it has
+ * no request cookies to read when called from inside a `"use server"`
+ * Server Action's own call chain, and throws `UnauthorizedError` there even
+ * though the caller is genuinely signed in. So the Services catalog is
+ * fetched directly from the Client Component instead (the same
+ * already-proven entry point `useServicesCatalog.ts` uses), and joined
+ * there against these curation rows — see `MediaKitServicesCurator.tsx`.
+ */
+export async function getMediaKitServiceCurationsForWorkspace(workspaceId: string, mediaKitId: string): Promise<MediaKitServiceCuration[]> {
+  return repository.listMediaKitServiceCurations(workspaceId, mediaKitId);
+}
+
+export async function setMediaKitServiceIncludedForWorkspace(
+  workspaceId: string,
+  mediaKitId: string,
+  serviceId: string,
+  included: boolean,
+): Promise<DataResult<MediaKitServiceCuration>> {
+  return repository.setMediaKitServiceIncluded(workspaceId, mediaKitId, serviceId, included);
+}
+
+export async function updateMediaKitServiceCurationForWorkspace(
+  workspaceId: string,
+  curationId: string,
+  input: MediaKitServiceCurationInput,
+): Promise<DataResult<MediaKitServiceCuration>> {
+  return repository.updateMediaKitServiceCuration(workspaceId, curationId, input);
+}
+
+export async function reorderMediaKitServicesForWorkspace(
+  workspaceId: string,
+  mediaKitId: string,
+  orderedCurationIds: string[],
+): Promise<DataResult<MediaKitServiceCuration[]>> {
+  return repository.reorderMediaKitServices(workspaceId, mediaKitId, orderedCurationIds);
 }

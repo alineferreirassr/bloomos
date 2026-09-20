@@ -10,6 +10,24 @@ vi.mock("@/modules/mediaKit/getMediaKitOverviewData", () => ({
 vi.mock("@/modules/mediaKit/createMediaKitAction", () => ({
   createMediaKitAction: vi.fn(),
 }));
+vi.mock("@/modules/mediaKit/updateMediaKitBrandAction", () => ({
+  updateMediaKitBrandAction: vi.fn(),
+}));
+vi.mock("@/lib/queries/services/catalog", () => ({
+  getServicesCatalog: vi.fn(() => new Promise(() => {})),
+}));
+vi.mock("@/modules/mediaKit/getMediaKitServiceCurationsData", () => ({
+  getMediaKitServiceCurationsData: vi.fn(() => new Promise(() => {})),
+}));
+vi.mock("@/modules/mediaKit/setMediaKitServiceIncludedAction", () => ({
+  setMediaKitServiceIncludedAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/updateMediaKitServiceCurationAction", () => ({
+  updateMediaKitServiceCurationAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/reorderMediaKitServicesAction", () => ({
+  reorderMediaKitServicesAction: vi.fn(),
+}));
 
 import { getMediaKitOverviewData } from "@/modules/mediaKit/getMediaKitOverviewData";
 import { createMediaKitAction } from "@/modules/mediaKit/createMediaKitAction";
@@ -109,15 +127,16 @@ describe("MediaKitOverviewView", () => {
     }
   });
 
-  it("switching to the Brand tab shows a polished, honestly-labeled coming-soon state — never lorem ipsum or a broken editor", async () => {
+  it("switching to the Brand tab shows the real Brand editor in its view state, reading the real (empty) Media Kit fields — never lorem ipsum", async () => {
     const user = userEvent.setup();
     vi.mocked(getMediaKitOverviewData).mockResolvedValue({ success: true, data: EMPTY_MEDIA_KIT });
     render(<MediaKitOverviewView />);
     await screen.findByRole("heading", { name: "Media Kit" });
 
     await user.click(screen.getByRole("tab", { name: "Brand" }));
-    expect(screen.getByText("Tell your brand story")).toBeInTheDocument();
-    expect(screen.getByText(/begins in the next Media Kit checkpoint/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Brand" })).toBeInTheDocument();
+    // Every empty Brand field reads a genuine "Not set" — never fabricated example copy.
+    expect(screen.getAllByText("Not set").length).toBeGreaterThan(0);
     expect(screen.queryByText(/lorem ipsum/i)).not.toBeInTheDocument();
   });
 

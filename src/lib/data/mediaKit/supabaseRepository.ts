@@ -1,9 +1,56 @@
 import { createClient } from "@/lib/supabase/server";
 import { normalizeSupabaseError } from "@/lib/supabase/errors";
-import type { MediaKit, MediaKitAnalyticsSummary, MediaKitContentStatus, MediaKitEventType, MediaKitRecentActivityItem } from "@/types/mediaKit";
+import type {
+  MediaKit,
+  MediaKitAnalyticsSummary,
+  MediaKitBrandInput,
+  MediaKitContentStatus,
+  MediaKitEventType,
+  MediaKitRecentActivityItem,
+  MediaKitServiceCuration,
+  MediaKitServiceCurationInput,
+} from "@/types/mediaKit";
 import type { MediaKitRepository } from "@/lib/data/mediaKit/repository";
 import type { DataResult } from "@/lib/data/result";
-import { ok } from "@/lib/data/result";
+import { ok, fail } from "@/lib/data/result";
+
+interface MediaKitServiceCurationRow {
+  id: string;
+  workspace_id: string;
+  media_kit_id: string;
+  service_id: string;
+  headline_override: string | null;
+  description_override: string | null;
+  icon_key: string | null;
+  public_starting_price_minor: number | null;
+  public_price_label: string | null;
+  is_featured: boolean;
+  is_included: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+function mapMediaKitServiceCurationRow(row: MediaKitServiceCurationRow): MediaKitServiceCuration {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    media_kit_id: row.media_kit_id,
+    service_id: row.service_id,
+    headline_override: row.headline_override,
+    description_override: row.description_override,
+    icon_key: row.icon_key,
+    public_starting_price_minor: row.public_starting_price_minor,
+    public_price_label: row.public_price_label,
+    is_featured: row.is_featured,
+    is_included: row.is_included,
+    sort_order: row.sort_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    archived_at: row.archived_at,
+  };
+}
 
 interface MediaKitRow {
   id: string;
@@ -123,6 +170,162 @@ async function createMediaKit(workspaceId: string): Promise<DataResult<MediaKit>
   return ok(mapMediaKitRow(created as MediaKitRow));
 }
 
+/** MEDIAKIT-03 — updates only the Brand identity/story/location fields. RLS-enforced (`is_workspace_member`), no service-role bypass. */
+async function updateMediaKitBrand(workspaceId: string, mediaKitId: string, input: MediaKitBrandInput): Promise<DataResult<MediaKit>> {
+  const supabase = await createClient();
+
+  const { data: updated, error } = await supabase
+    .from("media_kits")
+    .update({
+      headline: input.headline,
+      positioning_statement: input.positioning_statement,
+      brand_narrative: input.brand_narrative,
+      location_label: input.location_label,
+      service_area: input.service_area,
+      established_year: input.established_year,
+      specialty_label: input.specialty_label,
+    })
+    .eq("id", mediaKitId)
+    .eq("workspace_id", workspaceId)
+    .select("*")
+    .maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  if (!updated) return fail("This Media Kit could not be found.");
+  return ok(mapMediaKitRow(updated as MediaKitRow));
+}
+
+async function listMediaKitServiceCurations(workspaceId: string, mediaKitId: string): Promise<MediaKitServiceCuration[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("media_kit_services")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("media_kit_id", mediaKitId)
+    .is("archived_at", null);
+  if (error) throw normalizeSupabaseError(error);
+
+  return (data ?? []).map((row) => mapMediaKitServiceCurationRow(row as MediaKitServiceCurationRow));
+}
+
+/**
+ * Get-or-create toggle, mirroring the `media_kits` bootstrap precedent.
+ * `included: false` on a Service with no existing row is a no-op/soft
+ * failure — nothing to exclude. On first include, `sort_order` is appended
+ * after the current maximum rather than reset to 0, so a Service excluded
+ * and re-included later doesn't jump back to the front of the list.
+ */
+async function setMediaKitServiceIncluded(
+  workspaceId: string,
+  mediaKitId: string,
+  serviceId: string,
+  included: boolean,
+): Promise<DataResult<MediaKitServiceCuration>> {
+  const supabase = await createClient();
+
+  const { data: existing, error: selectError } = await supabase
+    .from("media_kit_services")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("media_kit_id", mediaKitId)
+    .eq("service_id", serviceId)
+    .is("archived_at", null)
+    .maybeSingle();
+  if (selectError) throw normalizeSupabaseError(selectError);
+
+  if (existing) {
+    const { data: updated, error: updateError } = await supabase
+      .from("media_kit_services")
+      .update({ is_included: included })
+      .eq("id", (existing as MediaKitServiceCurationRow).id)
+      .eq("workspace_id", workspaceId)
+      .select("*")
+      .single();
+    if (updateError) throw normalizeSupabaseError(updateError);
+    return ok(mapMediaKitServiceCurationRow(updated as MediaKitServiceCurationRow));
+  }
+
+  if (!included) {
+    return fail("This service hasn't been added to the Media Kit yet.");
+  }
+
+  const { data: maxSortRow, error: maxSortError } = await supabase
+    .from("media_kit_services")
+    .select("sort_order")
+    .eq("media_kit_id", mediaKitId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (maxSortError) throw normalizeSupabaseError(maxSortError);
+  const nextSortOrder = maxSortRow ? (maxSortRow as { sort_order: number }).sort_order + 1 : 0;
+
+  const { data: created, error: insertError } = await supabase
+    .from("media_kit_services")
+    .insert({
+      workspace_id: workspaceId,
+      media_kit_id: mediaKitId,
+      service_id: serviceId,
+      is_included: true,
+      sort_order: nextSortOrder,
+    })
+    .select("*")
+    .single();
+  if (insertError) throw normalizeSupabaseError(insertError);
+  return ok(mapMediaKitServiceCurationRow(created as MediaKitServiceCurationRow));
+}
+
+async function updateMediaKitServiceCuration(
+  workspaceId: string,
+  curationId: string,
+  input: MediaKitServiceCurationInput,
+): Promise<DataResult<MediaKitServiceCuration>> {
+  const supabase = await createClient();
+
+  const { data: updated, error } = await supabase
+    .from("media_kit_services")
+    .update({
+      headline_override: input.headline_override,
+      description_override: input.description_override,
+      public_starting_price_minor: input.public_starting_price_minor,
+      public_price_label: input.public_price_label,
+      is_featured: input.is_featured,
+    })
+    .eq("id", curationId)
+    .eq("workspace_id", workspaceId)
+    .select("*")
+    .maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  if (!updated) return fail("This curated service could not be found.");
+  return ok(mapMediaKitServiceCurationRow(updated as MediaKitServiceCurationRow));
+}
+
+/** Batch reorder — one row-by-row update per id, mirroring `reorderContractExhibits`'s array-position-as-sort_order shape rather than one PATCH per drag/move in the UI. */
+async function reorderMediaKitServices(
+  workspaceId: string,
+  mediaKitId: string,
+  orderedCurationIds: string[],
+): Promise<DataResult<MediaKitServiceCuration[]>> {
+  const supabase = await createClient();
+
+  const updated = await Promise.all(
+    orderedCurationIds.map(async (curationId, position) => {
+      const { data, error } = await supabase
+        .from("media_kit_services")
+        .update({ sort_order: position })
+        .eq("id", curationId)
+        .eq("workspace_id", workspaceId)
+        .eq("media_kit_id", mediaKitId)
+        .select("*")
+        .maybeSingle();
+      if (error) throw normalizeSupabaseError(error);
+      return data ? mapMediaKitServiceCurationRow(data as MediaKitServiceCurationRow) : null;
+    }),
+  );
+
+  const rows = updated.filter((row): row is MediaKitServiceCuration => row !== null);
+  return ok(rows.sort((a, b) => a.sort_order - b.sort_order));
+}
+
 async function countIncludedRows(
   supabase: Awaited<ReturnType<typeof createClient>>,
   table: "media_kit_services" | "media_kit_portfolio_items" | "media_kit_partners" | "media_kit_press_features",
@@ -149,15 +352,26 @@ async function getMediaKitContentStatus(workspaceId: string, mediaKitId: string)
     .single();
   if (mediaKitError) throw normalizeSupabaseError(mediaKitError);
 
-  const brandReady = Boolean(mediaKitRow.headline || mediaKitRow.positioning_statement || mediaKitRow.brand_narrative);
+  const brandFieldsAllEmpty = !mediaKitRow.headline && !mediaKitRow.positioning_statement && !mediaKitRow.brand_narrative;
+  const brandCoreFieldsFilled = Boolean(mediaKitRow.headline && mediaKitRow.positioning_statement);
+  const brand = brandCoreFieldsFilled ? "ready" : brandFieldsAllEmpty ? "not_started" : "in_progress";
   const contactReady = Boolean(mediaKitRow.contact_headline || mediaKitRow.contact_subtext);
 
-  const [servicesCount, portfolioCount, partnersCount, pressCount] = await Promise.all([
+  const { count: totalServiceCurations, error: totalServiceCurationsError } = await supabase
+    .from("media_kit_services")
+    .select("id", { count: "exact", head: true })
+    .eq("media_kit_id", mediaKitId)
+    .is("archived_at", null);
+  if (totalServiceCurationsError) throw normalizeSupabaseError(totalServiceCurationsError);
+
+  const [includedServicesCount, portfolioCount, partnersCount, pressCount] = await Promise.all([
     countIncludedRows(supabase, "media_kit_services", mediaKitId),
     countIncludedRows(supabase, "media_kit_portfolio_items", mediaKitId),
     countIncludedRows(supabase, "media_kit_partners", mediaKitId),
     countIncludedRows(supabase, "media_kit_press_features", mediaKitId),
   ]);
+
+  const services = (totalServiceCurations ?? 0) === 0 ? "not_started" : includedServicesCount > 0 ? "ready" : "in_progress";
 
   const { count: testimonialsCount, error: testimonialsError } = await supabase
     .from("media_kit_testimonials")
@@ -177,8 +391,8 @@ async function getMediaKitContentStatus(workspaceId: string, mediaKitId: string)
   if (galleryError) throw normalizeSupabaseError(galleryError);
 
   return {
-    brand: brandReady ? "ready" : "not_started",
-    services: servicesCount > 0 ? "ready" : "not_started",
+    brand,
+    services,
     portfolio: portfolioCount > 0 ? "ready" : "not_started",
     partners: partnersCount > 0 ? "ready" : "not_started",
     testimonials: (testimonialsCount ?? 0) > 0 ? "ready" : "not_started",
@@ -245,6 +459,11 @@ async function getMediaKitRecentActivity(workspaceId: string, mediaKitId: string
 export const supabaseMediaKitRepository: MediaKitRepository = {
   getMediaKit,
   createMediaKit,
+  updateMediaKitBrand,
+  listMediaKitServiceCurations,
+  setMediaKitServiceIncluded,
+  updateMediaKitServiceCuration,
+  reorderMediaKitServices,
   getMediaKitContentStatus,
   getMediaKitAnalyticsSummary,
   getMediaKitRecentActivity,

@@ -1,4 +1,12 @@
-import type { MediaKit, MediaKitAnalyticsSummary, MediaKitContentStatus, MediaKitRecentActivityItem } from "@/types/mediaKit";
+import type {
+  MediaKit,
+  MediaKitAnalyticsSummary,
+  MediaKitBrandInput,
+  MediaKitContentStatus,
+  MediaKitRecentActivityItem,
+  MediaKitServiceCuration,
+  MediaKitServiceCurationInput,
+} from "@/types/mediaKit";
 import type { DataResult } from "@/lib/data/result";
 
 /**
@@ -42,4 +50,28 @@ export interface MediaKitRepository {
   getMediaKitAnalyticsSummary(workspaceId: string, mediaKitId: string): Promise<MediaKitAnalyticsSummary>;
 
   getMediaKitRecentActivity(workspaceId: string, mediaKitId: string, limit?: number): Promise<MediaKitRecentActivityItem[]>;
+
+  /** MEDIAKIT-03 — updates only the Brand identity/story/location fields. Trims text server-side; never requires every field. */
+  updateMediaKitBrand(workspaceId: string, mediaKitId: string, input: MediaKitBrandInput): Promise<DataResult<MediaKit>>;
+
+  /** Every curation row for this Media Kit, included or not — the caller joins it against the canonical Services catalog itself (never a second catalog fetch inside this repository). */
+  listMediaKitServiceCurations(workspaceId: string, mediaKitId: string): Promise<MediaKitServiceCuration[]>;
+
+  /**
+   * The one include/exclude toggle. Get-or-create semantics, mirroring the
+   * `media_kits` bootstrap precedent: if no curation row exists yet for
+   * this (mediaKit, service) pair, `included: true` creates one (schema
+   * defaults, `sort_order` appended after the current maximum); `included:
+   * false` on a Service with no row is a no-op (nothing to exclude). An
+   * existing row is simply updated, never duplicated (the
+   * `unique(media_kit_id, service_id)` constraint is the backstop either
+   * way).
+   */
+  setMediaKitServiceIncluded(workspaceId: string, mediaKitId: string, serviceId: string, included: boolean): Promise<DataResult<MediaKitServiceCuration>>;
+
+  /** Edits overrides/public pricing/featured on an existing curation row (by its own id, not service_id). */
+  updateMediaKitServiceCuration(workspaceId: string, curationId: string, input: MediaKitServiceCurationInput): Promise<DataResult<MediaKitServiceCuration>>;
+
+  /** Batch reorder — assigns sort_order from array position in one call, mirroring `reorderContractExhibits`'s exact shape rather than one PATCH per move. */
+  reorderMediaKitServices(workspaceId: string, mediaKitId: string, orderedCurationIds: string[]): Promise<DataResult<MediaKitServiceCuration[]>>;
 }
