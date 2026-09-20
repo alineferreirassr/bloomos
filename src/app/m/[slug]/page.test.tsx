@@ -12,6 +12,13 @@ vi.mock("@/lib/mediaKit/publicMediaKit", () => ({
   computeVisitorHash: vi.fn(() => "hash"),
   recordPublicMediaKitViewEvent: vi.fn(async () => {}),
 }));
+// `PublicMediaKitView` renders `PublicMediaKitCtaButton`/`PublicMediaKitInquiryForm`,
+// whose real "use server" actions pull in `server-only` transitively (via
+// `publicMediaKit.ts`/`mediaKitServiceRole.ts`) — mocked here for the same
+// reason `publicMediaKit.ts` itself is mocked above.
+vi.mock("@/modules/mediaKit/recordMediaKitCtaClickedAction", () => ({ recordMediaKitCtaClickedAction: vi.fn(async () => {}) }));
+vi.mock("@/modules/mediaKit/recordMediaKitContactStartedAction", () => ({ recordMediaKitContactStartedAction: vi.fn(async () => {}) }));
+vi.mock("@/modules/mediaKit/submitMediaKitInquiryAction", () => ({ submitMediaKitInquiryAction: vi.fn(async () => ({ success: true, data: { submitted: true } })) }));
 
 import PublicMediaKitPage, { generateMetadata } from "@/app/m/[slug]/page";
 import { getPublishedMediaKitContent, recordPublicMediaKitViewEvent } from "@/lib/mediaKit/publicMediaKit";

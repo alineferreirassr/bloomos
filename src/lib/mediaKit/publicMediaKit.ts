@@ -74,18 +74,40 @@ export function computeVisitorHash(ip: string, userAgent: string): string {
   return createHash("sha256").update(`${ip}:${userAgent}`).digest("hex");
 }
 
-/** Records one `viewed` event via the anon-safe `record_public_media_kit_event` RPC. Fails silently — a tracking failure must never break the page render. */
-export async function recordPublicMediaKitViewEvent(slug: string, visitorHash: string, referrer: string | null, path: string): Promise<void> {
+/**
+ * MEDIAKIT-05 — the general form behind `recordPublicMediaKitViewEvent`:
+ * any anon-safe event type through the SAME existing writer/hash mechanism
+ * (`record_public_media_kit_event`, frozen since MEDIAKIT-01C) — never a
+ * second event-recording path. `metadata` only ever reaches the RPC for
+ * `cta_clicked`, and the RPC itself re-applies its own fixed allow-list
+ * server-side regardless of what's passed here. Fails silently — a
+ * tracking failure must never break the page render or block an
+ * interaction.
+ */
+export async function recordPublicMediaKitEvent(
+  slug: string,
+  eventType: "viewed" | "cta_clicked" | "contact_started",
+  visitorHash: string,
+  referrer: string | null,
+  path: string,
+  metadata?: Record<string, unknown>,
+): Promise<void> {
   try {
     const supabase = await createClient();
     await supabase.rpc("record_public_media_kit_event", {
       p_slug: slug,
-      p_event_type: "viewed",
+      p_event_type: eventType,
       p_visitor_hash: visitorHash,
       p_referrer: referrer,
       p_path: path,
+      p_metadata: metadata as never,
     });
   } catch {
     // Analytics is best-effort — never surface a tracking failure to the visitor.
   }
+}
+
+/** Records one `viewed` event. Thin wrapper over `recordPublicMediaKitEvent` — kept for the exact call shape `page.tsx` already uses. */
+export async function recordPublicMediaKitViewEvent(slug: string, visitorHash: string, referrer: string | null, path: string): Promise<void> {
+  return recordPublicMediaKitEvent(slug, "viewed", visitorHash, referrer, path);
 }

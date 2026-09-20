@@ -30,9 +30,15 @@ export default async function PublicMediaKitPage({ params }: PageProps) {
     return <PublicMediaKitUnavailable />;
   }
 
+  const heroMediaAssetId = typeof content.appearance.hero_media_asset_id === "string" ? content.appearance.hero_media_asset_id : null;
   const assetIds = [
     ...content.gallery.map((image) => image.media_asset_id),
     ...content.portfolio.flatMap((item) => item.gallery.map((image) => image.media_asset_id)),
+    ...content.portfolio.map((item) => item.cover_media_asset_id).filter((id): id is string => id !== null),
+    ...content.partners.map((partner) => partner.logo_media_asset_id).filter((id): id is string => id !== null),
+    ...content.testimonials.map((testimonial) => testimonial.photo_media_asset_id).filter((id): id is string => id !== null),
+    ...content.press.map((feature) => feature.logo_media_asset_id).filter((id): id is string => id !== null),
+    ...(heroMediaAssetId ? [heroMediaAssetId] : []),
   ];
   const assetUrls = await resolvePublicMediaAssetUrls(assetIds);
 
@@ -44,7 +50,7 @@ export default async function PublicMediaKitPage({ params }: PageProps) {
   const referrer = requestHeaders.get("referer");
   void recordPublicMediaKitViewEvent(slug, computeVisitorHash(ip, userAgent), referrer, `/m/${slug}`);
 
-  return <PublicMediaKitView content={content} assetUrls={assetUrls} brandName={brandName} />;
+  return <PublicMediaKitView content={content} assetUrls={assetUrls} brandName={brandName} slug={slug} />;
 }
 
 /** MEDIAKIT-04 — basic SEO/share metadata from real persisted content only. No fabricated OG image (no suitable public image field exists this checkpoint) and no metadata at all for an unpublished/unknown slug. */

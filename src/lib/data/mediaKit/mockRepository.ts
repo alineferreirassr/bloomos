@@ -1,15 +1,24 @@
 import type {
   MediaKit,
   MediaKitAnalyticsSummary,
+  MediaKitAppearance,
   MediaKitBrandInput,
+  MediaKitContactCtaInput,
   MediaKitContentStatus,
   MediaKitGalleryItem,
   MediaKitGalleryItemInput,
+  MediaKitPartner,
+  MediaKitPartnerInput,
   MediaKitPortfolioItem,
   MediaKitPortfolioItemInput,
+  MediaKitPressFeature,
+  MediaKitPressFeatureInput,
   MediaKitRecentActivityItem,
   MediaKitServiceCuration,
   MediaKitServiceCurationInput,
+  MediaKitSocialLink,
+  MediaKitTestimonial,
+  MediaKitTestimonialInput,
 } from "@/types/mediaKit";
 import type { MediaKitRepository } from "@/lib/data/mediaKit/repository";
 import type { DataResult } from "@/lib/data/result";
@@ -20,6 +29,9 @@ let mediaKits: MediaKit[] = [];
 let serviceCurations: MediaKitServiceCuration[] = [];
 let portfolioItems: MediaKitPortfolioItem[] = [];
 let galleryItems: MediaKitGalleryItem[] = [];
+let partners: MediaKitPartner[] = [];
+let testimonials: MediaKitTestimonial[] = [];
+let pressFeatures: MediaKitPressFeature[] = [];
 
 /** Test-only: restore the store to empty between test cases. */
 export function resetMediaKitStore(): void {
@@ -27,6 +39,9 @@ export function resetMediaKitStore(): void {
   serviceCurations = [];
   portfolioItems = [];
   galleryItems = [];
+  partners = [];
+  testimonials = [];
+  pressFeatures = [];
 }
 
 function defaultMediaKit(workspaceId: string): MediaKit {
@@ -295,6 +310,189 @@ async function reorderMediaKitGalleryItems(
   return ok(updatedRows.sort((a, b) => a.sort_order - b.sort_order));
 }
 
+// ── MEDIAKIT-05 — Partners ─────────────────────────────────────────────
+
+async function listMediaKitPartners(workspaceId: string, mediaKitId: string): Promise<MediaKitPartner[]> {
+  await delay(80);
+  return partners.filter((row) => row.workspace_id === workspaceId && row.media_kit_id === mediaKitId && row.archived_at === null);
+}
+
+async function createMediaKitPartner(workspaceId: string, mediaKitId: string, input: MediaKitPartnerInput): Promise<DataResult<MediaKitPartner>> {
+  await delay(150);
+  const maxSortOrder = partners.filter((row) => row.media_kit_id === mediaKitId).reduce((max, row) => Math.max(max, row.sort_order), -1);
+  const now = nowIso();
+  const created: MediaKitPartner = { id: generateId("mk_partner"), workspace_id: workspaceId, media_kit_id: mediaKitId, ...input, sort_order: maxSortOrder + 1, created_at: now, updated_at: now, archived_at: null };
+  partners = [...partners, created];
+  return ok(created);
+}
+
+async function updateMediaKitPartner(workspaceId: string, partnerId: string, input: MediaKitPartnerInput): Promise<DataResult<MediaKitPartner>> {
+  await delay(150);
+  const index = partners.findIndex((row) => row.id === partnerId && row.workspace_id === workspaceId);
+  if (index === -1) return fail("This partner could not be found.");
+  const updated: MediaKitPartner = { ...partners[index], ...input, updated_at: nowIso() };
+  partners = [...partners.slice(0, index), updated, ...partners.slice(index + 1)];
+  return ok(updated);
+}
+
+async function archiveMediaKitPartner(workspaceId: string, partnerId: string): Promise<DataResult<MediaKitPartner>> {
+  await delay(120);
+  const index = partners.findIndex((row) => row.id === partnerId && row.workspace_id === workspaceId);
+  if (index === -1) return fail("This partner could not be found.");
+  const updated: MediaKitPartner = { ...partners[index], archived_at: nowIso(), updated_at: nowIso() };
+  partners = [...partners.slice(0, index), updated, ...partners.slice(index + 1)];
+  return ok(updated);
+}
+
+async function reorderMediaKitPartners(workspaceId: string, mediaKitId: string, orderedPartnerIds: string[]): Promise<DataResult<MediaKitPartner[]>> {
+  await delay(120);
+  const updatedRows: MediaKitPartner[] = [];
+  partners = partners.map((row) => {
+    if (row.workspace_id !== workspaceId || row.media_kit_id !== mediaKitId) return row;
+    const position = orderedPartnerIds.indexOf(row.id);
+    if (position === -1) return row;
+    const updated = { ...row, sort_order: position, updated_at: nowIso() };
+    updatedRows.push(updated);
+    return updated;
+  });
+  return ok(updatedRows.sort((a, b) => a.sort_order - b.sort_order));
+}
+
+// ── MEDIAKIT-05 — Testimonials ─────────────────────────────────────────
+
+async function listMediaKitTestimonials(workspaceId: string, mediaKitId: string): Promise<MediaKitTestimonial[]> {
+  await delay(80);
+  return testimonials.filter((row) => row.workspace_id === workspaceId && row.media_kit_id === mediaKitId && row.archived_at === null);
+}
+
+async function createMediaKitTestimonial(workspaceId: string, mediaKitId: string, input: MediaKitTestimonialInput): Promise<DataResult<MediaKitTestimonial>> {
+  await delay(150);
+  const maxSortOrder = testimonials.filter((row) => row.media_kit_id === mediaKitId).reduce((max, row) => Math.max(max, row.sort_order), -1);
+  const now = nowIso();
+  const created: MediaKitTestimonial = { id: generateId("mk_testimonial"), workspace_id: workspaceId, media_kit_id: mediaKitId, ...input, is_approved: false, sort_order: maxSortOrder + 1, created_at: now, updated_at: now, archived_at: null };
+  testimonials = [...testimonials, created];
+  return ok(created);
+}
+
+async function updateMediaKitTestimonial(workspaceId: string, testimonialId: string, input: MediaKitTestimonialInput): Promise<DataResult<MediaKitTestimonial>> {
+  await delay(150);
+  const index = testimonials.findIndex((row) => row.id === testimonialId && row.workspace_id === workspaceId);
+  if (index === -1) return fail("This testimonial could not be found.");
+  const updated: MediaKitTestimonial = { ...testimonials[index], ...input, updated_at: nowIso() };
+  testimonials = [...testimonials.slice(0, index), updated, ...testimonials.slice(index + 1)];
+  return ok(updated);
+}
+
+/** A newly created or edited testimonial is never auto-approved — approval is always this separate, deliberate action. */
+async function setMediaKitTestimonialApproved(workspaceId: string, testimonialId: string, approved: boolean): Promise<DataResult<MediaKitTestimonial>> {
+  await delay(120);
+  const index = testimonials.findIndex((row) => row.id === testimonialId && row.workspace_id === workspaceId);
+  if (index === -1) return fail("This testimonial could not be found.");
+  const updated: MediaKitTestimonial = { ...testimonials[index], is_approved: approved, updated_at: nowIso() };
+  testimonials = [...testimonials.slice(0, index), updated, ...testimonials.slice(index + 1)];
+  return ok(updated);
+}
+
+async function archiveMediaKitTestimonial(workspaceId: string, testimonialId: string): Promise<DataResult<MediaKitTestimonial>> {
+  await delay(120);
+  const index = testimonials.findIndex((row) => row.id === testimonialId && row.workspace_id === workspaceId);
+  if (index === -1) return fail("This testimonial could not be found.");
+  const updated: MediaKitTestimonial = { ...testimonials[index], archived_at: nowIso(), updated_at: nowIso() };
+  testimonials = [...testimonials.slice(0, index), updated, ...testimonials.slice(index + 1)];
+  return ok(updated);
+}
+
+async function reorderMediaKitTestimonials(workspaceId: string, mediaKitId: string, orderedTestimonialIds: string[]): Promise<DataResult<MediaKitTestimonial[]>> {
+  await delay(120);
+  const updatedRows: MediaKitTestimonial[] = [];
+  testimonials = testimonials.map((row) => {
+    if (row.workspace_id !== workspaceId || row.media_kit_id !== mediaKitId) return row;
+    const position = orderedTestimonialIds.indexOf(row.id);
+    if (position === -1) return row;
+    const updated = { ...row, sort_order: position, updated_at: nowIso() };
+    updatedRows.push(updated);
+    return updated;
+  });
+  return ok(updatedRows.sort((a, b) => a.sort_order - b.sort_order));
+}
+
+// ── MEDIAKIT-05 — Press ─────────────────────────────────────────────────
+
+async function listMediaKitPressFeatures(workspaceId: string, mediaKitId: string): Promise<MediaKitPressFeature[]> {
+  await delay(80);
+  return pressFeatures.filter((row) => row.workspace_id === workspaceId && row.media_kit_id === mediaKitId && row.archived_at === null);
+}
+
+async function createMediaKitPressFeature(workspaceId: string, mediaKitId: string, input: MediaKitPressFeatureInput): Promise<DataResult<MediaKitPressFeature>> {
+  await delay(150);
+  const maxSortOrder = pressFeatures.filter((row) => row.media_kit_id === mediaKitId).reduce((max, row) => Math.max(max, row.sort_order), -1);
+  const now = nowIso();
+  const created: MediaKitPressFeature = { id: generateId("mk_press"), workspace_id: workspaceId, media_kit_id: mediaKitId, ...input, sort_order: maxSortOrder + 1, created_at: now, updated_at: now, archived_at: null };
+  pressFeatures = [...pressFeatures, created];
+  return ok(created);
+}
+
+async function updateMediaKitPressFeature(workspaceId: string, pressFeatureId: string, input: MediaKitPressFeatureInput): Promise<DataResult<MediaKitPressFeature>> {
+  await delay(150);
+  const index = pressFeatures.findIndex((row) => row.id === pressFeatureId && row.workspace_id === workspaceId);
+  if (index === -1) return fail("This press feature could not be found.");
+  const updated: MediaKitPressFeature = { ...pressFeatures[index], ...input, updated_at: nowIso() };
+  pressFeatures = [...pressFeatures.slice(0, index), updated, ...pressFeatures.slice(index + 1)];
+  return ok(updated);
+}
+
+async function archiveMediaKitPressFeature(workspaceId: string, pressFeatureId: string): Promise<DataResult<MediaKitPressFeature>> {
+  await delay(120);
+  const index = pressFeatures.findIndex((row) => row.id === pressFeatureId && row.workspace_id === workspaceId);
+  if (index === -1) return fail("This press feature could not be found.");
+  const updated: MediaKitPressFeature = { ...pressFeatures[index], archived_at: nowIso(), updated_at: nowIso() };
+  pressFeatures = [...pressFeatures.slice(0, index), updated, ...pressFeatures.slice(index + 1)];
+  return ok(updated);
+}
+
+async function reorderMediaKitPressFeatures(workspaceId: string, mediaKitId: string, orderedPressFeatureIds: string[]): Promise<DataResult<MediaKitPressFeature[]>> {
+  await delay(120);
+  const updatedRows: MediaKitPressFeature[] = [];
+  pressFeatures = pressFeatures.map((row) => {
+    if (row.workspace_id !== workspaceId || row.media_kit_id !== mediaKitId) return row;
+    const position = orderedPressFeatureIds.indexOf(row.id);
+    if (position === -1) return row;
+    const updated = { ...row, sort_order: position, updated_at: nowIso() };
+    updatedRows.push(updated);
+    return updated;
+  });
+  return ok(updatedRows.sort((a, b) => a.sort_order - b.sort_order));
+}
+
+// ── MEDIAKIT-05 — Social / Contact & CTA / Appearance ──────────────────
+
+async function updateMediaKitSocialLinks(workspaceId: string, mediaKitId: string, links: MediaKitSocialLink[]): Promise<DataResult<MediaKit>> {
+  await delay(150);
+  const index = mediaKits.findIndex((mk) => mk.id === mediaKitId && mk.workspace_id === workspaceId);
+  if (index === -1) return fail("This Media Kit could not be found.");
+  const updated: MediaKit = { ...mediaKits[index], social_links: links, updated_at: nowIso() };
+  mediaKits = [...mediaKits.slice(0, index), updated, ...mediaKits.slice(index + 1)];
+  return ok(updated);
+}
+
+async function updateMediaKitContactCta(workspaceId: string, mediaKitId: string, input: MediaKitContactCtaInput): Promise<DataResult<MediaKit>> {
+  await delay(150);
+  const index = mediaKits.findIndex((mk) => mk.id === mediaKitId && mk.workspace_id === workspaceId);
+  if (index === -1) return fail("This Media Kit could not be found.");
+  const updated: MediaKit = { ...mediaKits[index], ...input, updated_at: nowIso() };
+  mediaKits = [...mediaKits.slice(0, index), updated, ...mediaKits.slice(index + 1)];
+  return ok(updated);
+}
+
+async function updateMediaKitAppearance(workspaceId: string, mediaKitId: string, input: MediaKitAppearance): Promise<DataResult<MediaKit>> {
+  await delay(150);
+  const index = mediaKits.findIndex((mk) => mk.id === mediaKitId && mk.workspace_id === workspaceId);
+  if (index === -1) return fail("This Media Kit could not be found.");
+  const updated: MediaKit = { ...mediaKits[index], appearance: { ...mediaKits[index].appearance, ...input }, updated_at: nowIso() };
+  mediaKits = [...mediaKits.slice(0, index), updated, ...mediaKits.slice(index + 1)];
+  return ok(updated);
+}
+
 // ── MEDIAKIT-04 — Publish ──────────────────────────────────────────────
 
 /**
@@ -343,15 +541,30 @@ async function getMediaKitContentStatus(workspaceId: string, mediaKitId: string)
   const anyGalleryIncluded = galleryForKit.some((row) => row.is_included);
   const gallery = galleryForKit.length === 0 ? "not_started" : anyGalleryIncluded ? "ready" : "in_progress";
 
+  const partnersForKit = partners.filter((row) => row.media_kit_id === mediaKitId && row.archived_at === null);
+  const anyPartnerIncluded = partnersForKit.some((row) => row.is_included);
+  const partnersReadiness = partnersForKit.length === 0 ? "not_started" : anyPartnerIncluded ? "ready" : "in_progress";
+
+  const testimonialsForKit = testimonials.filter((row) => row.media_kit_id === mediaKitId && row.archived_at === null);
+  const anyTestimonialPublic = testimonialsForKit.some((row) => row.is_included && row.is_approved);
+  const testimonialsReadiness = testimonialsForKit.length === 0 ? "not_started" : anyTestimonialPublic ? "ready" : "in_progress";
+
+  const pressForKit = pressFeatures.filter((row) => row.media_kit_id === mediaKitId && row.archived_at === null);
+  const anyPressIncluded = pressForKit.some((row) => row.is_included);
+  const pressReadiness = pressForKit.length === 0 ? "not_started" : anyPressIncluded ? "ready" : "in_progress";
+
+  const contactFieldsAllEmpty = !mediaKit?.contact_headline && !mediaKit?.contact_subtext;
+  const contact = mediaKit?.contact_headline ? "ready" : contactFieldsAllEmpty ? "not_started" : "in_progress";
+
   return {
     brand,
     services,
     portfolio,
-    partners: "not_started",
-    testimonials: "not_started",
-    press: "not_started",
+    partners: partnersReadiness,
+    testimonials: testimonialsReadiness,
+    press: pressReadiness,
     gallery,
-    contact: mediaKit?.contact_headline || mediaKit?.contact_subtext ? "ready" : "not_started",
+    contact,
   };
 }
 
@@ -385,6 +598,25 @@ export const mockMediaKitRepository: MediaKitRepository = {
   archiveMediaKitGalleryItem,
   reorderMediaKitGalleryItems,
   publishMediaKit,
+  listMediaKitPartners,
+  createMediaKitPartner,
+  updateMediaKitPartner,
+  archiveMediaKitPartner,
+  reorderMediaKitPartners,
+  listMediaKitTestimonials,
+  createMediaKitTestimonial,
+  updateMediaKitTestimonial,
+  setMediaKitTestimonialApproved,
+  archiveMediaKitTestimonial,
+  reorderMediaKitTestimonials,
+  listMediaKitPressFeatures,
+  createMediaKitPressFeature,
+  updateMediaKitPressFeature,
+  archiveMediaKitPressFeature,
+  reorderMediaKitPressFeatures,
+  updateMediaKitSocialLinks,
+  updateMediaKitContactCta,
+  updateMediaKitAppearance,
   getMediaKitContentStatus,
   getMediaKitAnalyticsSummary,
   getMediaKitRecentActivity,

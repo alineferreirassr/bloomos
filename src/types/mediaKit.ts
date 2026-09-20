@@ -76,12 +76,26 @@ export interface MediaKit {
  *   exist but none are is_included; ready when at least one non-archived
  *   row is is_included.
  *
- * Sections without an editor yet (partners/testimonials/press/contact)
- * keep the original two-outcome rule: at least one non-archived,
- * `is_included` row exists (testimonials additionally requires
- * `is_approved`; contact requires contact_headline or contact_subtext) —
- * never `in_progress`, since no editor exists yet to produce a real
- * partial state for them.
+ * MEDIAKIT-05 rules:
+ * - partners: not_started when zero media_kit_partners rows exist;
+ *   in_progress when rows exist but none are is_included; ready when at
+ *   least one non-archived row is is_included.
+ * - testimonials: not_started when zero media_kit_testimonials rows exist;
+ *   in_progress when rows exist but none satisfy BOTH is_included AND
+ *   is_approved (the two independent gates the schema itself documents);
+ *   ready when at least one non-archived row satisfies both.
+ * - press: not_started when zero media_kit_press_features rows exist;
+ *   in_progress when rows exist but none are is_included; ready when at
+ *   least one non-archived row is is_included.
+ * - contact: not_started when contact_headline, contact_subtext are both
+ *   empty AND primary_cta_type/label are still at their schema defaults;
+ *   ready when contact_headline is set (the field that actually renders as
+ *   the public Contact section's heading); in_progress otherwise (e.g. only
+ *   subtext or a customized CTA without a heading yet).
+ *
+ * Social/Appearance are intentionally never part of this readiness set —
+ * neither blocks or represents the public page's actual availability, and
+ * founder direction (MEDIAKIT-05) explicitly keeps them non-blocking.
  */
 export type MediaKitSectionReadiness = "not_started" | "in_progress" | "ready";
 
@@ -260,33 +274,22 @@ export interface MediaKitGalleryItemInput {
 }
 
 /**
- * MEDIAKIT-04 — the exact `content` shape `publish_media_kit()` composes
- * (supabase/migrations/20260929100200_media_kit_foundation.sql) and
+ * MEDIAKIT-04/05 — the exact `content` shape `publish_media_kit()` composes
+ * (supabase/migrations/20260929100200_media_kit_foundation.sql, corrected
+ * by 20260929100300_media_kit_publish_snapshot_correction.sql) and
  * `get_published_media_kit()` returns verbatim. This is a frozen, immutable
  * contract: it contains no foreign key into any private/business table, no
  * storage path, and no signed URL — only `media_asset_id` references the
  * public renderer resolves fresh at request time.
  *
- * Three known gaps in this frozen shape (mechanically confirmed, not
- * fixable without a new founder-authorized migration): a Service entry's
- * `headline`/`description` are the override columns copied verbatim — the
- * snapshot does not capture the canonical Service's own name/description at
- * publish time, and carries no `service_id` to join back to one after the
- * fact, so an included Service published with an empty override cannot
- * fall back to canonical text on the public page. A Service entry carries
- * `price_label` but never `public_starting_price_minor` — the public
- * snapshot has no price amount field at all, so a public price can never be
- * displayed under this frozen schema, regardless of what the private
- * curator has stored. And `PublicMediaKitPortfolioItem` carries no
- * `cover_media_asset_id` at all — `media_kit_portfolio_items.cover_media_asset_id`
- * is stored and editable in the private Portfolio editor, but
- * `publish_media_kit()` never serializes it into the snapshot; only that
- * portfolio item's OWN `gallery[].is_cover` (a real `media_kit_gallery_items`
- * row scoped to that item via `portfolio_item_id`) ever reaches the public
- * page. The public renderer handles all three gaps by omitting the
- * incomplete piece — or, for the portfolio cover, deriving it from the
- * item's own gallery instead — rather than fabricating or guessing at
- * content.
+ * MEDIAKIT-05 correction: a Service entry's `headline`/`description` now
+ * resolve to the canonical Service's own name/description at PUBLISH time
+ * when the curator left an override empty (`service_id` itself still never
+ * appears in the output — only the already-resolved text does), and
+ * `public_starting_price_minor` is now included alongside `price_label`.
+ * `PublicMediaKitPortfolioItem` now carries `cover_media_asset_id` directly,
+ * so an explicit cover selection in the private Portfolio editor survives
+ * publication instead of being silently replaced by "first gallery image".
  */
 export interface PublicMediaKitBrand {
   headline: string | null;
@@ -313,6 +316,7 @@ export interface PublicMediaKitService {
   headline: string | null;
   description: string | null;
   icon_key: string | null;
+  public_starting_price_minor: number | null;
   price_label: string | null;
   is_featured: boolean;
 }
@@ -330,6 +334,7 @@ export interface PublicMediaKitPortfolioItem {
   location_label: string | null;
   event_year: number | null;
   short_description: string | null;
+  cover_media_asset_id: string | null;
   is_featured: boolean;
   gallery: PublicMediaKitGalleryImage[];
 }
@@ -371,4 +376,138 @@ export interface PublicMediaKitContent {
   testimonials: PublicMediaKitTestimonial[];
   press: PublicMediaKitPressFeature[];
   gallery: PublicMediaKitGalleryImage[];
+}
+
+/**
+ * MEDIAKIT-05 — mirrors `media_kit_partners` exactly. `client_id`/
+ * `vendor_id` are an optional convenience link only (at most one may be
+ * set — enforced by `media_kit_partners_single_reference`); `display_name`
+ * is always manually entered at curation time, never auto-populated from
+ * the linked Client/Vendor's real name — the privacy boundary between
+ * "which real record this is" (staff-only) and "what the public sees".
+ * Both references null is fully intentional: a purely editorial partner
+ * with no backing CRM record at all.
+ */
+export interface MediaKitPartner {
+  id: string;
+  workspace_id: string;
+  media_kit_id: string;
+  client_id: string | null;
+  vendor_id: string | null;
+  display_name: string;
+  logo_media_asset_id: string | null;
+  partner_type: string | null;
+  is_featured: boolean;
+  is_included: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+export interface MediaKitPartnerInput {
+  client_id: string | null;
+  vendor_id: string | null;
+  display_name: string;
+  logo_media_asset_id: string | null;
+  partner_type: string | null;
+  is_featured: boolean;
+  is_included: boolean;
+}
+
+/**
+ * MEDIAKIT-05 — mirrors `media_kit_testimonials` exactly. `is_approved` is
+ * a second, independent gate from `is_included` — the schema's own
+ * documented "never automatically publish internal notes" rule. A
+ * testimonial only reaches `publish_media_kit()`'s output when BOTH are
+ * true.
+ */
+export interface MediaKitTestimonial {
+  id: string;
+  workspace_id: string;
+  media_kit_id: string;
+  client_id: string | null;
+  quote: string;
+  author_name: string;
+  author_role: string | null;
+  photo_media_asset_id: string | null;
+  is_approved: boolean;
+  is_featured: boolean;
+  is_included: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+export interface MediaKitTestimonialInput {
+  client_id: string | null;
+  quote: string;
+  author_name: string;
+  author_role: string | null;
+  photo_media_asset_id: string | null;
+  is_featured: boolean;
+  is_included: boolean;
+}
+
+/** Mirrors `media_kit_press_features` exactly. */
+export interface MediaKitPressFeature {
+  id: string;
+  workspace_id: string;
+  media_kit_id: string;
+  publication_name: string;
+  feature_title: string | null;
+  url: string | null;
+  logo_media_asset_id: string | null;
+  featured_on: string | null;
+  is_featured: boolean;
+  is_included: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+export interface MediaKitPressFeatureInput {
+  publication_name: string;
+  feature_title: string | null;
+  url: string | null;
+  logo_media_asset_id: string | null;
+  featured_on: string | null;
+  is_featured: boolean;
+  is_included: boolean;
+}
+
+/** MEDIAKIT-05 — Contact & CTA editor. Only `media_kits`' own contact/CTA columns; Brand/Social/Appearance stay out of scope, per each section's own ownership. */
+export interface MediaKitContactCtaInput {
+  contact_headline: string | null;
+  contact_subtext: string | null;
+  primary_cta_label: string;
+  primary_cta_type: MediaKitCtaType;
+  primary_cta_external_url: string | null;
+  secondary_cta_label: string | null;
+  secondary_cta_url: string | null;
+}
+
+/**
+ * MEDIAKIT-05 — the minimum useful Appearance contract the current
+ * architecture supports cleanly: a single curated hero image, chosen from
+ * existing Media Assets (never an upload flow of its own). No color/theme/
+ * layout keys exist yet; `media_kits.appearance` stays a forward-compatible
+ * JSONB bag, but this checkpoint only ever reads/writes this one key.
+ */
+export interface MediaKitAppearance {
+  hero_media_asset_id: string | null;
+}
+
+export const EMPTY_MEDIA_KIT_APPEARANCE: MediaKitAppearance = { hero_media_asset_id: null };
+
+/** The public inquiry form's own input shape — never a raw CRM Lead form. */
+export interface MediaKitInquiryInput {
+  name: string;
+  email: string;
+  interest: string | null;
+  message: string;
+  /** Honeypot — real visitors never fill this in; a non-empty value is treated as spam and silently no-ops. */
+  companyWebsite: string;
 }

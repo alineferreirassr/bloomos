@@ -3205,6 +3205,10 @@ export interface Database {
         Args: { p_slug: string; p_event_type: string; p_visitor_hash?: string | null; p_referrer?: string | null; p_path?: string | null; p_metadata?: Json };
         Returns: undefined;
       };
+      record_media_kit_inquiry_event: {
+        Args: { p_slug: string; p_lead_id: string; p_visitor_hash?: string | null; p_referrer?: string | null; p_path?: string | null };
+        Returns: undefined;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

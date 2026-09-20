@@ -1,15 +1,24 @@
 import type {
   MediaKit,
   MediaKitAnalyticsSummary,
+  MediaKitAppearance,
   MediaKitBrandInput,
+  MediaKitContactCtaInput,
   MediaKitContentStatus,
   MediaKitGalleryItem,
   MediaKitGalleryItemInput,
+  MediaKitPartner,
+  MediaKitPartnerInput,
   MediaKitPortfolioItem,
   MediaKitPortfolioItemInput,
+  MediaKitPressFeature,
+  MediaKitPressFeatureInput,
   MediaKitRecentActivityItem,
   MediaKitServiceCuration,
   MediaKitServiceCurationInput,
+  MediaKitSocialLink,
+  MediaKitTestimonial,
+  MediaKitTestimonialInput,
 } from "@/types/mediaKit";
 import type { DataResult } from "@/lib/data/result";
 
@@ -128,4 +137,41 @@ export interface MediaKitRepository {
    * every other mutation here returns.
    */
   publishMediaKit(workspaceId: string, mediaKitId: string): Promise<DataResult<MediaKit>>;
+
+  // ── MEDIAKIT-05 — Partners ───────────────────────────────────────────
+
+  listMediaKitPartners(workspaceId: string, mediaKitId: string): Promise<MediaKitPartner[]>;
+  createMediaKitPartner(workspaceId: string, mediaKitId: string, input: MediaKitPartnerInput): Promise<DataResult<MediaKitPartner>>;
+  updateMediaKitPartner(workspaceId: string, partnerId: string, input: MediaKitPartnerInput): Promise<DataResult<MediaKitPartner>>;
+  /** Soft-delete — `media_kit_partners` has no delete RLS policy. */
+  archiveMediaKitPartner(workspaceId: string, partnerId: string): Promise<DataResult<MediaKitPartner>>;
+  reorderMediaKitPartners(workspaceId: string, mediaKitId: string, orderedPartnerIds: string[]): Promise<DataResult<MediaKitPartner[]>>;
+
+  // ── MEDIAKIT-05 — Testimonials ───────────────────────────────────────
+
+  listMediaKitTestimonials(workspaceId: string, mediaKitId: string): Promise<MediaKitTestimonial[]>;
+  createMediaKitTestimonial(workspaceId: string, mediaKitId: string, input: MediaKitTestimonialInput): Promise<DataResult<MediaKitTestimonial>>;
+  updateMediaKitTestimonial(workspaceId: string, testimonialId: string, input: MediaKitTestimonialInput): Promise<DataResult<MediaKitTestimonial>>;
+  /** The dedicated approval gate — independent of `updateMediaKitTestimonial`, matching the schema's own "two independent gates" design. */
+  setMediaKitTestimonialApproved(workspaceId: string, testimonialId: string, approved: boolean): Promise<DataResult<MediaKitTestimonial>>;
+  archiveMediaKitTestimonial(workspaceId: string, testimonialId: string): Promise<DataResult<MediaKitTestimonial>>;
+  reorderMediaKitTestimonials(workspaceId: string, mediaKitId: string, orderedTestimonialIds: string[]): Promise<DataResult<MediaKitTestimonial[]>>;
+
+  // ── MEDIAKIT-05 — Press ──────────────────────────────────────────────
+
+  listMediaKitPressFeatures(workspaceId: string, mediaKitId: string): Promise<MediaKitPressFeature[]>;
+  createMediaKitPressFeature(workspaceId: string, mediaKitId: string, input: MediaKitPressFeatureInput): Promise<DataResult<MediaKitPressFeature>>;
+  updateMediaKitPressFeature(workspaceId: string, pressFeatureId: string, input: MediaKitPressFeatureInput): Promise<DataResult<MediaKitPressFeature>>;
+  archiveMediaKitPressFeature(workspaceId: string, pressFeatureId: string): Promise<DataResult<MediaKitPressFeature>>;
+  reorderMediaKitPressFeatures(workspaceId: string, mediaKitId: string, orderedPressFeatureIds: string[]): Promise<DataResult<MediaKitPressFeature[]>>;
+
+  // ── MEDIAKIT-05 — Social / Contact & CTA / Appearance ───────────────
+
+  /** Replaces the full `social_links` array — the UI always sends the complete intended list, matching the tag-editor convention elsewhere in this codebase. */
+  updateMediaKitSocialLinks(workspaceId: string, mediaKitId: string, links: MediaKitSocialLink[]): Promise<DataResult<MediaKit>>;
+
+  updateMediaKitContactCta(workspaceId: string, mediaKitId: string, input: MediaKitContactCtaInput): Promise<DataResult<MediaKit>>;
+
+  /** Merges into the existing `appearance` JSONB — never blindly overwrites the whole object, so a future key this checkpoint doesn't know about survives. */
+  updateMediaKitAppearance(workspaceId: string, mediaKitId: string, input: MediaKitAppearance): Promise<DataResult<MediaKit>>;
 }

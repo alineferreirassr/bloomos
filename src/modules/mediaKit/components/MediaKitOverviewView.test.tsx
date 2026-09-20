@@ -67,6 +67,67 @@ vi.mock("@/modules/mediaKit/reorderMediaKitGalleryItemsAction", () => ({
 vi.mock("@/lib/data", () => ({
   getMediaAssetDownloadUrl: vi.fn(() => new Promise(() => {})),
   listMediaAssetsForWorkspace: vi.fn(() => new Promise(() => {})),
+  getVendors: vi.fn(() => new Promise(() => {})),
+}));
+vi.mock("@/modules/mediaKit/getMediaKitPartnersData", () => ({
+  getMediaKitPartnersData: vi.fn(() => new Promise(() => {})),
+}));
+vi.mock("@/modules/mediaKit/createMediaKitPartnerAction", () => ({
+  createMediaKitPartnerAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/updateMediaKitPartnerAction", () => ({
+  updateMediaKitPartnerAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/archiveMediaKitPartnerAction", () => ({
+  archiveMediaKitPartnerAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/reorderMediaKitPartnersAction", () => ({
+  reorderMediaKitPartnersAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/getMediaKitClientOptionsData", () => ({
+  getMediaKitClientOptionsData: vi.fn(() => new Promise(() => {})),
+}));
+vi.mock("@/modules/mediaKit/getMediaKitTestimonialsData", () => ({
+  getMediaKitTestimonialsData: vi.fn(() => new Promise(() => {})),
+}));
+vi.mock("@/modules/mediaKit/createMediaKitTestimonialAction", () => ({
+  createMediaKitTestimonialAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/updateMediaKitTestimonialAction", () => ({
+  updateMediaKitTestimonialAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/setMediaKitTestimonialApprovedAction", () => ({
+  setMediaKitTestimonialApprovedAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/archiveMediaKitTestimonialAction", () => ({
+  archiveMediaKitTestimonialAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/reorderMediaKitTestimonialsAction", () => ({
+  reorderMediaKitTestimonialsAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/getMediaKitPressFeaturesData", () => ({
+  getMediaKitPressFeaturesData: vi.fn(() => new Promise(() => {})),
+}));
+vi.mock("@/modules/mediaKit/createMediaKitPressFeatureAction", () => ({
+  createMediaKitPressFeatureAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/updateMediaKitPressFeatureAction", () => ({
+  updateMediaKitPressFeatureAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/archiveMediaKitPressFeatureAction", () => ({
+  archiveMediaKitPressFeatureAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/reorderMediaKitPressFeaturesAction", () => ({
+  reorderMediaKitPressFeaturesAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/updateMediaKitSocialLinksAction", () => ({
+  updateMediaKitSocialLinksAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/updateMediaKitContactCtaAction", () => ({
+  updateMediaKitContactCtaAction: vi.fn(),
+}));
+vi.mock("@/modules/mediaKit/updateMediaKitAppearanceAction", () => ({
+  updateMediaKitAppearanceAction: vi.fn(),
 }));
 
 import { getMediaKitOverviewData } from "@/modules/mediaKit/getMediaKitOverviewData";

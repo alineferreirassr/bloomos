@@ -1,22 +1,142 @@
 import { createClient } from "@/lib/supabase/server";
 import { normalizeSupabaseError } from "@/lib/supabase/errors";
+import type { Json } from "@/types/database.types";
 import type {
   MediaKit,
   MediaKitAnalyticsSummary,
+  MediaKitAppearance,
   MediaKitBrandInput,
+  MediaKitContactCtaInput,
   MediaKitContentStatus,
   MediaKitEventType,
   MediaKitGalleryItem,
   MediaKitGalleryItemInput,
+  MediaKitPartner,
+  MediaKitPartnerInput,
   MediaKitPortfolioItem,
   MediaKitPortfolioItemInput,
+  MediaKitPressFeature,
+  MediaKitPressFeatureInput,
   MediaKitRecentActivityItem,
   MediaKitServiceCuration,
   MediaKitServiceCurationInput,
+  MediaKitSocialLink,
+  MediaKitTestimonial,
+  MediaKitTestimonialInput,
 } from "@/types/mediaKit";
 import type { MediaKitRepository } from "@/lib/data/mediaKit/repository";
 import type { DataResult } from "@/lib/data/result";
 import { ok, fail } from "@/lib/data/result";
+
+interface MediaKitPartnerRow {
+  id: string;
+  workspace_id: string;
+  media_kit_id: string;
+  client_id: string | null;
+  vendor_id: string | null;
+  display_name: string;
+  logo_media_asset_id: string | null;
+  partner_type: string | null;
+  is_featured: boolean;
+  is_included: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+function mapMediaKitPartnerRow(row: MediaKitPartnerRow): MediaKitPartner {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    media_kit_id: row.media_kit_id,
+    client_id: row.client_id,
+    vendor_id: row.vendor_id,
+    display_name: row.display_name,
+    logo_media_asset_id: row.logo_media_asset_id,
+    partner_type: row.partner_type,
+    is_featured: row.is_featured,
+    is_included: row.is_included,
+    sort_order: row.sort_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    archived_at: row.archived_at,
+  };
+}
+
+interface MediaKitTestimonialRow {
+  id: string;
+  workspace_id: string;
+  media_kit_id: string;
+  client_id: string | null;
+  quote: string;
+  author_name: string;
+  author_role: string | null;
+  photo_media_asset_id: string | null;
+  is_approved: boolean;
+  is_featured: boolean;
+  is_included: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+function mapMediaKitTestimonialRow(row: MediaKitTestimonialRow): MediaKitTestimonial {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    media_kit_id: row.media_kit_id,
+    client_id: row.client_id,
+    quote: row.quote,
+    author_name: row.author_name,
+    author_role: row.author_role,
+    photo_media_asset_id: row.photo_media_asset_id,
+    is_approved: row.is_approved,
+    is_featured: row.is_featured,
+    is_included: row.is_included,
+    sort_order: row.sort_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    archived_at: row.archived_at,
+  };
+}
+
+interface MediaKitPressFeatureRow {
+  id: string;
+  workspace_id: string;
+  media_kit_id: string;
+  publication_name: string;
+  feature_title: string | null;
+  url: string | null;
+  logo_media_asset_id: string | null;
+  featured_on: string | null;
+  is_featured: boolean;
+  is_included: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+function mapMediaKitPressFeatureRow(row: MediaKitPressFeatureRow): MediaKitPressFeature {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    media_kit_id: row.media_kit_id,
+    publication_name: row.publication_name,
+    feature_title: row.feature_title,
+    url: row.url,
+    logo_media_asset_id: row.logo_media_asset_id,
+    featured_on: row.featured_on,
+    is_featured: row.is_featured,
+    is_included: row.is_included,
+    sort_order: row.sort_order,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    archived_at: row.archived_at,
+  };
+}
 
 interface MediaKitPortfolioItemRow {
   id: string;
@@ -632,6 +752,282 @@ async function reorderMediaKitGalleryItems(
   return ok(rows.sort((a, b) => a.sort_order - b.sort_order));
 }
 
+// ── MEDIAKIT-05 — Partners ─────────────────────────────────────────────
+
+async function listMediaKitPartners(workspaceId: string, mediaKitId: string): Promise<MediaKitPartner[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("media_kit_partners").select("*").eq("workspace_id", workspaceId).eq("media_kit_id", mediaKitId).is("archived_at", null);
+  if (error) throw normalizeSupabaseError(error);
+  return (data ?? []).map((row) => mapMediaKitPartnerRow(row as MediaKitPartnerRow));
+}
+
+async function createMediaKitPartner(workspaceId: string, mediaKitId: string, input: MediaKitPartnerInput): Promise<DataResult<MediaKitPartner>> {
+  const supabase = await createClient();
+  const { data: maxSortRow, error: maxSortError } = await supabase
+    .from("media_kit_partners")
+    .select("sort_order")
+    .eq("media_kit_id", mediaKitId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (maxSortError) throw normalizeSupabaseError(maxSortError);
+  const nextSortOrder = maxSortRow ? (maxSortRow as { sort_order: number }).sort_order + 1 : 0;
+
+  const { data: created, error: insertError } = await supabase
+    .from("media_kit_partners")
+    .insert({ workspace_id: workspaceId, media_kit_id: mediaKitId, ...input, sort_order: nextSortOrder })
+    .select("*")
+    .single();
+  if (insertError) throw normalizeSupabaseError(insertError);
+  return ok(mapMediaKitPartnerRow(created as MediaKitPartnerRow));
+}
+
+async function updateMediaKitPartner(workspaceId: string, partnerId: string, input: MediaKitPartnerInput): Promise<DataResult<MediaKitPartner>> {
+  const supabase = await createClient();
+  const { data: updated, error } = await supabase.from("media_kit_partners").update(input).eq("id", partnerId).eq("workspace_id", workspaceId).select("*").maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  if (!updated) return fail("This partner could not be found.");
+  return ok(mapMediaKitPartnerRow(updated as MediaKitPartnerRow));
+}
+
+/** `media_kit_partners` has no delete RLS policy — `archived_at` is the only removal path. */
+async function archiveMediaKitPartner(workspaceId: string, partnerId: string): Promise<DataResult<MediaKitPartner>> {
+  const supabase = await createClient();
+  const { data: updated, error } = await supabase
+    .from("media_kit_partners")
+    .update({ archived_at: new Date().toISOString() })
+    .eq("id", partnerId)
+    .eq("workspace_id", workspaceId)
+    .select("*")
+    .maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  if (!updated) return fail("This partner could not be found.");
+  return ok(mapMediaKitPartnerRow(updated as MediaKitPartnerRow));
+}
+
+async function reorderMediaKitPartners(workspaceId: string, mediaKitId: string, orderedPartnerIds: string[]): Promise<DataResult<MediaKitPartner[]>> {
+  const supabase = await createClient();
+  const updated = await Promise.all(
+    orderedPartnerIds.map(async (partnerId, position) => {
+      const { data, error } = await supabase
+        .from("media_kit_partners")
+        .update({ sort_order: position })
+        .eq("id", partnerId)
+        .eq("workspace_id", workspaceId)
+        .eq("media_kit_id", mediaKitId)
+        .select("*")
+        .maybeSingle();
+      if (error) throw normalizeSupabaseError(error);
+      return data ? mapMediaKitPartnerRow(data as MediaKitPartnerRow) : null;
+    }),
+  );
+  const rows = updated.filter((row): row is MediaKitPartner => row !== null);
+  return ok(rows.sort((a, b) => a.sort_order - b.sort_order));
+}
+
+// ── MEDIAKIT-05 — Testimonials ─────────────────────────────────────────
+
+async function listMediaKitTestimonials(workspaceId: string, mediaKitId: string): Promise<MediaKitTestimonial[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("media_kit_testimonials").select("*").eq("workspace_id", workspaceId).eq("media_kit_id", mediaKitId).is("archived_at", null);
+  if (error) throw normalizeSupabaseError(error);
+  return (data ?? []).map((row) => mapMediaKitTestimonialRow(row as MediaKitTestimonialRow));
+}
+
+async function createMediaKitTestimonial(workspaceId: string, mediaKitId: string, input: MediaKitTestimonialInput): Promise<DataResult<MediaKitTestimonial>> {
+  const supabase = await createClient();
+  const { data: maxSortRow, error: maxSortError } = await supabase
+    .from("media_kit_testimonials")
+    .select("sort_order")
+    .eq("media_kit_id", mediaKitId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (maxSortError) throw normalizeSupabaseError(maxSortError);
+  const nextSortOrder = maxSortRow ? (maxSortRow as { sort_order: number }).sort_order + 1 : 0;
+
+  // is_approved is never set here — a brand-new (or freshly edited)
+  // testimonial is never auto-approved; the schema default (false) always
+  // wins, and approval is only ever the dedicated setMediaKitTestimonialApproved action.
+  const { data: created, error: insertError } = await supabase
+    .from("media_kit_testimonials")
+    .insert({ workspace_id: workspaceId, media_kit_id: mediaKitId, ...input, sort_order: nextSortOrder })
+    .select("*")
+    .single();
+  if (insertError) throw normalizeSupabaseError(insertError);
+  return ok(mapMediaKitTestimonialRow(created as MediaKitTestimonialRow));
+}
+
+async function updateMediaKitTestimonial(workspaceId: string, testimonialId: string, input: MediaKitTestimonialInput): Promise<DataResult<MediaKitTestimonial>> {
+  const supabase = await createClient();
+  const { data: updated, error } = await supabase.from("media_kit_testimonials").update(input).eq("id", testimonialId).eq("workspace_id", workspaceId).select("*").maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  if (!updated) return fail("This testimonial could not be found.");
+  return ok(mapMediaKitTestimonialRow(updated as MediaKitTestimonialRow));
+}
+
+async function setMediaKitTestimonialApproved(workspaceId: string, testimonialId: string, approved: boolean): Promise<DataResult<MediaKitTestimonial>> {
+  const supabase = await createClient();
+  const { data: updated, error } = await supabase
+    .from("media_kit_testimonials")
+    .update({ is_approved: approved })
+    .eq("id", testimonialId)
+    .eq("workspace_id", workspaceId)
+    .select("*")
+    .maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  if (!updated) return fail("This testimonial could not be found.");
+  return ok(mapMediaKitTestimonialRow(updated as MediaKitTestimonialRow));
+}
+
+/** `media_kit_testimonials` has no delete RLS policy — `archived_at` is the only removal path. */
+async function archiveMediaKitTestimonial(workspaceId: string, testimonialId: string): Promise<DataResult<MediaKitTestimonial>> {
+  const supabase = await createClient();
+  const { data: updated, error } = await supabase
+    .from("media_kit_testimonials")
+    .update({ archived_at: new Date().toISOString() })
+    .eq("id", testimonialId)
+    .eq("workspace_id", workspaceId)
+    .select("*")
+    .maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  if (!updated) return fail("This testimonial could not be found.");
+  return ok(mapMediaKitTestimonialRow(updated as MediaKitTestimonialRow));
+}
+
+async function reorderMediaKitTestimonials(workspaceId: string, mediaKitId: string, orderedTestimonialIds: string[]): Promise<DataResult<MediaKitTestimonial[]>> {
+  const supabase = await createClient();
+  const updated = await Promise.all(
+    orderedTestimonialIds.map(async (testimonialId, position) => {
+      const { data, error } = await supabase
+        .from("media_kit_testimonials")
+        .update({ sort_order: position })
+        .eq("id", testimonialId)
+        .eq("workspace_id", workspaceId)
+        .eq("media_kit_id", mediaKitId)
+        .select("*")
+        .maybeSingle();
+      if (error) throw normalizeSupabaseError(error);
+      return data ? mapMediaKitTestimonialRow(data as MediaKitTestimonialRow) : null;
+    }),
+  );
+  const rows = updated.filter((row): row is MediaKitTestimonial => row !== null);
+  return ok(rows.sort((a, b) => a.sort_order - b.sort_order));
+}
+
+// ── MEDIAKIT-05 — Press ─────────────────────────────────────────────────
+
+async function listMediaKitPressFeatures(workspaceId: string, mediaKitId: string): Promise<MediaKitPressFeature[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("media_kit_press_features").select("*").eq("workspace_id", workspaceId).eq("media_kit_id", mediaKitId).is("archived_at", null);
+  if (error) throw normalizeSupabaseError(error);
+  return (data ?? []).map((row) => mapMediaKitPressFeatureRow(row as MediaKitPressFeatureRow));
+}
+
+async function createMediaKitPressFeature(workspaceId: string, mediaKitId: string, input: MediaKitPressFeatureInput): Promise<DataResult<MediaKitPressFeature>> {
+  const supabase = await createClient();
+  const { data: maxSortRow, error: maxSortError } = await supabase
+    .from("media_kit_press_features")
+    .select("sort_order")
+    .eq("media_kit_id", mediaKitId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (maxSortError) throw normalizeSupabaseError(maxSortError);
+  const nextSortOrder = maxSortRow ? (maxSortRow as { sort_order: number }).sort_order + 1 : 0;
+
+  const { data: created, error: insertError } = await supabase
+    .from("media_kit_press_features")
+    .insert({ workspace_id: workspaceId, media_kit_id: mediaKitId, ...input, sort_order: nextSortOrder })
+    .select("*")
+    .single();
+  if (insertError) throw normalizeSupabaseError(insertError);
+  return ok(mapMediaKitPressFeatureRow(created as MediaKitPressFeatureRow));
+}
+
+async function updateMediaKitPressFeature(workspaceId: string, pressFeatureId: string, input: MediaKitPressFeatureInput): Promise<DataResult<MediaKitPressFeature>> {
+  const supabase = await createClient();
+  const { data: updated, error } = await supabase.from("media_kit_press_features").update(input).eq("id", pressFeatureId).eq("workspace_id", workspaceId).select("*").maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  if (!updated) return fail("This press feature could not be found.");
+  return ok(mapMediaKitPressFeatureRow(updated as MediaKitPressFeatureRow));
+}
+
+/** `media_kit_press_features` has no delete RLS policy — `archived_at` is the only removal path. */
+async function archiveMediaKitPressFeature(workspaceId: string, pressFeatureId: string): Promise<DataResult<MediaKitPressFeature>> {
+  const supabase = await createClient();
+  const { data: updated, error } = await supabase
+    .from("media_kit_press_features")
+    .update({ archived_at: new Date().toISOString() })
+    .eq("id", pressFeatureId)
+    .eq("workspace_id", workspaceId)
+    .select("*")
+    .maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  if (!updated) return fail("This press feature could not be found.");
+  return ok(mapMediaKitPressFeatureRow(updated as MediaKitPressFeatureRow));
+}
+
+async function reorderMediaKitPressFeatures(workspaceId: string, mediaKitId: string, orderedPressFeatureIds: string[]): Promise<DataResult<MediaKitPressFeature[]>> {
+  const supabase = await createClient();
+  const updated = await Promise.all(
+    orderedPressFeatureIds.map(async (pressFeatureId, position) => {
+      const { data, error } = await supabase
+        .from("media_kit_press_features")
+        .update({ sort_order: position })
+        .eq("id", pressFeatureId)
+        .eq("workspace_id", workspaceId)
+        .eq("media_kit_id", mediaKitId)
+        .select("*")
+        .maybeSingle();
+      if (error) throw normalizeSupabaseError(error);
+      return data ? mapMediaKitPressFeatureRow(data as MediaKitPressFeatureRow) : null;
+    }),
+  );
+  const rows = updated.filter((row): row is MediaKitPressFeature => row !== null);
+  return ok(rows.sort((a, b) => a.sort_order - b.sort_order));
+}
+
+// ── MEDIAKIT-05 — Social / Contact & CTA / Appearance ──────────────────
+
+async function updateMediaKitSocialLinks(workspaceId: string, mediaKitId: string, links: MediaKitSocialLink[]): Promise<DataResult<MediaKit>> {
+  const supabase = await createClient();
+  const { data: updated, error } = await supabase
+    .from("media_kits")
+    .update({ social_links: links as unknown as Json })
+    .eq("id", mediaKitId)
+    .eq("workspace_id", workspaceId)
+    .select("*")
+    .maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  if (!updated) return fail("This Media Kit could not be found.");
+  return ok(mapMediaKitRow(updated as MediaKitRow));
+}
+
+async function updateMediaKitContactCta(workspaceId: string, mediaKitId: string, input: MediaKitContactCtaInput): Promise<DataResult<MediaKit>> {
+  const supabase = await createClient();
+  const { data: updated, error } = await supabase.from("media_kits").update(input).eq("id", mediaKitId).eq("workspace_id", workspaceId).select("*").maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  if (!updated) return fail("This Media Kit could not be found.");
+  return ok(mapMediaKitRow(updated as MediaKitRow));
+}
+
+/** Read-modify-write — merges into the existing `appearance` JSONB rather than blindly overwriting it, so a future key this checkpoint doesn't touch survives. */
+async function updateMediaKitAppearance(workspaceId: string, mediaKitId: string, input: MediaKitAppearance): Promise<DataResult<MediaKit>> {
+  const supabase = await createClient();
+  const { data: existing, error: selectError } = await supabase.from("media_kits").select("appearance").eq("id", mediaKitId).eq("workspace_id", workspaceId).maybeSingle();
+  if (selectError) throw normalizeSupabaseError(selectError);
+  if (!existing) return fail("This Media Kit could not be found.");
+
+  const currentAppearance = (existing as { appearance: unknown }).appearance;
+  const mergedAppearance = { ...(typeof currentAppearance === "object" && currentAppearance !== null ? currentAppearance : {}), ...input };
+
+  const { data: updated, error } = await supabase.from("media_kits").update({ appearance: mergedAppearance }).eq("id", mediaKitId).eq("workspace_id", workspaceId).select("*").maybeSingle();
+  if (error) throw normalizeSupabaseError(error);
+  if (!updated) return fail("This Media Kit could not be found.");
+  return ok(mapMediaKitRow(updated as MediaKitRow));
+}
+
 // ── MEDIAKIT-04 — Publish ──────────────────────────────────────────────
 
 /** Wires the frozen `publish_media_kit(uuid)` RPC. It re-derives the workspace/authorization itself (`security definer`, row-locks the media_kits row), so this is a thin pass-through plus a re-read of the refreshed row. */
@@ -672,7 +1068,7 @@ async function countIncludedRows(
 
 async function countTotalRows(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  table: "media_kit_portfolio_items" | "media_kit_gallery_items",
+  table: "media_kit_portfolio_items" | "media_kit_gallery_items" | "media_kit_partners" | "media_kit_press_features" | "media_kit_testimonials",
   mediaKitId: string,
 ): Promise<number> {
   const { count, error } = await supabase.from(table).select("id", { count: "exact", head: true }).eq("media_kit_id", mediaKitId).is("archived_at", null);
@@ -694,7 +1090,6 @@ async function getMediaKitContentStatus(workspaceId: string, mediaKitId: string)
   const brandFieldsAllEmpty = !mediaKitRow.headline && !mediaKitRow.positioning_statement && !mediaKitRow.brand_narrative;
   const brandCoreFieldsFilled = Boolean(mediaKitRow.headline && mediaKitRow.positioning_statement);
   const brand = brandCoreFieldsFilled ? "ready" : brandFieldsAllEmpty ? "not_started" : "in_progress";
-  const contactReady = Boolean(mediaKitRow.contact_headline || mediaKitRow.contact_subtext);
 
   const { count: totalServiceCurations, error: totalServiceCurationsError } = await supabase
     .from("media_kit_services")
@@ -703,21 +1098,37 @@ async function getMediaKitContentStatus(workspaceId: string, mediaKitId: string)
     .is("archived_at", null);
   if (totalServiceCurationsError) throw normalizeSupabaseError(totalServiceCurationsError);
 
-  const [includedServicesCount, includedPortfolioCount, totalPortfolioCount, includedGalleryCount, totalGalleryCount, partnersCount, pressCount] = await Promise.all([
+  const [
+    includedServicesCount,
+    includedPortfolioCount,
+    totalPortfolioCount,
+    includedGalleryCount,
+    totalGalleryCount,
+    includedPartnersCount,
+    totalPartnersCount,
+    includedPressCount,
+    totalPressCount,
+    totalTestimonialsCount,
+  ] = await Promise.all([
     countIncludedRows(supabase, "media_kit_services", mediaKitId),
     countIncludedRows(supabase, "media_kit_portfolio_items", mediaKitId),
     countTotalRows(supabase, "media_kit_portfolio_items", mediaKitId),
     countIncludedRows(supabase, "media_kit_gallery_items", mediaKitId),
     countTotalRows(supabase, "media_kit_gallery_items", mediaKitId),
     countIncludedRows(supabase, "media_kit_partners", mediaKitId),
+    countTotalRows(supabase, "media_kit_partners", mediaKitId),
     countIncludedRows(supabase, "media_kit_press_features", mediaKitId),
+    countTotalRows(supabase, "media_kit_press_features", mediaKitId),
+    countTotalRows(supabase, "media_kit_testimonials", mediaKitId),
   ]);
 
   const services = (totalServiceCurations ?? 0) === 0 ? "not_started" : includedServicesCount > 0 ? "ready" : "in_progress";
   const portfolio = totalPortfolioCount === 0 ? "not_started" : includedPortfolioCount > 0 ? "ready" : "in_progress";
   const gallery = totalGalleryCount === 0 ? "not_started" : includedGalleryCount > 0 ? "ready" : "in_progress";
+  const partners = totalPartnersCount === 0 ? "not_started" : includedPartnersCount > 0 ? "ready" : "in_progress";
+  const press = totalPressCount === 0 ? "not_started" : includedPressCount > 0 ? "ready" : "in_progress";
 
-  const { count: testimonialsCount, error: testimonialsError } = await supabase
+  const { count: publicTestimonialsCount, error: testimonialsError } = await supabase
     .from("media_kit_testimonials")
     .select("id", { count: "exact", head: true })
     .eq("media_kit_id", mediaKitId)
@@ -725,16 +1136,20 @@ async function getMediaKitContentStatus(workspaceId: string, mediaKitId: string)
     .eq("is_approved", true)
     .is("archived_at", null);
   if (testimonialsError) throw normalizeSupabaseError(testimonialsError);
+  const testimonials = totalTestimonialsCount === 0 ? "not_started" : (publicTestimonialsCount ?? 0) > 0 ? "ready" : "in_progress";
+
+  const contactFieldsAllEmpty = !mediaKitRow.contact_headline && !mediaKitRow.contact_subtext;
+  const contact = mediaKitRow.contact_headline ? "ready" : contactFieldsAllEmpty ? "not_started" : "in_progress";
 
   return {
     brand,
     services,
     portfolio,
-    partners: partnersCount > 0 ? "ready" : "not_started",
-    testimonials: (testimonialsCount ?? 0) > 0 ? "ready" : "not_started",
-    press: pressCount > 0 ? "ready" : "not_started",
+    partners,
+    testimonials,
+    press,
     gallery,
-    contact: contactReady ? "ready" : "not_started",
+    contact,
   };
 }
 
@@ -811,6 +1226,25 @@ export const supabaseMediaKitRepository: MediaKitRepository = {
   archiveMediaKitGalleryItem,
   reorderMediaKitGalleryItems,
   publishMediaKit,
+  listMediaKitPartners,
+  createMediaKitPartner,
+  updateMediaKitPartner,
+  archiveMediaKitPartner,
+  reorderMediaKitPartners,
+  listMediaKitTestimonials,
+  createMediaKitTestimonial,
+  updateMediaKitTestimonial,
+  setMediaKitTestimonialApproved,
+  archiveMediaKitTestimonial,
+  reorderMediaKitTestimonials,
+  listMediaKitPressFeatures,
+  createMediaKitPressFeature,
+  updateMediaKitPressFeature,
+  archiveMediaKitPressFeature,
+  reorderMediaKitPressFeatures,
+  updateMediaKitSocialLinks,
+  updateMediaKitContactCta,
+  updateMediaKitAppearance,
   getMediaKitContentStatus,
   getMediaKitAnalyticsSummary,
   getMediaKitRecentActivity,

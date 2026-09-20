@@ -150,6 +150,12 @@ const KNOWN_UNRELATED_IN_FLIGHT_MIGRATIONS = new Set([
   // not-yet-released, unrelated to the Finance release this exact-count
   // assertion describes.
   "20260929100200_media_kit_foundation.sql",
+  // MEDIAKIT-05 — narrow additive correction to publish_media_kit()'s
+  // snapshot composition (canonical Service fallback text, public
+  // starting price, Portfolio cover_media_asset_id). Independently-
+  // tracked, not-yet-released, unrelated to the Finance release this
+  // exact-count assertion describes.
+  "20260929100300_media_kit_publish_snapshot_correction.sql",
 ]);
 
 function migrationFilesForThisRelease(): string[] {

@@ -4,14 +4,23 @@ import { supabaseMediaKitRepository } from "@/lib/data/mediaKit/supabaseReposito
 import type { DataResult } from "@/lib/data/result";
 import type {
   MediaKit,
+  MediaKitAppearance,
   MediaKitBrandInput,
+  MediaKitContactCtaInput,
   MediaKitGalleryItem,
   MediaKitGalleryItemInput,
   MediaKitOverview,
+  MediaKitPartner,
+  MediaKitPartnerInput,
   MediaKitPortfolioItem,
   MediaKitPortfolioItemInput,
+  MediaKitPressFeature,
+  MediaKitPressFeatureInput,
   MediaKitServiceCuration,
   MediaKitServiceCurationInput,
+  MediaKitSocialLink,
+  MediaKitTestimonial,
+  MediaKitTestimonialInput,
 } from "@/types/mediaKit";
 
 const repository = selectRepository({ mock: mockMediaKitRepository, supabase: supabaseMediaKitRepository });
@@ -176,4 +185,73 @@ export async function reorderMediaKitGalleryItemsForWorkspace(
 
 export async function publishMediaKitForWorkspace(workspaceId: string, mediaKitId: string): Promise<DataResult<MediaKit>> {
   return repository.publishMediaKit(workspaceId, mediaKitId);
+}
+
+// ── MEDIAKIT-05 — Partners ─────────────────────────────────────────────
+
+export async function listMediaKitPartnersForWorkspace(workspaceId: string, mediaKitId: string): Promise<MediaKitPartner[]> {
+  return repository.listMediaKitPartners(workspaceId, mediaKitId);
+}
+export async function createMediaKitPartnerForWorkspace(workspaceId: string, mediaKitId: string, input: MediaKitPartnerInput): Promise<DataResult<MediaKitPartner>> {
+  return repository.createMediaKitPartner(workspaceId, mediaKitId, input);
+}
+export async function updateMediaKitPartnerForWorkspace(workspaceId: string, partnerId: string, input: MediaKitPartnerInput): Promise<DataResult<MediaKitPartner>> {
+  return repository.updateMediaKitPartner(workspaceId, partnerId, input);
+}
+export async function archiveMediaKitPartnerForWorkspace(workspaceId: string, partnerId: string): Promise<DataResult<MediaKitPartner>> {
+  return repository.archiveMediaKitPartner(workspaceId, partnerId);
+}
+export async function reorderMediaKitPartnersForWorkspace(workspaceId: string, mediaKitId: string, orderedPartnerIds: string[]): Promise<DataResult<MediaKitPartner[]>> {
+  return repository.reorderMediaKitPartners(workspaceId, mediaKitId, orderedPartnerIds);
+}
+
+// ── MEDIAKIT-05 — Testimonials ───────────────────────────────────────
+
+export async function listMediaKitTestimonialsForWorkspace(workspaceId: string, mediaKitId: string): Promise<MediaKitTestimonial[]> {
+  return repository.listMediaKitTestimonials(workspaceId, mediaKitId);
+}
+export async function createMediaKitTestimonialForWorkspace(workspaceId: string, mediaKitId: string, input: MediaKitTestimonialInput): Promise<DataResult<MediaKitTestimonial>> {
+  return repository.createMediaKitTestimonial(workspaceId, mediaKitId, input);
+}
+export async function updateMediaKitTestimonialForWorkspace(workspaceId: string, testimonialId: string, input: MediaKitTestimonialInput): Promise<DataResult<MediaKitTestimonial>> {
+  return repository.updateMediaKitTestimonial(workspaceId, testimonialId, input);
+}
+export async function setMediaKitTestimonialApprovedForWorkspace(workspaceId: string, testimonialId: string, approved: boolean): Promise<DataResult<MediaKitTestimonial>> {
+  return repository.setMediaKitTestimonialApproved(workspaceId, testimonialId, approved);
+}
+export async function archiveMediaKitTestimonialForWorkspace(workspaceId: string, testimonialId: string): Promise<DataResult<MediaKitTestimonial>> {
+  return repository.archiveMediaKitTestimonial(workspaceId, testimonialId);
+}
+export async function reorderMediaKitTestimonialsForWorkspace(workspaceId: string, mediaKitId: string, orderedTestimonialIds: string[]): Promise<DataResult<MediaKitTestimonial[]>> {
+  return repository.reorderMediaKitTestimonials(workspaceId, mediaKitId, orderedTestimonialIds);
+}
+
+// ── MEDIAKIT-05 — Press ──────────────────────────────────────────────
+
+export async function listMediaKitPressFeaturesForWorkspace(workspaceId: string, mediaKitId: string): Promise<MediaKitPressFeature[]> {
+  return repository.listMediaKitPressFeatures(workspaceId, mediaKitId);
+}
+export async function createMediaKitPressFeatureForWorkspace(workspaceId: string, mediaKitId: string, input: MediaKitPressFeatureInput): Promise<DataResult<MediaKitPressFeature>> {
+  return repository.createMediaKitPressFeature(workspaceId, mediaKitId, input);
+}
+export async function updateMediaKitPressFeatureForWorkspace(workspaceId: string, pressFeatureId: string, input: MediaKitPressFeatureInput): Promise<DataResult<MediaKitPressFeature>> {
+  return repository.updateMediaKitPressFeature(workspaceId, pressFeatureId, input);
+}
+export async function archiveMediaKitPressFeatureForWorkspace(workspaceId: string, pressFeatureId: string): Promise<DataResult<MediaKitPressFeature>> {
+  return repository.archiveMediaKitPressFeature(workspaceId, pressFeatureId);
+}
+export async function reorderMediaKitPressFeaturesForWorkspace(workspaceId: string, mediaKitId: string, orderedPressFeatureIds: string[]): Promise<DataResult<MediaKitPressFeature[]>> {
+  return repository.reorderMediaKitPressFeatures(workspaceId, mediaKitId, orderedPressFeatureIds);
+}
+
+// ── MEDIAKIT-05 — Social / Contact & CTA / Appearance ────────────────
+
+export async function updateMediaKitSocialLinksForWorkspace(workspaceId: string, mediaKitId: string, links: MediaKitSocialLink[]): Promise<DataResult<MediaKit>> {
+  return repository.updateMediaKitSocialLinks(workspaceId, mediaKitId, links);
+}
+export async function updateMediaKitContactCtaForWorkspace(workspaceId: string, mediaKitId: string, input: MediaKitContactCtaInput): Promise<DataResult<MediaKit>> {
+  return repository.updateMediaKitContactCta(workspaceId, mediaKitId, input);
+}
+export async function updateMediaKitAppearanceForWorkspace(workspaceId: string, mediaKitId: string, input: MediaKitAppearance): Promise<DataResult<MediaKit>> {
+  return repository.updateMediaKitAppearance(workspaceId, mediaKitId, input);
 }

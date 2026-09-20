@@ -1,7 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { PublicMediaKitView } from "@/modules/mediaKit/components/PublicMediaKitView";
 import type { PublicMediaKitContent } from "@/types/mediaKit";
+
+// These are real "use server" actions whose modules pull in `server-only`
+// (via `mediaKitServiceRole.ts`/`publicMediaKit.ts`) — mocked the same way
+// every other Media Kit client-component test mocks its own actions
+// (see MediaKitPortfolioEditor.test.tsx), never executed for real here.
+vi.mock("@/modules/mediaKit/submitMediaKitInquiryAction", () => ({ submitMediaKitInquiryAction: vi.fn(async () => ({ success: true, data: { submitted: true } })) }));
+vi.mock("@/modules/mediaKit/recordMediaKitContactStartedAction", () => ({ recordMediaKitContactStartedAction: vi.fn(async () => undefined) }));
+vi.mock("@/modules/mediaKit/recordMediaKitCtaClickedAction", () => ({ recordMediaKitCtaClickedAction: vi.fn(async () => undefined) }));
 
 const EMPTY_CONTENT: PublicMediaKitContent = {
   brand: {
@@ -34,7 +42,7 @@ const EMPTY_CONTENT: PublicMediaKitContent = {
 
 describe("PublicMediaKitView", () => {
   it("renders only the brand name when there is no persisted content at all — no fabricated marketing copy, no empty section shells", () => {
-    render(<PublicMediaKitView content={EMPTY_CONTENT} assetUrls={new Map()} brandName="Amoré Bloom" />);
+    render(<PublicMediaKitView content={EMPTY_CONTENT} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
     expect(screen.getAllByText("Amoré Bloom").length).toBeGreaterThan(0);
     // Nothing to navigate to yet — no nav links for unpopulated sections.
     expect(screen.queryByRole("navigation", { name: "Section navigation" })).not.toBeInTheDocument();
@@ -56,7 +64,7 @@ describe("PublicMediaKitView", () => {
         specialty_label: "Editorial Florals",
       },
     };
-    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" />);
+    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
     expect(screen.getByRole("heading", { name: "Modern romance, timelessly told." })).toBeInTheDocument();
     expect(screen.getByText("For couples who want their story shown, not staged.")).toBeInTheDocument();
     expect(screen.getByText("A longer brand story.")).toBeInTheDocument();
@@ -68,25 +76,50 @@ describe("PublicMediaKitView", () => {
     const content: PublicMediaKitContent = {
       ...EMPTY_CONTENT,
       services: [
-        { id: "s1", headline: "Full-Service Design", description: "End-to-end event design.", icon_key: null, price_label: "Starting at", is_featured: false },
-        { id: "s2", headline: null, description: null, icon_key: null, price_label: null, is_featured: false },
+        {
+          id: "s1",
+          headline: "Full-Service Design",
+          description: "End-to-end event design.",
+          icon_key: null,
+          public_starting_price_minor: null,
+          price_label: "Starting at",
+          is_featured: false,
+        },
+        { id: "s2", headline: null, description: null, icon_key: null, public_starting_price_minor: null, price_label: null, is_featured: false },
       ],
     };
-    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" />);
+    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
     expect(screen.getByText("Full-Service Design")).toBeInTheDocument();
     expect(screen.getByText("End-to-end event design.")).toBeInTheDocument();
     // The second entry has no headline (an included Service published with an empty override) — nothing renders for it, and no internal id ("s2") leaks into the page.
     expect(screen.queryByText("s2")).not.toBeInTheDocument();
-    // No numeric price ever renders — the published snapshot carries no price amount field at all (see PublicMediaKitContent's doc comment).
-    expect(screen.queryByText(/\$\d/)).not.toBeInTheDocument();
+  });
+
+  it("renders the resolved public starting price alongside its price label when the corrected snapshot carries one", () => {
+    const content: PublicMediaKitContent = {
+      ...EMPTY_CONTENT,
+      services: [
+        {
+          id: "s1",
+          headline: "Full-Service Design",
+          description: null,
+          icon_key: null,
+          public_starting_price_minor: 250000,
+          price_label: "Packages from",
+          is_featured: false,
+        },
+      ],
+    };
+    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
+    expect(screen.getByText(/Packages from.*\$2,500\.00/)).toBeInTheDocument();
   });
 
   it("excluded Services never appear at all — the snapshot itself is already is_included-filtered, so this component has nothing to exclude by name; confirms no extra unlisted service text leaks in", () => {
     const content: PublicMediaKitContent = {
       ...EMPTY_CONTENT,
-      services: [{ id: "s1", headline: "Floral Styling", description: null, icon_key: null, price_label: null, is_featured: false }],
+      services: [{ id: "s1", headline: "Floral Styling", description: null, icon_key: null, public_starting_price_minor: null, price_label: null, is_featured: false }],
     };
-    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" />);
+    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
     expect(screen.getByText("Floral Styling")).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(1);
   });
@@ -102,12 +135,13 @@ describe("PublicMediaKitView", () => {
           location_label: "Savannah, GA",
           event_year: 2025,
           short_description: "A garden celebration.",
+          cover_media_asset_id: null,
           is_featured: true,
           gallery: [],
         },
       ],
     };
-    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" />);
+    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
     expect(screen.getByText("The Harrington Wedding")).toBeInTheDocument();
     expect(screen.getByText(/Wedding · Savannah, GA · 2025/)).toBeInTheDocument();
     expect(screen.getByText("A garden celebration.")).toBeInTheDocument();
@@ -123,7 +157,7 @@ describe("PublicMediaKitView", () => {
       ],
     };
     const assetUrls = new Map([["asset_1", "https://example.test/signed/asset_1.jpg"]]);
-    render(<PublicMediaKitView content={content} assetUrls={assetUrls} brandName="Amoré Bloom" />);
+    render(<PublicMediaKitView content={content} assetUrls={assetUrls} brandName="Amoré Bloom" slug="amore-bloom" />);
     expect(screen.getByRole("heading", { name: "Gallery" })).toBeInTheDocument();
     const image = screen.getByAltText("Reception detail");
     expect(image).toHaveAttribute("src", "https://example.test/signed/asset_1.jpg");
@@ -133,18 +167,20 @@ describe("PublicMediaKitView", () => {
     const content: PublicMediaKitContent = {
       ...EMPTY_CONTENT,
       brand: { ...EMPTY_CONTENT.brand, headline: "Headline" },
-      services: [{ id: "s1", headline: "A Service", description: null, icon_key: null, price_label: null, is_featured: false }],
+      services: [{ id: "s1", headline: "A Service", description: null, icon_key: null, public_starting_price_minor: null, price_label: null, is_featured: false }],
     };
-    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" />);
+    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
     const nav = screen.getByRole("navigation", { name: "Section navigation" });
     expect(nav).toHaveTextContent("Services");
     expect(nav).not.toHaveTextContent("Portfolio");
     expect(nav).not.toHaveTextContent("Gallery");
   });
 
-  it("omits the CTA entirely when the CTA type isn't a real external URL — never a fake/broken action", () => {
-    render(<PublicMediaKitView content={EMPTY_CONTENT} assetUrls={new Map()} brandName="Amoré Bloom" />);
-    expect(screen.queryByRole("link", { name: "Request a Proposal" })).not.toBeInTheDocument();
+  it("the primary CTA links to the on-page inquiry form (#contact) when the CTA type is the default inquiry_form — a real, working action, never a fake/broken one", () => {
+    render(<PublicMediaKitView content={EMPTY_CONTENT} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
+    const links = screen.getAllByRole("link", { name: "Request a Proposal" });
+    expect(links.length).toBeGreaterThan(0);
+    expect(links[0]).toHaveAttribute("href", "#contact");
   });
 
   it("renders a real external CTA link when configured", () => {
@@ -152,9 +188,51 @@ describe("PublicMediaKitView", () => {
       ...EMPTY_CONTENT,
       contact: { ...EMPTY_CONTENT.contact, primary_cta_type: "external_url", primary_cta_external_url: "https://example.test/contact", primary_cta_label: "Work With Us" },
     };
-    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" />);
+    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
     const links = screen.getAllByRole("link", { name: "Work With Us" });
     expect(links.length).toBeGreaterThan(0);
     expect(links[0]).toHaveAttribute("href", "https://example.test/contact");
+  });
+
+  it("always renders the real CRM inquiry form in the Contact section — the non-negotiable public inquiry flow, not optional content", () => {
+    render(<PublicMediaKitView content={EMPTY_CONTENT} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
+    expect(screen.getByLabelText("Name")).toBeInTheDocument();
+    expect(screen.getByLabelText("Email")).toBeInTheDocument();
+    expect(screen.getByLabelText("Message")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send Inquiry" })).toBeInTheDocument();
+  });
+
+  it("renders only approved+included Partners/Testimonials/Press the snapshot already carries, grouped under one Recognition section, and omits it entirely when none exist", () => {
+    render(<PublicMediaKitView content={EMPTY_CONTENT} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
+    expect(screen.queryByText("What Clients Say")).not.toBeInTheDocument();
+    expect(screen.queryByText("Selected Partners")).not.toBeInTheDocument();
+    expect(screen.queryByText("As Featured In")).not.toBeInTheDocument();
+
+    const content: PublicMediaKitContent = {
+      ...EMPTY_CONTENT,
+      partners: [{ id: "p1", display_name: "The Grand Ballroom", logo_media_asset_id: null, partner_type: "Venue", is_featured: false }],
+      testimonials: [{ id: "t1", quote: "They made our day unforgettable.", author_name: "Jamie & Alex", author_role: "Married 2025", photo_media_asset_id: null, is_featured: false }],
+      press: [{ id: "pr1", publication_name: "Southern Weddings", feature_title: null, url: null, logo_media_asset_id: null, featured_on: null }],
+    };
+    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
+    expect(screen.getByText("What Clients Say")).toBeInTheDocument();
+    expect(screen.getByText(/They made our day unforgettable\./)).toBeInTheDocument();
+    expect(screen.getByText("Selected Partners")).toBeInTheDocument();
+    expect(screen.getByText("The Grand Ballroom")).toBeInTheDocument();
+    expect(screen.getByText("As Featured In")).toBeInTheDocument();
+    expect(screen.getByText("Southern Weddings")).toBeInTheDocument();
+  });
+
+  it("renders only visible Social links, and omits the row entirely when none are visible", () => {
+    const content: PublicMediaKitContent = {
+      ...EMPTY_CONTENT,
+      social_links: [
+        { platform: "Instagram", handle_or_url: "instagram.com/amorebloom", is_visible: true },
+        { platform: "Internal Draft Link", handle_or_url: "internal.example/draft", is_visible: false },
+      ],
+    };
+    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
+    expect(screen.getByRole("link", { name: "Instagram" })).toBeInTheDocument();
+    expect(screen.queryByText("Internal Draft Link")).not.toBeInTheDocument();
   });
 });

@@ -18,6 +18,12 @@ import { MediaKitBrandEditor } from "@/modules/mediaKit/components/MediaKitBrand
 import { MediaKitServicesCurator } from "@/modules/mediaKit/components/MediaKitServicesCurator";
 import { MediaKitPortfolioEditor } from "@/modules/mediaKit/components/MediaKitPortfolioEditor";
 import { MediaKitGalleryEditor } from "@/modules/mediaKit/components/MediaKitGalleryEditor";
+import { MediaKitPartnersEditor } from "@/modules/mediaKit/components/MediaKitPartnersEditor";
+import { MediaKitTestimonialsEditor } from "@/modules/mediaKit/components/MediaKitTestimonialsEditor";
+import { MediaKitPressEditor } from "@/modules/mediaKit/components/MediaKitPressEditor";
+import { MediaKitSocialEditor } from "@/modules/mediaKit/components/MediaKitSocialEditor";
+import { MediaKitContactCtaEditor } from "@/modules/mediaKit/components/MediaKitContactCtaEditor";
+import { MediaKitAppearanceEditor } from "@/modules/mediaKit/components/MediaKitAppearanceEditor";
 import type { MediaKitContentStatus, MediaKitEventType, MediaKitOverview, MediaKitSectionReadiness } from "@/types/mediaKit";
 
 type LoadState =
@@ -51,28 +57,6 @@ function ReadinessBadge({ readiness }: { readiness: MediaKitSectionReadiness }) 
   const label = readiness === "ready" ? "Ready" : readiness === "in_progress" ? "In progress" : "Not started";
   return <Badge tone={tone}>{label}</Badge>;
 }
-
-function ComingSoonSection({ title, description, note }: { title: string; description: string; note: string }) {
-  return (
-    <EmptyState
-      icon={MediaKitIcon}
-      title={title}
-      description={description}
-      secondaryAction={note}
-    />
-  );
-}
-
-const SECTION_COPY: Record<(typeof SECTION_KEYS)[number], { title: string; description: string }> = {
-  brand: { title: "Tell your brand story", description: "Share Amoré Bloom's positioning, your longer brand narrative, and where you work." },
-  services: { title: "Choose the services you want to feature", description: "Select which of your Services appear on your public Media Kit, with their own headline and starting price." },
-  portfolio: { title: "Build your portfolio", description: "Showcase your favorite work — from a real Event or a standalone feature." },
-  partners: { title: "Add selected partners", description: "Feature the brands, venues, and collaborators you're proud to work with." },
-  testimonials: { title: "Add approved testimonials", description: "Share the words your clients have used to describe working with you." },
-  press: { title: "Add press features", description: "Highlight where Amoré Bloom has been featured." },
-  gallery: { title: "Build your gallery", description: "Curate the images that tell your story visually." },
-  contact: { title: "Set up your inquiry form", description: "Decide how visitors reach out, and where their inquiry goes." },
-};
 
 /**
  * The private Media Kit Manager's Overview + section-navigation foundation
@@ -403,13 +387,13 @@ export function MediaKitOverviewView() {
           <MediaKitPortfolioEditor workspaceId={mediaKit.workspace_id} onChanged={refresh} />
         </TabPanel>
         <TabPanel value="partners" className="mt-6">
-          <ComingSoonSection {...SECTION_COPY.partners} note="Partners curation begins in a future Media Kit checkpoint." />
+          <MediaKitPartnersEditor workspaceId={mediaKit.workspace_id} onChanged={refresh} />
         </TabPanel>
         <TabPanel value="testimonials" className="mt-6">
-          <ComingSoonSection {...SECTION_COPY.testimonials} note="Testimonials begin in a future Media Kit checkpoint." />
+          <MediaKitTestimonialsEditor workspaceId={mediaKit.workspace_id} onChanged={refresh} />
         </TabPanel>
         <TabPanel value="press" className="mt-6">
-          <ComingSoonSection {...SECTION_COPY.press} note="Press begins in a future Media Kit checkpoint." />
+          <MediaKitPressEditor workspaceId={mediaKit.workspace_id} onChanged={refresh} />
         </TabPanel>
 
         <TabPanel value="metrics" className="mt-6 space-y-3">
@@ -438,24 +422,16 @@ export function MediaKitOverviewView() {
         </TabPanel>
 
         <TabPanel value="social" className="mt-6">
-          <ComingSoonSection
-            title="Add your social links"
-            description="Connect the channels people can find you on."
-            note="Social linking begins in a future Media Kit checkpoint."
-          />
+          <MediaKitSocialEditor mediaKit={mediaKit} onChanged={refresh} />
         </TabPanel>
         <TabPanel value="gallery" className="mt-6">
           <MediaKitGalleryEditor workspaceId={mediaKit.workspace_id} onChanged={refresh} />
         </TabPanel>
         <TabPanel value="contact" className="mt-6">
-          <ComingSoonSection {...SECTION_COPY.contact} note="Contact & CTA setup begins in a future Media Kit checkpoint." />
+          <MediaKitContactCtaEditor mediaKit={mediaKit} onChanged={refresh} />
         </TabPanel>
         <TabPanel value="appearance" className="mt-6">
-          <ComingSoonSection
-            title="Choose your Media Kit's presentation"
-            description="Select a hero image and light presentation preferences, within Amoré Bloom's existing design language."
-            note="Appearance settings begin in a future Media Kit checkpoint."
-          />
+          <MediaKitAppearanceEditor mediaKit={mediaKit} onChanged={refresh} />
         </TabPanel>
 
         <TabPanel value="publish" className="mt-6 space-y-4">
