@@ -22,28 +22,18 @@ export function LuxurySidebar({ logoUrl, brandName, tagline, inspirationalMessag
   const { can, role } = useMemberSession();
   const groups = groupVisibleNavigationModules(can);
   const dashboardLabel = role && resolveDashboardExperience(role) === "team" ? "My Day" : undefined;
-  // GLOBAL-VISUAL-01 Round 4.4 — the approved prototype's brand mark is a small circular
-  // monogram beside the wordmark, not a logo image alone; derived from the real `brandName`
-  // (never hardcoded "AB") so it stays correct for any real workspace name.
-  const monogram = brandName
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase())
-    .join("");
 
   return (
-    // GLOBAL-VISUAL-01 Round 4.3 Revision A, then Round 4.4 — founder-flagged "substantially
-    // too wide and visually heavy" / "wrong composition" correction: logo/header/decorative-
-    // box/footer padding trimmed, and a circular brand monogram (the prototype's actual brand-
-    // mark composition, not a logo image alone) added beside the wordmark. Width, navigation
-    // data, grouping/collapse behavior, active state, and permissions are unchanged.
+    // Founder correction (parallel to Classical Sidebar's own GLOBAL-VISUAL-04R fix) — the
+    // circular "AB" monogram beside the real logo was a duplicate brand mark, not a second
+    // one. Removed; the logo/wordmark is now the single mark and sized up (24px -> 40px max
+    // height) to fill the space the badge freed. Width, navigation data, grouping/collapse
+    // behavior, active state, and permissions are unchanged.
     <aside className="hidden md:flex md:w-64 md:shrink-0 md:flex-col md:border-r md:border-luxury-border md:bg-luxury-sidebar md:py-5">
       <div className="mb-3 flex items-center gap-2.5 px-5 pb-4">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-luxury-rose text-luxury-status font-medium text-luxury-rose-foreground">{monogram}</span>
         <div className="min-w-0">
           {logoUrl ? (
-            <Image src={logoUrl} alt={brandName} width={640} height={640} priority className="h-auto max-h-6 w-auto" />
+            <Image src={logoUrl} alt={brandName} width={640} height={640} priority className="h-auto max-h-10 w-auto" />
           ) : (
             <p className="truncate font-luxury-display text-base leading-none font-semibold text-luxury-text">{brandName}</p>
           )}
