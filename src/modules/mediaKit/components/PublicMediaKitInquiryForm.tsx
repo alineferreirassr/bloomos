@@ -10,7 +10,7 @@ const EMPTY_FORM: MediaKitInquiryInput = { name: "", email: "", interest: "", me
 type FormStatus = "idle" | "submitting" | "success" | "error";
 
 const inputClasses =
-  "w-full rounded-sm border border-border/70 bg-background px-3.5 py-2.5 text-sm text-text placeholder:text-text-muted/60 transition-colors focus:border-accent focus:outline-none";
+  "w-full rounded-sm border border-border/70 bg-background px-4 py-3.5 text-base text-text placeholder:text-text-muted/60 transition-colors focus:border-accent focus:outline-none";
 
 interface PublicMediaKitInquiryFormProps {
   slug: string;
@@ -53,24 +53,24 @@ export function PublicMediaKitInquiryForm({ slug }: PublicMediaKitInquiryFormPro
 
   if (status === "success") {
     return (
-      <div className="rounded-sm border border-accent/30 bg-surface px-6 py-10 text-center">
-        <p className="font-serif text-xl text-text">Thank you.</p>
-        <p className="mt-2 text-sm text-text-muted">Your inquiry has been received — we&apos;ll be in touch soon.</p>
+      <div className="rounded-sm border border-accent/30 bg-surface px-8 py-14 text-center">
+        <p className="font-serif text-2xl text-text">Thank you.</p>
+        <p className="mt-3 text-base text-text-muted">Your inquiry has been received — we&apos;ll be in touch soon.</p>
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} onFocus={markStarted} className="space-y-4 text-left">
+    <form onSubmit={handleSubmit} onFocus={markStarted} className="space-y-5 text-left">
       {error ? (
-        <p role="alert" className="rounded-sm border border-danger/40 bg-danger/10 px-3.5 py-2.5 text-sm text-danger">
+        <p role="alert" className="rounded-sm border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
           {error}
         </p>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <div>
-          <label htmlFor="inquiry_name" className="mb-1.5 block text-[11px] tracking-[0.1em] text-text-muted uppercase">
+          <label htmlFor="inquiry_name" className="mb-2 block text-[11px] tracking-[0.12em] text-text-muted uppercase">
             Name
           </label>
           <input
@@ -84,7 +84,7 @@ export function PublicMediaKitInquiryForm({ slug }: PublicMediaKitInquiryFormPro
           />
         </div>
         <div>
-          <label htmlFor="inquiry_email" className="mb-1.5 block text-[11px] tracking-[0.1em] text-text-muted uppercase">
+          <label htmlFor="inquiry_email" className="mb-2 block text-[11px] tracking-[0.12em] text-text-muted uppercase">
             Email
           </label>
           <input
@@ -99,7 +99,7 @@ export function PublicMediaKitInquiryForm({ slug }: PublicMediaKitInquiryFormPro
       </div>
 
       <div>
-        <label htmlFor="inquiry_interest" className="mb-1.5 block text-[11px] tracking-[0.1em] text-text-muted uppercase">
+        <label htmlFor="inquiry_interest" className="mb-2 block text-[11px] tracking-[0.12em] text-text-muted uppercase">
           What are you interested in?
         </label>
         <input
@@ -114,13 +114,13 @@ export function PublicMediaKitInquiryForm({ slug }: PublicMediaKitInquiryFormPro
       </div>
 
       <div>
-        <label htmlFor="inquiry_message" className="mb-1.5 block text-[11px] tracking-[0.1em] text-text-muted uppercase">
+        <label htmlFor="inquiry_message" className="mb-2 block text-[11px] tracking-[0.12em] text-text-muted uppercase">
           Message
         </label>
         <textarea
           id="inquiry_message"
           required
-          rows={4}
+          rows={5}
           maxLength={2000}
           value={values.message}
           onChange={(event) => setValues({ ...values, message: event.target.value })}
@@ -144,7 +144,7 @@ export function PublicMediaKitInquiryForm({ slug }: PublicMediaKitInquiryFormPro
       <button
         type="submit"
         disabled={status === "submitting"}
-        className="inline-flex items-center justify-center rounded-sm border border-accent bg-accent px-7 py-3 font-serif text-sm font-medium tracking-wide text-accent-foreground transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-60"
+        className="inline-flex w-full items-center justify-center rounded-sm border border-accent bg-accent px-8 py-4 font-serif text-base font-medium tracking-wide text-accent-foreground transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-60 sm:w-auto"
       >
         {status === "submitting" ? "Sending…" : "Send Inquiry"}
       </button>

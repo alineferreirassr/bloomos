@@ -69,7 +69,8 @@ describe("PublicMediaKitView", () => {
     expect(screen.getByText("For couples who want their story shown, not staged.")).toBeInTheDocument();
     expect(screen.getByText("A longer brand story.")).toBeInTheDocument();
     expect(screen.getByText(/Charleston, SC/)).toBeInTheDocument();
-    expect(screen.getByText(/Est\. 2019/)).toBeInTheDocument();
+    expect(screen.getByText("Established")).toBeInTheDocument();
+    expect(screen.getByText("2019")).toBeInTheDocument();
   });
 
   it("renders included Services and omits any Service with no headline (the documented snapshot fallback gap)", () => {
@@ -111,7 +112,8 @@ describe("PublicMediaKitView", () => {
       ],
     };
     render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
-    expect(screen.getByText(/Packages from.*\$2,500\.00/)).toBeInTheDocument();
+    expect(screen.getByText(/Packages from/)).toBeInTheDocument();
+    expect(screen.getByText("$2,500.00")).toBeInTheDocument();
   });
 
   it("excluded Services never appear at all — the snapshot itself is already is_included-filtered, so this component has nothing to exclude by name; confirms no extra unlisted service text leaks in", () => {
@@ -161,6 +163,18 @@ describe("PublicMediaKitView", () => {
     expect(screen.getByRole("heading", { name: "Gallery" })).toBeInTheDocument();
     const image = screen.getByAltText("Reception detail");
     expect(image).toHaveAttribute("src", "https://example.test/signed/asset_1.jpg");
+  });
+
+  it("MEDIAKIT-05V — omits the Gallery section entirely when its rows exist but none resolve to a real asset URL, rather than rendering a lone fake placeholder tile", () => {
+    const content: PublicMediaKitContent = {
+      ...EMPTY_CONTENT,
+      gallery: [
+        { media_asset_id: "asset_unresolvable_1", caption: "Broken", is_cover: false },
+        { media_asset_id: "asset_unresolvable_2", caption: null, is_cover: false },
+      ],
+    };
+    render(<PublicMediaKitView content={content} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
+    expect(screen.queryByRole("heading", { name: "Gallery" })).not.toBeInTheDocument();
   });
 
   it("public navigation only lists anchors for sections that actually rendered", () => {
