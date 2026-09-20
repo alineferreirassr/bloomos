@@ -41,7 +41,7 @@
     spread. Same values-only, names-unchanged approach.
   */
   --color-background: #faf8f1;
-  --color-sidebar: #f6f2e4;
+  --color-sidebar: #fbf8f1;
   --color-surface: #fffefa;
   --color-surface-tint: #f8f5ea;
   --color-border: color-mix(in srgb, #8a6d3f 30%, transparent);
@@ -134,7 +134,7 @@
     against the three approved reference images.
   */
   --luxury-background: #faf8f1;
-  --luxury-sidebar: #f6f2e4;
+  --luxury-sidebar: #fbf8f1;
   --luxury-surface: #fffefa;
   --luxury-surface-tint: #f8f5ea;
   --luxury-border: color-mix(in srgb, #8a6d3f 30%, transparent);
