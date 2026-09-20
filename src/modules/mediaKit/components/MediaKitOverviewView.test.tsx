@@ -7,8 +7,12 @@ import type { MediaKitOverview } from "@/types/mediaKit";
 vi.mock("@/modules/mediaKit/getMediaKitOverviewData", () => ({
   getMediaKitOverviewData: vi.fn(),
 }));
+vi.mock("@/modules/mediaKit/createMediaKitAction", () => ({
+  createMediaKitAction: vi.fn(),
+}));
 
 import { getMediaKitOverviewData } from "@/modules/mediaKit/getMediaKitOverviewData";
+import { createMediaKitAction } from "@/modules/mediaKit/createMediaKitAction";
 
 const EMPTY_MEDIA_KIT: MediaKitOverview = {
   mediaKit: {
@@ -143,5 +147,105 @@ describe("MediaKitOverviewView", () => {
 
     expect(await screen.findByRole("heading", { name: "Media Kit" })).toBeInTheDocument();
     expect(vi.mocked(getMediaKitOverviewData)).toHaveBeenCalledTimes(2);
+  });
+
+  // MEDIAKIT-02.1 — the founder correction: a plain page load (data: null,
+  // no access error) must render an explicit first-use setup, never a
+  // silently-created Overview.
+  describe("first-use setup (no Media Kit exists yet)", () => {
+    it("renders the first-use setup, not the Manager Overview, when no Media Kit exists", async () => {
+      vi.mocked(getMediaKitOverviewData).mockResolvedValue({ success: true, data: null });
+      render(<MediaKitOverviewView />);
+
+      expect(await screen.findByText("Create your Amoré Bloom Media Kit")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Create Media Kit" })).toBeInTheDocument();
+      // The Manager's own tab navigation and Publish button must not render
+      // before a Media Kit exists.
+      expect(screen.queryByRole("tab", { name: "Overview" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Publish" })).not.toBeInTheDocument();
+      // No fabricated content anywhere in the first-use copy.
+      expect(screen.queryByText(/lorem ipsum/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/200\+/)).not.toBeInTheDocument();
+    });
+
+    it("explicit create calls the create action and transitions into the real Manager Overview with truthful zero-state data", async () => {
+      const user = userEvent.setup();
+      vi.mocked(getMediaKitOverviewData).mockResolvedValueOnce({ success: true, data: null });
+      render(<MediaKitOverviewView />);
+      await screen.findByRole("button", { name: "Create Media Kit" });
+
+      vi.mocked(createMediaKitAction).mockResolvedValue({ success: true, data: EMPTY_MEDIA_KIT.mediaKit });
+      vi.mocked(getMediaKitOverviewData).mockResolvedValueOnce({ success: true, data: EMPTY_MEDIA_KIT });
+
+      await user.click(screen.getByRole("button", { name: "Create Media Kit" }));
+
+      expect(await screen.findByRole("heading", { name: "Media Kit" })).toBeInTheDocument();
+      expect(vi.mocked(createMediaKitAction)).toHaveBeenCalledTimes(1);
+      // The real read path is what populates the Overview after creation —
+      // never a client-fabricated ready state.
+      expect(vi.mocked(getMediaKitOverviewData)).toHaveBeenCalledTimes(2);
+      // Initial metrics are real zeros, content is genuinely not_started.
+      expect(screen.getAllByText("0").length).toBeGreaterThanOrEqual(4);
+      expect(screen.getAllByText("Not started").length).toBeGreaterThan(0);
+      expect(screen.getByText("Draft")).toBeInTheDocument();
+    });
+
+    it("double-clicking Create Media Kit only calls the create action once", async () => {
+      const user = userEvent.setup();
+      vi.mocked(getMediaKitOverviewData).mockResolvedValue({ success: true, data: null });
+      render(<MediaKitOverviewView />);
+      const createButton = await screen.findByRole("button", { name: "Create Media Kit" });
+
+      let resolveCreate: (value: Awaited<ReturnType<typeof createMediaKitAction>>) => void = () => {};
+      vi.mocked(createMediaKitAction).mockReturnValue(
+        new Promise((resolve) => {
+          resolveCreate = resolve;
+        }),
+      );
+
+      await user.click(createButton);
+      // The button must be disabled (and re-labeled) while the create is in
+      // flight, so a second click can't fire a second creation.
+      expect(screen.getByRole("button", { name: "Creating…" })).toBeDisabled();
+      await user.click(screen.getByRole("button", { name: "Creating…" }));
+
+      resolveCreate({ success: true, data: EMPTY_MEDIA_KIT.mediaKit });
+      expect(vi.mocked(createMediaKitAction)).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows a calm, actionable error state on creation failure — never a raw database error, and never pretends the Media Kit exists", async () => {
+      const user = userEvent.setup();
+      vi.mocked(getMediaKitOverviewData).mockResolvedValue({ success: true, data: null });
+      render(<MediaKitOverviewView />);
+      await screen.findByRole("button", { name: "Create Media Kit" });
+
+      vi.mocked(createMediaKitAction).mockResolvedValue({ success: false, error: "The Media Kit isn't available." });
+      await user.click(screen.getByRole("button", { name: "Create Media Kit" }));
+
+      expect(await screen.findByText("The Media Kit isn't available.")).toBeInTheDocument();
+      // Still on the first-use setup, not a fabricated Overview.
+      expect(screen.getByRole("button", { name: "Create Media Kit" })).toBeInTheDocument();
+      expect(screen.queryByRole("tab", { name: "Overview" })).not.toBeInTheDocument();
+    });
+
+    it("retries cleanly after a rejected create action, never exposing the raw error", async () => {
+      const user = userEvent.setup();
+      vi.mocked(getMediaKitOverviewData).mockResolvedValue({ success: true, data: null });
+      render(<MediaKitOverviewView />);
+      await screen.findByRole("button", { name: "Create Media Kit" });
+
+      vi.mocked(createMediaKitAction).mockRejectedValueOnce(new Error("duplicate key value violates unique constraint"));
+      await user.click(screen.getByRole("button", { name: "Create Media Kit" }));
+
+      expect(await screen.findByText(/Something went wrong creating your Media Kit/)).toBeInTheDocument();
+      expect(screen.queryByText(/duplicate key/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/unique constraint/)).not.toBeInTheDocument();
+
+      vi.mocked(createMediaKitAction).mockResolvedValueOnce({ success: true, data: EMPTY_MEDIA_KIT.mediaKit });
+      vi.mocked(getMediaKitOverviewData).mockResolvedValueOnce({ success: true, data: EMPTY_MEDIA_KIT });
+      await user.click(screen.getByRole("button", { name: "Create Media Kit" }));
+
+      expect(await screen.findByRole("heading", { name: "Media Kit" })).toBeInTheDocument();
+    });
   });
 });

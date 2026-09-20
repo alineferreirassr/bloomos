@@ -6,7 +6,14 @@ import type { MediaKitOverview } from "@/types/mediaKit";
 
 const GENERIC_ACCESS_ERROR = "The Media Kit isn't available.";
 
-export type GetMediaKitOverviewDataResult = { success: true; data: MediaKitOverview } | { success: false; error: string };
+/**
+ * `data: null` means "authenticated, no access issue, but this workspace
+ * has no Media Kit yet" — the view renders the first-use setup state
+ * rather than treating it as an error. This read path never creates a row
+ * (MEDIAKIT-02.1) — see `createMediaKitAction.ts` for the one explicit
+ * mutation.
+ */
+export type GetMediaKitOverviewDataResult = { success: true; data: MediaKitOverview | null } | { success: false; error: string };
 
 /**
  * The Media Kit Manager's own self-fetch data source, mirroring

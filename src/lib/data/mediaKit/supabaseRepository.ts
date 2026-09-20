@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { normalizeSupabaseError } from "@/lib/supabase/errors";
 import type { MediaKit, MediaKitAnalyticsSummary, MediaKitContentStatus, MediaKitEventType, MediaKitRecentActivityItem } from "@/types/mediaKit";
 import type { MediaKitRepository } from "@/lib/data/mediaKit/repository";
+import type { DataResult } from "@/lib/data/result";
+import { ok } from "@/lib/data/result";
 
 interface MediaKitRow {
   id: string;
@@ -74,7 +76,8 @@ function mapMediaKitRow(row: MediaKitRow): MediaKit {
  * ordinary authenticated surface, exactly like Services/Clients/Events, and
  * has no need to bypass RLS.
  */
-async function getOrCreateMediaKit(workspaceId: string): Promise<MediaKit> {
+/** Pure read — never inserts. Returns `null` if the workspace has no Media Kit yet, so a plain page load can never create one. */
+async function getMediaKit(workspaceId: string): Promise<MediaKit | null> {
   const supabase = await createClient();
 
   const { data: existing, error: selectError } = await supabase
@@ -84,13 +87,22 @@ async function getOrCreateMediaKit(workspaceId: string): Promise<MediaKit> {
     .is("archived_at", null)
     .maybeSingle();
   if (selectError) throw normalizeSupabaseError(selectError);
-  if (existing) return mapMediaKitRow(existing as MediaKitRow);
+  if (!existing) return null;
+  return mapMediaKitRow(existing as MediaKitRow);
+}
 
-  // First-use bootstrap (MEDIAKIT Phase 5): schema defaults only — no
-  // fabricated brand copy, no seeded metrics, no fake achievements. The
-  // `unique(workspace_id)` constraint means a race with another concurrent
-  // first-open just surfaces as a duplicate-key error on the losing insert;
-  // re-reading on that specific failure is enough to recover cleanly.
+/**
+ * MEDIAKIT-02.1 — the one explicit creation path, called only from the
+ * founder's own "Create Media Kit" action, never from a read/page-load
+ * path. Schema defaults only — no fabricated brand copy, no seeded
+ * metrics, no fake achievements. The `unique(workspace_id)` constraint
+ * means a race with another concurrent create just surfaces as a
+ * duplicate-key error on the losing insert; re-reading on that specific
+ * failure recovers cleanly instead of surfacing a broken experience.
+ */
+async function createMediaKit(workspaceId: string): Promise<DataResult<MediaKit>> {
+  const supabase = await createClient();
+
   const { data: created, error: insertError } = await supabase
     .from("media_kits")
     .insert({ workspace_id: workspaceId })
@@ -104,11 +116,11 @@ async function getOrCreateMediaKit(workspaceId: string): Promise<MediaKit> {
         .eq("workspace_id", workspaceId)
         .single();
       if (raceSelectError) throw normalizeSupabaseError(raceSelectError);
-      return mapMediaKitRow(raceWinner as MediaKitRow);
+      return ok(mapMediaKitRow(raceWinner as MediaKitRow));
     }
     throw normalizeSupabaseError(insertError);
   }
-  return mapMediaKitRow(created as MediaKitRow);
+  return ok(mapMediaKitRow(created as MediaKitRow));
 }
 
 async function countIncludedRows(
@@ -231,7 +243,8 @@ async function getMediaKitRecentActivity(workspaceId: string, mediaKitId: string
 }
 
 export const supabaseMediaKitRepository: MediaKitRepository = {
-  getOrCreateMediaKit,
+  getMediaKit,
+  createMediaKit,
   getMediaKitContentStatus,
   getMediaKitAnalyticsSummary,
   getMediaKitRecentActivity,

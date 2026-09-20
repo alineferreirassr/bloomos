@@ -11,9 +11,14 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Tabs, TabList, Tab, TabPanel } from "@/components/ui/Tabs";
 import { MediaKitIcon } from "@/components/ui/icons";
 import { getMediaKitOverviewData } from "@/modules/mediaKit/getMediaKitOverviewData";
+import { createMediaKitAction } from "@/modules/mediaKit/createMediaKitAction";
 import type { MediaKitContentStatus, MediaKitEventType, MediaKitOverview, MediaKitSectionReadiness } from "@/types/mediaKit";
 
-type LoadState = { status: "loading" } | { status: "ready"; data: MediaKitOverview } | { status: "error" };
+type LoadState =
+  | { status: "loading" }
+  | { status: "not_configured" }
+  | { status: "ready"; data: MediaKitOverview }
+  | { status: "error" };
 
 const SECTION_KEYS = ["brand", "services", "portfolio", "partners", "testimonials", "press", "gallery", "contact"] as const;
 
@@ -83,10 +88,16 @@ const SECTION_COPY: Record<(typeof SECTION_KEYS)[number], { title: string; descr
  */
 export function MediaKitOverviewView() {
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   function applyResult(result: Awaited<ReturnType<typeof getMediaKitOverviewData>>) {
     if (!result.success) {
       setState({ status: "error" });
+      return;
+    }
+    if (result.data === null) {
+      setState({ status: "not_configured" });
       return;
     }
     setState({ status: "ready", data: result.data });
@@ -115,6 +126,30 @@ export function MediaKitOverviewView() {
     };
   }, []);
 
+  // MEDIAKIT-02.1 — the one explicit creation entry point. Guards against
+  // double submission with the `creating` flag (the button is also
+  // disabled while true); on success it re-runs the same real read path
+  // (`load`) rather than fabricating a ready state client-side, so the
+  // Overview that appears is always genuinely persisted data.
+  const handleCreate = () => {
+    if (creating) return;
+    setCreating(true);
+    setCreateError(null);
+    createMediaKitAction()
+      .then((result) => {
+        setCreating(false);
+        if (!result.success) {
+          setCreateError(result.error);
+          return;
+        }
+        load();
+      })
+      .catch(() => {
+        setCreating(false);
+        setCreateError("Something went wrong creating your Media Kit. Please try again.");
+      });
+  };
+
   if (state.status === "loading") {
     return (
       <div className="mx-auto max-w-6xl space-y-6">
@@ -131,6 +166,50 @@ export function MediaKitOverviewView() {
 
   if (state.status === "error") {
     return <ErrorState message="The Media Kit isn't available." onRetry={load} />;
+  }
+
+  if (state.status === "not_configured") {
+    return (
+      <div className="mx-auto max-w-6xl space-y-6">
+        <ModuleHero
+          eyebrow="Business"
+          title="Media Kit"
+          purpose="Manage your public Amoré Bloom media presence."
+          breadcrumbs={[{ label: "Home", href: "/dashboard" }, { label: "Media Kit" }]}
+        />
+
+        <Card className="mx-auto flex max-w-xl flex-col items-center gap-5 px-8 py-14 text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-accent-100">
+            <MediaKitIcon className="h-6 w-6 text-accent" aria-hidden="true" />
+          </span>
+          <div>
+            <h1 className="font-serif text-2xl text-text">Create your Amoré Bloom Media Kit</h1>
+            <p className="mt-2 text-sm leading-relaxed text-text-muted">
+              Build a polished public presentation of your brand, services, portfolio, and selected work — all managed directly from BloomOS.
+            </p>
+          </div>
+
+          <ul className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-xs text-text-muted sm:grid-cols-2">
+            <li>Present the brand</li>
+            <li>Feature services</li>
+            <li>Curate portfolio work</li>
+            <li>Share a public page</li>
+            <li>Receive inquiries</li>
+            <li>Track views and conversions</li>
+          </ul>
+
+          <Button type="button" variant="primary" onClick={handleCreate} disabled={creating}>
+            {creating ? "Creating…" : "Create Media Kit"}
+          </Button>
+
+          {createError ? (
+            <p role="alert" className="text-xs text-danger">
+              {createError}
+            </p>
+          ) : null}
+        </Card>
+      </div>
+    );
   }
 
   const { data } = state;

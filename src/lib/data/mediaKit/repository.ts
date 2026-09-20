@@ -1,7 +1,8 @@
 import type { MediaKit, MediaKitAnalyticsSummary, MediaKitContentStatus, MediaKitRecentActivityItem } from "@/types/mediaKit";
+import type { DataResult } from "@/lib/data/result";
 
 /**
- * The Media Kit persistence contract — Foundation phase (MEDIAKIT-02).
+ * The Media Kit persistence contract — Foundation phase (MEDIAKIT-02/02.1).
  * `workspaceId` is an explicit parameter on every method rather than
  * resolved internally (the `requireWorkspaceSession()` pattern
  * Services/Inventory/Purchases use for direct client-side repository
@@ -12,18 +13,29 @@ import type { MediaKit, MediaKitAnalyticsSummary, MediaKitContentStatus, MediaKi
  * convention `core/integrations/*` engine functions already use for the
  * same reason.
  *
- * Only read + get-or-create operations exist this phase — Brand/Services/
+ * Only read + explicit-create operations exist this phase — Brand/Services/
  * Portfolio/Partners/Testimonials/Press/Gallery/Contact/Appearance editing,
  * and the Publish/Unpublish/Rollback actions, begin in MEDIAKIT-03 onward.
+ *
+ * MEDIAKIT-02.1 — founder correction: a plain page load must never
+ * persist a row. `getMediaKit` is a pure read (returns `null` when the
+ * workspace has none yet); `createMediaKit` is the one explicit mutation,
+ * invoked only from the founder's own "Create Media Kit" action.
  */
 export interface MediaKitRepository {
+  /** Pure read — returns `null` if the workspace has no Media Kit yet. Never inserts. */
+  getMediaKit(workspaceId: string): Promise<MediaKit | null>;
+
   /**
-   * Returns the workspace's single `media_kits` row, creating a default one
-   * (schema defaults only — no fabricated brand copy, no seeded metrics) on
-   * first access. Mirrors the "no missing-row error case callers need to
-   * handle" precedent `getOrCreateForProposal` already established.
+   * The one explicit creation path, called only from the founder's own
+   * "Create Media Kit" action — never from a read/page-load path. Uses
+   * schema defaults only (no fabricated brand copy, no seeded metrics). If
+   * a concurrent call already created the row (the `unique(workspace_id)`
+   * constraint), recovers safely by returning the existing row rather than
+   * surfacing a duplicate-key error — a repeated/double submission is
+   * never a broken experience.
    */
-  getOrCreateMediaKit(workspaceId: string): Promise<MediaKit>;
+  createMediaKit(workspaceId: string): Promise<DataResult<MediaKit>>;
 
   getMediaKitContentStatus(workspaceId: string, mediaKitId: string): Promise<MediaKitContentStatus>;
 

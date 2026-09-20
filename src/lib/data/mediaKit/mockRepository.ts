@@ -1,5 +1,7 @@
 import type { MediaKit, MediaKitAnalyticsSummary, MediaKitContentStatus, MediaKitRecentActivityItem } from "@/types/mediaKit";
 import type { MediaKitRepository } from "@/lib/data/mediaKit/repository";
+import type { DataResult } from "@/lib/data/result";
+import { ok } from "@/lib/data/result";
 import { generateId, nowIso, delay } from "@/lib/data/utils";
 
 let mediaKits: MediaKit[] = [];
@@ -42,13 +44,20 @@ function defaultMediaKit(workspaceId: string): MediaKit {
   };
 }
 
-async function getOrCreateMediaKit(workspaceId: string): Promise<MediaKit> {
+/** Pure read — never inserts. */
+async function getMediaKit(workspaceId: string): Promise<MediaKit | null> {
   await delay(100);
+  return mediaKits.find((mk) => mk.workspace_id === workspaceId) ?? null;
+}
+
+/** The one explicit creation path. Recovers safely (returns the existing row) on a repeated/double call rather than creating a second one. */
+async function createMediaKit(workspaceId: string): Promise<DataResult<MediaKit>> {
+  await delay(150);
   const existing = mediaKits.find((mk) => mk.workspace_id === workspaceId);
-  if (existing) return existing;
+  if (existing) return ok(existing);
   const created = defaultMediaKit(workspaceId);
   mediaKits = [...mediaKits, created];
-  return created;
+  return ok(created);
 }
 
 /** No child-table mock stores exist yet (editing begins MEDIAKIT-03) — every section is truthfully "not_started" until then, since brand fields are also still empty on a freshly created row. */
@@ -78,7 +87,8 @@ async function getMediaKitRecentActivity(_workspaceId: string, _mediaKitId: stri
 }
 
 export const mockMediaKitRepository: MediaKitRepository = {
-  getOrCreateMediaKit,
+  getMediaKit,
+  createMediaKit,
   getMediaKitContentStatus,
   getMediaKitAnalyticsSummary,
   getMediaKitRecentActivity,
