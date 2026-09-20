@@ -6,6 +6,8 @@ import type { WorkflowExecutionPolicy, WorkflowMetadata } from "@/types/workflow
 import type { WorkspaceMemberRole } from "@/core/enums/workspaceRole";
 import { Input } from "@/components/ui/Input";
 import { Checkbox } from "@/components/ui/Checkbox";
+import { Textarea } from "@/components/ui/Textarea";
+import { Select } from "@/components/ui/Select";
 
 const SCHEDULE_FREQUENCY_LABELS: Record<WorkflowScheduleFrequency, string> = { daily: "Daily", weekly: "Weekly", monthly: "Monthly" };
 const WEEKDAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -46,7 +48,7 @@ export function WorkflowInspectorPanel({
         <label htmlFor="inspector-description" className="block text-[11px] font-medium text-text-muted">
           Description
         </label>
-        <textarea
+        <Textarea
           id="inspector-description"
           value={metadata.description}
           onChange={(event) => onChange({ metadata: { ...metadata, description: event.target.value }, executionPolicy })}
@@ -59,18 +61,18 @@ export function WorkflowInspectorPanel({
         <label htmlFor="inspector-category" className="block text-[11px] font-medium text-text-muted">
           Category
         </label>
-        <select
+        <Select
           id="inspector-category"
           value={metadata.category}
           onChange={(event) => onChange({ metadata: { ...metadata, category: event.target.value as AutomationCategory }, executionPolicy })}
-          className="mt-1 w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-text"
+          className="mt-1 bg-transparent px-2.5 py-1.5"
         >
           {AUTOMATION_CATEGORIES.map((value) => (
             <option key={value} value={value}>
               {value}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
       <div className="border-t border-border pt-3">
@@ -81,13 +83,13 @@ export function WorkflowInspectorPanel({
           <label htmlFor="inspector-min-role" className="block text-[11px] font-medium text-text-muted">
             Minimum role
           </label>
-          <select
+          <Select
             id="inspector-min-role"
             value={executionPolicy.minimumRole ?? ""}
             onChange={(event) =>
               onChange({ metadata, executionPolicy: { ...executionPolicy, minimumRole: event.target.value ? (event.target.value as WorkspaceMemberRole) : null } })
             }
-            className="mt-1 w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-text"
+            className="mt-1 bg-transparent px-2.5 py-1.5"
           >
             <option value="">No minimum</option>
             {WORKSPACE_MEMBER_ROLES.map((role) => (
@@ -95,7 +97,7 @@ export function WorkflowInspectorPanel({
                 {WORKSPACE_MEMBER_ROLE_LABELS[role]}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         <div className="mt-2">
@@ -145,7 +147,7 @@ export function WorkflowInspectorPanel({
               <label htmlFor="inspector-schedule-frequency" className="block text-[11px] font-medium text-text-muted">
                 Frequency
               </label>
-              <select
+              <Select
                 id="inspector-schedule-frequency"
                 value={executionPolicy.scheduledExecution.frequency}
                 onChange={(event) =>
@@ -157,14 +159,14 @@ export function WorkflowInspectorPanel({
                     },
                   })
                 }
-                className="mt-1 w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-text"
+                className="mt-1 bg-transparent px-2.5 py-1.5"
               >
                 {WORKFLOW_SCHEDULE_FREQUENCIES.map((frequency) => (
                   <option key={frequency} value={frequency}>
                     {SCHEDULE_FREQUENCY_LABELS[frequency]}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             <div>
@@ -190,7 +192,7 @@ export function WorkflowInspectorPanel({
                 <label htmlFor="inspector-schedule-weekday" className="block text-[11px] font-medium text-text-muted">
                   Day of week
                 </label>
-                <select
+                <Select
                   id="inspector-schedule-weekday"
                   value={executionPolicy.scheduledExecution.dayOfWeek ?? 0}
                   onChange={(event) =>
@@ -199,14 +201,14 @@ export function WorkflowInspectorPanel({
                       executionPolicy: { ...executionPolicy, scheduledExecution: { ...executionPolicy.scheduledExecution!, dayOfWeek: Number(event.target.value) } },
                     })
                   }
-                  className="mt-1 w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-text"
+                  className="mt-1 bg-transparent px-2.5 py-1.5"
                 >
                   {WEEKDAY_LABELS.map((label, index) => (
                     <option key={label} value={index}>
                       {label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
             ) : null}
 

@@ -5,6 +5,8 @@ import { listActiveAnnouncementsAction, acknowledgeAnnouncementAction, publishAn
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
+import { Select } from "@/components/ui/Select";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -63,7 +65,7 @@ export function AnnouncementsPanel({ currentMemberId, canManage }: { currentMemb
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Title"
           />
-          <textarea
+          <Textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder="Message"
@@ -71,15 +73,15 @@ export function AnnouncementsPanel({ currentMemberId, canManage }: { currentMemb
             className="w-full resize-none rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text placeholder:text-text-muted focus-visible:border-accent focus-visible:outline-none"
           />
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <select
+            <Select
               value={priority}
               onChange={(e) => setPriority(e.target.value as AnnouncementPriority)}
-              className="w-full rounded-md border border-border bg-surface px-2 py-1 text-sm text-text sm:w-auto"
+              className="px-2 py-1 sm:w-auto"
             >
               <option value="normal">Normal</option>
               <option value="important">Important</option>
               <option value="critical">Critical</option>
-            </select>
+            </Select>
             <Button onClick={handlePublish} disabled={title.trim().length === 0 || body.trim().length === 0} className="w-full sm:w-auto">
               Publish
             </Button>

@@ -5,6 +5,7 @@ import { NodeResizer, type Node, type NodeProps } from "@xyflow/react";
 import { useAnnotationActions } from "@/modules/workflow/canvas/AnnotationActionsContext";
 import { resolveNodeColorClasses } from "@/modules/workflow/canvas/nodeColors";
 import type { WorkflowAnnotationRenderData } from "@/modules/workflow/canvas/graphAdapters";
+import { Textarea } from "@/components/ui/Textarea";
 
 const COMMENT_COLORS = ["neutral", "accent", "warning", "danger", "success"] as const;
 
@@ -49,7 +50,7 @@ export function CommentNode({ id, data, selected }: NodeProps<Node<WorkflowAnnot
           </div>
         ) : null}
       </div>
-      <textarea
+      <Textarea
         className="nodrag h-full w-full flex-1 resize-none border-0 bg-transparent text-[12px] text-text outline-none placeholder:opacity-60"
         value={text}
         placeholder="Write a comment…"

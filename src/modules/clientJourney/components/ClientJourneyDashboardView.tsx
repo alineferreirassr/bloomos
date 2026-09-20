@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Select } from "@/components/ui/Select";
 import { CrmIcon, CheckIcon, AnalyticsIcon } from "@/components/ui/icons";
 
 /**
@@ -113,22 +114,22 @@ export function ClientJourneyDashboardView() {
             <label className="text-sm text-text-muted" htmlFor="journey-subject-filter">
               Type
             </label>
-            <select id="journey-subject-filter" className="rounded-md border border-border bg-surface px-2 py-1 text-sm" value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value as "all" | JourneySubjectType)}>
+            <Select id="journey-subject-filter" className="px-2 py-1" value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value as "all" | JourneySubjectType)}>
               <option value="all">All</option>
               <option value="lead">Leads</option>
               <option value="client">Clients</option>
-            </select>
+            </Select>
             <label className="text-sm text-text-muted" htmlFor="journey-stage-filter">
               Stage
             </label>
-            <select id="journey-stage-filter" className="rounded-md border border-border bg-surface px-2 py-1 text-sm" value={stageFilter} onChange={(e) => setStageFilter(e.target.value)}>
+            <Select id="journey-stage-filter" className="px-2 py-1" value={stageFilter} onChange={(e) => setStageFilter(e.target.value)}>
               <option value="all">All Stages</option>
               {STAGE_BUCKETS.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.label} ({bucketCounts.get(b.id) ?? 0})
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <Card>

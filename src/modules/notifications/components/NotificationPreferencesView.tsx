@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge } from "@/components/ui/Badge";
 import { Checkbox } from "@/components/ui/Checkbox";
+import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { COMMUNICATION_CATEGORIES, DIGEST_FREQUENCIES } from "@/types/communication";
@@ -145,27 +146,27 @@ export function NotificationPreferencesView() {
           <label htmlFor="min-priority" className="mt-2 block text-xs text-text-muted">
             Minimum priority to notify on
           </label>
-          <select
+          <Select
             id="min-priority"
             value={preferences.minimum_priority}
             onChange={(e) => setMinimumPriority(e.target.value as NotificationPriority)}
-            className="mt-1 block rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text"
+            className="mt-1 w-auto px-2 py-1.5"
           >
             {NOTIFICATION_PRIORITIES.map((p) => (
               <option key={p} value={p}>
                 {p}
               </option>
             ))}
-          </select>
+          </Select>
 
           <h3 className="mt-4 font-serif text-base font-semibold text-text">Digest frequency</h3>
-          <select value={preferences.digest_frequency} onChange={(e) => setDigestFrequency(e.target.value as DigestFrequency)} className="mt-1 block rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text">
+          <Select value={preferences.digest_frequency} onChange={(e) => setDigestFrequency(e.target.value as DigestFrequency)} className="mt-1 w-auto px-2 py-1.5">
             {DIGEST_FREQUENCIES.map((f) => (
               <option key={f} value={f}>
                 {f}
               </option>
             ))}
-          </select>
+          </Select>
         </LuxuryCard>
 
         <LuxuryCard>

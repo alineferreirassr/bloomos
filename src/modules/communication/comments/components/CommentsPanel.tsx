@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
+import { Textarea } from "@/components/ui/Textarea";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import type { Comment } from "@/types/comment";
 import type { EntityType } from "@/core/enums/entityType";
@@ -68,7 +69,7 @@ export function CommentsPanel({ ownerType, ownerId }: { ownerType: EntityType; o
         <label htmlFor="new-comment-body" className="sr-only">
           Add a comment
         </label>
-        <textarea
+        <Textarea
           id="new-comment-body"
           value={body}
           onChange={(e) => setBody(e.target.value)}

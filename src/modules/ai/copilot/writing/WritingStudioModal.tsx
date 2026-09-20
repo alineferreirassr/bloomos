@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
 import {
   applyWritingAction,
   WRITING_ACTIONS,
@@ -71,7 +72,7 @@ export function WritingStudioModal({ open, onClose, initialTaskType = "email", i
 
         <label className="block text-xs font-medium text-text-muted">
           Your text
-          <textarea
+          <Textarea
             value={sourceText}
             onChange={(event) => setSourceText(event.target.value)}
             rows={5}

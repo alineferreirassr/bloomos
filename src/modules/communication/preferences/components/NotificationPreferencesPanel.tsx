@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getNotificationPreferencesAction, updateNotificationPreferencesAction } from "@/modules/communication/preferences/preferencesActions";
 import { Checkbox } from "@/components/ui/Checkbox";
+import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { COMMUNICATION_CATEGORIES, DIGEST_FREQUENCIES } from "@/types/communication";
@@ -143,33 +144,33 @@ export function NotificationPreferencesPanel() {
           <label htmlFor="min-priority" className="text-xs text-text-muted">
             Minimum priority to notify on
           </label>
-          <select
+          <Select
             id="min-priority"
             value={preferences.minimum_priority}
             onChange={(e) => setMinimumPriority(e.target.value as NotificationPriority)}
-            className="block w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text sm:max-w-xs"
+            className="px-2 py-1.5 sm:max-w-xs"
           >
             {NOTIFICATION_PRIORITIES.map((p) => (
               <option key={p} value={p}>
                 {p}
               </option>
             ))}
-          </select>
+          </Select>
         </section>
 
         <section className="space-y-2">
           <h3 className="text-sm font-semibold text-text">Digest frequency</h3>
-          <select
+          <Select
             value={preferences.digest_frequency}
             onChange={(e) => setDigestFrequency(e.target.value as DigestFrequency)}
-            className="block w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text sm:max-w-xs"
+            className="px-2 py-1.5 sm:max-w-xs"
           >
             {DIGEST_FREQUENCIES.map((f) => (
               <option key={f} value={f}>
                 {f}
               </option>
             ))}
-          </select>
+          </Select>
         </section>
       </div>
     </div>

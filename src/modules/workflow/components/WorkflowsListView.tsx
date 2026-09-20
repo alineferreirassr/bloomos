@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { registerCommand, unregisterCommand } from "@/core/commandPalette";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { LuxuryCard } from "@/modules/dashboard/luxury/components/LuxuryCard";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -332,18 +333,18 @@ export function WorkflowsListView() {
             <label htmlFor="workflow-category" className="block text-xs font-medium text-text-muted">
               Category
             </label>
-            <select
+            <Select
               id="workflow-category"
               value={category}
               onChange={(event) => setCategory(event.target.value as AutomationCategory)}
-              className="mt-1 w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm text-text"
+              className="mt-1 bg-transparent"
             >
               {AUTOMATION_CATEGORIES.map((value) => (
                 <option key={value} value={value}>
                   {value}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           {createError ? <p className="text-sm text-danger">{createError}</p> : null}
           <div className="flex justify-end gap-2">

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { AUTOMATION_CONDITION_FIELDS, AUTOMATION_CONDITION_OPERATORS } from "@/types/automation";
 import { WORKSPACE_MEMBER_ROLES, WORKSPACE_MEMBER_ROLE_LABELS } from "@/core/enums/workspaceRole";
 import { TIMELINE_ACTIVITY_TYPES } from "@/core/enums/timelineActivityType";
@@ -128,11 +129,11 @@ function ConditionFields({
           <label htmlFor="condition-field" className="block text-[11px] font-medium text-text-muted">
             Field
           </label>
-          <select
+          <Select
             id="condition-field"
             value={field}
             onChange={(event) => onUpdateNodeData(node.id, { ...node.data, field: event.target.value })}
-            className="mt-1 w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-text"
+            className="mt-1 bg-transparent px-2.5 py-1.5"
           >
             <option value="">Select a field…</option>
             {AUTOMATION_CONDITION_FIELDS.map((candidate) => (
@@ -140,7 +141,7 @@ function ConditionFields({
                 {FIELD_LABEL[candidate] ?? candidate}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       ) : (
         <p className="text-xs text-text-muted">
@@ -169,18 +170,18 @@ function ConditionFields({
             <label htmlFor="condition-operator" className="block text-[11px] font-medium text-text-muted">
               Operator
             </label>
-            <select
+            <Select
               id="condition-operator"
               value={operator}
               onChange={(event) => onUpdateNodeData(node.id, { ...node.data, operator: event.target.value })}
-              className="mt-1 w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-text"
+              className="mt-1 bg-transparent px-2.5 py-1.5"
             >
               {AUTOMATION_CONDITION_OPERATORS.map((op) => (
                 <option key={op} value={op}>
                   {OPERATOR_LABEL[op]}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
             <label htmlFor="condition-value" className="block text-[11px] font-medium text-text-muted">
@@ -353,18 +354,18 @@ function ApprovalFields({ node, onUpdateNodeData }: { node: WorkflowNode; onUpda
       <label htmlFor="approval-role" className="block text-[11px] font-medium text-text-muted">
         Minimum approver role
       </label>
-      <select
+      <Select
         id="approval-role"
         value={minimumApproverRole}
         onChange={(event) => onUpdateNodeData(node.id, { ...node.data, minimumApproverRole: event.target.value })}
-        className="mt-1 w-full rounded-md border border-border bg-transparent px-2.5 py-1.5 text-sm text-text"
+        className="mt-1 bg-transparent px-2.5 py-1.5"
       >
         {WORKSPACE_MEMBER_ROLES.map((role) => (
           <option key={role} value={role}>
             {WORKSPACE_MEMBER_ROLE_LABELS[role]}
           </option>
         ))}
-      </select>
+      </Select>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getEntityTimelineData } from "@/modules/communication/timeline/getEntityTimelineData";
 import { ActivityCard } from "@/modules/communication/components/ActivityCard";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -68,11 +69,11 @@ export function EntityTimelinePanel({ ownerType, ownerId }: { ownerType: EntityT
           aria-label="Search timeline"
           className="min-w-0 flex-1"
         />
-        <select
+        <Select
           value={category}
           onChange={(e) => setCategory(e.target.value as CommunicationCategory | "all")}
           aria-label="Filter by category"
-          className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text sm:w-auto sm:shrink-0"
+          className="px-2 py-1.5 sm:w-auto sm:shrink-0"
         >
           <option value="all">All categories</option>
           {COMMUNICATION_CATEGORIES.map((c) => (
@@ -80,7 +81,7 @@ export function EntityTimelinePanel({ ownerType, ownerId }: { ownerType: EntityT
               {CATEGORY_LABEL[c]}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       {filtered.length === 0 ? (
         <EmptyState illustration="generic" title="Nothing here yet" description="Comments, notifications, and other activity for this record will appear here." />

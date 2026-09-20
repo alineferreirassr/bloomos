@@ -4,6 +4,7 @@ import { useState } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
 import {
   applyWritingAction,
   WRITING_ACTIONS,
@@ -56,7 +57,7 @@ export function WritingStudioView() {
 
         <label className="block text-xs font-medium text-text-muted">
           Your text
-          <textarea
+          <Textarea
             value={sourceText}
             onChange={(event) => setSourceText(event.target.value)}
             rows={6}

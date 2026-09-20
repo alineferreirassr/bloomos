@@ -19,6 +19,8 @@ import { Button } from "@/components/ui/Button";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
+import { Select } from "@/components/ui/Select";
 import { FinanceIcon } from "@/components/ui/icons";
 import { CommentsPanel } from "@/modules/communication/comments/components/CommentsPanel";
 
@@ -264,14 +266,14 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
           <h2 className="mb-3 text-sm font-semibold">Build a New Version</h2>
           <label className="text-sm">
             Template
-            <select className="mt-1 w-full rounded-md border border-border bg-surface px-2 py-1 text-sm" value={selectedTemplateId} onChange={(e) => setSelectedTemplateId(e.target.value)}>
+            <Select className="mt-1 w-full px-2 py-1" value={selectedTemplateId} onChange={(e) => setSelectedTemplateId(e.target.value)}>
               <option value="">Select a template…</option>
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
 
           <div className="mt-4">
@@ -279,13 +281,13 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
             <ul role="list" className="space-y-2">
               {draftLineItems.map((li) => (
                 <li key={li.id} role="listitem" className="flex flex-wrap items-center gap-2">
-                  <select className="rounded-md border border-border bg-surface px-2 py-1 text-sm" value={li.kind} onChange={(e) => updateDraftLineItem(li.id, { kind: e.target.value as InvoiceLineItemKind })}>
+                  <Select className="px-2 py-1" value={li.kind} onChange={(e) => updateDraftLineItem(li.id, { kind: e.target.value as InvoiceLineItemKind })}>
                     {INVOICE_LINE_ITEM_KINDS.map((kind) => (
                       <option key={kind} value={kind}>
                         {INVOICE_LINE_ITEM_KIND_LABELS[kind]}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                   <Input className="flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm" placeholder="Label" value={li.label} onChange={(e) => updateDraftLineItem(li.id, { label: e.target.value })} />
                   <Input type="number" min={0} className="w-32 rounded-md border border-border bg-surface px-2 py-1 text-sm" value={li.amount_minor / 100} onChange={(e) => updateDraftLineItem(li.id, { amount_minor: Math.round(Number(e.target.value) * 100) })} />
                   <Button variant="secondary" onClick={() => removeDraftLineItem(li.id)} disabled={draftLineItems.length === 1}>
@@ -303,11 +305,11 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
           <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
             <label className="text-sm">
               Terms
-              <textarea className="mt-1 w-full rounded-md border border-border bg-surface px-2 py-1 text-sm" rows={3} value={terms} onChange={(e) => setTerms(e.target.value)} />
+              <Textarea className="mt-1 w-full rounded-md border border-border bg-surface px-2 py-1 text-sm" rows={3} value={terms} onChange={(e) => setTerms(e.target.value)} />
             </label>
             <label className="text-sm">
               Policies
-              <textarea className="mt-1 w-full rounded-md border border-border bg-surface px-2 py-1 text-sm" rows={3} value={policies} onChange={(e) => setPolicies(e.target.value)} />
+              <Textarea className="mt-1 w-full rounded-md border border-border bg-surface px-2 py-1 text-sm" rows={3} value={policies} onChange={(e) => setPolicies(e.target.value)} />
             </label>
           </div>
 
@@ -394,22 +396,22 @@ export function InvoiceDetailView({ invoiceId }: { invoiceId: string }) {
 
         {detail.builderState && detail.builderState.versions.length > 1 && (
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <select className="rounded-md border border-border bg-surface px-2 py-1 text-sm" value={compareA ?? ""} onChange={(e) => setCompareA(Number(e.target.value))}>
+            <Select className="px-2 py-1" value={compareA ?? ""} onChange={(e) => setCompareA(Number(e.target.value))}>
               <option value="">Version A</option>
               {detail.builderState.versions.map((v) => (
                 <option key={v.id} value={v.version_number}>
                   Version {v.version_number}
                 </option>
               ))}
-            </select>
-            <select className="rounded-md border border-border bg-surface px-2 py-1 text-sm" value={compareB ?? ""} onChange={(e) => setCompareB(Number(e.target.value))}>
+            </Select>
+            <Select className="px-2 py-1" value={compareB ?? ""} onChange={(e) => setCompareB(Number(e.target.value))}>
               <option value="">Version B</option>
               {detail.builderState.versions.map((v) => (
                 <option key={v.id} value={v.version_number}>
                   Version {v.version_number}
                 </option>
               ))}
-            </select>
+            </Select>
             <Button variant="secondary" onClick={handleCompare} disabled={compareA === null || compareB === null}>
               Compare
             </Button>

@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { AssetsIcon } from "@/components/ui/icons";
 
 function nodeLabel(node: KnowledgeNodeRef): string {
@@ -116,13 +117,13 @@ export function KnowledgeGraphExplorerView() {
         <Card>
           <h2 className="mb-3 text-sm font-semibold">Node Inspector</h2>
           <div className="flex flex-wrap items-end gap-2">
-            <select value={inspectNodeType} onChange={(e) => setInspectNodeType(e.target.value as KnowledgeNodeType)} className="rounded-md border border-border bg-surface px-2 py-1.5 text-sm">
+            <Select value={inspectNodeType} onChange={(e) => setInspectNodeType(e.target.value as KnowledgeNodeType)} className="px-2 py-1.5">
               {KNOWLEDGE_NODE_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>
               ))}
-            </select>
+            </Select>
             <Input
               value={inspectNodeId}
               onChange={(e) => setInspectNodeId(e.target.value)}
@@ -177,22 +178,22 @@ export function KnowledgeGraphExplorerView() {
         <Card>
           <h2 className="mb-3 text-sm font-semibold">Path Explorer</h2>
           <div className="flex flex-wrap items-end gap-2">
-            <select value={fromType} onChange={(e) => setFromType(e.target.value as KnowledgeNodeType)} className="rounded-md border border-border bg-surface px-2 py-1.5 text-sm">
+            <Select value={fromType} onChange={(e) => setFromType(e.target.value as KnowledgeNodeType)} className="px-2 py-1.5">
               {KNOWLEDGE_NODE_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>
               ))}
-            </select>
+            </Select>
             <Input value={fromId} onChange={(e) => setFromId(e.target.value)} placeholder="From id" className="w-28" />
             <span className="text-text-muted">→</span>
-            <select value={toType} onChange={(e) => setToType(e.target.value as KnowledgeNodeType)} className="rounded-md border border-border bg-surface px-2 py-1.5 text-sm">
+            <Select value={toType} onChange={(e) => setToType(e.target.value as KnowledgeNodeType)} className="px-2 py-1.5">
               {KNOWLEDGE_NODE_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>
               ))}
-            </select>
+            </Select>
             <Input value={toId} onChange={(e) => setToId(e.target.value)} placeholder="To id" className="w-28" />
             <Button variant="primary" onClick={handleFindPath}>
               Find Path
@@ -253,22 +254,22 @@ export function KnowledgeGraphExplorerView() {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">All Relationships</h2>
           <div className="flex gap-2">
-            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="rounded-md border border-border bg-surface px-2 py-1.5 text-sm">
+            <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="px-2 py-1.5">
               <option value="all">All types</option>
               {Object.entries(RELATIONSHIP_TYPE_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
               ))}
-            </select>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as RelationshipStatus | "all")} className="rounded-md border border-border bg-surface px-2 py-1.5 text-sm">
+            </Select>
+            <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as RelationshipStatus | "all")} className="px-2 py-1.5">
               <option value="all">All statuses</option>
               {RELATIONSHIP_STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
 

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { TableSkeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { ReportsIcon } from "@/components/ui/icons";
 import { listReportMetricsAction, previewReportAction, createReportAction } from "@/modules/reporting/reportingActions";
@@ -119,33 +120,33 @@ export function ReportBuilderView() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <label className="flex flex-col gap-1 text-sm">
             Category
-            <select className="rounded-md border border-border px-3 py-2 text-sm" value={category} onChange={(e) => setCategory(e.target.value as ReportCategory)}>
+            <Select value={category} onChange={(e) => setCategory(e.target.value as ReportCategory)}>
               {REPORT_CATEGORIES.map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="flex flex-col gap-1 text-sm">
             Period
-            <select className="rounded-md border border-border px-3 py-2 text-sm" value={periodKey} onChange={(e) => setPeriodKey(e.target.value as ReportPeriodKey)}>
+            <Select value={periodKey} onChange={(e) => setPeriodKey(e.target.value as ReportPeriodKey)}>
               {REPORT_PERIOD_KEYS.map((key) => (
                 <option key={key} value={key}>
                   {key}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="flex flex-col gap-1 text-sm">
             Comparison
-            <select className="rounded-md border border-border px-3 py-2 text-sm" value={comparisonMode} onChange={(e) => setComparisonMode(e.target.value as ReportComparisonMode)}>
+            <Select value={comparisonMode} onChange={(e) => setComparisonMode(e.target.value as ReportComparisonMode)}>
               {REPORT_COMPARISON_MODES.map((mode) => (
                 <option key={mode} value={mode}>
                   {mode}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         </div>
       </Card>

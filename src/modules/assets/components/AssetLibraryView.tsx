@@ -24,6 +24,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { CardGridSkeleton } from "@/components/ui/Skeleton";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { AssetsIcon, SearchIcon } from "@/components/ui/icons";
 import { useMemberSession } from "@/components/providers/MemberSessionProvider";
 import { AssetCard } from "@/modules/assets/components/AssetCard";
@@ -259,11 +260,11 @@ export function AssetLibraryView() {
                 className="w-full rounded-md border border-border bg-surface py-1.5 pl-8 pr-3 text-sm"
               />
             </div>
-            <select
+            <Select
               value={category}
               onChange={(e) => setCategory(e.target.value as AssetCategory | "all")}
               aria-label="Filter by file type"
-              className="rounded-md border border-border bg-surface px-2 py-1.5 text-sm"
+              className="w-auto px-2 py-1.5"
             >
               <option value="all">All file types</option>
               {ASSET_CATEGORIES.map((c) => (
@@ -271,12 +272,12 @@ export function AssetLibraryView() {
                   {ASSET_CATEGORY_LABELS[c]}
                 </option>
               ))}
-            </select>
-            <select
+            </Select>
+            <Select
               value={status}
               onChange={(e) => setStatus(e.target.value as MediaAssetStatus | "all")}
               aria-label="Filter by approval status"
-              className="rounded-md border border-border bg-surface px-2 py-1.5 text-sm"
+              className="w-auto px-2 py-1.5"
             >
               <option value="all">All statuses</option>
               {Object.entries(MEDIA_ASSET_STATUS_LABELS).map(([value, label]) => (
@@ -284,7 +285,7 @@ export function AssetLibraryView() {
                   {label}
                 </option>
               ))}
-            </select>
+            </Select>
             <ViewToggle value={viewMode} onChange={setViewMode} className="shrink-0" />
           </Card>
 
