@@ -44,8 +44,14 @@ describe("PublicMediaKitView", () => {
   it("renders only the brand name when there is no persisted content at all — no fabricated marketing copy, no empty section shells", () => {
     render(<PublicMediaKitView content={EMPTY_CONTENT} assetUrls={new Map()} brandName="Amoré Bloom" slug="amore-bloom" />);
     expect(screen.getAllByText("Amoré Bloom").length).toBeGreaterThan(0);
-    // Nothing to navigate to yet — no nav links for unpopulated sections.
-    expect(screen.queryByRole("navigation", { name: "Section navigation" })).not.toBeInTheDocument();
+    // MEDIAKIT-06X — the nav still renders, because Contact always exists (the
+    // CRM inquiry form is non-negotiable), but it lists nothing else: no link
+    // points at a section that did not render.
+    const nav = screen.getByRole("navigation", { name: "Section navigation" });
+    expect(nav).toHaveTextContent("Contact");
+    expect(nav).not.toHaveTextContent("About");
+    expect(nav).not.toHaveTextContent("Services");
+    expect(nav).not.toHaveTextContent("Portfolio");
     expect(screen.queryByRole("heading", { name: "Services" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Portfolio" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Gallery" })).not.toBeInTheDocument();

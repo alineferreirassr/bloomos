@@ -6,7 +6,6 @@ import type {
   PublicMediaKitGalleryImage,
   PublicMediaKitPortfolioItem,
   PublicMediaKitPressFeature,
-  PublicMediaKitTestimonial,
 } from "@/types/mediaKit";
 
 interface PublicMediaKitViewProps {
@@ -18,8 +17,8 @@ interface PublicMediaKitViewProps {
   slug: string;
 }
 
-/** The editorial canvas width — deliberately wider than the private BloomOS Manager's admin content width, and wide enough that content fills the browser canvas confidently rather than reading as a narrow document. Images and major visual sections use this; prose nests a narrower reading measure inside it. */
-const WIDE = "mx-auto w-full max-w-[1600px] px-6 sm:px-10 lg:px-16";
+/** The editorial canvas. One width for the whole page so the rhythm reads as a single publication. */
+const WIDE = "mx-auto w-full max-w-[1440px] px-6 sm:px-10 lg:px-16";
 
 function PublicImage({ mediaAssetId, assetUrls, alt, className = "" }: { mediaAssetId: string | null; assetUrls: Map<string, string>; alt: string; className?: string }) {
   const url = mediaAssetId ? assetUrls.get(mediaAssetId) : undefined;
@@ -42,60 +41,37 @@ function coverImageFor(item: PublicMediaKitPortfolioItem): string | null {
   return galleryImage?.media_asset_id ?? null;
 }
 
-/** The lead Portfolio piece — a true full-width cinematic feature, not merely a wider grid cell. */
-function FeaturedPortfolioItem({ item, assetUrls }: { item: PublicMediaKitPortfolioItem; assetUrls: Map<string, string> }) {
-  const cover = coverImageFor(item);
-  const meta = [item.category, item.location_label, item.event_year ? String(item.event_year) : null].filter(Boolean).join(" · ");
+function portfolioMeta(item: PublicMediaKitPortfolioItem): string {
+  return [item.category, item.location_label, item.event_year ? String(item.event_year) : null].filter(Boolean).join(" · ");
+}
 
+/** The small tracked label that opens each band — the page's one recurring editorial motif. */
+function Eyebrow({ children }: { children: React.ReactNode }) {
+  return <p className="text-[11px] tracking-[0.22em] text-accent-2 uppercase">{children}</p>;
+}
+
+/** A Selected Work plate: photograph first, then title and whatever real metadata exists. */
+function WorkPlate({ item, assetUrls, aspectClass }: { item: PublicMediaKitPortfolioItem; assetUrls: Map<string, string>; aspectClass: string }) {
+  const meta = portfolioMeta(item);
   return (
     <article>
-      <div className="aspect-[16/9] overflow-hidden rounded-sm border border-border/60 sm:aspect-[21/9]">
-        <PublicImage mediaAssetId={cover} assetUrls={assetUrls} alt={item.title} />
+      <div className={`overflow-hidden rounded-sm ${aspectClass}`}>
+        <PublicImage mediaAssetId={coverImageFor(item)} assetUrls={assetUrls} alt={item.title} />
       </div>
-      <div className="mt-6 max-w-2xl">
-        {meta ? <p className="text-[11px] tracking-[0.18em] text-accent-2 uppercase">{meta}</p> : null}
-        <h3 className="mt-2 font-serif text-4xl text-text sm:text-5xl">{item.title}</h3>
-        {item.short_description ? <p className="mt-3 text-lg leading-relaxed text-text-muted">{item.short_description}</p> : null}
-      </div>
+      <h3 className="mt-5 font-serif text-[22px] leading-tight text-text">{item.title}</h3>
+      {meta ? <p className="mt-1.5 text-[11px] tracking-[0.14em] text-accent-2 uppercase">{meta}</p> : null}
+      {item.short_description ? <p className="mt-2.5 max-w-[34ch] text-[15px] leading-relaxed text-text-muted">{item.short_description}</p> : null}
     </article>
   );
 }
 
-function PortfolioCard({ item, assetUrls, aspectClass }: { item: PublicMediaKitPortfolioItem; assetUrls: Map<string, string>; aspectClass: string }) {
-  const cover = coverImageFor(item);
-  const meta = [item.category, item.location_label, item.event_year ? String(item.event_year) : null].filter(Boolean).join(" · ");
-
+function GalleryFrame({ image, assetUrls, aspectClass }: { image: PublicMediaKitGalleryImage; assetUrls: Map<string, string>; aspectClass: string }) {
+  const url = assetUrls.get(image.media_asset_id);
+  if (!url) return null;
   return (
-    <article>
-      <div className={`overflow-hidden rounded-sm border border-border/60 ${aspectClass}`}>
-        <PublicImage mediaAssetId={cover} assetUrls={assetUrls} alt={item.title} />
-      </div>
-      <div className="mt-5">
-        {meta ? <p className="text-[11px] tracking-[0.18em] text-accent-2 uppercase">{meta}</p> : null}
-        <h3 className="mt-1.5 font-serif text-2xl text-text">{item.title}</h3>
-        {item.short_description ? <p className="mt-2 max-w-md text-base leading-relaxed text-text-muted">{item.short_description}</p> : null}
-      </div>
-    </article>
-  );
-}
-
-function TestimonialQuote({ testimonial, assetUrls }: { testimonial: PublicMediaKitTestimonial; assetUrls: Map<string, string> }) {
-  return (
-    <figure className="flex flex-col items-center gap-6 text-center">
-      {testimonial.photo_media_asset_id ? (
-        <div className="h-24 w-24 overflow-hidden rounded-full border border-border/60">
-          <PublicImage mediaAssetId={testimonial.photo_media_asset_id} assetUrls={assetUrls} alt={testimonial.author_name} />
-        </div>
-      ) : (
-        <span aria-hidden="true" className="font-serif text-3xl text-accent/30">
-          ✦
-        </span>
-      )}
-      <blockquote className="max-w-lg text-balance font-serif text-[28px] leading-snug text-text italic sm:text-[32px]">&ldquo;{testimonial.quote}&rdquo;</blockquote>
-      <figcaption className="text-xs tracking-[0.14em] text-text-muted uppercase">
-        {testimonial.author_name}
-        {testimonial.author_role ? <span className="text-text-muted/70"> — {testimonial.author_role}</span> : null}
-      </figcaption>
+    <figure className={`overflow-hidden rounded-sm ${aspectClass}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- a real signed Supabase Storage URL resolved per-request server-side, not a static asset Next can optimize */}
+      <img src={url} alt={image.caption ?? ""} className="h-full w-full object-cover" />
     </figure>
   );
 }
@@ -104,9 +80,9 @@ function PressLogo({ feature, assetUrls }: { feature: PublicMediaKitPressFeature
   const url = feature.logo_media_asset_id ? assetUrls.get(feature.logo_media_asset_id) : undefined;
   const content = url ? (
     // eslint-disable-next-line @next/next/no-img-element -- a real signed Supabase Storage URL resolved per-request server-side, not a static asset Next can optimize
-    <img src={url} alt={feature.publication_name} className="h-10 max-w-[170px] object-contain opacity-70 grayscale transition-opacity hover:opacity-100" />
+    <img src={url} alt={feature.publication_name} className="h-8 max-w-[150px] object-contain opacity-70 grayscale transition-opacity hover:opacity-100" />
   ) : (
-    <span className="font-serif text-lg tracking-wide text-text-muted">{feature.publication_name}</span>
+    <span className="font-serif text-base tracking-wide text-text-muted">{feature.publication_name}</span>
   );
   return feature.url ? (
     <a href={feature.url} target="_blank" rel="noopener noreferrer" className="flex items-center">
@@ -118,360 +94,389 @@ function PressLogo({ feature, assetUrls }: { feature: PublicMediaKitPressFeature
 }
 
 /**
- * A light deterministic rhythm for the masonry gallery — every third image
- * reads slightly taller so the grid has real editorial variation instead of
- * a uniform checkerboard, without needing to measure real image
- * dimensions client-side.
- */
-function galleryAspect(index: number): string {
-  return index % 3 === 0 ? "aspect-[3/4]" : index % 3 === 1 ? "aspect-square" : "aspect-[4/5]";
-}
-
-/** The same rhythm, offset by one, for the Portfolio secondary grid — visually distinct from the Gallery's own pattern even when both render on the same page. */
-function portfolioAspect(index: number): string {
-  return index % 2 === 0 ? "aspect-[4/5]" : "aspect-square";
-}
-
-function GalleryImage({ image, assetUrls, aspectClass }: { image: PublicMediaKitGalleryImage; assetUrls: Map<string, string>; aspectClass: string }) {
-  const url = assetUrls.get(image.media_asset_id);
-  if (!url) return null;
-  return (
-    <div className={`mb-5 break-inside-avoid overflow-hidden rounded-sm border border-border/60 ${aspectClass} sm:mb-6`}>
-      {/* eslint-disable-next-line @next/next/no-img-element -- a real signed Supabase Storage URL resolved per-request server-side, not a static asset Next can optimize */}
-      <img src={url} alt={image.caption ?? "Gallery image"} className="h-full w-full object-cover" />
-    </div>
-  );
-}
-
-/**
  * MEDIAKIT-05 — the public-facing Amoré Bloom Media Kit. Renders ONLY
  * `content` that survived the frozen `publish_media_kit()` composition
  * (already published/is_included/is_approved-filtered) — this component
  * never reaches back into draft data, never fabricates copy, and omits any
  * section with nothing real to show rather than rendering an empty/broken
- * placeholder. Deliberately does not reuse the private Manager's
- * `Card`/admin components: this is a public brand experience, not a
- * dashboard.
+ * placeholder.
  *
- * The Contact section always renders — the real CRM inquiry form is a
- * non-negotiable core feature, not optional content — using persisted
- * copy when set and an already-approved generic label otherwise
- * (`primary_cta_label` always has a real value; the schema itself
- * defaults it, never fabricated Amoré Bloom-specific claims).
+ * MEDIAKIT-06X — the Home is now a short luxury portfolio site, not a long
+ * editorial document. Six primary bands, in this order:
  *
- * MEDIAKIT-06V — a substantial visual rework after founder rejection of
- * MEDIAKIT-06's composition (too sparse, too small, too much dead
- * whitespace, Services reading as plain text rows rather than premium
- * offerings, insufficient editorial color rhythm). This pass: widens the
- * canvas (1600px), gives Services real card containment, gives Portfolio a
- * true full-width cinematic lead item, introduces one deliberate deep-wine
- * editorial band (the closing "Work With Us" section, using the existing
- * `--color-accent-800` token — never a new color), and varies section
- * padding by actual content weight instead of a uniform py-24/py-32
- * everywhere. Content/DTO/section omission rules are unchanged from
- * MEDIAKIT-05V — this is presentation only.
+ *   01 header + hero   02 services   03 selected work
+ *   04 about           05 work with us (CTA + the real inquiry form)
+ *   06 footer
+ *
+ * Recognition (testimonials / partners / press) and the Gallery no longer
+ * occupy bands of their own: when real published content exists they appear
+ * compactly inside Selected Work and About, so nothing published is lost
+ * while the page stays short. Every omission rule and the whole
+ * content/DTO/CRM contract are unchanged — this is presentation only.
+ *
+ * Public metrics are deliberately absent: the published snapshot carries no
+ * founder-approved public metric fields, and the visual reference's
+ * 200+/150+/25+/100% are illustrative mockup content, never real data.
  */
 export function PublicMediaKitView({ content, assetUrls, brandName, slug }: PublicMediaKitViewProps) {
   const { brand, contact, social_links, appearance, services, portfolio, partners, testimonials, press, gallery } = content;
 
   // A Service entry can publish with a null `headline` (see the documented
-  // gap on `PublicMediaKitContent` in src/types/mediaKit.ts) — a card with
+  // gap on `PublicMediaKitContent` in src/types/mediaKit.ts) — an entry with
   // no headline has nothing honest to show, so it's omitted rather than
   // rendered blank.
   const visibleServices = services.filter((service) => service.headline);
   const hasAbout = Boolean(brand.brand_narrative || brand.location_label || brand.service_area || brand.established_year || brand.specialty_label);
   const hasServices = visibleServices.length > 0;
-  const hasPortfolio = portfolio.length > 0;
-  const [featuredPortfolioItem, ...restPortfolio] = portfolio;
+
+  // Home is the preview: three plates lead, the rest stays available just
+  // below rather than being hidden behind a link with nowhere to go.
+  const leadWork = portfolio.slice(0, 3);
+  const restWork = portfolio.slice(3);
+  const hasPortfolio = leadWork.length > 0;
+
+  const resolvedGallery = gallery.filter((image) => assetUrls.has(image.media_asset_id));
+  const hasGallery = resolvedGallery.length > 0;
   const hasPartners = partners.length > 0;
   const hasTestimonials = testimonials.length > 0;
   const hasPress = press.length > 0;
-  const resolvedGallery = gallery.filter((image) => assetUrls.has(image.media_asset_id));
-  const hasGallery = resolvedGallery.length > 0;
+  const hasRecognition = hasPartners || hasTestimonials || hasPress;
+
+  // The fourth band renders when there is anything real to say — About copy,
+  // recognition, or both. Recognition never disappears just because the
+  // brand narrative happens to be empty.
+  const hasAboutBand = hasAbout || hasRecognition;
+
   const visibleSocialLinks = social_links.filter((link) => link.is_visible);
   const hasSocial = visibleSocialLinks.length > 0;
 
   const heroMediaAssetId = typeof appearance.hero_media_asset_id === "string" ? appearance.hero_media_asset_id : null;
   const heroImageUrl = heroMediaAssetId ? assetUrls.get(heroMediaAssetId) : undefined;
 
+  // The closing band borrows a real published photograph when one exists —
+  // never a fabricated one. Falls back to the existing deep-wine token band.
+  const closingImageUrl =
+    resolvedGallery.length > 0 ? assetUrls.get(resolvedGallery[resolvedGallery.length - 1].media_asset_id) : undefined;
+
   const primaryCtaIsExternal = contact.primary_cta_type === "external_url" && Boolean(contact.primary_cta_external_url);
   const primaryCtaHref = primaryCtaIsExternal ? (contact.primary_cta_external_url as string) : "#contact";
+  const ctaTarget = primaryCtaIsExternal ? "_blank" : undefined;
+  const ctaRel = primaryCtaIsExternal ? "noopener noreferrer" : undefined;
 
   const navSections = [
     hasAbout ? { id: "about", label: "About" } : null,
     hasServices ? { id: "services", label: "Services" } : null,
     hasPortfolio ? { id: "portfolio", label: "Portfolio" } : null,
-    hasPartners || hasTestimonials || hasPress ? { id: "recognition", label: "Recognition" } : null,
-    hasGallery ? { id: "gallery", label: "Gallery" } : null,
+    { id: "contact", label: "Contact" },
   ].filter((section): section is { id: string; label: string } => section !== null);
 
   return (
     <div className="min-h-screen bg-background text-text">
-      <header className="border-b border-border/60">
-        <div className={`${WIDE} flex flex-col items-start gap-3 py-6 sm:flex-row sm:items-center sm:justify-between`}>
+      {/* ── BAND 01 · header + hero ─────────────────────────────────── */}
+      <header className="border-b border-border/60 bg-background">
+        <div className={`${WIDE} flex flex-wrap items-center justify-between gap-x-10 gap-y-3 py-5`}>
           <span className="font-serif text-xl tracking-wide text-text">{brandName}</span>
-          {navSections.length > 0 ? (
-            <nav aria-label="Section navigation" className="flex flex-wrap gap-x-6 gap-y-1.5">
-              {navSections.map((section) => (
-                <a
-                  key={section.id}
-                  href={`#${section.id}`}
-                  className="rounded-[2px] text-[11px] tracking-[0.14em] text-text-muted uppercase transition-colors hover:text-accent focus-visible:text-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent sm:text-xs"
-                >
-                  {section.label}
-                </a>
-              ))}
-            </nav>
-          ) : null}
+          <nav aria-label="Section navigation" className="flex flex-wrap items-center gap-x-7 gap-y-1.5">
+            {navSections.map((section) => (
+              <a
+                key={section.id}
+                href={`#${section.id}`}
+                className="rounded-[2px] text-[11px] tracking-[0.14em] text-text-muted uppercase transition-colors hover:text-accent focus-visible:text-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+              >
+                {section.label}
+              </a>
+            ))}
+          </nav>
+          <PublicMediaKitCtaButton
+            slug={slug}
+            ctaId="header_primary"
+            href={primaryCtaHref}
+            target={ctaTarget}
+            rel={ctaRel}
+            className="inline-flex items-center justify-center rounded-sm bg-accent px-6 py-2.5 text-[12px] font-medium tracking-[0.1em] text-accent-foreground uppercase transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+          >
+            {contact.primary_cta_label}
+          </PublicMediaKitCtaButton>
         </div>
       </header>
 
-      {/* Hero / first fold */}
-      {heroImageUrl ? (
-        <section className="relative flex min-h-[92vh] items-end overflow-hidden sm:min-h-screen">
-          {/* eslint-disable-next-line @next/next/no-img-element -- a real signed Supabase Storage URL resolved per-request server-side, not a static asset Next can optimize */}
-          <img src={heroImageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/5" />
-          <div className={`${WIDE} relative z-10 pb-20 text-white sm:pb-28`}>
-            <div className="max-w-4xl">
-              <p className="text-[12px] tracking-[0.3em] uppercase opacity-85">{brandName}</p>
-              <h1 className="mt-5 text-balance font-serif text-6xl leading-[1.02] sm:text-7xl lg:text-8xl">{brand.headline || brandName}</h1>
-              {brand.positioning_statement ? <p className="mt-6 max-w-xl text-lg leading-relaxed italic opacity-90 sm:text-xl">{brand.positioning_statement}</p> : null}
-              <PublicMediaKitCtaButton
-                slug={slug}
-                ctaId="hero_primary"
-                href={primaryCtaHref}
-                target={primaryCtaIsExternal ? "_blank" : undefined}
-                rel={primaryCtaIsExternal ? "noopener noreferrer" : undefined}
-                className="mt-10 inline-flex items-center justify-center rounded-sm border border-white bg-white px-10 py-4 font-serif text-base font-medium tracking-wide text-text transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
-              >
-                {contact.primary_cta_label}
-              </PublicMediaKitCtaButton>
-            </div>
-          </div>
-        </section>
-      ) : (
-        <section className="relative flex min-h-[85vh] items-center overflow-hidden border-b border-border/60 sm:min-h-[92vh]">
-          {/* A soft warm radial wash — never a fabricated photo — so the image-empty hero still reads as an intentional editorial composition rather than a blank page. */}
-          <div
-            aria-hidden="true"
-            className="absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(ellipse 80% 60% at 50% 30%, color-mix(in srgb, var(--color-accent) 10%, transparent), transparent), radial-gradient(ellipse 60% 50% at 80% 80%, color-mix(in srgb, var(--color-accent-2) 12%, transparent), transparent)",
-            }}
-          />
-          <div className={`${WIDE} relative text-center`}>
-            <span aria-hidden="true" className="font-serif text-4xl text-accent/40">
-              ✦
-            </span>
-            <p className="mt-6 text-[12px] tracking-[0.3em] text-accent-2 uppercase">{brandName}</p>
-            <h1 className="mx-auto mt-5 max-w-5xl text-balance font-serif text-6xl leading-[1.02] text-text sm:text-8xl lg:text-9xl">{brand.headline || brandName}</h1>
+      <section className="border-b border-border/60">
+        <div className="mx-auto grid w-full max-w-[1440px] grid-cols-1 items-center gap-10 lg:grid-cols-[0.88fr_1.12fr] lg:gap-14">
+          <div className="px-6 pt-14 pb-2 sm:px-10 lg:py-16 lg:pr-0 lg:pl-16">
+            <Eyebrow>{brandName}</Eyebrow>
+            <h1 className="mt-5 text-balance font-serif text-[44px] leading-[1.07] text-text sm:text-6xl lg:text-[64px]">{brand.headline || brandName}</h1>
             {brand.positioning_statement ? (
-              <p className="mx-auto mt-8 max-w-2xl text-lg leading-relaxed text-text-muted italic sm:text-xl">{brand.positioning_statement}</p>
+              <p className="mt-6 max-w-md text-lg leading-relaxed text-text-muted">{brand.positioning_statement}</p>
             ) : null}
             <PublicMediaKitCtaButton
               slug={slug}
               ctaId="hero_primary"
               href={primaryCtaHref}
-              target={primaryCtaIsExternal ? "_blank" : undefined}
-              rel={primaryCtaIsExternal ? "noopener noreferrer" : undefined}
-              className="mt-10 inline-flex items-center justify-center rounded-sm border border-accent bg-accent px-10 py-4 font-serif text-base font-medium tracking-wide text-accent-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+              target={ctaTarget}
+              rel={ctaRel}
+              className="mt-8 inline-flex items-center justify-center rounded-sm bg-accent px-9 py-3.5 font-serif text-base font-medium tracking-wide text-accent-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
             >
               {contact.primary_cta_label}
             </PublicMediaKitCtaButton>
           </div>
-        </section>
-      )}
 
-      {hasAbout ? (
+          <div className="overflow-hidden">
+            {heroImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- a real signed Supabase Storage URL resolved per-request server-side, not a static asset Next can optimize
+              <img src={heroImageUrl} alt="" className="aspect-[4/3] w-full object-cover lg:aspect-[6/5]" />
+            ) : (
+              <div
+                aria-hidden="true"
+                className="aspect-[4/3] w-full lg:aspect-[6/5]"
+                style={{
+                  background:
+                    "radial-gradient(ellipse 80% 70% at 40% 30%, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent), radial-gradient(ellipse 70% 60% at 85% 85%, color-mix(in srgb, var(--color-accent-2) 14%, transparent), transparent), var(--color-surface-tint)",
+                }}
+              />
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ── BAND 02 · services ──────────────────────────────────────── */}
+      {hasServices ? (
+        <section id="services" className="border-b border-border/60 bg-surface">
+          <div className={`${WIDE} py-14 sm:py-[72px]`}>
+            <Eyebrow>Our Services</Eyebrow>
+            <h2 className="mt-4 font-serif text-4xl text-text sm:text-[42px]">Services</h2>
+            <ul className="mt-11 grid grid-cols-1 gap-px bg-border/50 sm:grid-cols-2 lg:grid-cols-3">
+              {visibleServices.slice(0, 6).map((service, index) => (
+                <li key={service.id} className="bg-surface px-7 py-8 transition-colors hover:bg-background lg:px-8 lg:py-9">
+                  <span className="font-serif text-xs text-accent-2 tabular-nums">{String(index + 1).padStart(2, "0")}</span>
+                  <h3 className="mt-3 font-serif text-[26px] leading-tight text-text">{service.headline}</h3>
+                  {service.description ? <p className="mt-2.5 max-w-[30ch] text-[15px] leading-relaxed text-text-muted">{service.description}</p> : null}
+                  {service.public_starting_price_minor != null ? (
+                    <p className="mt-4 text-[13px] tracking-[0.04em] text-accent-2">
+                      {service.price_label ?? "Starting at"} <span className="font-medium">{formatMoney(service.public_starting_price_minor, "USD")}</span>
+                    </p>
+                  ) : service.price_label ? (
+                    <p className="mt-4 text-[13px] tracking-[0.04em] text-accent-2">{service.price_label}</p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      ) : null}
+
+      {/* ── BAND 03 · selected work ─────────────────────────────────── */}
+      {hasPortfolio || hasGallery ? (
+        <section id="portfolio" className="border-b border-border/60">
+          <div className={`${WIDE} py-14 sm:py-[72px]`}>
+            <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-3">
+              <div>
+                <Eyebrow>Selected Work</Eyebrow>
+                <h2 className="mt-4 font-serif text-4xl text-text sm:text-[42px]">Portfolio</h2>
+              </div>
+              {restWork.length > 0 || hasGallery ? (
+                <a
+                  href="#portfolio-more"
+                  className="rounded-[2px] text-[12px] tracking-[0.12em] text-accent uppercase underline decoration-accent/40 underline-offset-4 transition-colors hover:decoration-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+                >
+                  View More Work
+                </a>
+              ) : null}
+            </div>
+
+            {hasPortfolio ? (
+              <div className="mt-12 grid grid-cols-1 gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+                {leadWork.map((item) => (
+                  <WorkPlate key={item.id} item={item} assetUrls={assetUrls} aspectClass="aspect-[4/3]" />
+                ))}
+              </div>
+            ) : null}
+
+            {restWork.length > 0 || hasGallery ? (
+              <div id="portfolio-more" className="mt-14 scroll-mt-24">
+                {restWork.length > 0 ? (
+                  <>
+                    <h3 className="sr-only">More work</h3>
+                    <div className="grid grid-cols-2 items-start gap-x-6 gap-y-10 sm:grid-cols-3 lg:grid-cols-4">
+                      {restWork.map((item) => (
+                        <WorkPlate key={item.id} item={item} assetUrls={assetUrls} aspectClass="aspect-square" />
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+                {hasGallery ? (
+                  <>
+                    <h3 className="sr-only">Gallery</h3>
+                    <div className={`grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 ${restWork.length > 0 ? "mt-8" : ""}`}>
+                      {resolvedGallery.map((image) => (
+                        <GalleryFrame key={image.media_asset_id} image={image} assetUrls={assetUrls} aspectClass="aspect-square" />
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {/* ── BAND 04 · about ─────────────────────────────────────────── */}
+      {hasAboutBand ? (
         <section id="about" className="border-b border-border/60 bg-surface">
-          <div className={`${WIDE} grid grid-cols-1 gap-12 py-20 sm:py-28 lg:grid-cols-[0.8fr_1.2fr] lg:gap-24`}>
+          <div className={`${WIDE} grid grid-cols-1 items-center gap-10 py-14 sm:py-[72px] ${hasAbout ? "lg:grid-cols-[0.95fr_1.05fr] lg:gap-16" : ""}`}>
+            {hasAbout ? (
+            <div className="overflow-hidden rounded-sm">
+              <div className="aspect-[4/5]">
+                <PublicImage
+                  mediaAssetId={resolvedGallery[0]?.media_asset_id ?? (leadWork[0] ? coverImageFor(leadWork[0]) : null)}
+                  assetUrls={assetUrls}
+                  alt=""
+                />
+              </div>
+            </div>
+            ) : null}
+
             <div>
+              {hasAbout ? <Eyebrow>About {brandName}</Eyebrow> : null}
               {brand.specialty_label ? (
-                <h2 className="font-serif text-4xl leading-tight text-text sm:text-5xl">{brand.specialty_label}</h2>
+                <h2 className="mt-4 font-serif text-4xl leading-tight text-text sm:text-[42px]">{brand.specialty_label}</h2>
               ) : (
                 <h2 className="sr-only">About</h2>
               )}
+              {brand.brand_narrative ? (
+                <p className="mt-6 max-w-xl text-lg leading-relaxed whitespace-pre-wrap text-text-muted">{brand.brand_narrative}</p>
+              ) : null}
+
               {brand.location_label || brand.service_area || brand.established_year ? (
-                <dl className="mt-10 space-y-4">
+                <dl className="mt-8 flex flex-wrap gap-x-12 gap-y-4">
                   {brand.location_label ? (
                     <div>
                       <dt className="text-[11px] tracking-[0.14em] text-accent-2 uppercase">Based In</dt>
-                      <dd className="mt-0.5 text-lg text-text">{brand.location_label}</dd>
+                      <dd className="mt-0.5 text-base text-text">{brand.location_label}</dd>
                     </div>
                   ) : null}
                   {brand.service_area ? (
                     <div>
                       <dt className="text-[11px] tracking-[0.14em] text-accent-2 uppercase">Service Area</dt>
-                      <dd className="mt-0.5 text-lg text-text">{brand.service_area}</dd>
+                      <dd className="mt-0.5 text-base text-text">{brand.service_area}</dd>
                     </div>
                   ) : null}
                   {brand.established_year ? (
                     <div>
                       <dt className="text-[11px] tracking-[0.14em] text-accent-2 uppercase">Established</dt>
-                      <dd className="mt-0.5 text-lg text-text">{brand.established_year}</dd>
+                      <dd className="mt-0.5 text-base text-text">{brand.established_year}</dd>
                     </div>
                   ) : null}
                 </dl>
               ) : null}
-            </div>
-            {brand.brand_narrative ? (
-              <p className="max-w-2xl text-2xl leading-relaxed whitespace-pre-wrap text-text">{brand.brand_narrative}</p>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
 
-      {hasServices ? (
-        <section id="services" className="border-b border-border/60">
-          <div className={`${WIDE} py-20 sm:py-28`}>
-            <h2 className="font-serif text-4xl text-text sm:text-5xl">Services</h2>
-            <div className="mt-14 grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-8">
-              {visibleServices.map((service, index) => (
-                <div
-                  key={service.id}
-                  className={`rounded-md border bg-surface p-8 shadow-sm transition-shadow hover:shadow-md lg:p-10 ${service.is_featured ? "border-accent/40" : "border-border/60"}`}
-                >
-                  {service.is_featured ? (
-                    <div className="-mt-8 -ml-8 mb-6 inline-block rounded-tl-md rounded-br-md bg-accent px-4 py-1.5 text-[10px] font-medium tracking-[0.18em] text-accent-foreground uppercase lg:-mt-10 lg:-ml-10">
-                      Featured
+              {/* Real recognition, compactly — never its own band, never fabricated. */}
+              {hasRecognition ? (
+                <div className={hasAbout ? "mt-10 border-t border-border/60 pt-8" : ""}>
+                  {hasTestimonials ? (
+                    <div>
+                      <h3 className="text-[11px] tracking-[0.2em] text-accent-2 uppercase">What Clients Say</h3>
+                      <div className="mt-4 flex flex-col gap-6">
+                        {testimonials.map((testimonial) => (
+                          <figure key={testimonial.id}>
+                            <blockquote className="max-w-xl font-serif text-xl leading-snug text-text italic">&ldquo;{testimonial.quote}&rdquo;</blockquote>
+                            <figcaption className="mt-2 text-[11px] tracking-[0.14em] text-text-muted uppercase">
+                              {testimonial.author_name}
+                              {testimonial.author_role ? <span className="text-text-muted/70"> — {testimonial.author_role}</span> : null}
+                            </figcaption>
+                          </figure>
+                        ))}
+                      </div>
                     </div>
-                  ) : (
-                    <span className="font-serif text-sm text-accent-2 tabular-nums">{String(index + 1).padStart(2, "0")}</span>
-                  )}
-                  <h3 className="mt-3 font-serif text-3xl text-text">{service.headline}</h3>
-                  {service.description ? <p className="mt-3 text-base leading-relaxed text-text-muted">{service.description}</p> : null}
-                  {service.public_starting_price_minor != null ? (
-                    <p className="mt-5 border-t border-border/60 pt-4 text-base text-accent-2">
-                      {service.price_label ?? "Starting at"} <span className="font-medium">{formatMoney(service.public_starting_price_minor, "USD")}</span>
-                    </p>
-                  ) : service.price_label ? (
-                    <p className="mt-5 border-t border-border/60 pt-4 text-base text-accent-2">{service.price_label}</p>
+                  ) : null}
+                  {hasPartners ? (
+                    <div className={hasTestimonials ? "mt-7" : ""}>
+                      <h3 className="text-[11px] tracking-[0.2em] text-accent-2 uppercase">Selected Partners</h3>
+                      <div className="mt-3 flex flex-wrap items-center gap-x-7 gap-y-2">
+                        {partners.map((partner) => (
+                          <span key={partner.id} className="font-serif text-base text-text">
+                            {partner.display_name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {hasPress ? (
+                    <div className={hasTestimonials || hasPartners ? "mt-7" : ""}>
+                      <h3 className="text-[11px] tracking-[0.2em] text-accent-2 uppercase">As Featured In</h3>
+                      <div className="mt-3 flex flex-wrap items-center gap-x-10 gap-y-4">
+                        {press.map((feature) => (
+                          <PressLogo key={feature.id} feature={feature} assetUrls={assetUrls} />
+                        ))}
+                      </div>
+                    </div>
                   ) : null}
                 </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      {hasPortfolio ? (
-        <section id="portfolio" className="border-b border-border/60 bg-surface">
-          <div className={`${WIDE} py-20 sm:py-28`}>
-            <h2 className="font-serif text-4xl text-text sm:text-5xl">Portfolio</h2>
-            <div className="mt-14">
-              <FeaturedPortfolioItem item={featuredPortfolioItem} assetUrls={assetUrls} />
-            </div>
-            {restPortfolio.length > 0 ? (
-              <div className="mt-16 grid grid-cols-1 gap-x-10 gap-y-14 sm:grid-cols-2 lg:grid-cols-3">
-                {restPortfolio.map((item, index) => (
-                  <PortfolioCard key={item.id} item={item} assetUrls={assetUrls} aspectClass={portfolioAspect(index)} />
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
-
-      {hasPartners || hasTestimonials || hasPress ? (
-        <section id="recognition" className="border-b border-border/60 bg-background">
-          {hasTestimonials ? (
-            <div className={`${WIDE} py-20 sm:py-28`}>
-              <h2 className="text-center font-serif text-4xl text-text sm:text-5xl">What Clients Say</h2>
-              <div className="mx-auto mt-14 grid max-w-5xl grid-cols-1 gap-16 sm:grid-cols-2">
-                {testimonials.map((testimonial) => (
-                  <TestimonialQuote key={testimonial.id} testimonial={testimonial} assetUrls={assetUrls} />
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {hasPartners ? (
-            <div className={`${WIDE} py-16 text-center ${hasTestimonials ? "border-t border-border/60" : ""}`}>
-              <h2 className="text-[11px] tracking-[0.22em] text-accent-2 uppercase">Selected Partners</h2>
-              <div className="mt-8 flex flex-wrap items-center justify-center gap-x-12 gap-y-7">
-                {partners.map((partner) => (
-                  <div key={partner.id} className="flex items-center gap-3">
-                    {partner.logo_media_asset_id ? (
-                      <div className="h-14 w-14 overflow-hidden rounded-full border border-border/60">
-                        <PublicImage mediaAssetId={partner.logo_media_asset_id} assetUrls={assetUrls} alt={partner.display_name} />
-                      </div>
-                    ) : null}
-                    <span className="font-serif text-lg text-text">{partner.display_name}</span>
-                    {partner.partner_type ? <span className="text-sm text-text-muted">— {partner.partner_type}</span> : null}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {hasPress ? (
-            <div className={`${WIDE} py-16 text-center ${hasTestimonials || hasPartners ? "border-t border-border/60" : ""}`}>
-              <h2 className="text-[11px] tracking-[0.22em] text-accent-2 uppercase">As Featured In</h2>
-              <div className="mt-8 flex flex-wrap items-center justify-center gap-x-16 gap-y-7">
-                {press.map((feature) => (
-                  <PressLogo key={feature.id} feature={feature} assetUrls={assetUrls} />
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </section>
-      ) : null}
-
-      {hasGallery ? (
-        <section id="gallery" className="border-b border-border/60 bg-surface">
-          <div className={`${WIDE} py-20 sm:py-28`}>
-            <h2 className="font-serif text-4xl text-text sm:text-5xl">Gallery</h2>
-            {resolvedGallery.length === 1 ? (
-              <div className="mx-auto mt-14 max-w-5xl overflow-hidden rounded-sm border border-border/60">
-                <GalleryImage image={resolvedGallery[0]} assetUrls={assetUrls} aspectClass="aspect-[16/9]" />
-              </div>
-            ) : (
-              <div className="mt-14 columns-1 gap-5 sm:columns-2 sm:gap-6 lg:columns-3 xl:columns-4">
-                {resolvedGallery.map((image, index) => (
-                  <GalleryImage key={image.media_asset_id} image={image} assetUrls={assetUrls} aspectClass={galleryAspect(index)} />
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      ) : null}
-
-      {/* Work With Us — the deliberate deep-wine editorial band and the page's strong closing conversion moment. */}
-      <section id="contact" className="bg-accent-800 text-white">
-        <div className={`${WIDE} py-20 sm:py-28`}>
-          <div className="grid grid-cols-1 gap-16 lg:grid-cols-2 lg:gap-24">
-            <div className="lg:pt-4">
-              <p className="text-[12px] tracking-[0.3em] uppercase opacity-70">Work With Us</p>
-              <h2 className="mt-4 font-serif text-5xl leading-[1.05] sm:text-6xl">{contact.headline || "Let's create something meaningful."}</h2>
-              {contact.subtext ? <p className="mt-6 max-w-md text-lg leading-relaxed opacity-85">{contact.subtext}</p> : null}
-
-              {contact.secondary_cta_label && contact.secondary_cta_url ? (
-                <PublicMediaKitCtaButton
-                  slug={slug}
-                  ctaId="secondary"
-                  href={contact.secondary_cta_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-8 inline-block rounded-[2px] text-sm tracking-[0.1em] text-white uppercase underline decoration-white/40 underline-offset-4 hover:decoration-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-                >
-                  {contact.secondary_cta_label}
-                </PublicMediaKitCtaButton>
               ) : null}
             </div>
+          </div>
+        </section>
+      ) : null}
 
-            <div className="rounded-md border border-border/60 bg-background p-8 text-text shadow-lg sm:p-10">
-              <PublicMediaKitInquiryForm slug={slug} />
+      {/* ── BAND 05 · work with us: the closing moment and the real CRM form ── */}
+      <section id="contact" className="scroll-mt-4">
+        <div className="relative overflow-hidden bg-accent-800 text-white">
+          {closingImageUrl ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element -- a real signed Supabase Storage URL resolved per-request server-side, not a static asset Next can optimize */}
+              <img src={closingImageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              <div aria-hidden="true" className="absolute inset-0 bg-[color-mix(in_srgb,var(--color-accent-800)_72%,transparent)]" />
+            </>
+          ) : null}
+          <div className={`${WIDE} relative z-10 py-14 text-center sm:py-[72px]`}>
+            <p className="text-[12px] tracking-[0.28em] uppercase opacity-75">Work With Us</p>
+            <h2 className="mx-auto mt-4 max-w-2xl text-balance font-serif text-4xl leading-[1.1] sm:text-5xl">
+              {contact.headline || "Let's create something meaningful."}
+            </h2>
+            {contact.subtext ? <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed opacity-85">{contact.subtext}</p> : null}
+            {contact.secondary_cta_label && contact.secondary_cta_url ? (
+              <PublicMediaKitCtaButton
+                slug={slug}
+                ctaId="secondary"
+                href={contact.secondary_cta_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-7 inline-block rounded-[2px] text-sm tracking-[0.1em] text-white uppercase underline decoration-white/40 underline-offset-4 hover:decoration-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+              >
+                {contact.secondary_cta_label}
+              </PublicMediaKitCtaButton>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="border-b border-border/60 bg-surface">
+          <div className={`${WIDE} py-12 sm:py-14`}>
+            <div className="mx-auto max-w-2xl">
+              <p className="text-center text-[11px] tracking-[0.22em] text-accent-2 uppercase">Tell us about your celebration</p>
+              <div className="mt-6 rounded-md border border-border/60 bg-background p-8 sm:p-10">
+                <PublicMediaKitInquiryForm slug={slug} />
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <footer className="border-t border-border/60 bg-background">
-        <div className={`${WIDE} flex flex-col items-center gap-5 py-14 text-center`}>
+      {/* ── BAND 06 · footer ────────────────────────────────────────── */}
+      <footer className="bg-background">
+        <div className={`${WIDE} flex flex-col items-center gap-4 py-8 text-center sm:flex-row sm:justify-between sm:text-left`}>
+          <span className="font-serif text-lg tracking-wide text-text">{brandName}</span>
+          <nav aria-label="Footer navigation" className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1.5">
+            {navSections.map((section) => (
+              <a
+                key={section.id}
+                href={`#${section.id}`}
+                className="rounded-[2px] text-[11px] tracking-[0.14em] text-text-muted uppercase transition-colors hover:text-accent focus-visible:text-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+              >
+                {section.label}
+              </a>
+            ))}
+          </nav>
           {hasSocial ? (
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
               {visibleSocialLinks.map((link) => (
                 <a
                   key={`${link.platform}-${link.handle_or_url}`}
@@ -485,7 +490,6 @@ export function PublicMediaKitView({ content, assetUrls, brandName, slug }: Publ
               ))}
             </div>
           ) : null}
-          <p className="font-serif text-base tracking-wide text-text-muted">{brandName}</p>
         </div>
       </footer>
     </div>

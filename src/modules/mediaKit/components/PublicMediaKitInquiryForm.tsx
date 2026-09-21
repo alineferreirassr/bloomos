@@ -100,7 +100,7 @@ export function PublicMediaKitInquiryForm({ slug }: PublicMediaKitInquiryFormPro
 
       <div>
         <label htmlFor="inquiry_interest" className="mb-2 block text-[11px] tracking-[0.12em] text-text-muted uppercase">
-          What are you interested in?
+          Type of Inquiry
         </label>
         <input
           id="inquiry_interest"
